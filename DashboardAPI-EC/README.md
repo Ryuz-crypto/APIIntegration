@@ -39,7 +39,8 @@ bash scripts/install-linux.sh
 
 El instalador:
 
-- Instala `git`, `curl`, `openssl`, Docker y Docker Compose plugin.
+- Instala `git`, `curl`, `openssl`, Docker Engine y Docker Compose plugin desde el repositorio oficial de Docker.
+- Valida que existan `git`, `curl`, `openssl`, `docker` y `docker compose`.
 - Genera `.env` preguntando puerto HTTP, usuario/password de PostgreSQL, `SECRET_KEY`, CORS y ambiente.
 - Ejecuta `docker compose up -d --build`.
 - Valida `http://localhost:<puerto>/api/v1/health`.
@@ -55,9 +56,17 @@ Al terminar abre:
 ### Ubuntu Server
 
 ```bash
+sudo apt-get remove -y docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc || true
 sudo apt-get update
-sudo apt-get install -y git curl openssl docker.io docker-compose-plugin
+sudo apt-get install -y ca-certificates curl git gnupg openssl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 sudo systemctl enable --now docker
+sudo docker compose version
 git clone -b codex/fase-2-real-data https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/DashboardAPI-EC
 bash scripts/install-linux.sh
@@ -66,14 +75,24 @@ bash scripts/install-linux.sh
 ### Ubuntu Workstation
 
 ```bash
+sudo apt-get remove -y docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc || true
 sudo apt-get update
-sudo apt-get install -y git curl openssl docker.io docker-compose-plugin
+sudo apt-get install -y ca-certificates curl git gnupg openssl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 sudo systemctl enable --now docker
+sudo docker compose version
 git clone -b codex/fase-2-real-data https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/DashboardAPI-EC
 bash scripts/install-linux.sh
 xdg-open http://localhost:8080
 ```
+
+Si ves `E: No se ha podido localizar el paquete docker-compose-plugin`, significa que aun no agregaste el repositorio oficial de Docker. Repite el bloque completo de Ubuntu desde `sudo apt-get remove -y docker.io ...` hasta `sudo docker compose version`.
 
 ### Rocky Linux
 
@@ -117,7 +136,7 @@ Al agregar un Orchestrator desde la UI se solicitan y validan estos campos:
 
 - `Name`: nombre operativo del Orchestrator.
 - `Base URL`: URL real, por ejemplo `https://orchestrator.empresa.local`.
-- `API profile`: auto detect o version 9.3, 9.4, 9.5, 9.6.
+- `API profile`: auto detect o version 9.3, 9.4, 9.5, 9.6, 9.7.
 - `Auth`: `None`, `Basic`, `Bearer` o `API Key`.
 - `Username` y `Password`: requeridos para `Basic`.
 - `Bearer token`: requerido para `Bearer`.
@@ -142,6 +161,7 @@ Si un endpoint de Aruba cambia, no se modifica el servicio: se actualiza el perf
 ## Checklist de validacion
 
 - `docker compose ps` muestra `postgres`, `redis`, `backend`, `worker`, `frontend` y `nginx`.
+- `docker compose version` muestra la version del plugin Compose v2.
 - `curl http://localhost:8080/api/v1/health` responde OK.
 - `http://localhost:8080` abre la UI.
 - `http://localhost:8080/api/v1/docs` abre Swagger.

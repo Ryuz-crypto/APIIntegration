@@ -22,8 +22,30 @@ command_exists() {
 }
 
 install_debian_family() {
+  local repo_os="ubuntu"
+  local codename="${VERSION_CODENAME:-}"
+  if [ "${ID}" = "debian" ] || [[ "${ID_LIKE:-}" == *debian* && "${ID}" != "ubuntu" ]]; then
+    repo_os="debian"
+  fi
+  if [ "${ID}" = "ubuntu" ] && [ -n "${UBUNTU_CODENAME:-}" ]; then
+    codename="${UBUNTU_CODENAME}"
+  fi
+  if [ -z "${codename}" ]; then
+    echo "Cannot detect Debian/Ubuntu codename for Docker repository." >&2
+    exit 1
+  fi
+
+  ${SUDO} apt-get remove -y docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc || true
   ${SUDO} apt-get update
-  ${SUDO} apt-get install -y ca-certificates curl git openssl docker.io docker-compose-plugin
+  ${SUDO} apt-get install -y ca-certificates curl git gnupg openssl
+  ${SUDO} install -m 0755 -d /etc/apt/keyrings
+  ${SUDO} curl -fsSL "https://download.docker.com/linux/${repo_os}/gpg" -o /etc/apt/keyrings/docker.asc
+  ${SUDO} chmod a+r /etc/apt/keyrings/docker.asc
+  printf 'deb [arch=%s signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/%s %s stable\n' \
+    "$(dpkg --print-architecture)" "${repo_os}" "${codename}" |
+    ${SUDO} tee /etc/apt/sources.list.d/docker.list >/dev/null
+  ${SUDO} apt-get update
+  ${SUDO} apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 }
 
 install_rhel_family() {
@@ -65,6 +87,30 @@ install_prerequisites() {
       ;;
   esac
   ${SUDO} systemctl enable --now docker
+  validate_prerequisites
+}
+
+validate_prerequisites() {
+  if ! command_exists git; then
+    echo "Missing required command: git" >&2
+    exit 1
+  fi
+  if ! command_exists curl; then
+    echo "Missing required command: curl" >&2
+    exit 1
+  fi
+  if ! command_exists openssl; then
+    echo "Missing required command: openssl" >&2
+    exit 1
+  fi
+  if ! command_exists docker; then
+    echo "Missing required command: docker" >&2
+    exit 1
+  fi
+  if ! ${SUDO} docker compose version >/dev/null 2>&1; then
+    echo "Docker Compose plugin is not available. Validate with: sudo docker compose version" >&2
+    exit 1
+  fi
 }
 
 prompt_value() {
