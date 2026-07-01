@@ -1,6 +1,7 @@
 import {
   Box,
   Button,
+  Chip,
   Checkbox,
   FormControl,
   FormControlLabel,
@@ -18,33 +19,77 @@ import {
   Tooltip,
   Typography
 } from "@mui/material";
-import { PlugZap, Radar, RefreshCw } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { AlertCircle, CheckCircle2, PlugZap, Radar, RefreshCw } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { StatusChip } from "../../components/StatusChip";
-import { api, Orchestrator } from "../../lib/api";
+import { api, Orchestrator, OrchestratorConnectionPlan } from "../../lib/api";
 
 type Props = {
   items: Orchestrator[];
+  profiles: string[];
   onChanged: () => void;
 };
 
-export function OrchestratorPanel({ items, onChanged }: Props) {
+const AUTH_LABELS: Record<string, string> = {
+  none: "None",
+  basic: "Basic",
+  bearer: "Bearer",
+  api_key: "API Key"
+};
+
+export function OrchestratorPanel({ items, profiles, onChanged }: Props) {
   const [name, setName] = useState("Lab Orchestrator");
   const [baseUrl, setBaseUrl] = useState("https://orchestrator.example.local");
+  const [apiVersion, setApiVersion] = useState("");
   const [authType, setAuthType] = useState("none");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [apiToken, setApiToken] = useState("");
   const [apiKeyHeader, setApiKeyHeader] = useState("X-API-Key");
   const [verifyTls, setVerifyTls] = useState(true);
+  const [timeoutSeconds, setTimeoutSeconds] = useState(20);
+  const [connectionPlan, setConnectionPlan] = useState<OrchestratorConnectionPlan | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.connectionPlan(authType).then(setConnectionPlan).catch(() => setConnectionPlan(null));
+  }, [authType]);
+
+  const checks = useMemo(() => {
+    const apiProfileOk = !apiVersion || profiles.includes(apiVersion);
+    const nextChecks = [
+      { label: "Name", ok: name.trim().length >= 2 },
+      { label: "Base URL", ok: /^https?:\/\//i.test(baseUrl.trim()) },
+      { label: "API profile", ok: apiProfileOk },
+      { label: "Timeout", ok: timeoutSeconds >= 3 && timeoutSeconds <= 120 }
+    ];
+    if (authType === "basic") {
+      nextChecks.push({ label: "Username", ok: username.trim().length > 0 });
+      nextChecks.push({ label: "Password", ok: password.length > 0 });
+    }
+    if (authType === "bearer") {
+      nextChecks.push({ label: "Bearer token", ok: apiToken.length > 0 });
+    }
+    if (authType === "api_key") {
+      nextChecks.push({ label: "API key", ok: apiToken.length > 0 });
+      nextChecks.push({ label: "Header", ok: apiKeyHeader.trim().length > 0 });
+    }
+    return nextChecks;
+  }, [apiKeyHeader, apiToken, apiVersion, authType, baseUrl, name, password, profiles, timeoutSeconds, username]);
+
+  const formReady = checks.every((check) => check.ok);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!formReady) {
+      setMessage("Complete the required connection parameters before saving.");
+      return;
+    }
     try {
       await api.createOrchestrator({
         name,
         base_url: baseUrl,
+        api_version: apiVersion || undefined,
         credential_label: authType === "none" ? undefined : `${authType}-credential`,
         auth_type: authType,
         username: username || undefined,
@@ -52,7 +97,7 @@ export function OrchestratorPanel({ items, onChanged }: Props) {
         api_token: apiToken || undefined,
         api_key_header: apiKeyHeader || undefined,
         verify_tls: verifyTls,
-        timeout_seconds: 20
+        timeout_seconds: timeoutSeconds
       });
       setMessage(null);
       onChanged();
@@ -100,6 +145,22 @@ export function OrchestratorPanel({ items, onChanged }: Props) {
           onChange={(e) => setBaseUrl(e.target.value)}
         />
         <FormControl size="small">
+          <InputLabel id="api-version-label">API profile</InputLabel>
+          <Select
+            labelId="api-version-label"
+            label="API profile"
+            value={apiVersion}
+            onChange={(e) => setApiVersion(e.target.value)}
+          >
+            <MenuItem value="">Auto detect</MenuItem>
+            {profiles.map((version) => (
+              <MenuItem key={version} value={version}>
+                {version}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <FormControl size="small">
           <InputLabel id="auth-type-label">Auth</InputLabel>
           <Select
             labelId="auth-type-label"
@@ -146,7 +207,33 @@ export function OrchestratorPanel({ items, onChanged }: Props) {
           control={<Checkbox checked={verifyTls} onChange={(e) => setVerifyTls(e.target.checked)} />}
           label="Verify TLS"
         />
-        <Button type="submit" variant="contained" startIcon={<PlugZap size={16} />}>
+        <TextField
+          size="small"
+          label="Timeout seconds"
+          type="number"
+          value={timeoutSeconds}
+          onChange={(e) => setTimeoutSeconds(Number(e.target.value))}
+          inputProps={{ min: 3, max: 120 }}
+        />
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          {checks.map((check) => (
+            <Chip
+              key={check.label}
+              size="small"
+              color={check.ok ? "success" : "error"}
+              icon={check.ok ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+              label={check.label}
+              variant={check.ok ? "outlined" : "filled"}
+            />
+          ))}
+        </Stack>
+        {connectionPlan ? (
+          <Typography variant="caption" color="text.secondary">
+            {AUTH_LABELS[connectionPlan.auth_type]} / {connectionPlan.validation_operation} /{" "}
+            {connectionPlan.discovery_operation}
+          </Typography>
+        ) : null}
+        <Button type="submit" variant="contained" startIcon={<PlugZap size={16} />} disabled={!formReady}>
           Add Orchestrator
         </Button>
       </Box>
@@ -162,6 +249,7 @@ export function OrchestratorPanel({ items, onChanged }: Props) {
             <TableCell>Status</TableCell>
             <TableCell>API</TableCell>
             <TableCell>Auth</TableCell>
+            <TableCell>Last read</TableCell>
             <TableCell align="right">Actions</TableCell>
           </TableRow>
         </TableHead>
@@ -183,6 +271,16 @@ export function OrchestratorPanel({ items, onChanged }: Props) {
               </TableCell>
               <TableCell>{item.api_version ?? "pending"}</TableCell>
               <TableCell>{item.auth_type}{item.has_secret ? " / secret" : ""}</TableCell>
+              <TableCell>
+                <Stack spacing={0.25}>
+                  <Typography variant="body2">
+                    {item.last_status_code ? `HTTP ${item.last_status_code}` : "not read"}
+                  </Typography>
+                  <Typography variant="caption" color={item.last_error ? "error" : "text.secondary"}>
+                    {item.last_error ?? (item.last_latency_ms ? `${item.last_latency_ms} ms` : "-")}
+                  </Typography>
+                </Stack>
+              </TableCell>
               <TableCell align="right">
                 <Button size="small" onClick={() => validate(item.id)} startIcon={<Radar size={15} />}>
                   Validate

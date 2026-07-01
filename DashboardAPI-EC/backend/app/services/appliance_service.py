@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlmodel import Session, select
@@ -38,10 +39,18 @@ def discover_appliances(
         response = client.call_operation(version, operation_id)
     except EdgeConnectClientError as exc:
         record_error(session, orchestrator.id, version, operation_id, exc)
+        orchestrator.last_error = str(exc)[:800]
+        orchestrator.last_status_code = exc.status_code
+        orchestrator.last_latency_ms = exc.duration_ms
+        session.add(orchestrator)
         session.commit()
         raise
 
     record_success(session, orchestrator.id, version, response)
+    orchestrator.last_status_code = response.status_code
+    orchestrator.last_latency_ms = response.duration_ms
+    orchestrator.last_error = None
+    session.add(orchestrator)
     appliances = [_upsert_appliance(session, orchestrator, item) for item in _extract_items(response.payload)]
     record_event(
         session,
@@ -75,6 +84,10 @@ def collect_appliance_metrics(
 
     record_success(session, orchestrator.id, version, response, appliance.id)
     appliance.status = "sampled"
+    appliance.last_metrics = _summarize_metrics(response.payload)
+    appliance.last_collected_at = datetime.now(UTC)
+    appliance.last_status_code = response.status_code
+    appliance.last_latency_ms = response.duration_ms
     session.add(appliance)
     session.commit()
     return response.payload
@@ -135,3 +148,39 @@ def _first(item: dict[str, Any], *keys: str) -> Any:
         if value not in (None, ""):
             return value
     return None
+
+
+def _summarize_metrics(payload: dict[str, Any]) -> dict[str, Any]:
+    preferred_keys = (
+        "timestamp",
+        "cpu",
+        "cpuUtilization",
+        "memory",
+        "memoryUtilization",
+        "tunnelCount",
+        "tunnels",
+        "wanRx",
+        "wanTx",
+        "rxBytes",
+        "txBytes",
+        "latency",
+        "loss",
+        "jitter",
+    )
+    summary: dict[str, Any] = {}
+    for key in preferred_keys:
+        value = payload.get(key)
+        if _is_metric_value(value):
+            summary[key] = value
+    if summary:
+        return summary
+    for key, value in payload.items():
+        if _is_metric_value(value):
+            summary[key] = value
+        if len(summary) >= 8:
+            break
+    return summary
+
+
+def _is_metric_value(value: Any) -> bool:
+    return isinstance(value, str | int | float | bool) and value not in ("", None)

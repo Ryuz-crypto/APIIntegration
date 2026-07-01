@@ -99,12 +99,16 @@ function App() {
             <MetricCard
               label="Services"
               value="Ready"
-              detail="API, DB, Redis, worker"
+              detail={`${overview?.services.api_samples ?? 0} API samples`}
               icon={<ShieldCheck size={22} />}
             />
           </Grid>
           <Grid item xs={12} lg={7}>
-            <OrchestratorPanel items={orchestrators} onChanged={load} />
+            <OrchestratorPanel
+              items={orchestrators}
+              profiles={profiles.map((profile) => profile.version)}
+              onChanged={load}
+            />
           </Grid>
           <Grid item xs={12} lg={5}>
             <CompatibilityPanel profiles={profiles} />

@@ -1,5 +1,9 @@
 import uuid
+from datetime import datetime
 
+from sqlalchemy import Column
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.types import JSON
 from sqlmodel import Field, SQLModel
 
 from app.models.base import TimestampMixin, new_uuid
@@ -17,3 +21,7 @@ class Appliance(TimestampMixin, SQLModel, table=True):
     selected_for_monitoring: bool = Field(default=False)
     polling_active_seconds: int = Field(default=5)
     polling_idle_seconds: int = Field(default=300)
+    last_metrics: dict = Field(default_factory=dict, sa_column=Column(JSON().with_variant(JSONB(), "postgresql")))
+    last_collected_at: datetime | None = Field(default=None, index=True)
+    last_status_code: int | None = Field(default=None, index=True)
+    last_latency_ms: int | None = None

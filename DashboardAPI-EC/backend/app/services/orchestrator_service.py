@@ -1,11 +1,17 @@
 import re
+from datetime import UTC, datetime
 
 from sqlmodel import Session, select
 
 from app.compatibility.engine import CompatibilityEngine
 from app.core.security import encrypt_secret
 from app.models.orchestrator import Orchestrator
-from app.schemas.orchestrator import OrchestratorCreate, OrchestratorValidationResult
+from app.schemas.orchestrator import (
+    OrchestratorConnectionPlan,
+    OrchestratorConnectionRequirement,
+    OrchestratorCreate,
+    OrchestratorValidationResult,
+)
 from app.services.edgeconnect_client import EdgeConnectClient, EdgeConnectClientError
 from app.services.audit_service import record_event
 from app.services.sample_service import record_error, record_success
@@ -15,6 +21,7 @@ def create_orchestrator(session: Session, payload: OrchestratorCreate) -> Orches
     orchestrator = Orchestrator(
         name=payload.name,
         base_url=str(payload.base_url).rstrip("/"),
+        api_version=payload.api_version,
         credential_label=payload.credential_label,
         auth_type=payload.auth_type,
         username=payload.username,
@@ -47,6 +54,10 @@ def validate_orchestrator(
         response = client.detect_version()
     except EdgeConnectClientError as exc:
         orchestrator.status = "connection_error"
+        orchestrator.last_status_code = exc.status_code
+        orchestrator.last_latency_ms = exc.duration_ms
+        orchestrator.last_error = str(exc)[:800]
+        orchestrator.last_validated_at = datetime.now(UTC)
         record_error(session, orchestrator.id, orchestrator.api_version, operation_id, exc)
         record_event(
             session,
@@ -74,6 +85,10 @@ def validate_orchestrator(
     orchestrator.api_version = detected
     orchestrator.status = "validated"
     orchestrator.polling_enabled = True
+    orchestrator.last_validated_at = datetime.now(UTC)
+    orchestrator.last_status_code = response.status_code
+    orchestrator.last_latency_ms = response.duration_ms
+    orchestrator.last_error = None
     record_success(session, orchestrator.id, detected, response)
     record_event(
         session,
@@ -100,3 +115,55 @@ def _extract_version(payload: dict) -> str | None:
     text = " ".join(str(value) for value in payload.values())
     match = re.search(r"\b(9\.[3-6])\b", text)
     return match.group(1) if match else None
+
+
+def build_connection_plan(auth_type: str, versions: list[str]) -> OrchestratorConnectionPlan:
+    requirements = [
+        OrchestratorConnectionRequirement(field="name", label="Name", required=True),
+        OrchestratorConnectionRequirement(field="base_url", label="Base URL", required=True),
+        OrchestratorConnectionRequirement(field="api_version", label="API profile", required=False),
+        OrchestratorConnectionRequirement(field="verify_tls", label="TLS verification", required=False),
+        OrchestratorConnectionRequirement(field="timeout_seconds", label="Timeout", required=True),
+    ]
+    if auth_type == "basic":
+        requirements.extend(
+            [
+                OrchestratorConnectionRequirement(field="username", label="Username", required=True),
+                OrchestratorConnectionRequirement(
+                    field="password",
+                    label="Password",
+                    required=True,
+                    secret=True,
+                ),
+            ]
+        )
+    if auth_type == "bearer":
+        requirements.append(
+            OrchestratorConnectionRequirement(
+                field="api_token",
+                label="Bearer token",
+                required=True,
+                secret=True,
+            )
+        )
+    if auth_type == "api_key":
+        requirements.extend(
+            [
+                OrchestratorConnectionRequirement(
+                    field="api_token",
+                    label="API key",
+                    required=True,
+                    secret=True,
+                ),
+                OrchestratorConnectionRequirement(
+                    field="api_key_header",
+                    label="API key header",
+                    required=True,
+                ),
+            ]
+        )
+    return OrchestratorConnectionPlan(
+        auth_type=auth_type,
+        required_fields=requirements,
+        supported_versions=versions,
+    )

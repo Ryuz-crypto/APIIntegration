@@ -24,6 +24,10 @@ export type Orchestrator = {
   verify_tls: boolean;
   timeout_seconds: number;
   has_secret: boolean;
+  last_validated_at: string | null;
+  last_status_code: number | null;
+  last_latency_ms: number | null;
+  last_error: string | null;
 };
 
 export type Appliance = {
@@ -36,6 +40,10 @@ export type Appliance = {
   software_version: string | null;
   status: string;
   selected_for_monitoring: boolean;
+  last_metrics: Record<string, unknown>;
+  last_collected_at: string | null;
+  last_status_code: number | null;
+  last_latency_ms: number | null;
 };
 
 export type CompatibilityProfile = {
@@ -61,6 +69,20 @@ export type ApiSample = {
   created_at: string;
 };
 
+export type OrchestratorConnectionPlan = {
+  auth_type: string;
+  required_fields: {
+    field: string;
+    label: string;
+    required: boolean;
+    secret: boolean;
+  }[];
+  supported_versions: string[];
+  validation_operation: string;
+  discovery_operation: string;
+  metrics_operation: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
@@ -78,9 +100,12 @@ export const api = {
   appliances: () => request<Appliance[]>("/appliances"),
   profiles: () => request<CompatibilityProfile[]>("/compatibility/profiles"),
   samples: () => request<ApiSample[]>("/samples"),
+  connectionPlan: (authType: string) =>
+    request<OrchestratorConnectionPlan>(`/orchestrators/connection-plan?auth_type=${encodeURIComponent(authType)}`),
   createOrchestrator: (payload: {
     name: string;
     base_url: string;
+    api_version?: string;
     credential_label?: string;
     auth_type: string;
     username?: string;
