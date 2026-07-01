@@ -18,8 +18,15 @@ Incluye:
 Repositorio:
 
 ```bash
-git clone https://github.com/Ryuz-crypto/APIIntegration.git
+git clone -b codex/fase-2-real-data https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/DashboardAPI-EC
+git branch --show-current
+```
+
+La validacion debe responder:
+
+```bash
+codex/fase-2-real-data
 ```
 
 Instalador recomendado:
@@ -49,7 +56,7 @@ Al terminar abre:
 sudo apt-get update
 sudo apt-get install -y git curl openssl docker.io docker-compose-plugin
 sudo systemctl enable --now docker
-git clone https://github.com/Ryuz-crypto/APIIntegration.git
+git clone -b codex/fase-2-real-data https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/DashboardAPI-EC
 bash scripts/install-linux.sh
 ```
@@ -60,7 +67,7 @@ bash scripts/install-linux.sh
 sudo apt-get update
 sudo apt-get install -y git curl openssl docker.io docker-compose-plugin
 sudo systemctl enable --now docker
-git clone https://github.com/Ryuz-crypto/APIIntegration.git
+git clone -b codex/fase-2-real-data https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/DashboardAPI-EC
 bash scripts/install-linux.sh
 xdg-open http://localhost:8080
@@ -73,7 +80,7 @@ sudo dnf install -y git curl openssl yum-utils
 sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 sudo systemctl enable --now docker
-git clone https://github.com/Ryuz-crypto/APIIntegration.git
+git clone -b codex/fase-2-real-data https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/DashboardAPI-EC
 bash scripts/install-linux.sh
 ```
@@ -85,7 +92,7 @@ sudo dnf install -y git curl openssl yum-utils
 sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 sudo systemctl enable --now docker
-git clone https://github.com/Ryuz-crypto/APIIntegration.git
+git clone -b codex/fase-2-real-data https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/DashboardAPI-EC
 bash scripts/install-linux.sh
 ```
@@ -97,7 +104,7 @@ sudo yum install -y git curl openssl yum-utils
 sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 sudo yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 sudo systemctl enable --now docker
-git clone https://github.com/Ryuz-crypto/APIIntegration.git
+git clone -b codex/fase-2-real-data https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/DashboardAPI-EC
 bash scripts/install-linux.sh
 ```
