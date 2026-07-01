@@ -5,7 +5,8 @@ import { MetricCard } from "./components/MetricCard";
 import { AppliancePanel } from "./features/appliances/AppliancePanel";
 import { OrchestratorPanel } from "./features/orchestrators/OrchestratorPanel";
 import { CompatibilityPanel } from "./features/system/CompatibilityPanel";
-import { api, Appliance, CompatibilityProfile, Orchestrator, SystemOverview } from "./lib/api";
+import { SamplesPanel } from "./features/system/SamplesPanel";
+import { api, ApiSample, Appliance, CompatibilityProfile, Orchestrator, SystemOverview } from "./lib/api";
 import { theme } from "./theme/theme";
 
 function App() {
@@ -13,20 +14,23 @@ function App() {
   const [orchestrators, setOrchestrators] = useState<Orchestrator[]>([]);
   const [appliances, setAppliances] = useState<Appliance[]>([]);
   const [profiles, setProfiles] = useState<CompatibilityProfile[]>([]);
+  const [samples, setSamples] = useState<ApiSample[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
     try {
-      const [nextOverview, nextOrchestrators, nextAppliances, nextProfiles] = await Promise.all([
+      const [nextOverview, nextOrchestrators, nextAppliances, nextProfiles, nextSamples] = await Promise.all([
         api.overview(),
         api.orchestrators(),
         api.appliances(),
-        api.profiles()
+        api.profiles(),
+        api.samples()
       ]);
       setOverview(nextOverview);
       setOrchestrators(nextOrchestrators);
       setAppliances(nextAppliances);
       setProfiles(nextProfiles);
+      setSamples(nextSamples);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown API error");
@@ -106,7 +110,10 @@ function App() {
             <CompatibilityPanel profiles={profiles} />
           </Grid>
           <Grid item xs={12}>
-            <AppliancePanel items={appliances} />
+            <AppliancePanel items={appliances} onChanged={load} />
+          </Grid>
+          <Grid item xs={12}>
+            <SamplesPanel items={samples} />
           </Grid>
         </Grid>
       </Box>

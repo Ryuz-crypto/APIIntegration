@@ -18,3 +18,12 @@ def test_rejects_missing_operation():
 
     with pytest.raises(CompatibilityError):
         engine.resolve("9.3", "unknown.operation")
+
+
+def test_resolves_version_operation():
+    engine = CompatibilityEngine(load_builtin_profiles())
+
+    operation = engine.resolve("9.5", "orchestrator.version")
+
+    assert operation.method == "GET"
+    assert operation.path == "/gms/rest/version"

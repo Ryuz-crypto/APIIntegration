@@ -3,6 +3,12 @@
   "status": "preview",
   "api_root": "/gms/rest",
   "operations": {
+    "orchestrator.version": {
+      "method": "GET",
+      "path": "/version",
+      "polling_hint_seconds": 600,
+      "notes": ["Preview operation. Replace with uploaded Swagger when Aruba publishes final API."]
+    },
     "orchestrator.inventory.summary": {
       "method": "GET",
       "path": "/appliances",

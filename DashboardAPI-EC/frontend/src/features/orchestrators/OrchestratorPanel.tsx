@@ -1,7 +1,13 @@
 import {
   Box,
   Button,
+  Checkbox,
+  FormControl,
+  FormControlLabel,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -25,21 +31,54 @@ type Props = {
 export function OrchestratorPanel({ items, onChanged }: Props) {
   const [name, setName] = useState("Lab Orchestrator");
   const [baseUrl, setBaseUrl] = useState("https://orchestrator.example.local");
+  const [authType, setAuthType] = useState("none");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [apiToken, setApiToken] = useState("");
+  const [apiKeyHeader, setApiKeyHeader] = useState("X-API-Key");
+  const [verifyTls, setVerifyTls] = useState(true);
+  const [message, setMessage] = useState<string | null>(null);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    await api.createOrchestrator({ name, base_url: baseUrl, credential_label: "phase-1-secret" });
-    onChanged();
+    try {
+      await api.createOrchestrator({
+        name,
+        base_url: baseUrl,
+        credential_label: authType === "none" ? undefined : `${authType}-credential`,
+        auth_type: authType,
+        username: username || undefined,
+        password: password || undefined,
+        api_token: apiToken || undefined,
+        api_key_header: apiKeyHeader || undefined,
+        verify_tls: verifyTls,
+        timeout_seconds: 20
+      });
+      setMessage(null);
+      onChanged();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Unable to create orchestrator");
+    }
   }
 
   async function validate(id: string) {
-    await api.validateOrchestrator(id);
-    onChanged();
+    try {
+      await api.validateOrchestrator(id);
+      setMessage(null);
+      onChanged();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Validation failed");
+    }
   }
 
   async function discover(id: string) {
-    await api.discoverAppliances(id);
-    onChanged();
+    try {
+      await api.discoverAppliances(id);
+      setMessage(null);
+      onChanged();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Discovery failed");
+    }
   }
 
   return (
@@ -60,16 +99,69 @@ export function OrchestratorPanel({ items, onChanged }: Props) {
           value={baseUrl}
           onChange={(e) => setBaseUrl(e.target.value)}
         />
+        <FormControl size="small">
+          <InputLabel id="auth-type-label">Auth</InputLabel>
+          <Select
+            labelId="auth-type-label"
+            label="Auth"
+            value={authType}
+            onChange={(e) => setAuthType(e.target.value)}
+          >
+            <MenuItem value="none">None</MenuItem>
+            <MenuItem value="basic">Basic</MenuItem>
+            <MenuItem value="bearer">Bearer</MenuItem>
+            <MenuItem value="api_key">API Key</MenuItem>
+          </Select>
+        </FormControl>
+        {authType === "basic" ? (
+          <>
+            <TextField size="small" label="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+            <TextField
+              size="small"
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </>
+        ) : null}
+        {authType === "bearer" || authType === "api_key" ? (
+          <TextField
+            size="small"
+            label={authType === "bearer" ? "Bearer token" : "API key"}
+            type="password"
+            value={apiToken}
+            onChange={(e) => setApiToken(e.target.value)}
+          />
+        ) : null}
+        {authType === "api_key" ? (
+          <TextField
+            size="small"
+            label="Header"
+            value={apiKeyHeader}
+            onChange={(e) => setApiKeyHeader(e.target.value)}
+          />
+        ) : null}
+        <FormControlLabel
+          control={<Checkbox checked={verifyTls} onChange={(e) => setVerifyTls(e.target.checked)} />}
+          label="Verify TLS"
+        />
         <Button type="submit" variant="contained" startIcon={<PlugZap size={16} />}>
           Add Orchestrator
         </Button>
       </Box>
+      {message ? (
+        <Typography sx={{ mb: 2 }} color="error" variant="body2">
+          {message}
+        </Typography>
+      ) : null}
       <Table size="small">
         <TableHead>
           <TableRow>
             <TableCell>Name</TableCell>
             <TableCell>Status</TableCell>
             <TableCell>API</TableCell>
+            <TableCell>Auth</TableCell>
             <TableCell align="right">Actions</TableCell>
           </TableRow>
         </TableHead>
@@ -90,6 +182,7 @@ export function OrchestratorPanel({ items, onChanged }: Props) {
                 <StatusChip status={item.status} />
               </TableCell>
               <TableCell>{item.api_version ?? "pending"}</TableCell>
+              <TableCell>{item.auth_type}{item.has_secret ? " / secret" : ""}</TableCell>
               <TableCell align="right">
                 <Button size="small" onClick={() => validate(item.id)} startIcon={<Radar size={15} />}>
                   Validate

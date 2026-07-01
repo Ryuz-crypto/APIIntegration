@@ -18,6 +18,12 @@ export type Orchestrator = {
   polling_active_seconds: number;
   polling_idle_seconds: number;
   credential_label: string | null;
+  auth_type: string;
+  username: string | null;
+  api_key_header: string | null;
+  verify_tls: boolean;
+  timeout_seconds: number;
+  has_secret: boolean;
 };
 
 export type Appliance = {
@@ -39,6 +45,22 @@ export type CompatibilityProfile = {
   operations: string[];
 };
 
+export type ApiSample = {
+  id: string;
+  orchestrator_id: string;
+  appliance_id: string | null;
+  api_version: string | null;
+  operation_id: string;
+  method: string;
+  path: string;
+  status_code: number | null;
+  duration_ms: number | null;
+  ok: boolean;
+  payload: Record<string, unknown>;
+  error: string | null;
+  created_at: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
@@ -55,7 +77,19 @@ export const api = {
   orchestrators: () => request<Orchestrator[]>("/orchestrators"),
   appliances: () => request<Appliance[]>("/appliances"),
   profiles: () => request<CompatibilityProfile[]>("/compatibility/profiles"),
-  createOrchestrator: (payload: { name: string; base_url: string; credential_label?: string }) =>
+  samples: () => request<ApiSample[]>("/samples"),
+  createOrchestrator: (payload: {
+    name: string;
+    base_url: string;
+    credential_label?: string;
+    auth_type: string;
+    username?: string;
+    password?: string;
+    api_token?: string;
+    api_key_header?: string;
+    verify_tls: boolean;
+    timeout_seconds: number;
+  }) =>
     request<Orchestrator>("/orchestrators", {
       method: "POST",
       body: JSON.stringify(payload)
@@ -66,6 +100,10 @@ export const api = {
     }),
   discoverAppliances: (id: string) =>
     request<Appliance[]>(`/orchestrators/${id}/discover-appliances`, {
+      method: "POST"
+    }),
+  collectAppliance: (id: string) =>
+    request<Record<string, unknown>>(`/appliances/${id}/collect`, {
       method: "POST"
     })
 };
