@@ -14,6 +14,7 @@ from app.schemas.orchestrator import (
     OrchestratorValidationResult,
 )
 from app.services.appliance_service import discover_appliances
+from app.services.edgeconnect_client import EdgeConnectClientError
 from app.services.orchestrator_service import (
     create_orchestrator,
     list_orchestrators,
@@ -56,4 +57,8 @@ def discover_items(
     orchestrator = session.get(Orchestrator, orchestrator_id)
     if orchestrator is None:
         raise HTTPException(status_code=404, detail="Orchestrator not found")
-    return discover_appliances(session, orchestrator)
+    engine = CompatibilityEngine(load_builtin_profiles())
+    try:
+        return discover_appliances(session, orchestrator, engine)
+    except EdgeConnectClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc

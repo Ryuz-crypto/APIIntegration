@@ -1,29 +1,33 @@
 from app.compatibility.engine import CompatibilityEngine
 from app.compatibility.loader import load_builtin_profiles
+from app.db.session import engine
+from app.models.appliance import Appliance
+from app.models.orchestrator import Orchestrator
+from app.services.appliance_service import collect_appliance_metrics, discover_appliances
+from sqlmodel import Session
 from app.workers.celery_app import celery_app
 
 
 @celery_app.task
-def poll_orchestrator(version: str, operation_id: str = "orchestrator.inventory.summary") -> dict:
+def poll_orchestrator(orchestrator_id: str) -> dict:
     engine = CompatibilityEngine(load_builtin_profiles())
-    operation = engine.resolve(version, operation_id)
-    return {
-        "kind": "orchestrator",
-        "version": version,
-        "method": operation.method,
-        "path": operation.path,
-        "status": "contract-ready",
-    }
+    with Session(engine) as session:
+        orchestrator = session.get(Orchestrator, orchestrator_id)
+        if orchestrator is None:
+            return {"status": "not-found", "orchestrator_id": orchestrator_id}
+        appliances = discover_appliances(session, orchestrator, engine)
+        return {"status": "sampled", "orchestrator_id": orchestrator_id, "appliances": len(appliances)}
 
 
 @celery_app.task
-def poll_appliance(version: str, appliance_id: str, operation_id: str = "appliance.performance") -> dict:
+def poll_appliance(appliance_id: str) -> dict:
     engine = CompatibilityEngine(load_builtin_profiles())
-    operation = engine.resolve(version, operation_id, {"appliance_id": appliance_id})
-    return {
-        "kind": "appliance",
-        "version": version,
-        "method": operation.method,
-        "path": operation.path,
-        "status": "contract-ready",
-    }
+    with Session(engine) as session:
+        appliance = session.get(Appliance, appliance_id)
+        if appliance is None:
+            return {"status": "not-found", "appliance_id": appliance_id}
+        orchestrator = session.get(Orchestrator, appliance.orchestrator_id)
+        if orchestrator is None:
+            return {"status": "orchestrator-not-found", "appliance_id": appliance_id}
+        payload = collect_appliance_metrics(session, appliance, orchestrator, engine)
+        return {"status": "sampled", "appliance_id": appliance_id, "fields": len(payload)}

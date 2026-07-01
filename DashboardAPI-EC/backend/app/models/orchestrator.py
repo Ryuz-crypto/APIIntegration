@@ -15,3 +15,14 @@ class Orchestrator(TimestampMixin, SQLModel, table=True):
     polling_active_seconds: int = Field(default=120)
     polling_idle_seconds: int = Field(default=600)
     credential_label: str | None = Field(default=None, max_length=120)
+    auth_type: str = Field(default="none", max_length=40)
+    username: str | None = Field(default=None, max_length=160)
+    encrypted_password: str | None = Field(default=None)
+    encrypted_api_token: str | None = Field(default=None)
+    api_key_header: str | None = Field(default=None, max_length=120)
+    verify_tls: bool = Field(default=True)
+    timeout_seconds: int = Field(default=20)
+
+    @property
+    def has_secret(self) -> bool:
+        return bool(self.encrypted_password or self.encrypted_api_token)

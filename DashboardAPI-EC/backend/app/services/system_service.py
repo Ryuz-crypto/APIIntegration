@@ -1,6 +1,7 @@
 from sqlmodel import Session, func, select
 
 from app.models.appliance import Appliance
+from app.models.api_sample import ApiSample
 from app.models.compatibility import ApiCompatibilityProfile
 from app.models.orchestrator import Orchestrator
 from app.schemas.system import SystemOverview
@@ -13,6 +14,7 @@ def get_system_overview(session: Session) -> SystemOverview:
         select(func.count()).select_from(Appliance).where(Appliance.selected_for_monitoring)
     ).one()
     profiles = session.exec(select(func.count()).select_from(ApiCompatibilityProfile)).one()
+    samples = session.exec(select(func.count()).select_from(ApiSample)).one()
 
     return SystemOverview(
         orchestrators=orchestrators,
@@ -24,5 +26,6 @@ def get_system_overview(session: Session) -> SystemOverview:
             "database": "ready",
             "redis": "configured",
             "worker": "configured",
+            "api_samples": str(samples),
         },
     )
