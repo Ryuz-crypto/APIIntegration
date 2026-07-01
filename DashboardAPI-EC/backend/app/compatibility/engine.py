@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import re
 
 
 class CompatibilityError(ValueError):
@@ -43,7 +44,7 @@ class CompatibilityEngine:
         for key, value in (path_params or {}).items():
             path = path.replace("{" + key + "}", value)
 
-        unresolved = [part for part in path.split("/") if part.startswith("{") and part.endswith("}")]
+        unresolved = sorted(set(re.findall(r"{([^{}]+)}", path)))
         if unresolved:
             raise CompatibilityError(f"Missing path params: {', '.join(unresolved)}")
 

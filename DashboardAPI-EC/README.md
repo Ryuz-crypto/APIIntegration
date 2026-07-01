@@ -6,12 +6,14 @@ Incluye:
 
 - Backend FastAPI con Orchestrators, Appliances, perfiles API, auditoria y muestras API.
 - Compatibility Layer obligatorio para resolver operaciones por version.
-- Perfiles iniciales para EdgeConnect 9.3, 9.4, 9.5 y 9.6.
+- Perfiles importados para EdgeConnect 9.3, 9.4, 9.5, 9.6 y 9.7.
 - Cliente HTTP real para EdgeConnect.
 - Credenciales cifradas con `SECRET_KEY`.
 - Validacion real de Orchestrator, discovery real y metricas por Appliance.
 - PostgreSQL/TimescaleDB, Redis, worker Celery, frontend React y Nginx.
 - Instalador Linux interactivo para operar como aplicativo con Docker Compose.
+
+Los perfiles 9.3-9.6 se generan desde las colecciones Postman de EdgeConnect SD-WAN y el perfil 9.7 desde los modulos Swagger/OpenAPI independientes. El dashboard consume aliases canonicos estables como `orchestrator.version`, `orchestrator.inventory.summary` y `appliance.performance`, aunque la ruta real cambie entre contratos.
 
 ## Instalacion rapida como aplicativo
 

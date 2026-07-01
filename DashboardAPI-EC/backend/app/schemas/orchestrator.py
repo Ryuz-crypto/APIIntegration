@@ -4,7 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
 SUPPORTED_AUTH_TYPES = {"none", "basic", "bearer", "api_key"}
-SUPPORTED_API_VERSIONS = {"9.3", "9.4", "9.5", "9.6"}
+SUPPORTED_API_VERSIONS = {"9.3", "9.4", "9.5", "9.6", "9.7"}
 
 
 class OrchestratorCreate(BaseModel):
@@ -34,7 +34,7 @@ class OrchestratorCreate(BaseModel):
         if value in (None, ""):
             return None
         if value not in SUPPORTED_API_VERSIONS:
-            raise ValueError("api_version must be one of: 9.3, 9.4, 9.5, 9.6")
+            raise ValueError("api_version must be one of: 9.3, 9.4, 9.5, 9.6, 9.7")
         return value
 
     @model_validator(mode="after")
