@@ -1,0 +1,37 @@
+{
+  "version": "9.6",
+  "status": "preview",
+  "api_root": "/gms/rest",
+  "operations": {
+    "orchestrator.inventory.summary": {
+      "method": "GET",
+      "path": "/appliances",
+      "polling_hint_seconds": 120,
+      "notes": ["Preview profile. Replace with uploaded Swagger when Aruba publishes final API."]
+    },
+    "orchestrator.topology": {
+      "method": "GET",
+      "path": "/topology",
+      "polling_hint_seconds": 300,
+      "notes": ["Preview profile. Replace with uploaded Swagger when Aruba publishes final API."]
+    },
+    "appliance.interfaces": {
+      "method": "GET",
+      "path": "/appliances/{appliance_id}/interfaces",
+      "polling_hint_seconds": 5,
+      "notes": ["Preview profile. Replace with uploaded Swagger when Aruba publishes final API."]
+    },
+    "appliance.tunnels": {
+      "method": "GET",
+      "path": "/appliances/{appliance_id}/tunnels",
+      "polling_hint_seconds": 5,
+      "notes": ["Preview profile. Replace with uploaded Swagger when Aruba publishes final API."]
+    },
+    "appliance.performance": {
+      "method": "GET",
+      "path": "/appliances/{appliance_id}/performance",
+      "polling_hint_seconds": 5,
+      "notes": ["Preview profile. Replace with uploaded Swagger when Aruba publishes final API."]
+    }
+  }
+}
