@@ -14,7 +14,7 @@ COPY pyproject.toml ./
 
 # Instalar dependencias con caché de pip y timeout aumentado
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir --upgrade pip \
+    pip install --no-cache-dir --upgrade --retries 5 --timeout 60 pip \
     && pip install --no-cache-dir --retries 5 --timeout 60 .
 
 # Copiar el código fuente después de instalar dependencias

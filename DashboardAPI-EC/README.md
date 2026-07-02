@@ -58,12 +58,15 @@ docker compose version
 
 ---
 
-### 2️⃣ Clonar el repositorio
+### 2️⃣ Clonar el repositorio y cambiar a la rama con los fixes
 
 ```bash
 # Clonar el proyecto
 git clone https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/DashboardAPI-EC
+
+# Cambiar a la rama con los fixes para Docker y pip
+git checkout vibe/fix-docker-pip-errors-e158a5
 ```
 
 ---
@@ -89,8 +92,8 @@ nano .env
 ### 4️⃣ Construir y levantar la plataforma
 
 ```bash
-# Construir imágenes (puede tardar unos minutos la primera vez)
-docker compose build
+# Construir imágenes (IMPORTANTE: Usar --no-cache para aplicar los fixes)
+docker compose build --no-cache
 
 # Levantar todos los servicios
 docker compose up -d
@@ -99,6 +102,8 @@ docker compose up -d
 > ⏳ **Tiempo estimado**: 
 > - Primera construcción: ~10-15 minutos (depende de tu conexión a Internet).
 > - Inicios posteriores: ~1-2 minutos (gracias a la caché).
+
+> ⚠️ **Nota**: Si ves errores de timeout al instalar dependencias de Python (ej. `ReadTimeoutError`), **ejecuta el comando de construcción con `--no-cache`** para forzar la descarga de todos los paquetes desde cero. Esto es necesario para aplicar los fixes de timeout y retries.
 
 ---
 
@@ -163,18 +168,21 @@ docker compose up -d
 
 ## 🐛 Solución de problemas
 
-### Error: "Connection reset by peer" al instalar dependencias
+### Error: "ReadTimeoutError" o "Connection reset by peer" al instalar dependencias
 Si ves errores como:
 ```
-WARNING: Retrying (Retry(total=18, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProtocolError('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))'
+WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out. (read timeout=15)")'
 ```
 **Solución**:
-1. Verifica tu conexión a Internet.
-2. Reintenta la construcción:
+1. **Asegúrate de estar en la rama correcta**:
+   ```bash
+   git checkout vibe/fix-docker-pip-errors-e158a5
+   ```
+2. **Reconstruye las imágenes desde cero** (sin caché):
    ```bash
    docker compose build --no-cache
    ```
-3. Si el problema persiste, aumenta el tiempo de espera en el `Dockerfile` (ya está configurado en este proyecto).
+3. **Si el problema persiste**, aumenta el timeout manualmente en el `Dockerfile` (ya está configurado en esta rama).
 
 ### Error: "Port already in use"
 Si el puerto `8080` o `5432` ya está en uso:
@@ -195,6 +203,18 @@ sudo usermod -aG docker $USER
 # Reiniciar la sesión (cierra y vuelve a abrir la terminal)
 newgrp docker
 ```
+
+### Error: "Max retries exceeded" en el worker
+Si el `worker` falla al instalar dependencias:
+1. **Elimina los contenedores y volúmenes**:
+   ```bash
+   docker compose down -v
+   ```
+2. **Reconstruye todo desde cero**:
+   ```bash
+   docker compose build --no-cache
+   docker compose up -d
+   ```
 
 ---
 
