@@ -51,6 +51,33 @@ Al terminar abre:
 - API: `http://localhost:8080/api/v1`.
 - Docs API: `http://localhost:8080/api/v1/docs`.
 
+## Permisos de Docker en Linux
+
+Si ves:
+
+```text
+permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
+```
+
+Docker esta instalado, pero tu usuario no tiene permiso para usar el daemon. Solucion rapida:
+
+```bash
+cd ~/APIIntegration/DashboardAPI-EC
+sudo docker compose up -d
+sudo docker compose ps
+```
+
+Solucion permanente para usar Docker sin `sudo`:
+
+```bash
+sudo usermod -aG docker "$USER"
+newgrp docker
+docker compose version
+docker compose up -d
+```
+
+Si `newgrp docker` no aplica el permiso en tu terminal, cierra sesion y vuelve a entrar. El grupo `docker` puede controlar el daemon de Docker; si prefieres acceso mas estricto, usa siempre `sudo docker compose`.
+
 ## Instalacion desde cero por plataforma
 
 ### Ubuntu Server
@@ -187,8 +214,8 @@ vuelve a traer la ultima rama y reconstruye sin cache:
 cd ~/APIIntegration
 git pull
 cd DashboardAPI-EC
-docker compose build --no-cache backend worker
-docker compose up -d
+sudo docker compose build --no-cache backend worker
+sudo docker compose up -d
 ```
 
 El Dockerfile no actualiza `pip` durante el build porque eso agrega una descarga innecesaria y puede fallar en redes lentas. La instalacion de dependencias usa timeout de 120 segundos y 10 reintentos.
@@ -197,18 +224,18 @@ El Dockerfile no actualiza `pip` durante el build porque eso agrega una descarga
 
 ```bash
 cd APIIntegration/DashboardAPI-EC
-docker compose ps
-docker compose logs -f backend
-docker compose logs -f worker
-docker compose restart
-docker compose down
-docker compose up -d --build
+sudo docker compose ps
+sudo docker compose logs -f backend
+sudo docker compose logs -f worker
+sudo docker compose restart
+sudo docker compose down
+sudo docker compose up -d --build
 ```
 
 Para reiniciar desde cero en laboratorio:
 
 ```bash
-docker compose down -v
+sudo docker compose down -v
 bash scripts/install-linux.sh
 ```
 

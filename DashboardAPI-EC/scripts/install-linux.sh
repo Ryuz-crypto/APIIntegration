@@ -88,6 +88,7 @@ install_prerequisites() {
   esac
   ${SUDO} systemctl enable --now docker
   validate_prerequisites
+  show_docker_permission_hint
 }
 
 validate_prerequisites() {
@@ -110,6 +111,23 @@ validate_prerequisites() {
   if ! ${SUDO} docker compose version >/dev/null 2>&1; then
     echo "Docker Compose plugin is not available. Validate with: sudo docker compose version" >&2
     exit 1
+  fi
+}
+
+show_docker_permission_hint() {
+  if [ -n "${SUDO}" ] && ! docker compose version >/dev/null 2>&1; then
+    local current_user="${USER:-${LOGNAME:-your-user}}"
+    cat <<EOF
+
+Docker is ready through sudo. If you want to run Docker without sudo later:
+
+  sudo usermod -aG docker ${current_user}
+  newgrp docker
+  docker compose version
+
+The docker group can control the Docker daemon; use sudo instead if you prefer stricter access.
+
+EOF
   fi
 }
 
