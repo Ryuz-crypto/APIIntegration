@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
@@ -22,6 +23,10 @@ class Orchestrator(TimestampMixin, SQLModel, table=True):
     api_key_header: str | None = Field(default=None, max_length=120)
     verify_tls: bool = Field(default=True)
     timeout_seconds: int = Field(default=20)
+    last_validated_at: datetime | None = Field(default=None, index=True)
+    last_status_code: int | None = Field(default=None, index=True)
+    last_latency_ms: int | None = None
+    last_error: str | None = Field(default=None, max_length=800)
 
     @property
     def has_secret(self) -> bool:

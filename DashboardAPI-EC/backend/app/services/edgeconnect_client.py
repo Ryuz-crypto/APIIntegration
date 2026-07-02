@@ -17,11 +17,15 @@ class EdgeConnectClientError(RuntimeError):
         status_code: int | None = None,
         duration_ms: int | None = None,
         payload: dict | None = None,
+        method: str = "GET",
+        path: str = "unresolved",
     ):
         super().__init__(message)
         self.status_code = status_code
         self.duration_ms = duration_ms
         self.payload = payload or {}
+        self.method = method
+        self.path = path
 
 
 @dataclass(frozen=True)
@@ -60,7 +64,12 @@ class EdgeConnectClient:
                 response = client.request(operation.method, url, headers=headers, auth=auth)
         except httpx.HTTPError as exc:
             duration = int((time.perf_counter() - started) * 1000)
-            raise EdgeConnectClientError(str(exc), duration_ms=duration) from exc
+            raise EdgeConnectClientError(
+                str(exc),
+                duration_ms=duration,
+                method=operation.method,
+                path=operation.path,
+            ) from exc
 
         duration = int((time.perf_counter() - started) * 1000)
         payload = self._payload(response)
@@ -70,6 +79,8 @@ class EdgeConnectClient:
                 status_code=response.status_code,
                 duration_ms=duration,
                 payload=payload,
+                method=operation.method,
+                path=operation.path,
             )
 
         return EdgeConnectResponse(

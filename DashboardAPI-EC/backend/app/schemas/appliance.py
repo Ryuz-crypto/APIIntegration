@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -25,5 +26,9 @@ class ApplianceRead(BaseModel):
     selected_for_monitoring: bool
     polling_active_seconds: int
     polling_idle_seconds: int
+    last_metrics: dict
+    last_collected_at: datetime | None
+    last_status_code: int | None
+    last_latency_ms: int | None
 
     model_config = {"from_attributes": True}

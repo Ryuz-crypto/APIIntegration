@@ -5,6 +5,8 @@ const colorByStatus: Record<string, "default" | "success" | "warning" | "error" 
   ok: "success",
   validated: "success",
   supported: "success",
+  imported: "success",
+  generated: "info",
   configured: "info",
   pending: "warning",
   preview: "warning",
