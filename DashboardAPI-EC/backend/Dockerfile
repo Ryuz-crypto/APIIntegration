@@ -5,6 +5,10 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+# Usar espejo de PyPI de Tsinghua (rápido y confiable)
+ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ENV PIP_DEFAULT_TIMEOUT=120
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
@@ -14,8 +18,7 @@ COPY pyproject.toml ./
 
 # Instalar dependencias con caché de pip y timeout aumentado
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir --upgrade --retries 5 --timeout 60 pip \
-    && pip install --no-cache-dir --retries 5 --timeout 60 .
+    pip install --no-cache-dir --retries 5 --timeout 120 .
 
 # Copiar el código fuente después de instalar dependencias
 COPY app ./app

@@ -103,7 +103,7 @@ docker compose up -d
 > - Primera construcción: ~10-15 minutos (depende de tu conexión a Internet).
 > - Inicios posteriores: ~1-2 minutos (gracias a la caché).
 
-> ⚠️ **Nota**: Si ves errores de timeout al instalar dependencias de Python (ej. `ReadTimeoutError`), **ejecuta el comando de construcción con `--no-cache`** para forzar la descarga de todos los paquetes desde cero. Esto es necesario para aplicar los fixes de timeout y retries.
+> ⚠️ **Nota**: Si ves errores de timeout al instalar dependencias de Python (ej. `ReadTimeoutError`), **ejecuta el comando de construcción con `--no-cache`** para forzar la descarga de todos los paquetes desde cero. Esta rama usa un espejo de PyPI (Tsinghua) y un timeout de 120 segundos para evitar estos errores.
 
 ---
 
@@ -171,18 +171,46 @@ docker compose up -d
 ### Error: "ReadTimeoutError" o "Connection reset by peer" al instalar dependencias
 Si ves errores como:
 ```
-WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out. (read timeout=15)")'
+WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out. (read timeout=60.0)")'
 ```
-**Solución**:
-1. **Asegúrate de estar en la rama correcta**:
-   ```bash
-   git checkout vibe/fix-docker-pip-errors-e158a5
-   ```
-2. **Reconstruye las imágenes desde cero** (sin caché):
-   ```bash
-   docker compose build --no-cache
-   ```
-3. **Si el problema persiste**, aumenta el timeout manualmente en el `Dockerfile` (ya está configurado en esta rama).
+**Soluciones**:
+
+#### 1️⃣ Usar un espejo de PyPI más rápido
+Esta rama ya usa el espejo de **Tsinghua** (`https://pypi.tuna.tsinghua.edu.cn/simple`), pero si prefieres otro espejo (ej. Aliyun), modifica el `Dockerfile`:
+```dockerfile
+ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+```
+
+#### 2️⃣ Aumentar el timeout manualmente
+Si el espejo de Tsinghua sigue siendo lento, puedes aumentar el timeout en el `Dockerfile`:
+```dockerfile
+ENV PIP_DEFAULT_TIMEOUT=300  # 5 minutos
+```
+
+#### 3️⃣ Reconstruir con `--no-cache`
+```bash
+docker compose build --no-cache
+```
+
+#### 4️⃣ Verificar la conexión a Internet
+```bash
+# Probar conexión a PyPI
+curl -v https://pypi.tuna.tsinghua.edu.cn/simple/
+
+# Probar descarga de un paquete
+curl -v https://pypi.tuna.tsinghua.edu.cn/packages/5d/95/6b5cb3461ea5673ba0995989746db58eb18b91b54dbf331e72f569540946/pip-26.1.2-py3-none-any.whl
+```
+
+#### 5️⃣ Usar una VPN o proxy
+Si tu red tiene restricciones, prueba con una VPN o configura un proxy:
+```bash
+# Exportar variables de proxy (ejemplo)
+export HTTP_PROXY=http://tu-proxy:8080
+export HTTPS_PROXY=http://tu-proxy:8080
+
+# Reconstruir con proxy
+docker compose build --no-cache
+```
 
 ### Error: "Port already in use"
 Si el puerto `8080` o `5432` ya está en uso:
@@ -215,6 +243,24 @@ Si el `worker` falla al instalar dependencias:
    docker compose build --no-cache
    docker compose up -d
    ```
+
+---
+
+## 🌍 Espejos de PyPI alternativos
+Si el espejo de Tsinghua no funciona bien en tu región, prueba con uno de estos:
+
+| **Espejo** | **URL** | **Región** |
+|------------|---------|------------|
+| Tsinghua | `https://pypi.tuna.tsinghua.edu.cn/simple` | China |
+| Aliyun | `https://mirrors.aliyun.com/pypi/simple/` | China |
+| Douban | `https://pypi.doubanio.com/simple/` | China |
+| Huawei | `https://repo.huaweicloud.com/repository/pypi/simple/` | China |
+| Azure (China) | `https://mirror.azure.cn/pypi/simple/` | China |
+
+Para cambiar el espejo, modifica el `Dockerfile`:
+```dockerfile
+ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+```
 
 ---
 
