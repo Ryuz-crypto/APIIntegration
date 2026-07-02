@@ -165,6 +165,7 @@ ENVIRONMENT=${environment}
 API_V1_PREFIX=/api/v1
 BACKEND_CORS_ORIGINS=${cors_origins}
 DASHBOARD_HTTP_PORT=${dashboard_port}
+PIP_INDEX_URL=https://pypi.org/simple
 
 POSTGRES_USER=${postgres_user}
 POSTGRES_PASSWORD=${postgres_password}

@@ -208,17 +208,30 @@ Si durante `docker compose up -d --build` aparece un error como:
 HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out
 ```
 
-vuelve a traer la ultima rama y reconstruye sin cache:
+vuelve a traer la ultima rama y reconstruye usando el cache de dependencias:
 
 ```bash
 cd ~/APIIntegration
 git pull
 cd DashboardAPI-EC
-sudo docker compose build --no-cache backend worker
+sudo docker compose build backend worker
 sudo docker compose up -d
 ```
 
-El Dockerfile no actualiza `pip` durante el build porque eso agrega una descarga innecesaria y puede fallar en redes lentas. La instalacion de dependencias usa timeout de 120 segundos y 10 reintentos.
+El Dockerfile no actualiza `pip` durante el build porque eso agrega una descarga innecesaria y puede fallar en redes lentas. La instalacion de dependencias usa `requirements.txt`, cache de pip entre builds, timeout de 300 segundos, 20 reintentos y wheels binarios cuando estan disponibles.
+
+Si tu red hacia PyPI sigue fallando, puedes cambiar el indice Python en `.env`:
+
+```bash
+PIP_INDEX_URL=https://pypi.org/simple
+```
+
+Despues repite:
+
+```bash
+sudo docker compose build backend worker
+sudo docker compose up -d
+```
 
 ## Operacion diaria
 

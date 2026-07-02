@@ -28,6 +28,8 @@ services:
   backend:
     build:
       context: ./backend
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     env_file:
       - .env
     depends_on:
@@ -41,6 +43,8 @@ services:
   worker:
     build:
       context: ./backend
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     command: celery -A app.workers.celery_app.celery_app worker --loglevel=INFO
     env_file:
       - .env
