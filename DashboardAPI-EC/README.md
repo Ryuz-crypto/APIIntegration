@@ -1,13 +1,13 @@
 # DashboardAPI-EC
 
-Primera fase en codigo para una plataforma NOC/SOC de Aruba EdgeConnect.
+Primera fase en código para una plataforma NOC/SOC de Aruba EdgeConnect.
 
 Esta fase deja una base instalable y modular:
 
-- Backend FastAPI con modelos para Orchestrators, Appliances, perfiles API y auditoria.
-- Compatibility Layer obligatorio para resolver operaciones por version.
+- Backend FastAPI con modelos para Orchestrators, Appliances, perfiles API y auditoría.
+- Compatibility Layer obligatorio para resolver operaciones por versión.
 - Perfiles iniciales para EdgeConnect 9.3, 9.4, 9.5 y 9.6.
-- Swagger Loader base para generar perfiles sin cambiar codigo.
+- Swagger Loader base para generar perfiles sin cambiar código.
 - Workers Celery preparados para polling.
 - PostgreSQL con TimescaleDB y Redis.
 - Frontend React, TypeScript y Material UI en dark theme.
@@ -15,54 +15,228 @@ Esta fase deja una base instalable y modular:
 - Documentos MTDS y ADR para guiar las siguientes fases.
 - Fase 2: cliente HTTP real para EdgeConnect, credenciales cifradas, discovery real y muestras API persistidas.
 
-## Arranque local
+---
 
-1. Copiar variables:
+## 📥 Instalación desde 0 (Linux Workstation)
+
+### Requisitos previos
+- **Sistema operativo**: Ubuntu 22.04 LTS (o cualquier distribución Linux moderna).
+- **Permisos**: Usuario con `sudo` o root.
+- **Conexión a Internet**: Para descargar dependencias.
+
+---
+
+### 1️⃣ Instalar Docker y Docker Compose
+
+Abre una terminal y ejecuta:
 
 ```bash
+# Actualizar paquetes del sistema
+sudo apt update && sudo apt upgrade -y
+
+# Instalar dependencias necesarias
+sudo apt install -y ca-certificates curl gnupg
+
+# Añadir la clave GPG de Docker
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# Añadir el repositorio de Docker
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Instalar Docker
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Verificar instalación
+docker --version
+docker compose version
+```
+
+> ⚠️ **Nota**: Si usas otra distribución (ej. Debian, Fedora), consulta la [documentación oficial de Docker](https://docs.docker.com/engine/install/).
+
+---
+
+### 2️⃣ Clonar el repositorio
+
+```bash
+# Clonar el proyecto
+git clone https://github.com/Ryuz-crypto/APIIntegration.git
+cd APIIntegration/DashboardAPI-EC
+```
+
+---
+
+### 3️⃣ Configurar variables de entorno
+
+```bash
+# Copiar el archivo de ejemplo
 cp .env.example .env
+
+# Editar el archivo .env (opcional)
+# Puedes modificar contraseñas o puertos si es necesario:
+nano .env
 ```
 
-2. Levantar la plataforma:
+> 🔹 **Variables importantes en `.env`**:
+> - `POSTGRES_USER`: Usuario de PostgreSQL (default: `edgeconnect`).
+> - `POSTGRES_PASSWORD`: Contraseña de PostgreSQL (default: `edgeconnect`).
+> - `POSTGRES_DB`: Base de datos (default: `edgeconnect`).
+
+---
+
+### 4️⃣ Construir y levantar la plataforma
 
 ```bash
-docker compose up --build
+# Construir imágenes (puede tardar unos minutos la primera vez)
+docker compose build
+
+# Levantar todos los servicios
+docker compose up -d
 ```
 
-3. Abrir:
+> ⏳ **Tiempo estimado**: 
+> - Primera construcción: ~10-15 minutos (depende de tu conexión a Internet).
+> - Inicios posteriores: ~1-2 minutos (gracias a la caché).
 
-- UI: `http://localhost:8080`
-- API: `http://localhost:8080/api/v1`
-- Docs API: `http://localhost:8080/api/v1/docs`
+---
 
-## Flujo con datos reales
+### 5️⃣ Verificar que todo funciona
 
-1. Entrar a la UI.
-2. Agregar un Orchestrator con URL real, tipo de autenticacion y credenciales.
-3. Usar `Validate` para ejecutar una llamada real a `orchestrator.version`.
-4. Usar `Discover` para leer inventario real desde `orchestrator.inventory.summary`.
-5. Usar `Metrics` en un Appliance para recolectar `appliance.performance`.
-6. Revisar `Real API Samples` para ver HTTP status, latencia, operacion y payload almacenado.
+```bash
+# Ver estado de los contenedores
+docker compose ps
+```
 
-Si un endpoint de Aruba cambia, no se modifica el servicio: se actualiza el perfil de compatibilidad o se genera uno nuevo con Swagger/OpenAPI.
+Deberías ver algo como:
+```
+NAME                COMMAND                  SERVICE     STATUS              PORTS
+backend-1           "uvicorn app.main:app…"   backend    running             0.0.0.0:8000->8000/tcp
+frontend-1          "docker-entrypoint.s…"   frontend   running             0.0.0.0:8080->80/tcp
+nginx-1             "nginx -g 'daemon of…"   nginx      running             0.0.0.0:8080->80/tcp
+postgres-1          "docker-entrypoint.s…"   postgres   running (healthy)   0.0.0.0:5432->5432/tcp
+redis-1             "docker-entrypoint.s…"   redis      running (healthy)   0.0.0.0:6379->6379/tcp
+worker-1            "celery -A app.worker…"   worker     running
+```
 
-## Principios de fase 1
+---
 
-- Ningun servicio llama endpoints de EdgeConnect directamente.
-- Toda operacion se resuelve por `backend/app/compatibility`.
-- La configuracion operativa se modela para ser administrada desde UI.
-- El backend separa Orchestrator y Appliance.
+### 6️⃣ Acceder a la plataforma
+
+Abre tu navegador y ve a:
+
+- **🌐 UI (Interfaz de usuario)**: [http://localhost:8080](http://localhost:8080)
+- **📡 API (Backend)**: [http://localhost:8080/api/v1](http://localhost:8080/api/v1)
+- **📖 Documentación API (Swagger)**: [http://localhost:8080/api/v1/docs](http://localhost:8080/api/v1/docs)
+
+---
+
+## 🛑 Detener la plataforma
+
+```bash
+# Detener todos los contenedores
+docker compose down
+
+# Detener y eliminar volúmenes (⚠️ Borra los datos de PostgreSQL)
+docker compose down -v
+```
+
+---
+
+## 🔄 Actualizar la plataforma
+
+Si hay cambios en el código:
+
+```bash
+# Descargar los últimos cambios
+git pull
+
+# Reconstruir imágenes (sin caché para asegurar actualizaciones)
+docker compose build --no-cache
+
+# Reiniciar servicios
+docker compose up -d
+```
+
+---
+
+## 🐛 Solución de problemas
+
+### Error: "Connection reset by peer" al instalar dependencias
+Si ves errores como:
+```
+WARNING: Retrying (Retry(total=18, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProtocolError('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))'
+```
+**Solución**:
+1. Verifica tu conexión a Internet.
+2. Reintenta la construcción:
+   ```bash
+   docker compose build --no-cache
+   ```
+3. Si el problema persiste, aumenta el tiempo de espera en el `Dockerfile` (ya está configurado en este proyecto).
+
+### Error: "Port already in use"
+Si el puerto `8080` o `5432` ya está en uso:
+```bash
+# Ver qué proceso usa el puerto (ejemplo para 8080)
+sudo lsof -i :8080
+
+# Matar el proceso (reemplaza PID con el número del proceso)
+kill -9 PID
+```
+
+### Error: "Permission denied" al ejecutar Docker
+Si ves errores de permiso:
+```bash
+# Añadir tu usuario al grupo docker
+sudo usermod -aG docker $USER
+
+# Reiniciar la sesión (cierra y vuelve a abrir la terminal)
+newgrp docker
+```
+
+---
+
+## 📂 Flujo con datos reales
+
+1. Entrar a la UI en [http://localhost:8080](http://localhost:8080).
+2. Agregar un **Orchestrator** con:
+   - URL real de tu instancia de EdgeConnect.
+   - Tipo de autenticación.
+   - Credenciales.
+3. Usar **`Validate`** para ejecutar una llamada real a `orchestrator.version`.
+4. Usar **`Discover`** para leer inventario real desde `orchestrator.inventory.summary`.
+5. Usar **`Metrics`** en un Appliance para recolectar `appliance.performance`.
+6. Revisar **`Real API Samples`** para ver:
+   - HTTP status.
+   - Latencia.
+   - Operación.
+   - Payload almacenado.
+
+> 🔹 **Nota**: Si un endpoint de Aruba cambia, **no se modifica el servicio**. Solo actualiza el perfil de compatibilidad o genera uno nuevo con Swagger/OpenAPI.
+
+---
+
+## 🏗️ Principios de fase 1
+
+- Ningún servicio llamará endpoints de EdgeConnect directamente.
+- Toda operación se resuelve por `backend/app/compatibility`.
+- La configuración operativa se modela para ser administrada desde la UI.
+- El backend separa **Orchestrator** y **Appliance**.
 - Secretos se reciben por API, se enmascaran en respuestas y quedan preparados para cifrado.
-- La fase 2 guarda secretos cifrados con `SECRET_KEY`; cambiar ese valor invalida secretos ya cifrados.
+- La fase 2 guarda secretos cifrados con `SECRET_KEY`. **Cambiar ese valor invalida secretos ya cifrados**.
 
-## Estructura
+---
+
+## 📁 Estructura del proyecto
 
 ```text
 DashboardAPI-EC/
-  backend/
-  frontend/
-  infrastructure/
-  docs/
-  scripts/
-  docker-compose.yml
+├── backend/          # Backend en FastAPI
+├── frontend/         # Frontend en React + TypeScript
+├── infrastructure/   # Configuraciones de infraestructura (Nginx)
+├── docs/             # Documentación técnica
+├── scripts/          # Scripts de apoyo
+└── docker-compose.yml # Configuración de Docker
 ```
