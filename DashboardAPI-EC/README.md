@@ -171,6 +171,28 @@ Si un endpoint de Aruba cambia, no se modifica el servicio: se actualiza el perf
 - `Metrics` muestra valores en la columna `Last metrics`.
 - `Real API Samples` registra cada lectura exitosa o fallida.
 
+## Troubleshooting de instalacion
+
+### Timeout descargando paquetes Python
+
+Si durante `docker compose up -d --build` aparece un error como:
+
+```text
+HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out
+```
+
+vuelve a traer la ultima rama y reconstruye sin cache:
+
+```bash
+cd ~/APIIntegration
+git pull
+cd DashboardAPI-EC
+docker compose build --no-cache backend worker
+docker compose up -d
+```
+
+El Dockerfile no actualiza `pip` durante el build porque eso agrega una descarga innecesaria y puede fallar en redes lentas. La instalacion de dependencias usa timeout de 120 segundos y 10 reintentos.
+
 ## Operacion diaria
 
 ```bash
