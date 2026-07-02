@@ -214,7 +214,7 @@ vuelve a traer la ultima rama y reconstruye usando el cache de dependencias:
 cd ~/APIIntegration
 git pull
 cd DashboardAPI-EC
-sudo docker compose build backend worker
+sudo docker compose build backend
 sudo docker compose up -d
 ```
 
@@ -229,7 +229,7 @@ PIP_INDEX_URL=https://pypi.org/simple
 Despues repite:
 
 ```bash
-sudo docker compose build backend worker
+sudo docker compose build backend
 sudo docker compose up -d
 ```
 
