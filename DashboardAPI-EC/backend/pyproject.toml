@@ -4,19 +4,21 @@ version = "0.1.0"
 description = "FastAPI backend for DashboardAPI-EC phase 1"
 requires-python = ">=3.12"
 dependencies = [
-  "celery>=5.4.0",
   "cryptography>=43.0.0",
   "fastapi>=0.115.0",
   "httpx>=0.27.0",
   "pydantic-settings>=2.4.0",
   "python-multipart>=0.0.9",
-  "redis>=5.0.0",
   "sqlmodel>=0.0.22",
-  "uvicorn[standard]>=0.30.0",
+  "uvicorn>=0.30.0",
   "psycopg[binary]>=3.2.0"
 ]
 
 [project.optional-dependencies]
+worker = [
+  "celery>=5.4.0",
+  "redis>=5.0.0"
+]
 dev = [
   "pytest>=8.3.0",
   "ruff>=0.6.0"

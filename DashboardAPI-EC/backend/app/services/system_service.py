@@ -24,8 +24,8 @@ def get_system_overview(session: Session) -> SystemOverview:
         services={
             "api": "ready",
             "database": "ready",
-            "redis": "configured",
-            "worker": "configured",
+            "redis": "optional",
+            "worker": "optional",
             "api_samples": str(samples),
         },
     )

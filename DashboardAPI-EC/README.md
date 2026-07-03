@@ -10,7 +10,8 @@ Incluye:
 - Cliente HTTP real para EdgeConnect.
 - Credenciales cifradas con `SECRET_KEY`.
 - Validacion real de Orchestrator, discovery real y metricas por Appliance.
-- PostgreSQL/TimescaleDB, Redis, worker Celery, frontend React y Nginx.
+- PostgreSQL/TimescaleDB, frontend React y Nginx.
+- Redis y worker Celery como perfil opcional para tareas en background.
 - Instalador Linux interactivo para operar como aplicativo con Docker Compose.
 
 Los perfiles 9.3-9.6 se generan desde las colecciones Postman de EdgeConnect SD-WAN y el perfil 9.7 desde los modulos Swagger/OpenAPI independientes. El dashboard consume aliases canonicos estables como `orchestrator.version`, `orchestrator.inventory.summary` y `appliance.performance`, aunque la ruta real cambie entre contratos.
@@ -42,7 +43,7 @@ El instalador:
 - Instala `git`, `curl`, `openssl`, Docker Engine y Docker Compose plugin desde el repositorio oficial de Docker.
 - Valida que existan `git`, `curl`, `openssl`, `docker` y `docker compose`.
 - Genera `.env` preguntando puerto HTTP, usuario/password de PostgreSQL, `SECRET_KEY`, CORS y ambiente.
-- Ejecuta `docker compose up -d --build`.
+- Ejecuta `docker compose up -d --build` para levantar API, UI, PostgreSQL y Nginx.
 - Valida `http://localhost:<puerto>/api/v1/health`.
 
 Al terminar abre:
@@ -77,6 +78,18 @@ docker compose up -d
 ```
 
 Si `newgrp docker` no aplica el permiso en tu terminal, cierra sesion y vuelve a entrar. El grupo `docker` puede controlar el daemon de Docker; si prefieres acceso mas estricto, usa siempre `sudo docker compose`.
+
+## Worker opcional
+
+La instalacion normal no construye Celery ni Redis. Esto evita que una red lenta se quede atorada descargando `celery` durante el primer arranque. El dashboard y la API ya pueden validar Orchestrator, descubrir Appliances y consultar metricas reales sin ese worker.
+
+Solo habilitalo si despues necesitas tareas periodicas en background:
+
+```bash
+cd ~/APIIntegration/DashboardAPI-EC
+sudo docker compose --profile worker up -d --build
+sudo docker compose --profile worker ps
+```
 
 ## Instalacion desde cero por plataforma
 
@@ -187,7 +200,8 @@ Si un endpoint de Aruba cambia, no se modifica el servicio: se actualiza el perf
 
 ## Checklist de validacion
 
-- `docker compose ps` muestra `postgres`, `redis`, `backend`, `worker`, `frontend` y `nginx`.
+- `docker compose ps` muestra `postgres`, `backend`, `frontend` y `nginx`.
+- Opcional: `docker compose --profile worker ps` muestra tambien `redis` y `worker`.
 - `docker compose version` muestra la version del plugin Compose v2.
 - `curl http://localhost:8080/api/v1/health` responde OK.
 - `http://localhost:8080` abre la UI.
@@ -218,7 +232,16 @@ sudo docker compose build backend
 sudo docker compose up -d
 ```
 
-El Dockerfile no actualiza `pip` durante el build porque eso agrega una descarga innecesaria y puede fallar en redes lentas. La instalacion de dependencias usa `requirements.txt`, cache de pip entre builds, timeout de 300 segundos, 20 reintentos y wheels binarios cuando estan disponibles.
+El Dockerfile no actualiza `pip` durante el build porque eso agrega una descarga innecesaria y puede fallar en redes lentas. La instalacion normal usa `requirements.txt`, cache de pip entre builds, timeout de 300 segundos, 20 reintentos y wheels binarios cuando estan disponibles.
+
+Si el log menciona `celery`, estas construyendo el perfil opcional `worker` o tienes codigo anterior. Valida que la rama este actualizada:
+
+```bash
+git branch --show-current
+grep -n "celery" backend/requirements.txt || echo "OK: celery no esta en el build normal"
+sudo docker compose build backend
+sudo docker compose up -d
+```
 
 Si tu red hacia PyPI sigue fallando, puedes cambiar el indice Python en `.env`:
 
@@ -239,10 +262,15 @@ sudo docker compose up -d
 cd APIIntegration/DashboardAPI-EC
 sudo docker compose ps
 sudo docker compose logs -f backend
-sudo docker compose logs -f worker
 sudo docker compose restart
 sudo docker compose down
 sudo docker compose up -d --build
+```
+
+Si habilitaste el worker opcional:
+
+```bash
+sudo docker compose --profile worker logs -f worker
 ```
 
 Para reiniciar desde cero en laboratorio:

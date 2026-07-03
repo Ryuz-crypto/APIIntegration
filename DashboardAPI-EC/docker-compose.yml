@@ -16,6 +16,8 @@ services:
       retries: 5
 
   redis:
+    profiles:
+      - worker
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -29,6 +31,7 @@ services:
     image: dashboardapi-ec-backend:local
     build:
       context: ./backend
+      target: base
       args:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     env_file:
@@ -36,14 +39,18 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     ports:
       - "8000:8000"
 
   worker:
-    image: dashboardapi-ec-backend:local
-    command: celery -A app.workers.celery_app.celery_app worker --loglevel=INFO
+    profiles:
+      - worker
+    image: dashboardapi-ec-worker:local
+    build:
+      context: ./backend
+      target: worker
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     env_file:
       - .env
     depends_on:

@@ -10,7 +10,7 @@ Phase 1 creates the installable foundation for DashboardAPI-EC.
 - FastAPI backend with versioned API.
 - Compatibility Layer for all EdgeConnect API operation resolution.
 - PostgreSQL/TimescaleDB for state and metrics readiness.
-- Redis and Celery for future polling workloads.
+- Optional Redis and Celery profile for future polling workloads.
 - Nginx entrypoint for UI and API routing.
 
 ## Rules

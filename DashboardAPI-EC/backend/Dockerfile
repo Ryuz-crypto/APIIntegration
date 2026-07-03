@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM python:3.12-slim
+FROM python:3.12-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -26,3 +26,11 @@ COPY app ./app
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+FROM base AS worker
+
+COPY requirements-worker.txt ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --prefer-binary --retries 20 --timeout 300 -r requirements-worker.txt
+
+CMD ["celery", "-A", "app.workers.celery_app.celery_app", "worker", "--loglevel=INFO"]
