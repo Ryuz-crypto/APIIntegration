@@ -1,19 +1,57 @@
+[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18-61dafb.svg)](https://react.dev/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ed.svg)](https://docs.docker.com/compose/)
+[![License](https://img.shields.io/badge/License-Proprietary-lightgrey.svg)](#licencia)
+
 # DashboardAPI-EC
 
-Primera fase en código para una plataforma NOC/SOC de Aruba EdgeConnect.
+Plataforma base **NOC/SOC** para Aruba EdgeConnect. Permite administrar orquestadores y appliances, validar conectividad real, recolectar telemetría y auditar cada llamada a la API a lo largo de múltiples versiones (9.3 → 9.6).
 
-Esta fase deja una base instalable y modular:
+El principio rector es la **Compatibility Layer First**: ningún servicio o ruta llama directamente a los endpoints de EdgeConnect. Toda operación se identifica por un `operation_id` estable y se resuelve a un método + path concreto a través de un perfil de compatibilidad versionado. Así, los cambios de API de Aruba se aíslan en datos de perfil, no en código.
 
-- Backend FastAPI con modelos para Orchestrators, Appliances, perfiles API y auditoría.
-- Compatibility Layer obligatorio para resolver operaciones por versión.
-- Perfiles iniciales para EdgeConnect 9.3, 9.4, 9.5 y 9.6.
-- Swagger Loader base para generar perfiles sin cambiar código.
-- Workers Celery preparados para polling.
-- PostgreSQL con TimescaleDB y Redis.
-- Frontend React, TypeScript y Material UI en dark theme.
-- Nginx como punto de entrada.
-- Documentos MTDS y ADR para guiar las siguientes fases.
-- Fase 2: cliente HTTP real para EdgeConnect, credenciales cifradas, discovery real y muestras API persistidas.
+## Características
+
+- **Backend FastAPI** con modelos para Orchestrators, Appliances, perfiles API y auditoría.
+- **Compatibility Layer** obligatoria para resolver operaciones por versión.
+- **Perfiles iniciales** para EdgeConnect 9.3, 9.4, 9.5 y 9.6.
+- **Swagger Loader** base para generar perfiles sin cambiar código.
+- **Workers Celery** preparados para polling.
+- **PostgreSQL + TimescaleDB** y **Redis**.
+- **Frontend React + TypeScript + Material UI** en dark theme.
+- **Nginx** como punto de entrada único.
+- **Fase 2**: cliente HTTP real para EdgeConnect, credenciales cifradas (Fernet), discovery real y muestras API persistidas para auditoría.
+
+## Tabla de contenidos
+
+- [Documentación](#documentación)
+- [Instalación desde 0 (Linux Workstation)](#-instalación-desde-0-linux-workstation)
+- [Detener la plataforma](#-detener-la-plataforma)
+- [Actualizar la plataforma](#-actualizar-la-plataforma)
+- [Solución de problemas](#-solución-de-problemas)
+- [Espejos de PyPI alternativos](#-espejos-de-pypi-alternativos)
+- [Flujo con datos reales](#-flujo-con-datos-reales)
+- [Principios de fase 1](#-principios-de-fase-1)
+- [Estructura del proyecto](#-estructura-del-proyecto)
+- [Licencia](#licencia)
+
+## Documentación
+
+| Documento | Descripción |
+|-----------|-------------|
+| [Arquitectura](docs/ARCHITECTURE.md) | Visión general, diagrama de componentes, capas y flujo de datos |
+| [Referencia de la API](docs/API.md) | Endpoints REST, cuerpos, respuestas y códigos de estado |
+| [Modelos de Datos](docs/DATA-MODELS.md) | Esquemas de la base de datos y relaciones |
+| [Configuración](docs/CONFIGURATION.md) | Variables de entorno y seguridad |
+| [Guía de Desarrollo](docs/DEVELOPMENT.md) | Entorno local, scripts, tests y convenciones |
+| [Changelog](docs/CHANGELOG.md) | Historial de cambios por versión |
+| [Contribuir](CONTRIBUTING.md) | Flujo de trabajo, checks y convenciones |
+| [ADR](docs/ADR/) | Decisiones de arquitectura razonadas |
+| [MTDS](docs/MTDS/) | Documentos de definición técnica por fase |
+
+Documentación interactiva (en runtime):
+- **Swagger UI**: [http://localhost:8080/api/v1/docs](http://localhost:8080/api/v1/docs)
+- **OpenAPI spec**: [http://localhost:8080/api/v1/openapi.json](http://localhost:8080/api/v1/openapi.json)
 
 ---
 
@@ -300,9 +338,27 @@ ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 ```text
 DashboardAPI-EC/
 ├── backend/          # Backend en FastAPI
+│   ├── app/          # Código fuente (api, services, compatibility, models, workers...)
+│   ├── tests/        # Tests del CompatibilityEngine
+│   └── pyproject.toml
 ├── frontend/         # Frontend en React + TypeScript
+│   ├── src/          # features, components, lib/api.ts, theme
+│   └── package.json
 ├── infrastructure/   # Configuraciones de infraestructura (Nginx)
 ├── docs/             # Documentación técnica
-├── scripts/          # Scripts de apoyo
-└── docker-compose.yml # Configuración de Docker
+│   ├── ADR/          # Decisiones de arquitectura
+│   └── MTDS/         # Definiciones técnicas por fase
+├── scripts/          # Scripts de apoyo (bootstrap, dev-check)
+├── docker-compose.yml # Configuración de Docker
+├── .env.example      # Plantilla de variables de entorno
+├── README.md         # Esta guía (instalación + overview)
+└── CONTRIBUTING.md   # Guía de contribución
 ```
+
+Para una descripción detallada del código por módulo, ver la [Arquitectura](docs/ARCHITECTURE.md).
+
+## Licencia
+
+Propietario. © Ryuz-crypto. Todos los derechos reservados.
+
+El uso, copia, modificación y distribución de este código están sujetos a permiso explícito del autor. Ver [CONTRIBUTING.md](CONTRIBUTING.md) para colaborar.
