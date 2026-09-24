@@ -40,6 +40,7 @@ fi
 chown root:"$APP_USER" "$ENV_FILE"
 chmod 0640 "$ENV_FILE"
 
+systemctl start postgresql redis-server
 if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='dashboardapi'" | grep -q 1; then
     runuser -u postgres -- createuser dashboardapi
 fi

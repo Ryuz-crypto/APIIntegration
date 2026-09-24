@@ -1,5 +1,6 @@
 #!/opt/dashboardapi-ec/venv/bin/python
 """Root-only activator; accepts certificate material, never configuration or commands."""
+
 import json
 import os
 import pwd
@@ -62,11 +63,19 @@ def activate(material):
     paths = [CERT_DIR / "fullchain.pem", CERT_DIR / "privkey.pem", CONFIG]
     old = {p: p.read_bytes() if p.exists() else None for p in paths}
     try:
-        for path, content in zip(paths, [material["certificate"].encode(), material["key"].encode(),
-                                         nginx_config(material["hostname"])]):
+        for path, content in zip(
+            paths,
+            [
+                material["certificate"].encode(),
+                material["key"].encode(),
+                nginx_config(material["hostname"]),
+            ],
+        ):
             atomic(path, content)
         subprocess.run(["/usr/sbin/nginx", "-t"], check=True, capture_output=True, timeout=30)
-        subprocess.run(["/usr/bin/systemctl", "reload", "nginx"], check=True, capture_output=True, timeout=30)
+        subprocess.run(
+            ["/usr/bin/systemctl", "reload", "nginx"], check=True, capture_output=True, timeout=30
+        )
     except Exception:
         for path, content in old.items():
             if content is None:
@@ -83,10 +92,15 @@ def main():
     directory = os.open(STATE, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         try:
-            fd = os.open("request.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+            fd = os.open(
+                "request.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory
+            )
         except FileNotFoundError:
             return
-        result = {"state": "error", "message": "No se activó HTTPS. Se conservó la configuración anterior."}
+        result = {
+            "state": "error",
+            "message": "No se activó HTTPS. Se conservó la configuración anterior.",
+        }
         try:
             with os.fdopen(fd, "rb") as stream:
                 if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
@@ -95,14 +109,22 @@ def main():
                 if len(raw) > 1024 * 1024:
                     raise ValueError("Request too large")
             request = json.loads(raw)
-            material = normalize(request["certificate"].encode(), request["key"].encode(), "", request["hostname"])
+            material = normalize(
+                request["certificate"].encode(), request["key"].encode(), "", request["hostname"]
+            )
             activate(material)
-            result = {"state": "active", "hostname": material["hostname"], "expires_at": material["expires_at"]}
+            result = {
+                "state": "active",
+                "hostname": material["hostname"],
+                "expires_at": material["expires_at"],
+            }
         except Exception:
             # Never put certificate contents, keys or subprocess output in status/logs.
             pass
         name = f"status-{os.urandom(16).hex()}"
-        out = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory)
+        out = os.open(
+            name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory
+        )
         account = pwd.getpwnam("dashboardapi")
         os.fchown(out, account.pw_uid, account.pw_gid)
         with os.fdopen(out, "w") as stream:

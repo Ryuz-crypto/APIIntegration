@@ -405,7 +405,7 @@ La versión 1.0 stable cubre los pasos 1 a 10: estabilización, Swagger 9.6, aut
 
 ## Licencia
 
-DashboardAPI-EC se distribuye bajo una [licencia de uso restringido](../LICENSE). La comercialización, el uso empresarial, la copia fuera de la instalación/respaldo y la redistribución requieren autorización escrita. Se conservan los derechos de terceros y los permisos concedidos sobre versiones anteriores. No es una licencia MIT.
+DashboardAPI-EC se distribuye bajo una [licencia de uso restringido](../LICENSE). La comercialización, la copia fuera de la instalación/respaldo y la redistribución requieren autorización escrita. Se permite el uso interno y se conservan los derechos de terceros y los permisos concedidos sobre versiones anteriores. No es una licencia MIT.
 
 ## Donaciones
 

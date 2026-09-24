@@ -193,7 +193,7 @@ El archivo `/etc/dashboardapi-ec/dashboardapi-ec.env` contiene la clave maestra.
 
 ## Licencia
 
-DashboardAPI-EC se distribuye bajo una **licencia de uso restringido**: evaluación, estudio y uso personal no comercial. Comercialización, uso empresarial, copia fuera de la instalación/respaldo y redistribución requieren autorización escrita. Los derechos de terceros y los permisos de versiones anteriores se conservan. Esta licencia no es MIT.
+DashboardAPI-EC se distribuye bajo una **licencia de uso restringido**: evaluación, estudio y uso interno. Comercialización, copia fuera de la instalación/respaldo y redistribución requieren autorización escrita. Los derechos de terceros y los permisos de versiones anteriores se conservan. Esta licencia no es MIT.
 
 Consulta el texto completo en [LICENSE](LICENSE).
 

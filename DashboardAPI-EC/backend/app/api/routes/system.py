@@ -17,12 +17,16 @@ router = APIRouter()
 
 def tls_authorized(request: Request, x_tls_admin_token: str = Header(default="")):
     if not settings.tls_enabled:
-        raise HTTPException(503, "HTTPS administrado requiere la instalación nativa Ubuntu actualizada.")
-    if not settings.tls_admin_token or not secrets.compare_digest(x_tls_admin_token, settings.tls_admin_token):
+        raise HTTPException(
+            503, "HTTPS administrado requiere la instalación nativa Ubuntu actualizada."
+        )
+    if not settings.tls_admin_token or not secrets.compare_digest(
+        x_tls_admin_token.encode(), settings.tls_admin_token.encode()
+    ):
         raise HTTPException(403, "Clave de administración incorrecta.")
     # Uvicorn trusts forwarded headers only from the local Nginx proxy.
     if request.url.scheme != "https" and (
-        not request.client or request.client.host not in {"127.0.0.1", "::1", "testclient"}
+        not request.client or request.client.host not in {"127.0.0.1", "::1"}
     ):
         raise HTTPException(400, "Utiliza HTTPS o el túnel SSH local para cargar el certificado.")
 
@@ -41,11 +45,19 @@ def tls_status():
 
 
 @router.post("/tls", status_code=202, dependencies=[Depends(tls_authorized)])
-async def upload_tls(hostname: str = Form(...), certificate: UploadFile = File(...),
-                     key: UploadFile | None = File(None), password: str = Form("")):
+async def upload_tls(
+    hostname: str = Form(...),
+    certificate: UploadFile = File(...),
+    key: UploadFile | None = File(None),
+    password: str = Form(""),
+):
     try:
-        material = normalize(await certificate.read(MAX_UPLOAD + 1),
-                             await key.read(MAX_UPLOAD + 1) if key else b"", password, hostname)
+        material = normalize(
+            await certificate.read(MAX_UPLOAD + 1),
+            await key.read(MAX_UPLOAD + 1) if key else b"",
+            password,
+            hostname,
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
     directory = Path(settings.tls_state_dir)
@@ -58,7 +70,9 @@ async def upload_tls(hostname: str = Form(...), certificate: UploadFile = File(.
         # Atomic publication without overwriting a pending request.
         os.link(temporary, directory / "request.json")
     except FileExistsError:
-        raise HTTPException(409, "Hay una solicitud pendiente; espera antes de volver a cargar.") from None
+        raise HTTPException(
+            409, "Hay una solicitud pendiente; espera antes de volver a cargar."
+        ) from None
     finally:
         temporary.unlink(missing_ok=True)
     return {"state": "pending", "message": "Validado. Ubuntu aplicará HTTPS en unos segundos."}

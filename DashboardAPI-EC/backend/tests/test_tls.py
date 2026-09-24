@@ -23,17 +23,24 @@ def material(days=30, name="dashboard.example.com"):
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
     now = datetime.now(UTC)
-    cert = (x509.CertificateBuilder().subject_name(subject).issuer_name(subject)
-            .public_key(key.public_key()).serial_number(x509.random_serial_number())
-            .not_valid_before(now - timedelta(days=2)).not_valid_after(now + timedelta(days=days))
-            .add_extension(x509.SubjectAlternativeName([x509.DNSName(name)]), critical=False)
-            .sign(key, hashes.SHA256()))
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=2))
+        .not_valid_after(now + timedelta(days=days))
+        .add_extension(x509.SubjectAlternativeName([x509.DNSName(name)]), critical=False)
+        .sign(key, hashes.SHA256())
+    )
     return cert, key
 
 
 def pem(cert, key):
     return cert.public_bytes(serialization.Encoding.PEM), key.private_bytes(
-        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    )
 
 
 @pytest.mark.parametrize("format", ["pem", "der", "pfx"])
@@ -41,14 +48,18 @@ def test_formats(format):
     cert, key = material()
     password = ""
     if format == "pfx":
-        certificate = pkcs12.serialize_key_and_certificates(b"dashboard", key, cert, None,
-                         serialization.BestAvailableEncryption(b"test-password"))
+        certificate = pkcs12.serialize_key_and_certificates(
+            b"dashboard", key, cert, None, serialization.BestAvailableEncryption(b"test-password")
+        )
         private = b""
         password = "test-password"
     elif format == "der":
         certificate = cert.public_bytes(serialization.Encoding.DER)
-        private = key.private_bytes(serialization.Encoding.DER, serialization.PrivateFormat.PKCS8,
-                                    serialization.NoEncryption())
+        private = key.private_bytes(
+            serialization.Encoding.DER,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
     else:
         certificate, private = pem(cert, key)
     result = normalize(certificate, private, password, "dashboard.example.com")
@@ -79,7 +90,7 @@ def test_upload_authorization_and_queue(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "tls_state_dir", str(tmp_path))
     app = FastAPI()
     app.include_router(router)
-    client = TestClient(app)
+    client = TestClient(app, client=("127.0.0.1", 12345))
     cert, key = pem(*material())
     files = {"certificate": ("cert.pem", cert), "key": ("key.pem", key)}
     data = {"hostname": "dashboard.example.com"}
@@ -93,7 +104,9 @@ def test_upload_authorization_and_queue(tmp_path, monkeypatch):
     assert client.post("/tls", files=files, data=data, headers=headers).status_code == 409
     remote = TestClient(app, client=("203.0.113.1", 12345))
     assert remote.get("/tls", headers=headers).status_code == 400
-    secure = TestClient(app, base_url="https://dashboard.example.com", client=("203.0.113.1", 12345))
+    secure = TestClient(
+        app, base_url="https://dashboard.example.com", client=("203.0.113.1", 12345)
+    )
     assert secure.get("/tls", headers=headers).status_code == 200
     monkeypatch.setattr(settings, "tls_enabled", False)
     assert client.get("/tls", headers=headers).status_code == 503
@@ -110,10 +123,12 @@ def test_activation_rolls_back(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "CONFIG", config)
     monkeypatch.setattr(module, "CERT_DIR", tmp_path / "certs")
     calls = []
+
     def fail_validation(command, **kwargs):
         calls.append(command)
         if command[-1] == "-t":
             raise subprocess.CalledProcessError(1, command)
+
     monkeypatch.setattr(module.subprocess, "run", fail_validation)
     with pytest.raises(subprocess.CalledProcessError):
         module.activate(normalize(*pem(*material()), "", "dashboard.example.com"))

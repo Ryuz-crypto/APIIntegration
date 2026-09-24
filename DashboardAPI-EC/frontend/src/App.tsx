@@ -103,12 +103,12 @@ function App() {
 
         <Box component="main" sx={{ flex: 1, ml: { xs: 0, md: "232px" }, minWidth: 0 }}>
           <Box sx={{ p: { xs: 2, md: 3.5 }, maxWidth: 1500, mx: "auto" }}>
-            <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={2} sx={{ mb: 3 }}>
+            <Stack direction={{ xs: "column", xl: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", xl: "center" }} spacing={2} sx={{ mb: 3 }}>
               <Box>
                 <Typography variant="h1">Estado de la red</Typography>
                 <Typography color="text.secondary">Inventario y capacidades obtenidas desde las APIs de EdgeConnect</Typography>
               </Box>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} useFlexGap flexWrap="wrap">
                 {orchestrators.length ? <Select size="small" value={selectedOrchestrator} onChange={(event) => setSelectedOrchestrator(event.target.value)} sx={{ minWidth: 220 }}>{orchestrators.map((item) => <MenuItem key={item.id} value={item.id}>{item.name} · {item.api_version ?? "sin validar"}</MenuItem>)}</Select> : null}
                 <Button variant="contained" startIcon={<Plus size={17} />} onClick={() => setWizardOpen(true)}>Conectar Orchestrator</Button>
                 <Button variant="outlined" startIcon={<ShieldCheck size={17} />} onClick={() => setTlsOpen(true)}>Certificado HTTPS</Button>
