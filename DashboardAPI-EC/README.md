@@ -402,3 +402,23 @@ La versión 1.0 stable cubre los pasos 1 a 10: estabilización, Swagger 9.6, aut
 - [Authentication: CSRF Token & API Key](https://developer.arubanetworks.com/edgeconnect/docs/authentication)
 - [Orchestrator and EdgeConnect API endpoints](https://developer.arubanetworks.com/edgeconnect/docs/aruba-orchestrator-and-edgeconnect-api-endpoints)
 - [REST API Monitoring](https://developer.arubanetworks.com/edgeconnect/docs/monitoring)
+
+## Licencia
+
+DashboardAPI-EC se distribuye bajo la [Licencia MIT](../LICENSE). Se permite su uso, modificación y redistribución, incluso con fines comerciales, siempre que se conserve el aviso de copyright y la licencia.
+
+## Donaciones
+
+```text
+╭──────────────────────────────────────────────────────╮
+│              ♥  APOYA DASHBOARDAPI-EC  ♥             │
+│   Ayuda a mantener el proyecto abierto y en marcha.  │
+│          Donaciones: decameru@outlook.com            │
+╰──────────────────────────────────────────────────────╯
+```
+
+Para conocer los medios disponibles, escribe a [decameru@outlook.com](mailto:decameru@outlook.com).
+
+## Contacto
+
+**[decameru@outlook.com](mailto:decameru@outlook.com)**
