@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+BUILD_STAGE="initialization"
+trap 'status=$?; echo "::error title=DashboardAPI-EC package build::${BUILD_STAGE} failed at line ${LINENO}" >&2; exit "$status"' ERR
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="1.0.0"
 
@@ -35,13 +38,16 @@ install -m 0755 "$ROOT_DIR/packaging/debian/preinst" "$STAGE/DEBIAN/preinst"
 install -m 0755 "$ROOT_DIR/packaging/debian/postinst" "$STAGE/DEBIAN/postinst"
 install -m 0755 "$ROOT_DIR/packaging/debian/prerm" "$STAGE/DEBIAN/prerm"
 
+BUILD_STAGE="Python wheel build"
 python3 -m pip wheel --wheel-dir "$STAGE/opt/dashboardapi-ec/wheels" "$ROOT_DIR/backend"
 cp -a "$ROOT_DIR/backend/alembic" "$STAGE/opt/dashboardapi-ec/backend/"
 cp -a "$ROOT_DIR/backend/app" "$STAGE/opt/dashboardapi-ec/backend/"
 cp "$ROOT_DIR/backend/alembic.ini" "$STAGE/opt/dashboardapi-ec/backend/"
 
 cd "$ROOT_DIR/frontend"
+BUILD_STAGE="frontend dependency installation"
 if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+BUILD_STAGE="frontend production build"
 npm run build
 cp -a dist/. "$STAGE/usr/share/dashboardapi-ec/frontend/"
 
@@ -50,5 +56,6 @@ install -m 0644 "$ROOT_DIR/packaging/systemd/dashboardapi-ec-worker.service" "$S
 install -m 0644 "$ROOT_DIR/packaging/nginx/dashboardapi-ec.conf" "$STAGE/etc/nginx/sites-available/dashboardapi-ec"
 
 mkdir -p "$ROOT_DIR/dist"
-dpkg-deb --build --root-owner-group "$STAGE" "$ROOT_DIR/dist/dashboardapi-ec_${VERSION}_${ARCH}.deb"
+BUILD_STAGE="Debian archive assembly"
+dpkg-deb --root-owner-group --build "$STAGE" "$ROOT_DIR/dist/dashboardapi-ec_${VERSION}_${ARCH}.deb"
 echo "Created dist/dashboardapi-ec_${VERSION}_${ARCH}.deb"
