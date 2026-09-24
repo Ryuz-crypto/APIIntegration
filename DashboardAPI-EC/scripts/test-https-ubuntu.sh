@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 TLS_TEST_STAGE="install"
-trap 'echo "::error title=HTTPS integration::Stage ${TLS_TEST_STAGE} failed at line ${LINENO}" >&2' ERR
+trap 'echo "::error title=HTTPS integration::Stage ${TLS_TEST_STAGE} failed at line ${LINENO}" >&2; sudo nginx -T' ERR
 # Disposable CI host only: installs the package and configures its Nginx site.
 sudo apt-get install -y ./dist/dashboardapi-ec_1.0.0_*.deb
 TLS_TEST_DIR="$(mktemp -d)"

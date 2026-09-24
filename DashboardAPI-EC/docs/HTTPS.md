@@ -71,7 +71,8 @@ Las actualizaciones del paquete conservan la configuración y los certificados a
 - FastAPI valida y normaliza los archivos, sin ejecutar comandos privilegiados.
 - `dashboardapi-ec-tls.timer` comprueba cada 15 segundos si hay una solicitud.
 - `dashboardapi-ec-tls.service` vuelve a validar el material, instala los archivos,
-  ejecuta `nginx -t` y recarga Nginx. Si falla, restaura la configuración anterior.
+  ejecuta `nginx -t` y recarga Nginx. Antes de marcarlo activo, comprueba en el
+  servidor el certificado servido y la redirección HTTP. Si falla, restaura la configuración anterior.
 - HTTP redirige con 308 al DNS/IP configurado. HTTPS admite TLS 1.2 y 1.3.
 - El certificado está en `/etc/dashboardapi-ec/tls/fullchain.pem` y la clave
   normalizada sin contraseña en `/etc/dashboardapi-ec/tls/privkey.pem`, accesibles

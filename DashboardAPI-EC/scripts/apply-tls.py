@@ -1,13 +1,20 @@
 #!/opt/dashboardapi-ec/venv/bin/python
 """Root-only activator; accepts certificate material, never configuration or commands."""
 
+import http.client
 import json
 import os
 import pwd
+import socket
+import ssl
 import stat
 import subprocess
 import tempfile
+import time
 from pathlib import Path
+
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization
 
 from app.services.tls_service import normalize
 
@@ -58,6 +65,41 @@ server {{
 """.encode()
 
 
+def wait_for_https(material):
+    """A successful reload signal alone does not mean the new workers are ready."""
+    expected = x509.load_pem_x509_certificates(material["certificate"].encode())[0].public_bytes(
+        serialization.Encoding.DER
+    )
+    hostname = material["hostname"]
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    # Trust the exact uploaded certificate, including private/internal CAs.
+    # This is a loopback readiness probe, not an outbound Orchestrator connection.
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        connection = http.client.HTTPConnection("127.0.0.1", 80, timeout=1)
+        try:
+            with socket.create_connection(("127.0.0.1", 443), timeout=1) as raw:
+                with context.wrap_socket(raw, server_hostname=hostname) as secure:
+                    certificate_matches = secure.getpeercert(binary_form=True) == expected
+            connection.request("GET", "/", headers={"Host": host, "Connection": "close"})
+            response = connection.getresponse()
+            if (
+                certificate_matches
+                and response.status == 308
+                and response.getheader("Location") == f"https://{host}/"
+            ):
+                return
+        except (OSError, http.client.HTTPException):
+            pass
+        finally:
+            connection.close()
+        time.sleep(0.25)
+    raise RuntimeError("Nginx did not activate the expected certificate and redirect")
+
+
 def activate(material):
     CERT_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     paths = [CERT_DIR / "fullchain.pem", CERT_DIR / "privkey.pem", CONFIG]
@@ -76,6 +118,7 @@ def activate(material):
         subprocess.run(
             ["/usr/bin/systemctl", "reload", "nginx"], check=True, capture_output=True, timeout=30
         )
+        wait_for_https(material)
     except Exception:
         for path, content in old.items():
             if content is None:
