@@ -13,6 +13,9 @@ def record_success(
     api_version: str | None,
     response: EdgeConnectResponse,
     appliance_id: uuid.UUID | None = None,
+    request_params: dict | None = None,
+    extracted_values: dict | None = None,
+    transformations: list | None = None,
 ) -> ApiSample:
     sample = ApiSample(
         orchestrator_id=orchestrator_id,
@@ -25,6 +28,9 @@ def record_success(
         duration_ms=response.duration_ms,
         ok=True,
         payload=response.payload,
+        request_params=request_params or {},
+        extracted_values=extracted_values or {},
+        transformations=transformations or [],
     )
     session.add(sample)
     return sample
@@ -49,6 +55,9 @@ def record_error(
         duration_ms=error.duration_ms,
         ok=False,
         payload=error.payload,
+        request_params={},
+        extracted_values={},
+        transformations=[],
         error=str(error),
     )
     session.add(sample)

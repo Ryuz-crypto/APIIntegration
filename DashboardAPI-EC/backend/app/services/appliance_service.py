@@ -9,6 +9,7 @@ from app.models.orchestrator import Orchestrator
 from app.schemas.appliance import ApplianceCreate
 from app.services.audit_service import record_event
 from app.services.edgeconnect_client import EdgeConnectClient, EdgeConnectClientError
+from app.services.normalization_service import normalize_inventory, normalize_metrics
 from app.services.sample_service import record_error, record_success
 
 
@@ -43,10 +44,23 @@ def discover_appliances(
         session.commit()
         raise
 
-    record_success(session, orchestrator.id, version, response)
+    raw_items = _extract_items(response.payload)
+    appliances = [_upsert_appliance(session, orchestrator, item) for item in raw_items]
+    session.flush()
+    sample = record_success(
+        session,
+        orchestrator.id,
+        version,
+        response,
+        extracted_values={"inventory_count": len(appliances)},
+        transformations=["Extract inventory list", "Normalize appliances and sites"],
+    )
+    session.flush()
+    normalized = normalize_inventory(session, orchestrator.id, appliances, raw_items, sample)
+    sample.extracted_values = {**sample.extracted_values, **normalized}
+    session.add(sample)
     _mark_verified(orchestrator, operation_id)
     session.add(orchestrator)
-    appliances = [_upsert_appliance(session, orchestrator, item) for item in _extract_items(response.payload)]
     record_event(
         session,
         "appliance.discovered",
@@ -79,7 +93,19 @@ def collect_appliance_metrics(
         session.commit()
         raise
 
-    record_success(session, orchestrator.id, version, response, appliance.id)
+    sample = record_success(
+        session,
+        orchestrator.id,
+        version,
+        response,
+        appliance.id,
+        request_params={"appliance_id": appliance_key},
+        transformations=["Flatten numeric fields", "Persist normalized metric points"],
+    )
+    session.flush()
+    values = normalize_metrics(session, orchestrator.id, appliance, response.payload, sample)
+    sample.extracted_values = values
+    session.add(sample)
     _mark_verified(orchestrator, operation_id)
     session.add(orchestrator)
     appliance.status = "sampled"

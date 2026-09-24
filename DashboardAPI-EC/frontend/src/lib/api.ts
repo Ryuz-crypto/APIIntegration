@@ -78,8 +78,44 @@ export type ApiSample = {
   duration_ms: number | null;
   ok: boolean;
   payload: Record<string, unknown>;
+  request_params: Record<string, unknown>;
+  extracted_values: Record<string, unknown>;
+  transformations: string[];
   error: string | null;
   created_at: string;
+};
+
+export type ApiTrace = ApiSample & {
+  sanitized_payload: Record<string, unknown>;
+  code_examples: { curl: string; python: string; javascript: string };
+};
+
+export type DashboardWidget = {
+  id: string;
+  title: string;
+  description: string;
+  visualization: "stat" | "bars" | "table" | "timeseries" | "status";
+  status: "ready" | "waiting" | "unavailable";
+  reason: string | null;
+  value: number | string | null;
+  unit: string | null;
+  data: Array<Record<string, unknown>>;
+  required_operations: string[];
+  provenance: {
+    sample_id: string | null;
+    operation_id: string;
+    method: string | null;
+    path: string | null;
+    collected_at: string | null;
+  } | null;
+};
+
+export type Dashboard = {
+  orchestrator_id: string;
+  orchestrator_name: string;
+  api_version: string | null;
+  generated_at: string;
+  sections: Array<{ id: string; title: string; widgets: DashboardWidget[] }>;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -99,6 +135,8 @@ export const api = {
   appliances: () => request<Appliance[]>("/appliances"),
   profiles: () => request<CompatibilityProfile[]>("/compatibility/profiles"),
   samples: () => request<ApiSample[]>("/samples"),
+  trace: (sampleId: string) => request<ApiTrace>(`/samples/${sampleId}/trace`),
+  dashboard: (orchestratorId: string) => request<Dashboard>(`/dashboard/${orchestratorId}`),
   createOrchestrator: (payload: {
     name: string;
     base_url: string;

@@ -13,6 +13,10 @@ La versión 1.0 se soporta exclusivamente en Ubuntu y se distribuye como paquete
 - Importación persistente de documentos OpenAPI 3 y Swagger 2 en JSON o YAML.
 - Activación explícita de perfiles importados y checksum SHA-256 del documento original.
 - Descubrimiento real de appliances y registro de capacidades declaradas y verificadas.
+- Modelo normalizado de appliances, sitios y métricas con referencia a la muestra API original.
+- Dashboard ensamblado en tiempo de ejecución según versión y capacidades disponibles.
+- Inspector visual con método, ruta, parámetros, valores extraídos, transformaciones, latencia y respuesta sanitizada.
+- Ejemplos reproducibles en cURL, Python y JavaScript sin exponer credenciales reales.
 - Credenciales cifradas, respuestas sin secretos y OTP de uso único no persistente.
 - Backend FastAPI, frontend React, PostgreSQL, Redis, Celery y Nginx.
 - Migraciones de base de datos con Alembic.
@@ -27,6 +31,57 @@ El asistente solicita, en orden:
 3. Método de autenticación y credenciales.
 4. Validación TLS y timeout.
 5. Detección de versión, perfil compatible, capacidades e inventario.
+
+Después de la conexión, el frontend solicita `/api/v1/dashboard/{id}`. El backend cruza el perfil de la versión detectada con las operaciones declaradas, las capacidades verificadas y las muestras disponibles. Con ese resultado entrega una definición de dashboard lista para renderizar. Una tarjeta puede estar en uno de estos estados:
+
+| Estado | Significado |
+| --- | --- |
+| `ready` | La capacidad existe y ya hay una muestra que respalda la visualización. |
+| `waiting` | La capacidad existe, pero falta ejecutar la primera consulta. |
+| `unavailable` | La versión o el Swagger activo no declara la operación requerida. |
+
+El frontend no supone que todos los Orchestrators ofrecen los mismos datos. Muestra cada módulo según la definición devuelta por el backend y explica por qué una capacidad todavía no está disponible.
+
+## Normalización y trazabilidad
+
+Las respuestas del fabricante se conservan como muestras inmutables en `apisample`. Sobre ellas se construye un modelo común:
+
+- `networkresource`: recursos identificables como appliances y sitios, con atributos del fabricante y estado observado;
+- `metricpoint`: valores numéricos con namespace, unidad inferida, dimensiones y fecha de observación;
+- `source_sample_id`: enlace desde cada recurso o métrica hacia la llamada que produjo el dato;
+- `source_operation_id`: nombre estable de la operación, independiente de la ruta usada en cada versión.
+
+El flujo de datos es:
+
+```text
+Swagger / perfil 9.x
+        │ resuelve operación estable
+        ▼
+Cliente EdgeConnect ──► muestra API sin modificar
+        │                         │
+        │ normaliza               │ conserva evidencia
+        ▼                         ▼
+recursos + métricas ──► compositor de widgets
+                                  │
+                                  ▼
+                        dashboard + inspector API
+```
+
+Durante el descubrimiento, el inventario se transforma en recursos `appliance` y `site`. Durante la colección de rendimiento, todos los campos numéricos se aplanan en puntos métricos. Los booleanos no se interpretan como números. La respuesta original continúa disponible para auditoría.
+
+## Inspector API
+
+Cada widget con evidencia ofrece **Ver API utilizada**. El panel lateral muestra:
+
+1. operación estable, método HTTP y ruta resuelta para la versión;
+2. código HTTP y tiempo de respuesta;
+3. parámetros utilizados;
+4. valores que alimentan la visualización;
+5. transformaciones aplicadas;
+6. JSON sanitizado;
+7. ejemplos equivalentes en cURL, Python y JavaScript.
+
+El sanitizador reemplaza valores asociados con contraseñas, tokens, API keys, cookies, encabezados de autorización y CSRF por `[REDACTED]`. Los ejemplos emplean las variables `ORCHESTRATOR_URL` y `EDGECONNECT_API_KEY`; nunca incluyen el secreto guardado.
 
 Para OaaS se recomienda crear una API key dedicada con permisos de solo lectura. El administrador completa el segundo factor en la interfaz de Orchestrator al crear la clave; DashboardAPI-EC usa después la clave en `X-Auth-Token`. El OTP interactivo también está soportado para instalaciones que lo expongan en el login, pero no se almacena y por ello no puede utilizarse para polling desatendido.
 
@@ -186,7 +241,42 @@ Los servicios no codifican rutas de EdgeConnect directamente. Solicitan operacio
 | `GET` | `/api/v1/appliances` | Listar appliances |
 | `POST` | `/api/v1/appliances/{id}/collect` | Obtener métricas |
 | `GET` | `/api/v1/samples` | Revisar llamadas y respuestas |
+| `GET` | `/api/v1/samples/{id}/trace` | Obtener evidencia sanitizada y ejemplos de código |
+| `GET` | `/api/v1/dashboard/{orchestrator_id}` | Componer widgets según capacidades y datos disponibles |
 | `POST` | `/api/v1/compatibility/swagger` | Importar OpenAPI/Swagger |
+
+### Ejemplo de dashboard dinámico
+
+```bash
+curl http://localhost/api/v1/dashboard/ORCHESTRATOR_UUID
+```
+
+Respuesta abreviada:
+
+```json
+{
+  "orchestrator_name": "EdgeConnect Producción",
+  "api_version": "9.6",
+  "sections": [
+    {
+      "id": "fleet",
+      "widgets": [
+        {
+          "id": "appliances",
+          "status": "ready",
+          "value": 12,
+          "required_operations": ["orchestrator.inventory.summary"],
+          "provenance": {
+            "sample_id": "...",
+            "method": "GET",
+            "path": "/appliance"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
 
 ## Desarrollo
 
@@ -216,6 +306,19 @@ Construcción de producción:
 cd frontend
 npm run build
 ```
+
+Validaciones utilizadas para la versión 1.0:
+
+```bash
+cd backend
+ruff check app tests
+pytest -q
+
+cd ../frontend
+npm run build
+```
+
+La migración `20260923_0002` añade recursos normalizados, puntos métricos y metadatos de trazabilidad. Puede aplicarse sobre una instalación 1.0 existente con `alembic upgrade head`; también funciona en una instalación nueva.
 
 ## Docker para desarrollo
 
@@ -249,7 +352,7 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 
 ## Estado de la versión
 
-La versión 1.0 cubre estabilización, Swagger 9.6, autenticación, asistente de configuración, detección de versión y descubrimiento inicial de capacidades. El siguiente incremento incorporará composición dinámica de widgets, inspector visual de API, series temporales y alarmas en tiempo real.
+La versión 1.0 stable cubre estabilización, Swagger 9.6, autenticación, asistente de configuración, detección de versión, inventario normalizado, composición dinámica de widgets e inspector visual de API. Las series históricas agregadas, alarmas en tiempo real y más colectores especializados quedan preparadas como ampliaciones posteriores sobre `metricpoint` y `networkresource`.
 
 ## Referencias oficiales
 

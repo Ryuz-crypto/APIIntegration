@@ -16,7 +16,21 @@ class ApiSampleRead(BaseModel):
     duration_ms: int | None
     ok: bool
     payload: dict
+    request_params: dict
+    extracted_values: dict
+    transformations: list
     error: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ApiCodeExamples(BaseModel):
+    curl: str
+    python: str
+    javascript: str
+
+
+class ApiTraceRead(ApiSampleRead):
+    sanitized_payload: dict
+    code_examples: ApiCodeExamples

@@ -1,13 +1,14 @@
-import { Box, Button, CssBaseline, Grid, Paper, Stack, ThemeProvider, Typography } from "@mui/material";
+import { Box, Button, CssBaseline, Grid, MenuItem, Paper, Select, Stack, ThemeProvider, Typography } from "@mui/material";
 import { Activity, Boxes, Database, Gauge, Network, Plus, RadioTower, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { MetricCard } from "./components/MetricCard";
 import { AppliancePanel } from "./features/appliances/AppliancePanel";
+import { DynamicDashboard } from "./features/dashboard/DynamicDashboard";
 import { OrchestratorPanel } from "./features/orchestrators/OrchestratorPanel";
 import { SetupWizard } from "./features/setup/SetupWizard";
 import { CompatibilityPanel } from "./features/system/CompatibilityPanel";
 import { SamplesPanel } from "./features/system/SamplesPanel";
-import { api, ApiSample, Appliance, CompatibilityProfile, Orchestrator, SystemOverview } from "./lib/api";
+import { api, ApiSample, Appliance, CompatibilityProfile, Dashboard, Orchestrator, SystemOverview } from "./lib/api";
 import { theme } from "./theme/theme";
 
 const navigation = [
@@ -23,6 +24,8 @@ function App() {
   const [appliances, setAppliances] = useState<Appliance[]>([]);
   const [profiles, setProfiles] = useState<CompatibilityProfile[]>([]);
   const [samples, setSamples] = useState<ApiSample[]>([]);
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [selectedOrchestrator, setSelectedOrchestrator] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
 
@@ -33,6 +36,7 @@ function App() {
       ]);
       setOverview(nextOverview);
       setOrchestrators(nextOrchestrators);
+      setSelectedOrchestrator((current) => nextOrchestrators.some((item) => item.id === current) ? current : (nextOrchestrators[0]?.id ?? ""));
       setAppliances(nextAppliances);
       setProfiles(nextProfiles);
       setSamples(nextSamples);
@@ -43,6 +47,10 @@ function App() {
   }
 
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    if (!selectedOrchestrator) { setDashboard(null); return; }
+    api.dashboard(selectedOrchestrator).then(setDashboard).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [selectedOrchestrator, samples, appliances]);
 
   return (
     <ThemeProvider theme={theme}>
@@ -98,7 +106,10 @@ function App() {
                 <Typography variant="h1">Estado de la red</Typography>
                 <Typography color="text.secondary">Inventario y capacidades obtenidas desde las APIs de EdgeConnect</Typography>
               </Box>
-              <Button variant="contained" startIcon={<Plus size={17} />} onClick={() => setWizardOpen(true)}>Conectar Orchestrator</Button>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+                {orchestrators.length ? <Select size="small" value={selectedOrchestrator} onChange={(event) => setSelectedOrchestrator(event.target.value)} sx={{ minWidth: 220 }}>{orchestrators.map((item) => <MenuItem key={item.id} value={item.id}>{item.name} · {item.api_version ?? "sin validar"}</MenuItem>)}</Select> : null}
+                <Button variant="contained" startIcon={<Plus size={17} />} onClick={() => setWizardOpen(true)}>Conectar Orchestrator</Button>
+              </Stack>
             </Stack>
 
             {error ? <Paper sx={{ p: 2, mb: 2, borderColor: "error.main" }}><Typography color="error">{error}</Typography></Paper> : null}
@@ -108,6 +119,7 @@ function App() {
               <Grid item xs={12} sm={6} lg={3}><MetricCard label="Appliances" value={overview?.appliances ?? 0} detail={`${overview?.selected_appliances ?? 0} seleccionados`} icon={<Activity size={22} />} /></Grid>
               <Grid item xs={12} sm={6} lg={3}><MetricCard label="Perfiles API" value={overview?.compatibility_profiles ?? profiles.length} detail="9.3 a 9.6" icon={<Database size={22} />} /></Grid>
               <Grid item xs={12} sm={6} lg={3}><MetricCard label="Muestras API" value={overview?.services?.api_samples ?? "0"} detail="Trazabilidad disponible" icon={<ShieldCheck size={22} />} /></Grid>
+              <Grid item xs={12}><DynamicDashboard dashboard={dashboard} /></Grid>
               <Grid item xs={12}><OrchestratorPanel items={orchestrators} onChanged={load} onAdd={() => setWizardOpen(true)} /></Grid>
               <Grid item xs={12} lg={5}><CompatibilityPanel profiles={profiles} /></Grid>
               <Grid item xs={12} lg={7}><AppliancePanel items={appliances} onChanged={load} /></Grid>
