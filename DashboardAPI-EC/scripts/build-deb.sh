@@ -57,5 +57,13 @@ install -m 0644 "$ROOT_DIR/packaging/nginx/dashboardapi-ec.conf" "$STAGE/etc/ngi
 
 mkdir -p "$ROOT_DIR/dist"
 BUILD_STAGE="Debian archive assembly"
-dpkg-deb --root-owner-group --build "$STAGE" "$ROOT_DIR/dist/dashboardapi-ec_${VERSION}_${ARCH}.deb"
+if ! DPKG_OUTPUT="$(dpkg-deb --root-owner-group --build "$STAGE" "$ROOT_DIR/dist/dashboardapi-ec_${VERSION}_${ARCH}.deb" 2>&1)"; then
+  echo "$DPKG_OUTPUT" >&2
+  ANNOTATION="${DPKG_OUTPUT//'%'/'%25'}"
+  ANNOTATION="${ANNOTATION//$'\r'/'%0D'}"
+  ANNOTATION="${ANNOTATION//$'\n'/'%0A'}"
+  echo "::error title=Debian archive assembly::${ANNOTATION}" >&2
+  exit 2
+fi
+echo "$DPKG_OUTPUT"
 echo "Created dist/dashboardapi-ec_${VERSION}_${ARCH}.deb"
