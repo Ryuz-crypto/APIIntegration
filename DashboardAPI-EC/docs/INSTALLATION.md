@@ -4,7 +4,7 @@ DashboardAPI-EC 1.0 stable se instala únicamente en Ubuntu. El método recomend
 
 ## Requisitos
 
-- Ubuntu 24.04 LTS `amd64` o `arm64`.
+- Ubuntu 24.04 LTS `amd64` o `arm64`, con Python 3.12 del sistema. Ubuntu 20.04 incluye Python 3.8 y Ubuntu 22.04 Python 3.10; no son compatibles con DashboardAPI-EC 1.0.
 - 4 GB de RAM como mínimo y 8 GB recomendados.
 - 10 GB libres.
 - Acceso HTTPS desde el servidor hacia cada EdgeConnect Orchestrator.
@@ -19,6 +19,11 @@ git clone https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/DashboardAPI-EC
 sudo ./scripts/install-ubuntu.sh
 ```
+
+El instalador comprueba Ubuntu 24.04 y Python 3.12 antes de instalar paquetes o
+construir el `.deb`. Si muestra otra versión, actualiza el servidor a Ubuntu 24.04
+LTS; instalar Python adicional sobre Ubuntu 20.04/22.04 no convierte esas
+plataformas en una instalación soportada.
 
 El instalador muestra la URL al terminar. Normalmente será:
 

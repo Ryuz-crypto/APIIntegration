@@ -12,14 +12,20 @@ if [[ ! -r /etc/os-release ]]; then
   exit 1
 fi
 . /etc/os-release
-if [[ "${ID:-}" != "ubuntu" ]]; then
-  echo "DashboardAPI-EC .deb builds are supported only on Ubuntu." >&2
+if [[ "${ID:-}" != "ubuntu" || "${VERSION_ID:-}" != "24.04" ]]; then
+  echo "DashboardAPI-EC .deb builds require Ubuntu 24.04 LTS with Python 3.12." >&2
+  echo "Detected system: ${PRETTY_NAME:-unknown}." >&2
   exit 1
 fi
 
 for command in dpkg-deb python3 npm; do
   command -v "$command" >/dev/null || { echo "Missing build dependency: $command" >&2; exit 1; }
 done
+
+if ! python3 -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))'; then
+  echo "DashboardAPI-EC .deb builds require Python 3.12; detected: $(python3 --version)." >&2
+  exit 1
+fi
 
 ARCH="$(dpkg --print-architecture)"
 BUILD_DIR="$(mktemp -d)"
