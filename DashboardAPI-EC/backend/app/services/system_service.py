@@ -1,7 +1,7 @@
 from sqlmodel import Session, func, select
 
-from app.models.appliance import Appliance
 from app.models.api_sample import ApiSample
+from app.models.appliance import Appliance
 from app.models.compatibility import ApiCompatibilityProfile
 from app.models.orchestrator import Orchestrator
 from app.schemas.system import SystemOverview

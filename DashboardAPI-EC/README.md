@@ -1,308 +1,259 @@
-# DashboardAPI-EC
+# DashboardAPI-EC 1.0 stable
 
-Primera fase en código para una plataforma NOC/SOC de Aruba EdgeConnect.
+DashboardAPI-EC es un servicio web para descubrir, consultar y visualizar entornos HPE Aruba Networking EdgeConnect. La aplicación identifica la versión del Orchestrator, carga su perfil de compatibilidad, descubre los appliances administrados y conserva evidencia de cada llamada API utilizada para construir el dashboard.
 
-Esta fase deja una base instalable y modular:
+La versión 1.0 se soporta exclusivamente en Ubuntu y se distribuye como paquete `.deb`.
 
-- Backend FastAPI con modelos para Orchestrators, Appliances, perfiles API y auditoría.
-- Compatibility Layer obligatorio para resolver operaciones por versión.
-- Perfiles iniciales para EdgeConnect 9.3, 9.4, 9.5 y 9.6.
-- Swagger Loader base para generar perfiles sin cambiar código.
-- Workers Celery preparados para polling.
-- PostgreSQL con TimescaleDB y Redis.
-- Frontend React, TypeScript y Material UI en dark theme.
-- Nginx como punto de entrada.
-- Documentos MTDS y ADR para guiar las siguientes fases.
-- Fase 2: cliente HTTP real para EdgeConnect, credenciales cifradas, discovery real y muestras API persistidas.
+## Alcance de 1.0
 
----
+- Asistente web para conectar Orchestrator on-premises y Orchestrator as a Service.
+- Autenticación mediante API key `X-Auth-Token`, sesión local con CSRF, sesión interactiva con OTP y HTTP Basic.
+- Detección estricta de versiones 9.3, 9.4, 9.5 y 9.6. Una versión desconocida nunca se acepta por aproximación.
+- Perfil compatible con EdgeConnect 9.6 basado en la referencia pública de HPE Aruba Networking.
+- Importación persistente de documentos OpenAPI 3 y Swagger 2 en JSON o YAML.
+- Activación explícita de perfiles importados y checksum SHA-256 del documento original.
+- Descubrimiento real de appliances y registro de capacidades declaradas y verificadas.
+- Credenciales cifradas, respuestas sin secretos y OTP de uso único no persistente.
+- Backend FastAPI, frontend React, PostgreSQL, Redis, Celery y Nginx.
+- Migraciones de base de datos con Alembic.
+- Instalación nativa mediante `.deb` y servicios `systemd`.
 
-## 📥 Instalación desde 0 (Linux Workstation)
+## Flujo de conexión
 
-### Requisitos previos
-- **Sistema operativo**: Ubuntu 22.04 LTS (o cualquier distribución Linux moderna).
-- **Permisos**: Usuario con `sudo` o root.
-- **Conexión a Internet**: Para descargar dependencias.
+El asistente solicita, en orden:
 
----
+1. Tipo de despliegue: OaaS u on-premises.
+2. URL, nombre y tenant o región opcional.
+3. Método de autenticación y credenciales.
+4. Validación TLS y timeout.
+5. Detección de versión, perfil compatible, capacidades e inventario.
 
-### 1️⃣ Instalar Docker y Docker Compose
+Para OaaS se recomienda crear una API key dedicada con permisos de solo lectura. El administrador completa el segundo factor en la interfaz de Orchestrator al crear la clave; DashboardAPI-EC usa después la clave en `X-Auth-Token`. El OTP interactivo también está soportado para instalaciones que lo expongan en el login, pero no se almacena y por ello no puede utilizarse para polling desatendido.
 
-Abre una terminal y ejecuta:
+## Swagger y compatibilidad 9.6
 
-```bash
-# Actualizar paquetes del sistema
-sudo apt update && sudo apt upgrade -y
+La aplicación incluye un perfil 9.6 para las operaciones necesarias durante conexión y descubrimiento. Además, permite importar el Swagger completo proporcionado por el Orchestrator.
 
-# Instalar dependencias necesarias
-sudo apt install -y ca-certificates curl gnupg
-
-# Añadir la clave GPG de Docker
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
-
-# Añadir el repositorio de Docker
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Instalar Docker
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# Verificar instalación
-docker --version
-docker compose version
-```
-
-> ⚠️ **Nota**: Si usas otra distribución (ej. Debian, Fedora), consulta la [documentación oficial de Docker](https://docs.docker.com/engine/install/).
-
----
-
-### 2️⃣ Clonar el repositorio y cambiar a la rama con los fixes
-
-```bash
-# Clonar el proyecto
-git clone https://github.com/Ryuz-crypto/APIIntegration.git
-cd APIIntegration/DashboardAPI-EC
-
-# Cambiar a la rama con los fixes para Docker y pip
-git checkout vibe/fix-docker-pip-errors-e158a5
-```
-
----
-
-### 3️⃣ Configurar variables de entorno
-
-```bash
-# Copiar el archivo de ejemplo
-cp .env.example .env
-
-# Editar el archivo .env (opcional)
-# Puedes modificar contraseñas o puertos si es necesario:
-nano .env
-```
-
-> 🔹 **Variables importantes en `.env`**:
-> - `POSTGRES_USER`: Usuario de PostgreSQL (default: `edgeconnect`).
-> - `POSTGRES_PASSWORD`: Contraseña de PostgreSQL (default: `edgeconnect`).
-> - `POSTGRES_DB`: Base de datos (default: `edgeconnect`).
-
----
-
-### 4️⃣ Construir y levantar la plataforma
-
-```bash
-# Construir imágenes (IMPORTANTE: Usar --no-cache para aplicar los fixes)
-docker compose build --no-cache
-
-# Levantar todos los servicios
-docker compose up -d
-```
-
-> ⏳ **Tiempo estimado**: 
-> - Primera construcción: ~10-15 minutos (depende de tu conexión a Internet).
-> - Inicios posteriores: ~1-2 minutos (gracias a la caché).
-
-> ⚠️ **Nota**: Si ves errores de timeout al instalar dependencias de Python (ej. `ReadTimeoutError`), **ejecuta el comando de construcción con `--no-cache`** para forzar la descarga de todos los paquetes desde cero. Esta rama usa un espejo de PyPI (Tsinghua) y un timeout de 120 segundos para evitar estos errores.
-
----
-
-### 5️⃣ Verificar que todo funciona
-
-```bash
-# Ver estado de los contenedores
-docker compose ps
-```
-
-Deberías ver algo como:
-```
-NAME                COMMAND                  SERVICE     STATUS              PORTS
-backend-1           "uvicorn app.main:app…"   backend    running             0.0.0.0:8000->8000/tcp
-frontend-1          "docker-entrypoint.s…"   frontend   running             0.0.0.0:8080->80/tcp
-nginx-1             "nginx -g 'daemon of…"   nginx      running             0.0.0.0:8080->80/tcp
-postgres-1          "docker-entrypoint.s…"   postgres   running (healthy)   0.0.0.0:5432->5432/tcp
-redis-1             "docker-entrypoint.s…"   redis      running (healthy)   0.0.0.0:6379->6379/tcp
-worker-1            "celery -A app.worker…"   worker     running
-```
-
----
-
-### 6️⃣ Acceder a la plataforma
-
-Abre tu navegador y ve a:
-
-- **🌐 UI (Interfaz de usuario)**: [http://localhost:8080](http://localhost:8080)
-- **📡 API (Backend)**: [http://localhost:8080/api/v1](http://localhost:8080/api/v1)
-- **📖 Documentación API (Swagger)**: [http://localhost:8080/api/v1/docs](http://localhost:8080/api/v1/docs)
-
----
-
-## 🛑 Detener la plataforma
-
-```bash
-# Detener todos los contenedores
-docker compose down
-
-# Detener y eliminar volúmenes (⚠️ Borra los datos de PostgreSQL)
-docker compose down -v
-```
-
----
-
-## 🔄 Actualizar la plataforma
-
-Si hay cambios en el código:
-
-```bash
-# Descargar los últimos cambios
-git pull
-
-# Reconstruir imágenes (sin caché para asegurar actualizaciones)
-docker compose build --no-cache
-
-# Reiniciar servicios
-docker compose up -d
-```
-
----
-
-## 🐛 Solución de problemas
-
-### Error: "ReadTimeoutError" o "Connection reset by peer" al instalar dependencias
-Si ves errores como:
-```
-WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ReadTimeoutError("HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out. (read timeout=60.0)")'
-```
-**Soluciones**:
-
-#### 1️⃣ Usar un espejo de PyPI más rápido
-Esta rama ya usa el espejo de **Tsinghua** (`https://pypi.tuna.tsinghua.edu.cn/simple`), pero si prefieres otro espejo (ej. Aliyun), modifica el `Dockerfile`:
-```dockerfile
-ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
-```
-
-#### 2️⃣ Aumentar el timeout manualmente
-Si el espejo de Tsinghua sigue siendo lento, puedes aumentar el timeout en el `Dockerfile`:
-```dockerfile
-ENV PIP_DEFAULT_TIMEOUT=300  # 5 minutos
-```
-
-#### 3️⃣ Reconstruir con `--no-cache`
-```bash
-docker compose build --no-cache
-```
-
-#### 4️⃣ Verificar la conexión a Internet
-```bash
-# Probar conexión a PyPI
-curl -v https://pypi.tuna.tsinghua.edu.cn/simple/
-
-# Probar descarga de un paquete
-curl -v https://pypi.tuna.tsinghua.edu.cn/packages/5d/95/6b5cb3461ea5673ba0995989746db58eb18b91b54dbf331e72f569540946/pip-26.1.2-py3-none-any.whl
-```
-
-#### 5️⃣ Usar una VPN o proxy
-Si tu red tiene restricciones, prueba con una VPN o configura un proxy:
-```bash
-# Exportar variables de proxy (ejemplo)
-export HTTP_PROXY=http://tu-proxy:8080
-export HTTPS_PROXY=http://tu-proxy:8080
-
-# Reconstruir con proxy
-docker compose build --no-cache
-```
-
-### Error: "Port already in use"
-Si el puerto `8080` o `5432` ya está en uso:
-```bash
-# Ver qué proceso usa el puerto (ejemplo para 8080)
-sudo lsof -i :8080
-
-# Matar el proceso (reemplaza PID con el número del proceso)
-kill -9 PID
-```
-
-### Error: "Permission denied" al ejecutar Docker
-Si ves errores de permiso:
-```bash
-# Añadir tu usuario al grupo docker
-sudo usermod -aG docker $USER
-
-# Reiniciar la sesión (cierra y vuelve a abrir la terminal)
-newgrp docker
-```
-
-### Error: "Max retries exceeded" en el worker
-Si el `worker` falla al instalar dependencias:
-1. **Elimina los contenedores y volúmenes**:
-   ```bash
-   docker compose down -v
-   ```
-2. **Reconstruye todo desde cero**:
-   ```bash
-   docker compose build --no-cache
-   docker compose up -d
-   ```
-
----
-
-## 🌍 Espejos de PyPI alternativos
-Si el espejo de Tsinghua no funciona bien en tu región, prueba con uno de estos:
-
-| **Espejo** | **URL** | **Región** |
-|------------|---------|------------|
-| Tsinghua | `https://pypi.tuna.tsinghua.edu.cn/simple` | China |
-| Aliyun | `https://mirrors.aliyun.com/pypi/simple/` | China |
-| Douban | `https://pypi.doubanio.com/simple/` | China |
-| Huawei | `https://repo.huaweicloud.com/repository/pypi/simple/` | China |
-| Azure (China) | `https://mirror.azure.cn/pypi/simple/` | China |
-
-Para cambiar el espejo, modifica el `Dockerfile`:
-```dockerfile
-ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
-```
-
----
-
-## 📂 Flujo con datos reales
-
-1. Entrar a la UI en [http://localhost:8080](http://localhost:8080).
-2. Agregar un **Orchestrator** con:
-   - URL real de tu instancia de EdgeConnect.
-   - Tipo de autenticación.
-   - Credenciales.
-3. Usar **`Validate`** para ejecutar una llamada real a `orchestrator.version`.
-4. Usar **`Discover`** para leer inventario real desde `orchestrator.inventory.summary`.
-5. Usar **`Metrics`** en un Appliance para recolectar `appliance.performance`.
-6. Revisar **`Real API Samples`** para ver:
-   - HTTP status.
-   - Latencia.
-   - Operación.
-   - Payload almacenado.
-
-> 🔹 **Nota**: Si un endpoint de Aruba cambia, **no se modifica el servicio**. Solo actualiza el perfil de compatibilidad o genera uno nuevo con Swagger/OpenAPI.
-
----
-
-## 🏗️ Principios de fase 1
-
-- Ningún servicio llamará endpoints de EdgeConnect directamente.
-- Toda operación se resuelve por `backend/app/compatibility`.
-- La configuración operativa se modela para ser administrada desde la UI.
-- El backend separa **Orchestrator** y **Appliance**.
-- Secretos se reciben por API, se enmascaran en respuestas y quedan preparados para cifrado.
-- La fase 2 guarda secretos cifrados con `SECRET_KEY`. **Cambiar ese valor invalida secretos ya cifrados**.
-
----
-
-## 📁 Estructura del proyecto
+Según la documentación de HPE Aruba Networking, el documento del Orchestrator se encuentra en:
 
 ```text
-DashboardAPI-EC/
-├── backend/          # Backend en FastAPI
-├── frontend/         # Frontend en React + TypeScript
-├── infrastructure/   # Configuraciones de infraestructura (Nginx)
-├── docs/             # Documentación técnica
-├── scripts/          # Scripts de apoyo
-└── docker-compose.yml # Configuración de Docker
+/home/gms/gms/webcontent/webclient/html/apiDocs/gmsApiInfo.json
 ```
+
+También puede obtenerse desde **Support → REST APIs**. El documento de un appliance ECOS se encuentra en:
+
+```text
+/opt/tms/lib/web/content/node/apiDocs/vxoaApiInfo.json
+```
+
+Importar un documento como borrador:
+
+```bash
+curl -F "file=@gmsApiInfo.json" \
+  "http://dashboard.example/api/v1/compatibility/swagger?version=9.6"
+```
+
+Activarlo después de verificarlo:
+
+```bash
+curl -X POST \
+  "http://dashboard.example/api/v1/compatibility/profiles/9.6/activate"
+```
+
+La importación conserva el documento original, genera un perfil normalizado y calcula un checksum. La extensión opcional `x-dashboard-operation` permite asociar un endpoint Swagger con una operación estable del dashboard.
+
+## Instalación en Ubuntu
+
+### Requisitos
+
+- Ubuntu 24.04 LTS.
+- Arquitectura `amd64` o `arm64`.
+- 4 GB de RAM como mínimo; 8 GB recomendados.
+- Acceso HTTPS desde el servidor hacia el Orchestrator y los appliances que se consultarán.
+- Privilegios `sudo` para instalar el paquete.
+
+Instalar el paquete generado:
+
+```bash
+sudo apt install ./dashboardapi-ec_1.0.0_amd64.deb
+```
+
+El instalador:
+
+- rechaza distribuciones distintas de Ubuntu;
+- crea el usuario de sistema `dashboardapi`;
+- instala el backend en `/opt/dashboardapi-ec`;
+- publica el frontend en `/usr/share/dashboardapi-ec/frontend`;
+- crea la configuración en `/etc/dashboardapi-ec/dashboardapi-ec.env`;
+- crea la base `dashboardapi_ec` y el rol PostgreSQL local;
+- ejecuta las migraciones;
+- configura Nginx;
+- habilita la API y el worker mediante `systemd`.
+
+Después de instalar, abrir:
+
+```text
+http://IP-DEL-SERVIDOR/
+```
+
+Swagger de DashboardAPI-EC:
+
+```text
+http://IP-DEL-SERVIDOR/api/v1/docs
+```
+
+### Construir el `.deb`
+
+La construcción también debe ejecutarse en Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install -y build-essential dpkg-dev python3 python3-pip python3-venv nodejs npm
+./scripts/build-deb.sh
+```
+
+El resultado se guarda en `dist/dashboardapi-ec_1.0.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
+
+## Operación del servicio
+
+```bash
+sudo systemctl status dashboardapi-ec
+sudo systemctl status dashboardapi-ec-worker
+sudo journalctl -u dashboardapi-ec -f
+sudo journalctl -u dashboardapi-ec-worker -f
+```
+
+Reiniciar después de cambiar la configuración:
+
+```bash
+sudo systemctl restart dashboardapi-ec dashboardapi-ec-worker
+```
+
+Validar Nginx:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+## Configuración
+
+Archivo principal:
+
+```text
+/etc/dashboardapi-ec/dashboardapi-ec.env
+```
+
+Variables relevantes:
+
+| Variable | Función |
+| --- | --- |
+| `DATABASE_URL` | Conexión a PostgreSQL |
+| `REDIS_URL` | Estado y caché de Redis |
+| `CELERY_BROKER_URL` | Cola de tareas |
+| `CELERY_RESULT_BACKEND` | Resultados de Celery |
+| `SECRET_KEY` | Cifra credenciales de EdgeConnect |
+| `BACKEND_CORS_ORIGINS` | Orígenes web permitidos |
+| `AUTO_CREATE_SCHEMA` | Solo desarrollo; en producción debe ser `false` |
+
+No debe cambiarse `SECRET_KEY` después de guardar credenciales: hacerlo vuelve indescifrables los secretos existentes.
+
+## Arquitectura
+
+```text
+Navegador
+   │
+   ▼
+Nginx :80
+   ├── /             → React
+   └── /api/v1       → FastAPI :8010
+                            ├── PostgreSQL
+                            ├── Redis / Celery
+                            └── EdgeConnect Orchestrator / ECOS
+```
+
+Los servicios no codifican rutas de EdgeConnect directamente. Solicitan operaciones estables como `orchestrator.version` u `orchestrator.inventory.summary`; la capa de compatibilidad resuelve el método y la ruta correspondientes a cada versión.
+
+## Endpoints principales
+
+| Método | Ruta | Propósito |
+| --- | --- | --- |
+| `GET` | `/api/v1/health` | Salud de la API |
+| `POST` | `/api/v1/orchestrators` | Registrar una conexión |
+| `POST` | `/api/v1/orchestrators/{id}/validate` | Autenticar y detectar versión |
+| `GET` | `/api/v1/orchestrators/{id}/capabilities` | Consultar capacidades |
+| `POST` | `/api/v1/orchestrators/{id}/discover-appliances` | Descubrir inventario |
+| `GET` | `/api/v1/appliances` | Listar appliances |
+| `POST` | `/api/v1/appliances/{id}/collect` | Obtener métricas |
+| `GET` | `/api/v1/samples` | Revisar llamadas y respuestas |
+| `POST` | `/api/v1/compatibility/swagger` | Importar OpenAPI/Swagger |
+
+## Desarrollo
+
+Backend:
+
+```bash
+cd backend
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e ".[dev]"
+alembic upgrade head
+pytest -q
+uvicorn app.main:app --reload
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Construcción de producción:
+
+```bash
+cd frontend
+npm run build
+```
+
+## Docker para desarrollo
+
+Docker Compose se conserva para desarrollo y laboratorios:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+La distribución recomendada para servidores Ubuntu es el paquete `.deb`.
+
+## Copia de seguridad
+
+```bash
+sudo -u postgres pg_dump dashboardapi_ec > dashboardapi_ec.sql
+sudo cp /etc/dashboardapi-ec/dashboardapi-ec.env dashboardapi-ec.env.backup
+```
+
+El respaldo del archivo de entorno contiene la clave utilizada para cifrar credenciales y debe protegerse como un secreto.
+
+## Seguridad operativa
+
+- Usar API keys de solo lectura y con expiración.
+- Mantener la verificación TLS activa.
+- Instalar una CA interna en Ubuntu cuando el Orchestrator use certificados privados.
+- No exponer el puerto interno `8010` fuera del host.
+- Colocar TLS en Nginx antes de publicar el servicio fuera de una red administrativa.
+- Limitar por firewall el acceso al dashboard.
+- Rotar API keys sin cambiar `SECRET_KEY`.
+
+## Estado de la versión
+
+La versión 1.0 cubre estabilización, Swagger 9.6, autenticación, asistente de configuración, detección de versión y descubrimiento inicial de capacidades. El siguiente incremento incorporará composición dinámica de widgets, inspector visual de API, series temporales y alarmas en tiempo real.
+
+## Referencias oficiales
+
+- [EdgeConnect: Making API Requests](https://developer.arubanetworks.com/edgeconnect/docs/making-api-requests)
+- [Authentication: CSRF Token & API Key](https://developer.arubanetworks.com/edgeconnect/docs/authentication)
+- [Orchestrator and EdgeConnect API endpoints](https://developer.arubanetworks.com/edgeconnect/docs/aruba-orchestrator-and-edgeconnect-api-endpoints)
+- [REST API Monitoring](https://developer.arubanetworks.com/edgeconnect/docs/monitoring)

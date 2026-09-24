@@ -13,16 +13,17 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar pyproject.toml primero para aprovechar el caché de Docker
+# Copiar metadatos y código requeridos para construir el paquete
 COPY pyproject.toml ./
+COPY app ./app
 
 # Instalar dependencias con caché de pip y timeout aumentado
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir --retries 5 --timeout 120 .
 
-# Copiar el código fuente después de instalar dependencias
-COPY app ./app
+COPY alembic.ini ./
+COPY alembic ./alembic
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

@@ -4,8 +4,8 @@ export const theme = createTheme({
   palette: {
     mode: "dark",
     background: {
-      default: "#101214",
-      paper: "#171A1D"
+      default: "#0F1214",
+      paper: "#171B1E"
     },
     primary: {
       main: "#2FBF9B"
@@ -31,7 +31,7 @@ export const theme = createTheme({
     button: { textTransform: "none", fontWeight: 700 }
   },
   shape: {
-    borderRadius: 8
+    borderRadius: 12
   },
   components: {
     MuiButton: {
@@ -43,8 +43,14 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: "none",
-          border: "1px solid rgba(255,255,255,0.08)"
+          border: "1px solid rgba(255,255,255,0.08)",
+          boxShadow: "0 18px 50px rgba(0,0,0,.16)"
         }
+      }
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: { backgroundImage: "linear-gradient(145deg, rgba(47,191,155,.04), transparent 45%)" }
       }
     }
   }

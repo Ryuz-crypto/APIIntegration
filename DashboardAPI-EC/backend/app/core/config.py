@@ -9,6 +9,8 @@ class Settings(BaseSettings):
 
     project_name: str = "DashboardAPI-EC"
     environment: str = "local"
+    app_version: str = "1.0.0"
+    auto_create_schema: bool = True
     api_v1_prefix: str = "/api/v1"
     backend_cors_origins: str = Field(
         default="http://localhost:5173,http://localhost:8080",

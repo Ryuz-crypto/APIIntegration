@@ -11,7 +11,7 @@
     },
     "orchestrator.inventory.summary": {
       "method": "GET",
-      "path": "/appliances",
+      "path": "/appliance",
       "polling_hint_seconds": 120,
       "notes": ["Lightweight orchestrator inventory call."]
     },

@@ -27,3 +27,15 @@ def test_resolves_version_operation():
 
     assert operation.method == "GET"
     assert operation.path == "/gms/rest/version"
+
+
+def test_matches_patch_release_to_supported_profile():
+    engine = CompatibilityEngine(load_builtin_profiles())
+
+    assert engine.match_version("9.6.2.0") == "9.6"
+
+
+def test_does_not_guess_unknown_version():
+    engine = CompatibilityEngine(load_builtin_profiles())
+
+    assert engine.match_version("10.0.0") is None

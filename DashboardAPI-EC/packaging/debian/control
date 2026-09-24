@@ -1,0 +1,11 @@
+Package: dashboardapi-ec
+Version: @VERSION@
+Section: net
+Priority: optional
+Architecture: @ARCH@
+Maintainer: DashboardAPI-EC maintainers
+Depends: python3 (>= 3.12), python3-venv, postgresql, redis-server, nginx, ca-certificates, openssl
+Description: API-driven NOC dashboard for HPE Aruba Networking EdgeConnect
+ DashboardAPI-EC discovers an EdgeConnect Orchestrator, detects its API
+ version and capabilities, inventories appliances, and presents the API data
+ through a web dashboard.

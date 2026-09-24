@@ -7,8 +7,8 @@ from app.compatibility.engine import CompatibilityEngine
 from app.models.appliance import Appliance
 from app.models.orchestrator import Orchestrator
 from app.schemas.appliance import ApplianceCreate
-from app.services.edgeconnect_client import EdgeConnectClient, EdgeConnectClientError
 from app.services.audit_service import record_event
+from app.services.edgeconnect_client import EdgeConnectClient, EdgeConnectClientError
 from app.services.sample_service import record_error, record_success
 
 
@@ -31,7 +31,9 @@ def discover_appliances(
     orchestrator: Orchestrator,
     engine: CompatibilityEngine,
 ) -> list[Appliance]:
-    version = orchestrator.api_version or engine.versions[-1]
+    version = orchestrator.api_version
+    if not version:
+        raise EdgeConnectClientError("Validate the Orchestrator version before discovery")
     client = EdgeConnectClient(orchestrator, engine)
     operation_id = "orchestrator.inventory.summary"
     try:
@@ -42,6 +44,8 @@ def discover_appliances(
         raise
 
     record_success(session, orchestrator.id, version, response)
+    _mark_verified(orchestrator, operation_id)
+    session.add(orchestrator)
     appliances = [_upsert_appliance(session, orchestrator, item) for item in _extract_items(response.payload)]
     record_event(
         session,
@@ -62,7 +66,9 @@ def collect_appliance_metrics(
     orchestrator: Orchestrator,
     engine: CompatibilityEngine,
 ) -> dict:
-    version = orchestrator.api_version or appliance.software_version or engine.versions[-1]
+    version = orchestrator.api_version
+    if not version:
+        raise EdgeConnectClientError("Validate the Orchestrator version before collecting metrics")
     client = EdgeConnectClient(orchestrator, engine)
     operation_id = "appliance.performance"
     appliance_key = appliance.serial_number or appliance.hostname
@@ -74,6 +80,8 @@ def collect_appliance_metrics(
         raise
 
     record_success(session, orchestrator.id, version, response, appliance.id)
+    _mark_verified(orchestrator, operation_id)
+    session.add(orchestrator)
     appliance.status = "sampled"
     session.add(appliance)
     session.commit()
@@ -135,3 +143,11 @@ def _first(item: dict[str, Any], *keys: str) -> Any:
         if value not in (None, ""):
             return value
     return None
+
+
+def _mark_verified(orchestrator: Orchestrator, operation_id: str) -> None:
+    capabilities = dict(orchestrator.capabilities or {})
+    verified = set(capabilities.get("verified", []))
+    verified.add(operation_id)
+    capabilities["verified"] = sorted(verified)
+    orchestrator.capabilities = capabilities

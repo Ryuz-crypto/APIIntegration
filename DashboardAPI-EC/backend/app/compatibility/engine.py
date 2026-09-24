@@ -27,6 +27,19 @@ class CompatibilityEngine:
         profile = self._get_profile(version)
         return sorted(profile.get("operations", {}))
 
+    def match_version(self, detected_version: str | None) -> str | None:
+        if not detected_version:
+            return None
+        exact = self._profiles.get(detected_version)
+        if exact is not None:
+            return detected_version
+        parts = detected_version.split(".")
+        if len(parts) >= 2:
+            major_minor = ".".join(parts[:2])
+            if major_minor in self._profiles:
+                return major_minor
+        return None
+
     def resolve(
         self,
         version: str,

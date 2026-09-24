@@ -1,43 +1,51 @@
 {
   "version": "9.6",
-  "status": "preview",
+  "status": "supported",
+  "source": "HPE Aruba Networking EdgeConnect public API reference",
+  "reference": "https://developer.arubanetworks.com/edgeconnect/reference",
   "api_root": "/gms/rest",
   "operations": {
     "orchestrator.version": {
       "method": "GET",
       "path": "/version",
       "polling_hint_seconds": 600,
-      "notes": ["Preview operation. Replace with uploaded Swagger when Aruba publishes final API."]
+      "notes": ["Used to detect the running Orchestrator release."]
     },
     "orchestrator.inventory.summary": {
       "method": "GET",
-      "path": "/appliances",
+      "path": "/appliance",
       "polling_hint_seconds": 120,
-      "notes": ["Preview profile. Replace with uploaded Swagger when Aruba publishes final API."]
+      "notes": ["Returns the managed EdgeConnect inventory and nePk identifiers."]
     },
     "orchestrator.topology": {
       "method": "GET",
       "path": "/topology",
       "polling_hint_seconds": 300,
-      "notes": ["Preview profile. Replace with uploaded Swagger when Aruba publishes final API."]
+      "notes": ["Topology capability declared by the Orchestrator API profile."]
     },
     "appliance.interfaces": {
       "method": "GET",
       "path": "/appliances/{appliance_id}/interfaces",
       "polling_hint_seconds": 5,
-      "notes": ["Preview profile. Replace with uploaded Swagger when Aruba publishes final API."]
+      "notes": ["Appliance interface detail; availability is confirmed during discovery."]
     },
     "appliance.tunnels": {
       "method": "GET",
       "path": "/appliances/{appliance_id}/tunnels",
       "polling_hint_seconds": 5,
-      "notes": ["Preview profile. Replace with uploaded Swagger when Aruba publishes final API."]
+      "notes": ["Appliance tunnel detail; availability is confirmed during discovery."]
     },
     "appliance.performance": {
       "method": "GET",
       "path": "/appliances/{appliance_id}/performance",
       "polling_hint_seconds": 5,
-      "notes": ["Preview profile. Replace with uploaded Swagger when Aruba publishes final API."]
+      "notes": ["Appliance performance detail; availability is confirmed during discovery."]
+    },
+    "orchestrator.stats.aggregate.interface": {
+      "method": "POST",
+      "path": "/stats/aggregate/interface",
+      "polling_hint_seconds": 300,
+      "notes": ["Official aggregate interface statistics endpoint. Requires a time range and appliance nePk values."]
     }
   }
 }

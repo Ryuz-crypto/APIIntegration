@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+if [ -r /etc/os-release ]; then
+    . /etc/os-release
+else
+    echo "DashboardAPI-EC requires Ubuntu." >&2
+    exit 1
+fi
+
+if [ "${ID:-}" != "ubuntu" ]; then
+    echo "DashboardAPI-EC 1.0 is supported only on Ubuntu." >&2
+    exit 1
+fi
+
+exit 0

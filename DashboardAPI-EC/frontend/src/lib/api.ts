@@ -12,18 +12,39 @@ export type Orchestrator = {
   id: string;
   name: string;
   base_url: string;
+  deployment_type: string;
+  tenant: string | null;
   api_version: string | null;
+  swagger_version: string | null;
   status: string;
   polling_enabled: boolean;
   polling_active_seconds: number;
   polling_idle_seconds: number;
   credential_label: string | null;
   auth_type: string;
+  login_type: number;
   username: string | null;
   api_key_header: string | null;
   verify_tls: boolean;
   timeout_seconds: number;
   has_secret: boolean;
+  capabilities: {
+    source?: string;
+    operations?: Record<string, boolean>;
+    verified?: string[];
+  };
+  last_validated_at: string | null;
+};
+
+export type ValidationResult = {
+  orchestrator_id: string;
+  status: string;
+  detected_version: string | null;
+  compatibility_profile: string | null;
+  message: string;
+  status_code: number | null;
+  duration_ms: number | null;
+  capabilities: Record<string, boolean>;
 };
 
 export type Appliance = {
@@ -81,8 +102,11 @@ export const api = {
   createOrchestrator: (payload: {
     name: string;
     base_url: string;
+    deployment_type: string;
+    tenant?: string;
     credential_label?: string;
     auth_type: string;
+    login_type: number;
     username?: string;
     password?: string;
     api_token?: string;
@@ -94,9 +118,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload)
     }),
-  validateOrchestrator: (id: string) =>
-    request(`/orchestrators/${id}/validate`, {
-      method: "POST"
+  validateOrchestrator: (id: string, otp?: string) =>
+    request<ValidationResult>(`/orchestrators/${id}/validate`, {
+      method: "POST",
+      body: JSON.stringify(otp ? { otp } : {})
     }),
   discoverAppliances: (id: string) =>
     request<Appliance[]>(`/orchestrators/${id}/discover-appliances`, {

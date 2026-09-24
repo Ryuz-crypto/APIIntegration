@@ -4,4 +4,4 @@ from app.models.audit import AuditEvent
 from app.models.compatibility import ApiCompatibilityProfile
 from app.models.orchestrator import Orchestrator
 
-__all__ = ["ApiSample", "Appliance", "AuditEvent", "ApiCompatibilityProfile", "Orchestrator"]
+__all__ = ["ApiCompatibilityProfile", "ApiSample", "Appliance", "AuditEvent", "Orchestrator"]

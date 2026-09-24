@@ -1,0 +1,22 @@
+[Unit]
+Description=DashboardAPI-EC web API
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dashboardapi
+Group=dashboardapi
+WorkingDirectory=/opt/dashboardapi-ec/backend
+EnvironmentFile=/etc/dashboardapi-ec/dashboardapi-ec.env
+ExecStart=/opt/dashboardapi-ec/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8010 --workers 2
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dashboardapi-ec
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+if [ "${1:-}" = "remove" ]; then
+    systemctl disable --now dashboardapi-ec-worker dashboardapi-ec 2>/dev/null || true
+fi
+
+exit 0

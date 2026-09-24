@@ -21,6 +21,8 @@ class CompatibilityProfileRead(BaseModel):
     status: str
     source: str
     operations: list[str]
+    checksum: str | None = None
+    is_active: bool = True
 
 
 class SwaggerLoadResult(BaseModel):
@@ -28,3 +30,5 @@ class SwaggerLoadResult(BaseModel):
     status: str
     operation_count: int
     message: str
+    checksum: str
+    activated: bool

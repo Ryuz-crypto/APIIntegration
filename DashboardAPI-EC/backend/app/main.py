@@ -16,8 +16,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.project_name,
-    version="0.1.0",
-    description="Phase 1 API foundation for EdgeConnect Dashboard.",
+    version=settings.app_version,
+    description="API-driven NOC dashboard for HPE Aruba Networking EdgeConnect.",
     docs_url=f"{settings.api_v1_prefix}/docs",
     openapi_url=f"{settings.api_v1_prefix}/openapi.json",
     lifespan=lifespan,

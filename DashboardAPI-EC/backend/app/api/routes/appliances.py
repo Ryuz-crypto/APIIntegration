@@ -1,16 +1,18 @@
 import uuid
 
-from fastapi import APIRouter, Depends
-from fastapi import HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
-from app.compatibility.engine import CompatibilityEngine
-from app.compatibility.loader import load_builtin_profiles
 from app.db.session import get_session
 from app.models.appliance import Appliance
 from app.models.orchestrator import Orchestrator
 from app.schemas.appliance import ApplianceCreate, ApplianceRead
-from app.services.appliance_service import create_appliance, list_appliances, collect_appliance_metrics
+from app.services.appliance_service import (
+    collect_appliance_metrics,
+    create_appliance,
+    list_appliances,
+)
+from app.services.compatibility_service import build_compatibility_engine
 from app.services.edgeconnect_client import EdgeConnectClientError
 
 router = APIRouter()
@@ -42,7 +44,7 @@ def collect_item(appliance_id: uuid.UUID, session: Session = Depends(get_session
     orchestrator = session.get(Orchestrator, appliance.orchestrator_id)
     if orchestrator is None:
         raise HTTPException(status_code=404, detail="Orchestrator not found")
-    engine = CompatibilityEngine(load_builtin_profiles())
+    engine = build_compatibility_engine(session)
     try:
         return collect_appliance_metrics(session, appliance, orchestrator, engine)
     except EdgeConnectClientError as exc:
