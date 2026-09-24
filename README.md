@@ -2,7 +2,7 @@
 
 [![Version](https://img.shields.io/badge/version-1.0%20stable-2fbf9b)](https://github.com/Ryuz-crypto/APIIntegration)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 
 DashboardAPI-EC es una plataforma web para descubrir, consultar y visualizar entornos **HPE Aruba Networking EdgeConnect** mediante sus APIs. Detecta la versión del Orchestrator, identifica las capacidades disponibles y ensambla un dashboard específico con datos reales.
@@ -185,14 +185,15 @@ http://IP-DEL-SERVIDOR/api/v1/docs
 - El inspector elimina contraseñas, tokens, cookies y encabezados sensibles.
 - El OTP se utiliza una sola vez y no se persiste.
 - El instalador genera una `SECRET_KEY` aleatoria.
-- TLS permanece activado de forma predeterminada.
+- La verificación TLS hacia los Orchestrators está activada de forma predeterminada.
+- Para servir el dashboard por HTTPS, carga un certificado desde **Certificado HTTPS** siguiendo la [guía HTTPS](DashboardAPI-EC/docs/HTTPS.md). Nginx redirige HTTP a HTTPS después de activarlo.
 - El puerto interno de FastAPI solo escucha en `127.0.0.1`.
 
 El archivo `/etc/dashboardapi-ec/dashboardapi-ec.env` contiene la clave maestra. Debe respaldarse junto con PostgreSQL. Si se pierde o cambia `SECRET_KEY`, las credenciales existentes no podrán descifrarse.
 
 ## Licencia
 
-DashboardAPI-EC se distribuye bajo la **Licencia MIT**. Puedes usarlo, copiarlo, modificarlo y redistribuirlo, incluso con fines comerciales, siempre que conserves el aviso de copyright y la licencia.
+DashboardAPI-EC se distribuye bajo una **licencia de uso restringido**: evaluación, estudio y uso personal no comercial. Comercialización, uso empresarial, copia fuera de la instalación/respaldo y redistribución requieren autorización escrita. Los derechos de terceros y los permisos de versiones anteriores se conservan. Esta licencia no es MIT.
 
 Consulta el texto completo en [LICENSE](LICENSE).
 

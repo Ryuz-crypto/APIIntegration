@@ -13,4 +13,9 @@ if [ "${ID:-}" != "ubuntu" ]; then
     exit 1
 fi
 
+# Preserve the configuration when upgrading from the old package that owned it
+# as an ordinary file. New packages leave the active configuration to postinst.
+if [ -f /etc/nginx/sites-available/dashboardapi-ec ]; then
+    cp -p /etc/nginx/sites-available/dashboardapi-ec /etc/nginx/sites-available/dashboardapi-ec.upgrade
+fi
 exit 0

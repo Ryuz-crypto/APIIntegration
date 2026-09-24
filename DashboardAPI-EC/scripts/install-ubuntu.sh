@@ -35,18 +35,18 @@ if [[ -z "$PACKAGE_PATH" ]]; then
 fi
 
 echo "[3/4] Instalando DashboardAPI-EC..."
-apt-get install -y "$PACKAGE_PATH"
+apt-get install --reinstall -y "$PACKAGE_PATH"
 
 echo "[4/4] Verificando servicios..."
 systemctl is-active --quiet dashboardapi-ec
 systemctl is-active --quiet nginx
 for _ in {1..15}; do
-  if curl --fail --silent http://127.0.0.1/api/v1/health >/dev/null; then
+  if curl --fail --silent http://127.0.0.1:8010/api/v1/health >/dev/null; then
     break
   fi
   sleep 1
 done
-curl --fail --silent http://127.0.0.1/api/v1/health >/dev/null
+curl --fail --silent http://127.0.0.1:8010/api/v1/health >/dev/null
 
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 SERVER_IP="${SERVER_IP:-127.0.0.1}"

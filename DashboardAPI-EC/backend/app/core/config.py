@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     celery_result_backend: str = "redis://redis:6379/2"
     secret_key: str = "change-me-before-production"
     access_token_expire_minutes: int = 60
+    tls_admin_token: str = ""
+    tls_enabled: bool = False
+    tls_state_dir: str = "/var/lib/dashboardapi-ec-tls"
 
     @computed_field
     @cached_property

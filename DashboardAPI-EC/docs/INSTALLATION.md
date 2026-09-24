@@ -105,6 +105,13 @@ sudo install -o root -g dashboardapi -m 640 dashboardapi-ec.env.backup \
 sudo systemctl restart dashboardapi-ec dashboardapi-ec-worker
 ```
 
+## Activar HTTPS con tu certificado
+
+Abre **Certificado HTTPS** en la cabecera del dashboard. La [guía HTTPS](HTTPS.md)
+explica cómo subir PEM/DER o PFX/P12, proteger la primera carga mediante SSH,
+renovar el certificado y respaldar la configuración. Al activarlo, Nginx sirve
+el dashboard en el puerto 443 y redirige las peticiones HTTP a HTTPS.
+
 ## Diagnóstico rápido
 
 ```bash

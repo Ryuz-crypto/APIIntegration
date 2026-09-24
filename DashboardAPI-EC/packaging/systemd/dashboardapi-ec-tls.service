@@ -1,0 +1,12 @@
+[Unit]
+Description=Apply validated DashboardAPI-EC HTTPS certificate
+After=nginx.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/dashboardapi-ec/backend
+ExecStart=/opt/dashboardapi-ec/venv/bin/python /opt/dashboardapi-ec/apply-tls.py
+PrivateTmp=true
+ProtectHome=true
+NoNewPrivileges=true

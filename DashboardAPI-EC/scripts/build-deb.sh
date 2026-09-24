@@ -53,7 +53,12 @@ cp -a dist/. "$STAGE/usr/share/dashboardapi-ec/frontend/"
 
 install -m 0644 "$ROOT_DIR/packaging/systemd/dashboardapi-ec.service" "$STAGE/lib/systemd/system/"
 install -m 0644 "$ROOT_DIR/packaging/systemd/dashboardapi-ec-worker.service" "$STAGE/lib/systemd/system/"
-install -m 0644 "$ROOT_DIR/packaging/nginx/dashboardapi-ec.conf" "$STAGE/etc/nginx/sites-available/dashboardapi-ec"
+install -m 0644 "$ROOT_DIR/packaging/nginx/dashboardapi-ec.conf" "$STAGE/opt/dashboardapi-ec/nginx-http.conf"
+install -m 0644 "$ROOT_DIR/packaging/nginx/bootstrap.conf" "$STAGE/opt/dashboardapi-ec/nginx-bootstrap.conf"
+install -m 0644 "$ROOT_DIR/packaging/systemd/dashboardapi-ec-tls.service" "$STAGE/lib/systemd/system/"
+install -m 0644 "$ROOT_DIR/packaging/systemd/dashboardapi-ec-tls.timer" "$STAGE/lib/systemd/system/"
+install -m 0755 "$ROOT_DIR/scripts/apply-tls.py" "$STAGE/opt/dashboardapi-ec/apply-tls.py"
+install -m 0644 "$ROOT_DIR/../LICENSE" "$STAGE/usr/share/dashboardapi-ec/LICENSE"
 
 mkdir -p "$ROOT_DIR/dist"
 BUILD_STAGE="Debian archive assembly"

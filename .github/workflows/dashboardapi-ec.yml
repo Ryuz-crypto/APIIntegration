@@ -47,6 +47,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y dpkg-dev python3-pip python3-venv nodejs npm
       - name: Build deb
         run: ./scripts/build-deb.sh
+      - name: Install, activate HTTPS and verify upgrade on Ubuntu
+        run: bash ./scripts/test-https-ubuntu.sh
       - uses: actions/upload-artifact@v4
         with:
           name: dashboardapi-ec-1.0.0-deb

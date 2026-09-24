@@ -1,21 +1,40 @@
-MIT License
+DashboardAPI-EC — Licencia de uso restringido
+Copyright (c) 2026. Los titulares conservan todos los derechos sobre sus aportaciones.
+Contacto para autorizaciones: decameru@outlook.com
 
-Copyright (c) 2026 DashboardAPI-EC contributors
+1. Propiedad intelectual
+El código y la documentación originales están sujetos a derechos de autor.
+No se transfiere la titularidad ni se concede ningún derecho distinto de los
+expresamente previstos en esta licencia. Esta licencia no es la licencia MIT.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+2. Uso permitido
+Se permite descargar, instalar y ejecutar el Software para evaluación, estudio
+y uso personal no comercial. Solo se autorizan las copias técnicas necesarias
+para esa instalación y una copia de respaldo, conservando este aviso.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+3. Restricciones
+Sin autorización previa y por escrito de los titulares, no se permite vender,
+comercializar, sublicenciar, alquilar, distribuir o redistribuir el Software;
+ofrecerlo como servicio remunerado; incorporarlo a productos o servicios
+comerciales; copiar su código o documentación fuera de lo autorizado en el
+apartado 2; modificarlo o crear y distribuir obras derivadas. El uso comercial
+o empresarial requiere autorización por escrito. No se permite eliminar los
+avisos de propiedad intelectual ni atribuirse la autoría de aportaciones ajenas.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+4. Alcance y derechos preexistentes
+Estas condiciones se aplican a las aportaciones originales que sus titulares
+distribuyan bajo esta licencia a partir de este cambio. No revocan permisos
+concedidos anteriormente sobre versiones distribuidas bajo MIT u otras licencias,
+ni restringen excepciones legales obligatorias. Las dependencias, bibliotecas,
+marcas y demás materiales de terceros conservan sus propias licencias y derechos.
+La publicación en GitHub queda sujeta a los permisos de visualización y fork
+previstos en sus términos de servicio; no concede por sí sola uso comercial.
+
+5. Donaciones
+Las donaciones son voluntarias y no compran derechos comerciales, de copia ni
+de distribución. Para donar o solicitar permisos: decameru@outlook.com.
+
+6. Ausencia de garantías
+En la medida permitida por la ley aplicable, el Software se proporciona tal cual,
+sin garantías de funcionamiento, idoneidad o disponibilidad. Sus titulares no
+responden por daños derivados de su uso salvo responsabilidad legal irrenunciable.

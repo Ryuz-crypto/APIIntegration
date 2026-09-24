@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for DashboardAPI-EC certificate uploads
+
+[Timer]
+OnBootSec=20s
+OnUnitInactiveSec=15s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

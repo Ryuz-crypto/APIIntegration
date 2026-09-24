@@ -8,6 +8,7 @@ import { OrchestratorPanel } from "./features/orchestrators/OrchestratorPanel";
 import { SetupWizard } from "./features/setup/SetupWizard";
 import { CompatibilityPanel } from "./features/system/CompatibilityPanel";
 import { SamplesPanel } from "./features/system/SamplesPanel";
+import { TlsDialog } from "./features/system/TlsDialog";
 import { api, ApiSample, Appliance, CompatibilityProfile, Dashboard, Orchestrator, SystemOverview } from "./lib/api";
 import { theme } from "./theme/theme";
 
@@ -28,6 +29,7 @@ function App() {
   const [selectedOrchestrator, setSelectedOrchestrator] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [tlsOpen, setTlsOpen] = useState(false);
 
   async function load() {
     try {
@@ -109,6 +111,7 @@ function App() {
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
                 {orchestrators.length ? <Select size="small" value={selectedOrchestrator} onChange={(event) => setSelectedOrchestrator(event.target.value)} sx={{ minWidth: 220 }}>{orchestrators.map((item) => <MenuItem key={item.id} value={item.id}>{item.name} · {item.api_version ?? "sin validar"}</MenuItem>)}</Select> : null}
                 <Button variant="contained" startIcon={<Plus size={17} />} onClick={() => setWizardOpen(true)}>Conectar Orchestrator</Button>
+                <Button variant="outlined" startIcon={<ShieldCheck size={17} />} onClick={() => setTlsOpen(true)}>Certificado HTTPS</Button>
               </Stack>
             </Stack>
 
@@ -129,6 +132,7 @@ function App() {
         </Box>
       </Box>
       <SetupWizard open={wizardOpen} onClose={() => setWizardOpen(false)} onComplete={load} />
+      {tlsOpen && <TlsDialog onClose={() => setTlsOpen(false)} />}
     </ThemeProvider>
   );
 }

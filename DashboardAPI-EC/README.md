@@ -388,7 +388,7 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 - Mantener la verificación TLS activa.
 - Instalar una CA interna en Ubuntu cuando el Orchestrator use certificados privados.
 - No exponer el puerto interno `8010` fuera del host.
-- Colocar TLS en Nginx antes de publicar el servicio fuera de una red administrativa.
+- Activar **Certificado HTTPS** antes de publicar el servicio. La [guía de certificados](docs/HTTPS.md) explica la carga PEM/DER/PFX, el túnel SSH inicial, la renovación y la recuperación.
 - Limitar por firewall el acceso al dashboard.
 - Rotar API keys sin cambiar `SECRET_KEY`.
 
@@ -405,14 +405,14 @@ La versión 1.0 stable cubre los pasos 1 a 10: estabilización, Swagger 9.6, aut
 
 ## Licencia
 
-DashboardAPI-EC se distribuye bajo la [Licencia MIT](../LICENSE). Se permite su uso, modificación y redistribución, incluso con fines comerciales, siempre que se conserve el aviso de copyright y la licencia.
+DashboardAPI-EC se distribuye bajo una [licencia de uso restringido](../LICENSE). La comercialización, el uso empresarial, la copia fuera de la instalación/respaldo y la redistribución requieren autorización escrita. Se conservan los derechos de terceros y los permisos concedidos sobre versiones anteriores. No es una licencia MIT.
 
 ## Donaciones
 
 ```text
 ╭──────────────────────────────────────────────────────╮
 │              ♥  APOYA DASHBOARDAPI-EC  ♥             │
-│   Ayuda a mantener el proyecto abierto y en marcha.  │
+│   Ayuda al desarrollo y mantenimiento del proyecto. │
 │          Donaciones: decameru@outlook.com            │
 ╰──────────────────────────────────────────────────────╯
 ```

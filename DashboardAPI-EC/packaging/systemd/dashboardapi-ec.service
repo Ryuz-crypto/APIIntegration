@@ -16,6 +16,7 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/dashboardapi-ec
+ReadWritePaths=/var/lib/dashboardapi-ec-tls
 NoNewPrivileges=true
 
 [Install]
