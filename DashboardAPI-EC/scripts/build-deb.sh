@@ -5,7 +5,7 @@ BUILD_STAGE="initialization"
 trap 'status=$?; echo "::error title=DashboardAPI-EC package build::${BUILD_STAGE} failed at line ${LINENO}" >&2; exit "$status"' ERR
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="1.0.0"
+PACKAGE_VERSION="1.0.0"
 
 if [[ ! -r /etc/os-release ]]; then
   echo "This package must be built on Ubuntu." >&2
@@ -23,7 +23,7 @@ done
 
 ARCH="$(dpkg --print-architecture)"
 BUILD_DIR="$(mktemp -d)"
-STAGE="$BUILD_DIR/dashboardapi-ec_${VERSION}_${ARCH}"
+STAGE="$BUILD_DIR/dashboardapi-ec_${PACKAGE_VERSION}_${ARCH}"
 trap 'rm -rf "$BUILD_DIR"' EXIT
 
 mkdir -p "$STAGE/DEBIAN" \
@@ -33,7 +33,7 @@ mkdir -p "$STAGE/DEBIAN" \
   "$STAGE/lib/systemd/system" \
   "$STAGE/etc/nginx/sites-available"
 
-sed -e "s/@VERSION@/$VERSION/g" -e "s/@ARCH@/$ARCH/g" "$ROOT_DIR/packaging/debian/control" > "$STAGE/DEBIAN/control"
+sed -e "s/@VERSION@/$PACKAGE_VERSION/g" -e "s/@ARCH@/$ARCH/g" "$ROOT_DIR/packaging/debian/control" > "$STAGE/DEBIAN/control"
 install -m 0755 "$ROOT_DIR/packaging/debian/preinst" "$STAGE/DEBIAN/preinst"
 install -m 0755 "$ROOT_DIR/packaging/debian/postinst" "$STAGE/DEBIAN/postinst"
 install -m 0755 "$ROOT_DIR/packaging/debian/prerm" "$STAGE/DEBIAN/prerm"
@@ -57,7 +57,7 @@ install -m 0644 "$ROOT_DIR/packaging/nginx/dashboardapi-ec.conf" "$STAGE/etc/ngi
 
 mkdir -p "$ROOT_DIR/dist"
 BUILD_STAGE="Debian archive assembly"
-if ! DPKG_OUTPUT="$(dpkg-deb --root-owner-group --build "$STAGE" "$ROOT_DIR/dist/dashboardapi-ec_${VERSION}_${ARCH}.deb" 2>&1)"; then
+if ! DPKG_OUTPUT="$(dpkg-deb --root-owner-group --build "$STAGE" "$ROOT_DIR/dist/dashboardapi-ec_${PACKAGE_VERSION}_${ARCH}.deb" 2>&1)"; then
   echo "$DPKG_OUTPUT" >&2
   ANNOTATION="${DPKG_OUTPUT//'%'/'%25'}"
   ANNOTATION="${ANNOTATION//$'\r'/'%0D'}"
@@ -66,4 +66,4 @@ if ! DPKG_OUTPUT="$(dpkg-deb --root-owner-group --build "$STAGE" "$ROOT_DIR/dist
   exit 2
 fi
 echo "$DPKG_OUTPUT"
-echo "Created dist/dashboardapi-ec_${VERSION}_${ARCH}.deb"
+echo "Created dist/dashboardapi-ec_${PACKAGE_VERSION}_${ARCH}.deb"
