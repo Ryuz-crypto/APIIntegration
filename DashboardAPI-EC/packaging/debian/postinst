@@ -39,7 +39,8 @@ if ! runuser -u postgres -- psql -tAc "SELECT 1 FROM pg_database WHERE datname='
 fi
 
 python3 -m venv "$APP_ROOT/venv"
-"$APP_ROOT/venv/bin/pip" install --no-index --find-links "$APP_ROOT/wheels" dashboardapi-ec-backend==1.0.0
+"$APP_ROOT/venv/bin/pip" install --no-index --find-links "$APP_ROOT/wheels" \
+    --upgrade --force-reinstall dashboardapi-ec-backend==1.0.0
 
 set -a
 . "$ENV_FILE"
@@ -53,5 +54,8 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl daemon-reload
 systemctl enable --now postgresql redis-server dashboardapi-ec dashboardapi-ec-worker nginx
+
+echo "DashboardAPI-EC está disponible en http://$(hostname -I 2>/dev/null | awk '{print $1}')/"
+echo "Usa 'Conectar Orchestrator' para registrar cada entorno y su credencial cifrada."
 
 exit 0

@@ -9,7 +9,7 @@ User=dashboardapi
 Group=dashboardapi
 WorkingDirectory=/opt/dashboardapi-ec/backend
 EnvironmentFile=/etc/dashboardapi-ec/dashboardapi-ec.env
-ExecStart=/opt/dashboardapi-ec/venv/bin/celery -A app.workers.celery_app.celery_app worker --loglevel=INFO --concurrency=2
+ExecStart=/opt/dashboardapi-ec/venv/bin/celery -A app.workers.celery_app.celery_app worker --beat --loglevel=INFO --concurrency=2 --queues=orchestrators,appliances --schedule=/var/lib/dashboardapi-ec/celerybeat-schedule
 Restart=on-failure
 RestartSec=5
 PrivateTmp=true

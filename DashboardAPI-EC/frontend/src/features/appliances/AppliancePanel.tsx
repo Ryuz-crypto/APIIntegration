@@ -1,4 +1,4 @@
-import { Button, Paper, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
+import { Button, Paper, Switch, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
 import { Activity } from "lucide-react";
 import { useState } from "react";
 import { StatusChip } from "../../components/StatusChip";
@@ -14,6 +14,16 @@ export function AppliancePanel({ items, onChanged }: { items: Appliance[]; onCha
       onChanged();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Collection failed");
+    }
+  }
+
+  async function toggleMonitoring(item: Appliance) {
+    try {
+      await api.setApplianceMonitoring(item.id, !item.selected_for_monitoring);
+      setMessage(null);
+      onChanged();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "No fue posible cambiar el monitoreo");
     }
   }
 
@@ -34,6 +44,7 @@ export function AppliancePanel({ items, onChanged }: { items: Appliance[]; onCha
             <TableCell>Site</TableCell>
             <TableCell>Version</TableCell>
             <TableCell>Status</TableCell>
+            <TableCell>Auto</TableCell>
             <TableCell align="right">Collect</TableCell>
           </TableRow>
         </TableHead>
@@ -46,6 +57,7 @@ export function AppliancePanel({ items, onChanged }: { items: Appliance[]; onCha
               <TableCell>
                 <StatusChip status={item.status} />
               </TableCell>
+              <TableCell><Switch size="small" checked={item.selected_for_monitoring} onChange={() => toggleMonitoring(item)} /></TableCell>
               <TableCell align="right">
                 <Button size="small" onClick={() => collect(item.id)} startIcon={<Activity size={15} />}>
                   Metrics

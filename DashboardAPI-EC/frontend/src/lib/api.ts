@@ -34,6 +34,19 @@ export type Orchestrator = {
     verified?: string[];
   };
   last_validated_at: string | null;
+  credentials_updated_at: string | null;
+};
+
+export type CredentialStatus = {
+  orchestrator_id: string;
+  credential_label: string | null;
+  auth_type: string;
+  username: string | null;
+  api_key_header: string | null;
+  configured: boolean;
+  encrypted_at_rest: boolean;
+  supports_unattended_polling: boolean;
+  updated_at: string | null;
 };
 
 export type ValidationResult = {
@@ -161,6 +174,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify(otp ? { otp } : {})
     }),
+  credentialStatus: (id: string) => request<CredentialStatus>(`/orchestrators/${id}/credential-status`),
+  updateCredentials: (id: string, payload: {
+    credential_label?: string;
+    auth_type: string;
+    login_type: number;
+    username?: string;
+    password?: string;
+    api_token?: string;
+    api_key_header?: string;
+  }) => request<Orchestrator>(`/orchestrators/${id}/credentials`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  }),
   discoverAppliances: (id: string) =>
     request<Appliance[]>(`/orchestrators/${id}/discover-appliances`, {
       method: "POST"
@@ -168,5 +194,10 @@ export const api = {
   collectAppliance: (id: string) =>
     request<Record<string, unknown>>(`/appliances/${id}/collect`, {
       method: "POST"
+    }),
+  setApplianceMonitoring: (id: string, enabled: boolean) =>
+    request<Appliance>(`/appliances/${id}/monitoring`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled, active_seconds: 5, idle_seconds: 300 })
     })
 };

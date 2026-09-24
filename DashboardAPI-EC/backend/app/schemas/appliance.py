@@ -1,6 +1,6 @@
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ApplianceCreate(BaseModel):
@@ -27,3 +27,9 @@ class ApplianceRead(BaseModel):
     polling_idle_seconds: int
 
     model_config = {"from_attributes": True}
+
+
+class ApplianceMonitoringUpdate(BaseModel):
+    enabled: bool
+    active_seconds: int = Field(default=5, ge=5, le=3600)
+    idle_seconds: int = Field(default=300, ge=30, le=86400)

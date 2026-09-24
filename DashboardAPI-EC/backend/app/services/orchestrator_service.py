@@ -6,7 +6,12 @@ from sqlmodel import Session, select
 from app.compatibility.engine import CompatibilityEngine
 from app.core.security import encrypt_secret
 from app.models.orchestrator import Orchestrator
-from app.schemas.orchestrator import OrchestratorCreate, OrchestratorValidationResult
+from app.schemas.orchestrator import (
+    OrchestratorCreate,
+    OrchestratorCredentialStatus,
+    OrchestratorCredentialUpdate,
+    OrchestratorValidationResult,
+)
 from app.services.audit_service import record_event
 from app.services.edgeconnect_client import EdgeConnectClient, EdgeConnectClientError
 from app.services.sample_service import record_error, record_success
@@ -27,6 +32,7 @@ def create_orchestrator(session: Session, payload: OrchestratorCreate) -> Orches
         api_key_header=payload.api_key_header,
         verify_tls=payload.verify_tls,
         timeout_seconds=payload.timeout_seconds,
+        credentials_updated_at=datetime.now(UTC),
     )
     session.add(orchestrator)
     session.flush()
@@ -38,6 +44,67 @@ def create_orchestrator(session: Session, payload: OrchestratorCreate) -> Orches
 
 def list_orchestrators(session: Session) -> list[Orchestrator]:
     return list(session.exec(select(Orchestrator).order_by(Orchestrator.name)).all())
+
+
+def update_credentials(
+    session: Session,
+    orchestrator: Orchestrator,
+    payload: OrchestratorCredentialUpdate,
+) -> Orchestrator:
+    needs_token = payload.auth_type in {"api_key", "bearer"}
+    needs_password = payload.auth_type in {"basic", "session", "session_otp"}
+    same_method = orchestrator.auth_type == payload.auth_type
+    if needs_token and not payload.api_token and not (same_method and orchestrator.encrypted_api_token):
+        raise ValueError("api_token is required when no saved token exists")
+    if needs_password and not payload.password and not (same_method and orchestrator.encrypted_password):
+        raise ValueError("password is required when no saved password exists")
+
+    orchestrator.credential_label = payload.credential_label
+    orchestrator.auth_type = payload.auth_type
+    orchestrator.login_type = payload.login_type
+    orchestrator.username = payload.username
+    orchestrator.api_key_header = payload.api_key_header
+    if needs_token:
+        orchestrator.encrypted_api_token = (
+            encrypt_secret(payload.api_token) if payload.api_token else orchestrator.encrypted_api_token
+        )
+        orchestrator.encrypted_password = None
+    elif needs_password:
+        orchestrator.encrypted_password = (
+            encrypt_secret(payload.password) if payload.password else orchestrator.encrypted_password
+        )
+        orchestrator.encrypted_api_token = None
+    else:
+        orchestrator.encrypted_password = None
+        orchestrator.encrypted_api_token = None
+    orchestrator.credentials_updated_at = datetime.now(UTC)
+    orchestrator.polling_enabled = payload.auth_type != "session_otp"
+    orchestrator.status = "credentials_updated"
+    session.add(orchestrator)
+    record_event(
+        session,
+        "orchestrator.credentials_updated",
+        "orchestrator",
+        str(orchestrator.id),
+        {"auth_type": payload.auth_type, "credential_label": payload.credential_label},
+    )
+    session.commit()
+    session.refresh(orchestrator)
+    return orchestrator
+
+
+def credential_status(orchestrator: Orchestrator) -> OrchestratorCredentialStatus:
+    return OrchestratorCredentialStatus(
+        orchestrator_id=orchestrator.id,
+        credential_label=orchestrator.credential_label,
+        auth_type=orchestrator.auth_type,
+        username=orchestrator.username,
+        api_key_header=orchestrator.api_key_header,
+        configured=orchestrator.has_secret or orchestrator.auth_type == "none",
+        supports_unattended_polling=orchestrator.has_secret
+        and orchestrator.auth_type != "session_otp",
+        updated_at=orchestrator.credentials_updated_at,
+    )
 
 
 def validate_orchestrator(

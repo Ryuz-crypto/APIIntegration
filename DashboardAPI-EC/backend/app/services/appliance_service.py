@@ -150,7 +150,11 @@ def _upsert_appliance(session: Session, orchestrator: Orchestrator, item: dict[s
             )
         ).first()
 
-    appliance = existing or Appliance(orchestrator_id=orchestrator.id, hostname=str(hostname))
+    appliance = existing or Appliance(
+        orchestrator_id=orchestrator.id,
+        hostname=str(hostname),
+        selected_for_monitoring=True,
+    )
     appliance.hostname = str(hostname)
     appliance.serial_number = str(serial) if serial else appliance.serial_number
     appliance.site = _first(item, "site", "siteName", "location") or appliance.site

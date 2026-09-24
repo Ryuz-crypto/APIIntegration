@@ -1,8 +1,9 @@
 import { Box, Button, Paper, Stack, Typography } from "@mui/material";
-import { Cloud, Plus, Radar, RefreshCw, Server } from "lucide-react";
+import { Cloud, KeyRound, Plus, Radar, RefreshCw, Server } from "lucide-react";
 import { useState } from "react";
 import { StatusChip } from "../../components/StatusChip";
 import { api, Orchestrator } from "../../lib/api";
+import { CredentialDialog } from "./CredentialDialog";
 
 type Props = {
   items: Orchestrator[];
@@ -12,6 +13,7 @@ type Props = {
 
 export function OrchestratorPanel({ items, onChanged, onAdd }: Props) {
   const [message, setMessage] = useState<string | null>(null);
+  const [credentialTarget, setCredentialTarget] = useState<Orchestrator | null>(null);
 
   async function validate(item: Orchestrator) {
     if (item.auth_type === "session_otp") {
@@ -56,7 +58,7 @@ export function OrchestratorPanel({ items, onChanged, onAdd }: Props) {
               key={item.id}
               sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "40px minmax(180px,1fr) 110px 90px 110px auto" },
+                gridTemplateColumns: { xs: "1fr", md: "40px minmax(180px,1fr) 110px 90px 130px auto" },
                 gap: 1.5,
                 alignItems: "center",
                 p: 1.5,
@@ -78,14 +80,18 @@ export function OrchestratorPanel({ items, onChanged, onAdd }: Props) {
                 <Typography fontWeight={800}>{item.api_version ?? "—"}</Typography>
               </Box>
               <Box>
-                <Typography variant="caption" color="text.secondary">Capacidades</Typography>
-                <Typography fontWeight={800}>{count || "—"}</Typography>
+                <Typography variant="caption" color="text.secondary">Credencial</Typography>
+                <Typography fontWeight={800}>{item.credential_label || (item.has_secret ? "Configurada" : "Pendiente")}</Typography>
               </Box>
-              <Button size="small" onClick={() => validate(item)} startIcon={<Radar size={15} />}>Validar</Button>
+              <Stack direction="row" spacing={0.5}>
+                <Button size="small" onClick={() => setCredentialTarget(item)} startIcon={<KeyRound size={15} />}>Credenciales</Button>
+                <Button size="small" onClick={() => validate(item)} startIcon={<Radar size={15} />}>Validar · {count || 0}</Button>
+              </Stack>
             </Box>
           );
         })}
       </Stack>
+      <CredentialDialog orchestrator={credentialTarget} onClose={() => setCredentialTarget(null)} onSaved={onChanged} />
     </Paper>
   );
 }

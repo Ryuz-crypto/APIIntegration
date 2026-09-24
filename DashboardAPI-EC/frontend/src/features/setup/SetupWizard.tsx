@@ -39,6 +39,7 @@ export function SetupWizard({ open, onClose, onComplete }: Props) {
   const [baseUrl, setBaseUrl] = useState("");
   const [tenant, setTenant] = useState("");
   const [authType, setAuthType] = useState("api_key");
+  const [credentialLabel, setCredentialLabel] = useState("Solo lectura");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [apiToken, setApiToken] = useState("");
@@ -73,7 +74,7 @@ export function SetupWizard({ open, onClose, onComplete }: Props) {
         base_url: baseUrl,
         deployment_type: deploymentType,
         tenant: tenant || undefined,
-        credential_label: authType === "api_key" ? "read-only-api-key" : "interactive-session",
+        credential_label: credentialLabel || undefined,
         auth_type: authType,
         login_type: loginType,
         username: username || undefined,
@@ -171,6 +172,7 @@ export function SetupWizard({ open, onClose, onComplete }: Props) {
 
         {step === 2 ? (
           <Stack spacing={2}>
+            <TextField label="Etiqueta de la credencial" value={credentialLabel} onChange={(event) => setCredentialLabel(event.target.value)} helperText="Sirve para distinguir credenciales de producción, laboratorio o tenants." />
             <FormControl>
               <InputLabel id="wizard-auth-label">Método</InputLabel>
               <Select labelId="wizard-auth-label" label="Método" value={authType} onChange={(event) => setAuthType(event.target.value)}>

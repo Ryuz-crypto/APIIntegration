@@ -35,6 +35,7 @@ class Orchestrator(TimestampMixin, SQLModel, table=True):
         sa_column=Column(JSON().with_variant(JSONB(), "postgresql")),
     )
     last_validated_at: datetime | None = Field(default=None)
+    credentials_updated_at: datetime | None = Field(default=None)
 
     @property
     def has_secret(self) -> bool:

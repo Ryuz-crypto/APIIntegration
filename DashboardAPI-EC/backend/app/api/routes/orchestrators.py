@@ -9,6 +9,8 @@ from app.schemas.appliance import ApplianceRead
 from app.schemas.orchestrator import (
     OrchestratorCapabilityRead,
     OrchestratorCreate,
+    OrchestratorCredentialStatus,
+    OrchestratorCredentialUpdate,
     OrchestratorRead,
     OrchestratorValidationRequest,
     OrchestratorValidationResult,
@@ -18,7 +20,9 @@ from app.services.compatibility_service import build_compatibility_engine
 from app.services.edgeconnect_client import EdgeConnectClientError
 from app.services.orchestrator_service import (
     create_orchestrator,
+    credential_status,
     list_orchestrators,
+    update_credentials,
     validate_orchestrator,
 )
 
@@ -36,6 +40,32 @@ def create_item(
     session: Session = Depends(get_session),
 ) -> Orchestrator:
     return create_orchestrator(session, payload)
+
+
+@router.get("/{orchestrator_id}/credential-status", response_model=OrchestratorCredentialStatus)
+def get_credential_status(
+    orchestrator_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> OrchestratorCredentialStatus:
+    orchestrator = session.get(Orchestrator, orchestrator_id)
+    if orchestrator is None:
+        raise HTTPException(status_code=404, detail="Orchestrator not found")
+    return credential_status(orchestrator)
+
+
+@router.put("/{orchestrator_id}/credentials", response_model=OrchestratorRead)
+def put_credentials(
+    orchestrator_id: uuid.UUID,
+    payload: OrchestratorCredentialUpdate,
+    session: Session = Depends(get_session),
+) -> Orchestrator:
+    orchestrator = session.get(Orchestrator, orchestrator_id)
+    if orchestrator is None:
+        raise HTTPException(status_code=404, detail="Orchestrator not found")
+    try:
+        return update_credentials(session, orchestrator, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/{orchestrator_id}/validate", response_model=OrchestratorValidationResult)

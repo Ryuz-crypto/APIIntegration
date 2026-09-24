@@ -41,7 +41,7 @@ services:
   worker:
     build:
       context: ./backend
-    command: celery -A app.workers.celery_app.celery_app worker --loglevel=INFO
+    command: celery -A app.workers.celery_app.celery_app worker --beat --loglevel=INFO --queues=orchestrators,appliances --schedule=/tmp/celerybeat-schedule
     env_file:
       - .env
     depends_on:

@@ -6,7 +6,7 @@ from sqlmodel import Session
 from app.db.session import get_session
 from app.models.appliance import Appliance
 from app.models.orchestrator import Orchestrator
-from app.schemas.appliance import ApplianceCreate, ApplianceRead
+from app.schemas.appliance import ApplianceCreate, ApplianceMonitoringUpdate, ApplianceRead
 from app.services.appliance_service import (
     collect_appliance_metrics,
     create_appliance,
@@ -34,6 +34,24 @@ def polling_plan() -> dict:
         "dashboard_active": {"orchestrator_seconds": 120, "appliance_seconds": 5},
         "dashboard_idle": {"orchestrator_seconds": 600, "appliance_seconds": 300},
     }
+
+
+@router.patch("/{appliance_id}/monitoring", response_model=ApplianceRead)
+def update_monitoring(
+    appliance_id: uuid.UUID,
+    payload: ApplianceMonitoringUpdate,
+    session: Session = Depends(get_session),
+) -> Appliance:
+    appliance = session.get(Appliance, appliance_id)
+    if appliance is None:
+        raise HTTPException(status_code=404, detail="Appliance not found")
+    appliance.selected_for_monitoring = payload.enabled
+    appliance.polling_active_seconds = payload.active_seconds
+    appliance.polling_idle_seconds = payload.idle_seconds
+    session.add(appliance)
+    session.commit()
+    session.refresh(appliance)
+    return appliance
 
 
 @router.post("/{appliance_id}/collect")

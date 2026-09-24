@@ -4,6 +4,19 @@ DashboardAPI-EC es un servicio web para descubrir, consultar y visualizar entorn
 
 La versión 1.0 se soporta exclusivamente en Ubuntu y se distribuye como paquete `.deb`.
 
+## Instalación rápida
+
+En un servidor Ubuntu 24.04:
+
+```bash
+sudo apt update && sudo apt install -y git
+git clone https://github.com/Ryuz-crypto/APIIntegration.git
+cd APIIntegration/DashboardAPI-EC
+sudo ./scripts/install-ubuntu.sh
+```
+
+El script instala dependencias, construye el `.deb`, configura los servicios y verifica `/api/v1/health`. Al terminar muestra la dirección que debes abrir. La guía completa de instalación, actualización, respaldo y diagnóstico está en [docs/INSTALLATION.md](docs/INSTALLATION.md).
+
 ## Alcance de 1.0
 
 - Asistente web para conectar Orchestrator on-premises y Orchestrator as a Service.
@@ -18,6 +31,9 @@ La versión 1.0 se soporta exclusivamente en Ubuntu y se distribuye como paquete
 - Inspector visual con método, ruta, parámetros, valores extraídos, transformaciones, latencia y respuesta sanitizada.
 - Ejemplos reproducibles en cURL, Python y JavaScript sin exponer credenciales reales.
 - Credenciales cifradas, respuestas sin secretos y OTP de uso único no persistente.
+- Varias conexiones simultáneas, cada una con credenciales, versión y capacidades independientes.
+- Rotación de credenciales desde la interfaz sin volver a registrar el Orchestrator.
+- Recolección automática mediante Celery Beat y selección individual de appliances.
 - Backend FastAPI, frontend React, PostgreSQL, Redis, Celery y Nginx.
 - Migraciones de base de datos con Alembic.
 - Instalación nativa mediante `.deb` y servicios `systemd`.
@@ -84,6 +100,29 @@ Cada widget con evidencia ofrece **Ver API utilizada**. El panel lateral muestra
 El sanitizador reemplaza valores asociados con contraseñas, tokens, API keys, cookies, encabezados de autorización y CSRF por `[REDACTED]`. Los ejemplos emplean las variables `ORCHESTRATOR_URL` y `EDGECONNECT_API_KEY`; nunca incluyen el secreto guardado.
 
 Para OaaS se recomienda crear una API key dedicada con permisos de solo lectura. El administrador completa el segundo factor en la interfaz de Orchestrator al crear la clave; DashboardAPI-EC usa después la clave en `X-Auth-Token`. El OTP interactivo también está soportado para instalaciones que lo expongan en el login, pero no se almacena y por ello no puede utilizarse para polling desatendido.
+
+## Administración de varios Orchestrators
+
+La plataforma no usa una credencial global. Cada fila de Orchestrator guarda de forma independiente su URL, tenant, tipo de autenticación, usuario, secreto cifrado y etiqueta. Puedes conectar producción, laboratorios y tenants distintos desde el mismo dashboard y elegir cuál visualizar en el selector superior.
+
+Para rotar una API key o contraseña, pulsa **Credenciales** en la conexión correspondiente. El backend cifra el nuevo secreto antes de persistirlo, elimina el tipo de secreto anterior si cambia el método y registra el evento sin incluir el valor. Después pulsa **Validar** para confirmar el acceso.
+
+El archivo `/etc/dashboardapi-ec/dashboardapi-ec.env` contiene `SECRET_KEY`, que protege todas las credenciales guardadas. Debe respaldarse junto con PostgreSQL y conservar permisos `0640`.
+
+## Paso 9: recolección automática
+
+Celery Beat evalúa cada minuto los intervalos configurados:
+
+- actualiza inventario de cada Orchestrator con polling habilitado;
+- recolecta rendimiento de cada appliance con **Auto** activo;
+- mantiene muestras y métricas separadas por `orchestrator_id` y `appliance_id`;
+- omite sesiones OTP porque requieren intervención humana.
+
+Los equipos descubiertos por primera vez activan el monitoreo automáticamente. El interruptor **Auto** permite excluir un appliance sin eliminar su inventario ni su historial.
+
+## Paso 10: entrega operativa
+
+La instalación oficial usa un paquete `.deb` para Ubuntu. `scripts/install-ubuntu.sh` automatiza la construcción, instalación y comprobación de salud. El workflow de GitHub valida backend y frontend y genera el `.deb` como artefacto descargable en cada ejecución sobre `main`.
 
 ## Swagger y compatibilidad 9.6
 
@@ -236,10 +275,13 @@ Los servicios no codifican rutas de EdgeConnect directamente. Solicitan operacio
 | `GET` | `/api/v1/health` | Salud de la API |
 | `POST` | `/api/v1/orchestrators` | Registrar una conexión |
 | `POST` | `/api/v1/orchestrators/{id}/validate` | Autenticar y detectar versión |
+| `GET` | `/api/v1/orchestrators/{id}/credential-status` | Consultar estado seguro de la credencial |
+| `PUT` | `/api/v1/orchestrators/{id}/credentials` | Rotar credenciales cifradas |
 | `GET` | `/api/v1/orchestrators/{id}/capabilities` | Consultar capacidades |
 | `POST` | `/api/v1/orchestrators/{id}/discover-appliances` | Descubrir inventario |
 | `GET` | `/api/v1/appliances` | Listar appliances |
 | `POST` | `/api/v1/appliances/{id}/collect` | Obtener métricas |
+| `PATCH` | `/api/v1/appliances/{id}/monitoring` | Activar o detener recolección automática |
 | `GET` | `/api/v1/samples` | Revisar llamadas y respuestas |
 | `GET` | `/api/v1/samples/{id}/trace` | Obtener evidencia sanitizada y ejemplos de código |
 | `GET` | `/api/v1/dashboard/{orchestrator_id}` | Componer widgets según capacidades y datos disponibles |
@@ -352,7 +394,7 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 
 ## Estado de la versión
 
-La versión 1.0 stable cubre estabilización, Swagger 9.6, autenticación, asistente de configuración, detección de versión, inventario normalizado, composición dinámica de widgets e inspector visual de API. Las series históricas agregadas, alarmas en tiempo real y más colectores especializados quedan preparadas como ampliaciones posteriores sobre `metricpoint` y `networkresource`.
+La versión 1.0 stable cubre los pasos 1 a 10: estabilización, Swagger 9.6, autenticación, asistente de configuración, múltiples Orchestrators con credenciales independientes, detección de versión, inventario normalizado, composición dinámica de widgets, inspector visual de API, recolección automática y entrega `.deb` para Ubuntu.
 
 ## Referencias oficiales
 

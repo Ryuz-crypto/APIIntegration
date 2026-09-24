@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from celery import Celery
 
 from app.core.config import settings
@@ -11,6 +13,13 @@ celery_app = Celery(
 
 celery_app.conf.timezone = "UTC"
 celery_app.conf.task_routes = {
+    "app.workers.tasks.schedule_due_polling": {"queue": "orchestrators"},
     "app.workers.tasks.poll_orchestrator": {"queue": "orchestrators"},
     "app.workers.tasks.poll_appliance": {"queue": "appliances"},
+}
+celery_app.conf.beat_schedule = {
+    "schedule-due-edgeconnect-polling": {
+        "task": "app.workers.tasks.schedule_due_polling",
+        "schedule": timedelta(seconds=60),
+    }
 }
