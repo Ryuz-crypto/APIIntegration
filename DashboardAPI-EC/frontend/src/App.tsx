@@ -120,7 +120,7 @@ function App() {
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6} lg={3}><MetricCard label="Orchestrators" value={overview?.orchestrators ?? 0} detail="Conexiones configuradas" icon={<Network size={22} />} /></Grid>
               <Grid item xs={12} sm={6} lg={3}><MetricCard label="Appliances" value={overview?.appliances ?? 0} detail={`${overview?.selected_appliances ?? 0} seleccionados`} icon={<Activity size={22} />} /></Grid>
-              <Grid item xs={12} sm={6} lg={3}><MetricCard label="Perfiles API" value={overview?.compatibility_profiles ?? profiles.length} detail="9.3 a 9.6" icon={<Database size={22} />} /></Grid>
+              <Grid item xs={12} sm={6} lg={3}><MetricCard label="Perfiles API" value={overview?.compatibility_profiles ?? profiles.length} detail="9.3–9.6 · 9.7 usa API 9.6" icon={<Database size={22} />} /></Grid>
               <Grid item xs={12} sm={6} lg={3}><MetricCard label="Muestras API" value={overview?.services?.api_samples ?? "0"} detail="Trazabilidad disponible" icon={<ShieldCheck size={22} />} /></Grid>
               <Grid item xs={12}><DynamicDashboard dashboard={dashboard} /></Grid>
               <Grid item xs={12}><OrchestratorPanel items={orchestrators} onChanged={load} onAdd={() => setWizardOpen(true)} /></Grid>

@@ -84,7 +84,7 @@ def mfa(monkeypatch):
         assert request.headers["x-xsrf-token"] == "private-csrf"
         assert "JSESSIONID=private-session" in request.headers["cookie"]
         if path.endswith("/briefInfo"):
-            return httpx.Response(outcome["data"], json={"release": "9.6.2.0"})
+            return httpx.Response(outcome["data"], json={"release": outcome.get("release", "9.6.2.0")})
         if path.endswith("/appliance"):
             return httpx.Response(200, json=[])
         pytest.fail(f"Unexpected request: {request.method} {path}")
@@ -181,8 +181,10 @@ def test_404_reports_actual_path_and_expired_session_does_not_relogin(mfa):
     assert len(calls) == 4
 
 
-def test_api_start_complete_validate_and_discover(mfa, monkeypatch):
-    orch, engine, _, calls, _ = mfa
+@pytest.mark.parametrize("release", ["9.6.2.0", "9.7.1.42046"])
+def test_api_start_complete_validate_and_discover(mfa, monkeypatch, release):
+    orch, engine, _, calls, outcome = mfa
+    outcome["release"] = release
     database = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
@@ -211,7 +213,9 @@ def test_api_start_complete_validate_and_discover(mfa, monkeypatch):
         )
         assert complete.status_code == 200
         assert complete.json()["status"] == "validated"
-        assert complete.json()["detected_version"] == "9.6"
+        assert complete.json()["detected_version"] == release
+        assert complete.json()["compatibility_profile"] == "9.6"
+        assert complete.json()["capabilities"]["orchestrator.inventory.summary"]
         assert "123456" not in complete.text
         assert client.post(f"{url}/discover-appliances").status_code == 200
         assert len(calls) == 4

@@ -181,7 +181,8 @@ def validate_orchestrator(
         "orchestrator.validated",
         "orchestrator",
         str(orchestrator.id),
-        {"detected_version": detected, "status_code": response.status_code},
+        {"detected_version": detected_raw, "compatibility_profile": detected,
+         "status_code": response.status_code},
     )
     session.add(orchestrator)
     session.commit()
@@ -189,7 +190,7 @@ def validate_orchestrator(
     return OrchestratorValidationResult(
         orchestrator_id=orchestrator.id,
         status=orchestrator.status,
-        detected_version=detected,
+        detected_version=detected_raw,
         compatibility_profile=detected,
         message="Real EdgeConnect API response received and stored.",
         status_code=response.status_code,

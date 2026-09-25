@@ -38,6 +38,10 @@ class CompatibilityEngine:
             major_minor = ".".join(parts[:2])
             if major_minor in self._profiles:
                 return major_minor
+            # Explicit compatibility mapping requested for Orchestrator 9.7.
+            # Prefer a native/imported 9.7 profile when one is available.
+            if major_minor == "9.7" and "9.6" in self._profiles:
+                return "9.6"
         return None
 
     def resolve(

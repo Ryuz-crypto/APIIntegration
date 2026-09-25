@@ -25,7 +25,7 @@ El script instala dependencias, construye el `.deb`, configura los servicios y v
 
 - Asistente web para conectar Orchestrator on-premises y Orchestrator as a Service.
 - Autenticación mediante API key `X-Auth-Token`, sesión local con CSRF, sesión interactiva con OTP y HTTP Basic.
-- Detección estricta de versiones 9.3, 9.4, 9.5 y 9.6. Una versión desconocida nunca se acepta por aproximación.
+- Detección de versiones 9.3, 9.4, 9.5 y 9.6, con una equivalencia explícita de Orchestrator 9.7 al perfil API 9.6. Otras versiones desconocidas no se aceptan por aproximación.
 - Perfil compatible con EdgeConnect 9.6 basado en la referencia pública de HPE Aruba Networking.
 - Importación persistente de documentos OpenAPI 3 y Swagger 2 en JSON o YAML.
 - Activación explícita de perfiles importados y checksum SHA-256 del documento original.
@@ -131,6 +131,8 @@ La instalación oficial usa un paquete `.deb` para Ubuntu. `scripts/install-ubun
 ## Swagger y compatibilidad 9.6
 
 La aplicación incluye un perfil 9.6 para las operaciones necesarias durante conexión y descubrimiento. Además, permite importar el Swagger completo proporcionado por el Orchestrator.
+
+Orchestrator **9.7.x**, incluida **9.7.1.42046**, se acepta utilizando las mismas rutas, métodos y capacidades del perfil **9.6**. La respuesta de validación conserva la versión completa detectada y distingue el perfil API seleccionado. Esta equivalencia es una configuración explícita del proyecto, no una certificación del fabricante; cada endpoint sigue sujeto a la disponibilidad y permisos del Orchestrator. Un perfil 9.7 importado y activado tendrá prioridad sobre esta equivalencia.
 
 Según la documentación de HPE Aruba Networking, el documento del Orchestrator se encuentra en:
 
