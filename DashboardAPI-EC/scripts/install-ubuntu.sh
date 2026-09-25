@@ -13,13 +13,13 @@ if [[ ! -r /etc/os-release ]]; then
 fi
 . /etc/os-release
 if [[ "${ID:-}" != "ubuntu" ]]; then
-  echo "DashboardAPI-EC 1.0 solo se instala en Ubuntu con Python 3.12 o superior." >&2
+  echo "DashboardAPI-EC 1.1 solo se instala en Ubuntu con Python 3.12 o superior." >&2
   echo "Sistema detectado: ${PRETTY_NAME:-desconocido}." >&2
   exit 1
 fi
 
 if ! python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 12))'; then
-  echo "DashboardAPI-EC 1.0 requiere Python 3.12 o superior; se detectó: $(python3 --version)." >&2
+  echo "DashboardAPI-EC 1.1 requiere Python 3.12 o superior; se detectó: $(python3 --version)." >&2
   echo "Actualiza Python o utiliza una versión de Ubuntu que incluya Python 3.12 o posterior." >&2
   exit 1
 fi
@@ -35,7 +35,7 @@ echo "[2/4] Construyendo el paquete para $(dpkg --print-architecture)..."
 BUILD_USER="${SUDO_USER:-root}"
 BUILD_HOME="$(getent passwd "$BUILD_USER" | cut -d: -f6)"
 runuser -u "$BUILD_USER" -- env HOME="$BUILD_HOME" "$ROOT_DIR/scripts/build-deb.sh"
-PACKAGE_PATH="$(find "$ROOT_DIR/dist" -maxdepth 1 -name 'dashboardapi-ec_1.0.0_*.deb' -print -quit)"
+PACKAGE_PATH="$(find "$ROOT_DIR/dist" -maxdepth 1 -name 'dashboardapi-ec_1.1.0_*.deb' -print -quit)"
 if [[ -z "$PACKAGE_PATH" ]]; then
   echo "No se generó el paquete .deb." >&2
   exit 1
@@ -64,6 +64,6 @@ curl --fail --silent http://127.0.0.1:8010/api/v1/health >/dev/null
 SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 SERVER_IP="${SERVER_IP:-127.0.0.1}"
 echo
-echo "DashboardAPI-EC 1.0 stable quedó instalado."
+echo "DashboardAPI-EC 1.1 quedó instalado."
 echo "Abre: http://${SERVER_IP}/"
 echo "Luego selecciona 'Conectar Orchestrator' para guardar la primera conexión."

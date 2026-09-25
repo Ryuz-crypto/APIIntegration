@@ -40,10 +40,10 @@ sudo systemctl status dashboardapi-ec dashboardapi-ec-worker nginx
 
 ## Instalación de un paquete ya construido
 
-Si recibiste `dashboardapi-ec_1.0.0_amd64.deb` o la variante `arm64`:
+Si recibiste `dashboardapi-ec_1.1.0_amd64.deb` o la variante `arm64`:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.0.0_amd64.deb
+sudo apt install ./dashboardapi-ec_1.1.0_amd64.deb
 ```
 
 Las actualizaciones usan el mismo comando con el paquete nuevo. Las migraciones se ejecutan automáticamente y conservan conexiones, credenciales y muestras.

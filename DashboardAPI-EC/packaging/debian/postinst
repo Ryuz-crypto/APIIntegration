@@ -18,7 +18,7 @@ if [ ! -f "$ENV_FILE" ]; then
     SECRET_KEY=$(openssl rand -hex 32)
     cat >"$ENV_FILE" <<EOF
 ENVIRONMENT=production
-APP_VERSION=1.0.0
+APP_VERSION=1.1.0
 AUTO_CREATE_SCHEMA=false
 PYTHONDONTWRITEBYTECODE=1
 DATABASE_URL=postgresql+psycopg:///dashboardapi_ec
@@ -50,7 +50,7 @@ fi
 
 python3 -m venv "$APP_ROOT/venv"
 "$APP_ROOT/venv/bin/pip" install --no-index --find-links "$APP_ROOT/wheels" \
-    --upgrade --force-reinstall dashboardapi-ec-backend==1.0.0
+    --upgrade --force-reinstall dashboardapi-ec-backend==1.1.0
 
 set -a
 . "$ENV_FILE"

@@ -3,7 +3,7 @@ set -euo pipefail
 TLS_TEST_STAGE="install"
 trap 'echo "::error title=HTTPS integration::Stage ${TLS_TEST_STAGE} failed at line ${LINENO}" >&2; sudo nginx -T' ERR
 # Disposable CI host only: installs the package and configures its Nginx site.
-sudo apt-get install -y ./dist/dashboardapi-ec_1.0.0_*.deb
+sudo apt-get install -y ./dist/dashboardapi-ec_1.1.0_*.deb
 TLS_TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TLS_TEST_DIR"' EXIT
 TLS_TEST_STAGE="generate certificate"
@@ -35,7 +35,7 @@ TLS_KEY_MODE="$(sudo stat -c '%a' /etc/dashboardapi-ec/tls/privkey.pem)"
 echo "Private key permissions: $TLS_KEY_MODE"
 test "$TLS_KEY_MODE" = 600
 TLS_TEST_STAGE="reinstall"
-sudo apt-get install --reinstall -y ./dist/dashboardapi-ec_1.0.0_*.deb
+sudo apt-get install --reinstall -y ./dist/dashboardapi-ec_1.1.0_*.deb
 TLS_TEST_STAGE="HTTPS after reinstall"
 curl --cacert "$TLS_TEST_DIR/cert.pem" -fsS https://localhost/ >/dev/null
 sudo nginx -t
