@@ -1,8 +1,8 @@
-# DashboardAPI-EC 1.0 stable
+# DashboardAPI-EC 1.1
 
 DashboardAPI-EC es un servicio web para descubrir, consultar y visualizar entornos HPE Aruba Networking EdgeConnect. La aplicación identifica la versión del Orchestrator, carga su perfil de compatibilidad, descubre los appliances administrados y conserva evidencia de cada llamada API utilizada para construir el dashboard.
 
-La versión 1.0 se soporta exclusivamente en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. Ubuntu 20.04 y 22.04 no son compatibles con su Python predeterminado; versiones posteriores de Ubuntu sí están admitidas.
+La versión 1.1 se soporta exclusivamente en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. Ubuntu 20.04 y 22.04 no son compatibles con su Python predeterminado; versiones posteriores de Ubuntu sí están admitidas.
 
 ## Instalación rápida
 
@@ -20,6 +20,8 @@ sudo ./scripts/install-ubuntu.sh
 ```
 
 El script instala dependencias, construye el `.deb`, configura los servicios y verifica `/api/v1/health`. Al terminar muestra la dirección que debes abrir. La guía completa de instalación, actualización, respaldo y diagnóstico está en [docs/INSTALLATION.md](docs/INSTALLATION.md).
+
+Para actualizar desde la versión 1.0, vuelve a ejecutar `sudo ./scripts/install-ubuntu.sh` o instala el paquete nuevo con `sudo apt install ./dashboardapi-ec_1.1.0_amd64.deb`. Los datos y credenciales se conservan y las migraciones se aplican solas; después ejecuta el descubrimiento de appliances para poblar el `nePk` antes de recolectar métricas.
 
 ## Cambios de 1.1
 
@@ -184,7 +186,7 @@ La importación conserva el documento original, genera un perfil normalizado y c
 Instalar el paquete generado:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.0.0_amd64.deb
+sudo apt install ./dashboardapi-ec_1.1.0_amd64.deb
 ```
 
 El instalador:
@@ -221,7 +223,7 @@ sudo apt install -y build-essential dpkg-dev python3 python3-pip python3-venv no
 ./scripts/build-deb.sh
 ```
 
-El resultado se guarda en `dist/dashboardapi-ec_1.0.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
+El resultado se guarda en `dist/dashboardapi-ec_1.1.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
 
 ## Operación del servicio
 
@@ -364,7 +366,7 @@ cd frontend
 npm run build
 ```
 
-Validaciones utilizadas para la versión 1.0:
+Validaciones utilizadas para la versión 1.1:
 
 ```bash
 cd backend
@@ -375,7 +377,7 @@ cd ../frontend
 npm run build
 ```
 
-La migración `20260923_0002` añade recursos normalizados, puntos métricos y metadatos de trazabilidad. Puede aplicarse sobre una instalación 1.0 existente con `alembic upgrade head`; también funciona en una instalación nueva.
+Las migraciones `20260923_0002` y `20260924_0004` añaden recursos normalizados, puntos métricos, metadatos de trazabilidad y el identificador `ne_pk` de cada appliance. Pueden aplicarse sobre una instalación 1.0 existente con `alembic upgrade head`; también funcionan en una instalación nueva.
 
 ## Docker para desarrollo
 
@@ -409,7 +411,7 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 
 ## Estado de la versión
 
-La versión 1.0 stable cubre los pasos 1 a 10: estabilización, Swagger 9.6, autenticación, asistente de configuración, múltiples Orchestrators con credenciales independientes, detección de versión, inventario normalizado, composición dinámica de widgets, inspector visual de API, recolección automática y entrega `.deb` para Ubuntu.
+La versión 1.0 stable cubre los pasos 1 a 10: estabilización, Swagger 9.6, autenticación, asistente de configuración, múltiples Orchestrators con credenciales independientes, detección de versión, inventario normalizado, composición dinámica de widgets, inspector visual de API, recolección automática y entrega `.deb` para Ubuntu. La versión 1.1 añade el identificador `nePk` para las llamadas por-appliance; tras actualizar desde 1.0, ejecuta el descubrimiento de appliances en cada Orchestrator para poblarlo.
 
 ## Referencias oficiales
 
