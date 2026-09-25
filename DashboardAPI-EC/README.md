@@ -6,6 +6,10 @@ La versión 1.0 se soporta exclusivamente en Ubuntu con Python 3.12 o superior y
 
 ## Instalación rápida
 
+Para conectar con usuario, contraseña y OTP, el asistente envía las credenciales
+y después espera el código vigente de tu aplicación. La [guía de autenticación](docs/AUTHENTICATION.md)
+explica el flujo, la duración de la sesión y el diagnóstico de errores 404.
+
 En un servidor Ubuntu con Python 3.12 o superior:
 
 ```bash

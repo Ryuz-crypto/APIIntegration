@@ -26,6 +26,7 @@ La versión **1.0 stable** funciona exclusivamente en **Ubuntu con Python 3.12 o
 ## Características
 
 - Asistente visual para conectar Orchestrator on-premises y Orchestrator as a Service.
+- Autenticación en dos fases: usuario/contraseña, espera del OTP y descubrimiento con la misma sesión. Consulta la [guía de autenticación](DashboardAPI-EC/docs/AUTHENTICATION.md).
 - Compatibilidad controlada con versiones EdgeConnect 9.3, 9.4, 9.5 y 9.6.
 - Importación de contratos OpenAPI 3 y Swagger 2.
 - Detección automática de versión, capacidades, appliances y sitios.

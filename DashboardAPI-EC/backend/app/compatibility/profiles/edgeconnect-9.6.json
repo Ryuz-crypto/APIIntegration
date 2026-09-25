@@ -7,7 +7,7 @@
   "operations": {
     "orchestrator.version": {
       "method": "GET",
-      "path": "/version",
+      "path": "/gmsserver/briefInfo",
       "polling_hint_seconds": 600,
       "notes": ["Used to detect the running Orchestrator release."]
     },

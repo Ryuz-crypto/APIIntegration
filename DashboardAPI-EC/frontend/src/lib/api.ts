@@ -137,12 +137,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init
   });
   if (!response.ok) {
-    throw new Error(await response.text());
+    const text = await response.text();
+    let detail: unknown;
+    try { detail = JSON.parse(text).detail; } catch { /* Non-JSON proxy error. */ }
+    throw new Error(typeof detail === "string" ? detail : `HTTP ${response.status}: no se pudo completar la solicitud.`);
   }
   return response.json() as Promise<T>;
 }
 
 export const api = {
+  startOtp: (id: string) => request<{ status: string; challenge_id: string; expires_in: number; message: string }>(`/orchestrators/${id}/auth/start`, { method: "POST" }),
+  completeOtp: (id: string, challenge_id: string, otp: string) => request<ValidationResult>(`/orchestrators/${id}/auth/complete`, { method: "POST", body: JSON.stringify({ challenge_id, otp }) }),
+  cancelOtp: (id: string, challenge_id: string) => request<{ status: string }>(`/orchestrators/${id}/auth/cancel`, { method: "POST", body: JSON.stringify({ challenge_id }) }),
   overview: () => request<SystemOverview>("/system/overview"),
   orchestrators: () => request<Orchestrator[]>("/orchestrators"),
   appliances: () => request<Appliance[]>("/appliances"),

@@ -42,7 +42,13 @@ if [[ -z "$PACKAGE_PATH" ]]; then
 fi
 
 echo "[3/4] Instalando DashboardAPI-EC..."
-apt-get install --reinstall -y "$PACKAGE_PATH"
+# APT's _apt user cannot traverse private home directories. Stage only the
+# public package under /var/tmp, without changing the user's home permissions.
+APT_STAGE="$(mktemp -d /var/tmp/dashboardapi-ec-apt.XXXXXX)"
+trap 'rm -rf -- "$APT_STAGE"' EXIT
+chmod 0755 "$APT_STAGE"
+install -m 0644 "$PACKAGE_PATH" "$APT_STAGE/$(basename "$PACKAGE_PATH")"
+apt-get install --reinstall -y "$APT_STAGE/$(basename "$PACKAGE_PATH")"
 
 echo "[4/4] Verificando servicios..."
 systemctl is-active --quiet dashboardapi-ec

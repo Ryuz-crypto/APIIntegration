@@ -26,7 +26,7 @@ def test_resolves_version_operation():
     operation = engine.resolve("9.5", "orchestrator.version")
 
     assert operation.method == "GET"
-    assert operation.path == "/gms/rest/version"
+    assert operation.path == "/gms/rest/gmsserver/briefInfo"
 
 
 def test_matches_patch_release_to_supported_profile():

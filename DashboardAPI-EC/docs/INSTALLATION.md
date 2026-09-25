@@ -119,6 +119,16 @@ el dashboard en el puerto 443 y redirige las peticiones HTTP a HTTPS.
 
 ## Diagnóstico rápido
 
+Si APT muestra `La descarga se realiza sin aislamiento como root ... _apt ...
+Permission denied` al instalar un `.deb` ubicado dentro de tu directorio personal,
+es un aviso de acceso al archivo local, no un fallo de conexión al Orchestrator.
+El instalador actualizado copia temporalmente el paquete a `/var/tmp` con permisos
+de lectura para `_apt` y elimina esa copia al terminar, sin cambiar permisos de tu home.
+Si el instalador imprimió `quedó instalado` después de verificar servicios, ese aviso
+no impidió la instalación.
+
+Para OTP y errores 404 durante el descubrimiento consulta la [guía de autenticación](AUTHENTICATION.md).
+
 ```bash
 sudo nginx -t
 sudo systemctl status postgresql redis-server nginx

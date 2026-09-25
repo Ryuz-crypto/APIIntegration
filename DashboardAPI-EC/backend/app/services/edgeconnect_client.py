@@ -8,6 +8,7 @@ import httpx
 from app.compatibility.engine import CompatibilityEngine
 from app.core.security import decrypt_secret
 from app.models.orchestrator import Orchestrator
+from app.services import interactive_auth
 
 
 class EdgeConnectClientError(RuntimeError):
@@ -65,13 +66,31 @@ class EdgeConnectClient:
             with httpx.Client(
                 verify=self.orchestrator.verify_tls,
                 timeout=self.orchestrator.timeout_seconds,
-                follow_redirects=True,
+                follow_redirects=False,
             ) as client:
-                if self.orchestrator.auth_type in {"session", "session_otp"}:
+                if self.orchestrator.auth_type == "session_otp":
+                    try:
+                        cookies = interactive_auth.load(
+                            interactive_auth.active_key(self.orchestrator), self.orchestrator
+                        )
+                    except interactive_auth.InteractiveAuthError as exc:
+                        raise EdgeConnectClientError(str(exc), path=operation.path) from None
+                    interactive_auth.restore_cookies(client, cookies)
+                    self._csrf(client, headers)
+                elif self.orchestrator.auth_type == "session":
                     self._login(client, headers)
                 response = client.request(operation.method, url, headers=headers, auth=auth)
-                if self.orchestrator.auth_type in {"session", "session_otp"}:
+                if self.orchestrator.auth_type == "session":
                     self._logout(client, headers)
+                if self.orchestrator.auth_type == "session_otp" and response.status_code in {
+                    401,
+                    403,
+                }:
+                    interactive_auth.invalidate(self.orchestrator)
+        except interactive_auth.InteractiveAuthError as exc:
+            raise EdgeConnectClientError(
+                str(exc), method=operation.method, path=operation.path
+            ) from None
         except httpx.HTTPError as exc:
             duration = int((time.perf_counter() - started) * 1000)
             raise EdgeConnectClientError(
@@ -80,9 +99,14 @@ class EdgeConnectClient:
 
         duration = int((time.perf_counter() - started) * 1000)
         payload = self._payload(response)
-        if response.is_error:
+        if response.is_error or response.is_redirect:
             raise EdgeConnectClientError(
-                f"EdgeConnect API returned HTTP {response.status_code}",
+                f"{operation.method} {operation.path}: HTTP {response.status_code}. "
+                + (
+                    "Ruta API no encontrada; revisa la URL del Orchestrator y el perfil Swagger."
+                    if response.status_code == 404
+                    else "Revisa permisos y autenticación; si usas MFA, vuelve a iniciar sesión."
+                ),
                 status_code=response.status_code,
                 duration_ms=duration,
                 payload=payload,
@@ -101,7 +125,9 @@ class EdgeConnectClient:
 
     def detect_version(self) -> EdgeConnectResponse:
         candidates = [self.orchestrator.api_version] if self.orchestrator.api_version else []
-        candidates.extend(version for version in reversed(self.engine.versions) if version not in candidates)
+        candidates.extend(
+            version for version in reversed(self.engine.versions) if version not in candidates
+        )
         last_error: EdgeConnectClientError | None = None
         attempted_paths: set[tuple[str, str]] = set()
         for version in candidates:
@@ -116,6 +142,8 @@ class EdgeConnectClient:
                 return self.call_operation(version, "orchestrator.version")
             except EdgeConnectClientError as exc:
                 last_error = exc
+                if exc.status_code != 404 or exc.method == "POST":
+                    raise
         raise last_error or EdgeConnectClientError("No compatible version endpoint is available")
 
     def _headers(self) -> dict[str, str]:
@@ -169,17 +197,48 @@ class EdgeConnectClient:
             },
             headers=headers,
         )
-        if response.is_error:
+        if response.is_error or response.is_redirect:
             raise EdgeConnectClientError(
-                f"EdgeConnect login returned HTTP {response.status_code}",
+                f"POST /gms/rest/authentication/login: HTTP {response.status_code}. "
+                "Revisa usuario, contraseña, OTP y permisos de API.",
                 status_code=response.status_code,
-                payload=self._payload(response),
                 method="POST",
                 path="/gms/rest/authentication/login",
             )
+        if not response.cookies.get("orchCsrfToken"):
+            raise EdgeConnectClientError(
+                "El login no entregó una sesión con CSRF. Revisa MFA o si el acceso requiere SSO.",
+                method="POST",
+                path="/gms/rest/authentication/login",
+            )
+        self._csrf(client, headers)
+
+    @staticmethod
+    def _csrf(client: httpx.Client, headers: dict[str, str]) -> None:
         csrf_token = client.cookies.get("orchCsrfToken")
         if csrf_token:
             headers["X-XSRF-TOKEN"] = csrf_token
+
+    def request_otp(self, client: httpx.Client) -> None:
+        path = "/gms/rest/authentication/loginToken"
+        response = client.post(
+            self._url(path),
+            json={
+                "user": self.orchestrator.username,
+                "password": decrypt_secret(self.orchestrator.encrypted_password),
+                "TempCode": False,
+            },
+        )
+        if response.status_code not in {200, 204} or "text/html" in response.headers.get(
+            "content-type", ""
+        ):
+            raise EdgeConnectClientError(
+                f"POST {path}: HTTP {response.status_code}. "
+                "No se pudo iniciar MFA. Revisa URL, credenciales y el método de acceso del Orchestrator.",
+                status_code=response.status_code,
+                method="POST",
+                path=path,
+            )
 
     def _logout(self, client: httpx.Client, headers: dict[str, str]) -> None:
         try:

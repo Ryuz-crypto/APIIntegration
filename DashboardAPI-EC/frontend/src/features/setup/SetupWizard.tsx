@@ -21,7 +21,7 @@ import {
   Typography
 } from "@mui/material";
 import { CheckCircle2, Cloud, KeyRound, Server, ShieldCheck } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, ValidationResult } from "../../lib/api";
 
 type Props = {
@@ -50,26 +50,57 @@ export function SetupWizard({ open, onClose, onComplete }: Props) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ValidationResult | null>(null);
+  const [orchestratorId, setOrchestratorId] = useState<string | null>(null);
+  const [challenge, setChallenge] = useState<string | null>(null);
+  const [remaining, setRemaining] = useState(0);
+  const [authenticated, setAuthenticated] = useState(false);
+
+  useEffect(() => {
+    if (!challenge) return;
+    const timer = window.setInterval(() => setRemaining(value => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [challenge]);
 
   const authReady = useMemo(() => {
     if (authType === "api_key") return Boolean(apiToken);
     if (["session", "session_otp", "basic"].includes(authType)) {
-      return Boolean(username && password && (authType !== "session_otp" || otp));
+      return Boolean(username && password);
     }
     return true;
-  }, [apiToken, authType, otp, password, username]);
+  }, [apiToken, authType, password, username]);
 
   function reset() {
     setStep(0);
     setError(null);
     setResult(null);
+    setOrchestratorId(null);
+    setChallenge(null);
+    setAuthenticated(false);
+    setOtp("");
+    setPassword("");
+    setApiToken("");
+  }
+
+  async function finish(id: string, validation: ValidationResult) {
+    setResult(validation);
+    if (validation.status === "validated") {
+      try {
+        await api.discoverAppliances(id);
+        onComplete();
+      } catch (err) {
+        setResult({ ...validation, status: "discovery_error", message: "Autenticación y versión correctas, pero falló la consulta de inventario. Revisa el error y vuelve a intentarlo." });
+        throw err;
+      }
+    }
   }
 
   async function connect() {
     setWorking(true);
     setError(null);
     try {
-      const orchestrator = await api.createOrchestrator({
+      let id = orchestratorId;
+      if (!id) {
+        const orchestrator = await api.createOrchestrator({
         name,
         base_url: baseUrl,
         deployment_type: deploymentType,
@@ -83,13 +114,25 @@ export function SetupWizard({ open, onClose, onComplete }: Props) {
         api_key_header: "X-Auth-Token",
         verify_tls: verifyTls,
         timeout_seconds: timeoutSeconds
-      });
-      const validation = await api.validateOrchestrator(orchestrator.id, otp || undefined);
-      setResult(validation);
-      if (validation.status === "validated") {
-        await api.discoverAppliances(orchestrator.id);
-        onComplete();
+        });
+        id = orchestrator.id;
+        setOrchestratorId(id);
+      } else if (!authenticated) {
+        await api.updateCredentials(id, {
+          credential_label: credentialLabel || undefined, auth_type: authType, login_type: loginType,
+          username: username || undefined, password: password || undefined,
+          api_token: apiToken || undefined, api_key_header: "X-Auth-Token"
+        });
       }
+      if (authType === "session_otp" && !authenticated) {
+        if (challenge) await api.cancelOtp(id, challenge);
+        setChallenge(null); setOtp(""); setResult(null);
+        const pending = await api.startOtp(id);
+        setChallenge(pending.challenge_id);
+        setRemaining(pending.expires_in);
+        return;
+      }
+      await finish(id, await api.validateOrchestrator(id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "No fue posible completar la conexión");
     } finally {
@@ -97,7 +140,24 @@ export function SetupWizard({ open, onClose, onComplete }: Props) {
     }
   }
 
+  async function submitOtp() {
+    if (!orchestratorId || !challenge) return;
+    setWorking(true); setError(null);
+    try {
+      const validation = await api.completeOtp(orchestratorId, challenge, otp);
+      setChallenge(null); setAuthenticated(true);
+      await finish(orchestratorId, validation);
+    } catch (err) {
+      setChallenge(null); setAuthenticated(false);
+      setError(`${err instanceof Error ? err.message : "No fue posible validar el OTP"} Inicia la autenticación de nuevo para utilizar un código vigente.`);
+    } finally {
+      setOtp(""); setWorking(false);
+    }
+  }
+
   function close() {
+    if (working) return;
+    if (challenge && orchestratorId) void api.cancelOtp(orchestratorId, challenge).catch(() => { /* Expires automatically. */ });
     reset();
     onClose();
   }
@@ -163,7 +223,7 @@ export function SetupWizard({ open, onClose, onComplete }: Props) {
               label="URL del Orchestrator"
               placeholder="https://orchestrator.example.com"
               value={baseUrl}
-              onChange={(event) => setBaseUrl(event.target.value)}
+              onChange={(event) => { setBaseUrl(event.target.value); setOrchestratorId(null); }}
               helperText="Puede ser el host o la URL terminada en /gms/rest."
             />
             <TextField label="Tenant o región (opcional)" value={tenant} onChange={(event) => setTenant(event.target.value)} />
@@ -197,7 +257,7 @@ export function SetupWizard({ open, onClose, onComplete }: Props) {
                   </Select>
                 </FormControl>
                 {authType === "session_otp" ? (
-                  <TextField label="Código de un solo uso" value={otp} onChange={(event) => setOtp(event.target.value)} helperText="Se usa una vez y no se almacena." />
+                  <Alert severity="info">Primero enviaremos usuario y contraseña. El asistente quedará esperando y te pedirá el código vigente de tu aplicación antes de continuar.</Alert>
                 ) : null}
               </>
             )}
@@ -209,12 +269,12 @@ export function SetupWizard({ open, onClose, onComplete }: Props) {
 
         {step === 3 ? (
           <Stack spacing={2}>
-            <FormControlLabel control={<Checkbox checked={verifyTls} onChange={(event) => setVerifyTls(event.target.checked)} />} label="Verificar certificado TLS" />
+            <FormControlLabel control={<Checkbox checked={verifyTls} onChange={(event) => { setVerifyTls(event.target.checked); setOrchestratorId(null); }} />} label="Verificar certificado TLS" />
             <TextField
               label="Timeout"
               type="number"
               value={timeoutSeconds}
-              onChange={(event) => setTimeoutSeconds(Number(event.target.value))}
+              onChange={(event) => { setTimeoutSeconds(Number(event.target.value)); setOrchestratorId(null); }}
               inputProps={{ min: 5, max: 120 }}
               helperText="Segundos por solicitud. Recomendado: 20."
             />
@@ -228,7 +288,7 @@ export function SetupWizard({ open, onClose, onComplete }: Props) {
               <Stack direction="row" spacing={1.5} alignItems="center">
                 {result?.status === "validated" ? <CheckCircle2 color="#53C57B" /> : <KeyRound color="#2FBF9B" />}
                 <Box>
-                  <Typography fontWeight={800}>{result?.status === "validated" ? "Conexión validada" : "Listo para detectar"}</Typography>
+                  <Typography fontWeight={800}>{challenge ? "Esperando tu código OTP" : result?.status === "validated" ? "Conexión validada" : result ? "No se completó la detección" : "Listo para conectar"}</Typography>
                   <Typography variant="body2" color="text.secondary">
                     {result ? `Versión ${result.detected_version ?? "no reconocida"} · ${Object.keys(result.capabilities).length} capacidades` : `${name} · ${baseUrl}`}
                   </Typography>
@@ -236,6 +296,12 @@ export function SetupWizard({ open, onClose, onComplete }: Props) {
               </Stack>
             </Paper>
             {result && result.status !== "validated" ? <Alert severity="warning">{result.message}</Alert> : null}
+            {challenge ? <>
+              <Alert severity={remaining ? "info" : "warning"}>{remaining ? `Usuario y contraseña enviados. Esperando el OTP; no se consultará el inventario todavía. Tiempo disponible: ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}.` : "La espera expiró. Reinicia la autenticación para continuar."}</Alert>
+              <TextField autoFocus label="Código OTP de tu aplicación" type="password" autoComplete="one-time-code" value={otp}
+                disabled={working || !remaining} onChange={event => setOtp(event.target.value.replace(/\D/g, "").slice(0, 12))}
+                inputProps={{ inputMode: "numeric", maxLength: 12 }} helperText="Introduce el código vigente ahora. No se guarda y se borra del formulario al enviarlo." />
+            </> : null}
             <Typography variant="body2" color="text.secondary">
               Se comprobarán autenticación, versión, perfil compatible e inventario. El código OTP no se guardará.
             </Typography>
@@ -243,14 +309,19 @@ export function SetupWizard({ open, onClose, onComplete }: Props) {
         ) : null}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2.5 }}>
-        <Button onClick={close}>Cancelar</Button>
-        {step > 0 && !result ? <Button onClick={() => setStep((current) => current - 1)}>Atrás</Button> : null}
+        <Button onClick={close} disabled={working}>Cancelar</Button>
+        {step > 0 && !challenge ? <Button disabled={working} onClick={() => { setResult(null); setAuthenticated(false); setStep((current) => current - 1); }}>Atrás</Button> : null}
         {step < 4 ? (
           <Button variant="contained" disabled={nextDisabled} onClick={() => setStep((current) => current + 1)}>Continuar</Button>
+        ) : challenge ? (
+          <>
+            <Button disabled={working} onClick={connect}>Reiniciar autenticación</Button>
+            <Button variant="contained" disabled={working || !remaining || otp.length < 4} onClick={submitOtp}>{working ? "Validando OTP y detectando…" : "Validar OTP y detectar"}</Button>
+          </>
         ) : result?.status === "validated" ? (
           <Button variant="contained" onClick={close}>Abrir dashboard</Button>
         ) : (
-          <Button variant="contained" disabled={working} onClick={connect}>{working ? "Detectando…" : "Conectar y detectar"}</Button>
+          <Button variant="contained" disabled={working} onClick={connect}>{working ? "Conectando…" : authType === "session_otp" && !authenticated ? "Autenticar usuario y contraseña" : "Conectar y detectar"}</Button>
         )}
       </DialogActions>
     </Dialog>

@@ -5,7 +5,7 @@
   "operations": {
     "orchestrator.version": {
       "method": "GET",
-      "path": "/version",
+      "path": "/gmsserver/briefInfo",
       "polling_hint_seconds": 600,
       "notes": ["Used to validate real connectivity and detect API version."]
     },
