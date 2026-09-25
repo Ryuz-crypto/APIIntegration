@@ -9,43 +9,65 @@
       "method": "GET",
       "path": "/gmsserver/briefInfo",
       "polling_hint_seconds": 600,
-      "notes": ["Used to detect the running Orchestrator release."]
+      "notes": [
+        "Detects the running Orchestrator release."
+      ]
     },
     "orchestrator.inventory.summary": {
       "method": "GET",
       "path": "/appliance",
       "polling_hint_seconds": 120,
-      "notes": ["Returns the managed EdgeConnect inventory and nePk identifiers."]
+      "notes": [
+        "Managed EdgeConnect inventory with nePk identifiers (id field)."
+      ]
     },
     "orchestrator.topology": {
       "method": "GET",
       "path": "/topology",
       "polling_hint_seconds": 300,
-      "notes": ["Topology capability declared by the Orchestrator API profile."]
+      "notes": [
+        "Topology capability declared by the Orchestrator API."
+      ]
     },
     "appliance.interfaces": {
       "method": "GET",
-      "path": "/appliances/{appliance_id}/interfaces",
-      "polling_hint_seconds": 5,
-      "notes": ["Appliance interface detail; availability is confirmed during discovery."]
+      "path": "/interfaceState/{appliance_id}?cached={cached}",
+      "polling_hint_seconds": 60,
+      "notes": [
+        "Real HPE endpoint: per-appliance interface state."
+      ]
     },
     "appliance.tunnels": {
       "method": "GET",
-      "path": "/appliances/{appliance_id}/tunnels",
-      "polling_hint_seconds": 5,
-      "notes": ["Appliance tunnel detail; availability is confirmed during discovery."]
+      "path": "/stats/aggregate/tunnel?nePk={appliance_id}&startTime={start_time}&endTime={end_time}&granularity={granularity}",
+      "polling_hint_seconds": 60,
+      "notes": [
+        "Real HPE endpoint: aggregate tunnel stats for one appliance."
+      ]
     },
     "appliance.performance": {
       "method": "GET",
-      "path": "/appliances/{appliance_id}/performance",
-      "polling_hint_seconds": 5,
-      "notes": ["Appliance performance detail; availability is confirmed during discovery."]
+      "path": "/stats/timeseries/appliance?nePk={appliance_id}&startTime={start_time}&endTime={end_time}&granularity={granularity}&trafficType={traffic_type}",
+      "polling_hint_seconds": 60,
+      "notes": [
+        "Real HPE endpoint: timeseries appliance stats. Query params required."
+      ]
     },
     "orchestrator.stats.aggregate.interface": {
       "method": "POST",
       "path": "/stats/aggregate/interface",
       "polling_hint_seconds": 300,
-      "notes": ["Official aggregate interface statistics endpoint. Requires a time range and appliance nePk values."]
+      "notes": [
+        "Official aggregate interface statistics endpoint. Requires a time range and appliance nePk values."
+      ]
+    },
+    "appliance.health": {
+      "method": "POST",
+      "path": "/health",
+      "polling_hint_seconds": 60,
+      "notes": [
+        "Real HPE endpoint: loss/latency/jitter/MOS health summary per nePk."
+      ]
     }
   }
 }

@@ -7,10 +7,23 @@ from app.compatibility.loader import load_builtin_profiles
 def test_resolves_versioned_operation_with_path_params():
     engine = CompatibilityEngine(load_builtin_profiles())
 
-    operation = engine.resolve("9.5", "appliance.performance", {"appliance_id": "edge-01"})
+    operation = engine.resolve(
+        "9.5",
+        "appliance.performance",
+        {
+            "appliance_id": "1.NE",
+            "start_time": "1000",
+            "end_time": "2000",
+            "granularity": "minute",
+            "traffic_type": "all_traffic",
+        },
+    )
 
     assert operation.method == "GET"
-    assert operation.path == "/gms/rest/appliances/edge-01/performance"
+    assert operation.path == (
+        "/gms/rest/stats/timeseries/appliance"
+        "?nePk=1.NE&startTime=1000&endTime=2000&granularity=minute&trafficType=all_traffic"
+    )
 
 
 def test_rejects_missing_operation():
@@ -53,3 +66,37 @@ def test_97_uses_96_api_profile(version):
 def test_native_97_profile_takes_precedence_over_96_mapping():
     engine = CompatibilityEngine([*load_builtin_profiles(), {"version": "9.7"}])
     assert engine.match_version("9.7.1.42046") == "9.7"
+
+
+def test_builtin_profiles_use_real_edgeconnect_endpoints():
+    engine = CompatibilityEngine(load_builtin_profiles())
+    for version in engine.versions:
+        performance = engine.resolve(
+            version,
+            "appliance.performance",
+            {
+                "appliance_id": "1.NE",
+                "start_time": "1000",
+                "end_time": "2000",
+                "granularity": "minute",
+                "traffic_type": "all_traffic",
+            },
+        )
+        assert "/stats/timeseries/appliance" in performance.path
+        interfaces = engine.resolve(
+            version, "appliance.interfaces", {"appliance_id": "1.NE", "cached": "true"}
+        )
+        assert "/interfaceState/1.NE" in interfaces.path
+        tunnels = engine.resolve(
+            version,
+            "appliance.tunnels",
+            {
+                "appliance_id": "1.NE",
+                "start_time": "1000",
+                "end_time": "2000",
+                "granularity": "minute",
+            },
+        )
+        assert "/stats/aggregate/tunnel" in tunnels.path
+        health = engine.resolve(version, "appliance.health")
+        assert health.method == "POST" and health.path.endswith("/health")

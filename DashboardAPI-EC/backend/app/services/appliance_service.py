@@ -1,3 +1,4 @@
+import time
 import uuid
 from typing import Any
 
@@ -91,8 +92,16 @@ def collect_appliance_metrics(
             "El appliance no tiene identificador nePk; ejecuta el descubrimiento para "
             "obtenerlo desde GET /gms/rest/appliance."
         )
+    now = int(time.time())
+    path_params = {
+        "appliance_id": appliance_key,
+        "start_time": str(now - 900),
+        "end_time": str(now),
+        "granularity": "minute",
+        "traffic_type": "all_traffic",
+    }
     try:
-        response = client.call_operation(version, operation_id, {"appliance_id": appliance_key})
+        response = client.call_operation(version, operation_id, path_params)
     except EdgeConnectClientError as exc:
         record_error(session, orchestrator.id, version, operation_id, exc, appliance.id)
         session.commit()
@@ -104,7 +113,7 @@ def collect_appliance_metrics(
         version,
         response,
         appliance.id,
-        request_params={"appliance_id": appliance_key},
+        request_params=path_params,
         transformations=["Flatten numeric fields", "Persist normalized metric points"],
     )
     session.flush()

@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 
 
@@ -60,9 +61,9 @@ class CompatibilityEngine:
         for key, value in (path_params or {}).items():
             path = path.replace("{" + key + "}", value)
 
-        unresolved = [part for part in path.split("/") if part.startswith("{") and part.endswith("}")]
+        unresolved = re.findall(r"\{[a-zA-Z_][a-zA-Z0-9_]*\}", path)
         if unresolved:
-            raise CompatibilityError(f"Missing path params: {', '.join(unresolved)}")
+            raise CompatibilityError(f"Missing path params: {', '.join(dict.fromkeys(unresolved))}")
 
         return ResolvedOperation(
             version=version,

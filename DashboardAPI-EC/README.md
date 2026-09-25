@@ -27,9 +27,13 @@ Para actualizar desde la versión 1.0, vuelve a ejecutar `sudo ./scripts/install
 
 - El descubrimiento persiste el identificador `nePk` (por ejemplo `1.NE`) que devuelve
   `GET /gms/rest/appliance` de cada Orchestrator.
-- Las llamadas por-appliance (`/appliances/{id}/performance`, `interfaces`, `tunnels`)
-  usan el `nePk` del EdgeConnect en lugar de la dirección MAC o el hostname; la API del
-  Orchestrator no acepta MAC como identificador de ruta.
+- Las llamadas por-appliance usan el `nePk` del EdgeConnect en lugar de la dirección MAC
+  o el hostname; la API del Orchestrator no acepta MAC como identificador de ruta.
+- Estadísticas por appliance mediante los endpoints reales del Orchestrator:
+  `GET /stats/timeseries/appliance?nePk=...` (rendimiento), `GET /interfaceState/{nePk}`
+  (interfaces), `GET /stats/aggregate/tunnel?nePk=...` (túneles) y `POST /health`
+  (resumen de pérdida, latencia, jitter y MOS). La recolección usa una ventana de
+  15 minutos con granularidad por minuto.
 - El panel de appliances muestra la columna `nePk` para verificar el identificador real.
 
 ## Alcance de 1.0

@@ -79,8 +79,9 @@ def _semantic_operation_id(method: str, path: str) -> str | None:
         (verb == "get" and normalized in {"/appliance", "/appliances"}, "orchestrator.inventory.summary"),
         (verb == "get" and normalized.endswith("/topology"), "orchestrator.topology"),
         (verb == "post" and "/stats/aggregate/interface" in normalized, "orchestrator.stats.aggregate.interface"),
-        (verb == "get" and normalized.endswith("/interfaces"), "appliance.interfaces"),
-        (verb == "get" and normalized.endswith("/tunnels"), "appliance.tunnels"),
-        (verb == "get" and normalized.endswith("/performance"), "appliance.performance"),
+        (verb == "get" and normalized.startswith("/interfacestate/"), "appliance.interfaces"),
+        (verb == "get" and "/stats/aggregate/tunnel" in normalized, "appliance.tunnels"),
+        (verb == "get" and "/stats/timeseries/appliance" in normalized, "appliance.performance"),
+        (verb == "post" and normalized == "/health", "appliance.health"),
     )
     return next((operation_id for matches, operation_id in rules if matches), None)

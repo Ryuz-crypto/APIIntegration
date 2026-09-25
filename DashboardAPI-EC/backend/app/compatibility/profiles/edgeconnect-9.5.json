@@ -7,49 +7,73 @@
       "method": "GET",
       "path": "/gmsserver/briefInfo",
       "polling_hint_seconds": 600,
-      "notes": ["Used to validate real connectivity and detect API version."]
+      "notes": [
+        "Detects the running Orchestrator release."
+      ]
     },
     "orchestrator.inventory.summary": {
       "method": "GET",
       "path": "/appliance",
       "polling_hint_seconds": 120,
-      "notes": ["Lightweight orchestrator inventory call."]
+      "notes": [
+        "Managed EdgeConnect inventory with nePk identifiers (id field)."
+      ]
     },
     "orchestrator.topology": {
       "method": "GET",
       "path": "/topology",
       "polling_hint_seconds": 300,
-      "notes": ["Used for dashboard topology views."]
+      "notes": [
+        "Topology capability declared by the Orchestrator API."
+      ]
     },
     "appliance.interfaces": {
       "method": "GET",
-      "path": "/appliances/{appliance_id}/interfaces",
-      "polling_hint_seconds": 5,
-      "notes": ["Appliance near-real-time interface metrics."]
+      "path": "/interfaceState/{appliance_id}?cached={cached}",
+      "polling_hint_seconds": 60,
+      "notes": [
+        "Real HPE endpoint: per-appliance interface state."
+      ]
     },
     "appliance.tunnels": {
       "method": "GET",
-      "path": "/appliances/{appliance_id}/tunnels",
-      "polling_hint_seconds": 5,
-      "notes": ["Tunnel state and overlay path visibility."]
+      "path": "/stats/aggregate/tunnel?nePk={appliance_id}&startTime={start_time}&endTime={end_time}&granularity={granularity}",
+      "polling_hint_seconds": 60,
+      "notes": [
+        "Real HPE endpoint: aggregate tunnel stats for one appliance."
+      ]
     },
     "appliance.performance": {
       "method": "GET",
-      "path": "/appliances/{appliance_id}/performance",
-      "polling_hint_seconds": 5,
-      "notes": ["CPU, memory, latency, jitter and loss."]
+      "path": "/stats/timeseries/appliance?nePk={appliance_id}&startTime={start_time}&endTime={end_time}&granularity={granularity}&trafficType={traffic_type}",
+      "polling_hint_seconds": 60,
+      "notes": [
+        "Real HPE endpoint: timeseries appliance stats. Query params required."
+      ]
     },
     "appliance.routing": {
       "method": "GET",
       "path": "/appliances/{appliance_id}/routing",
       "polling_hint_seconds": 30,
-      "notes": ["Routing snapshot for NOC and troubleshooting dashboards."]
+      "notes": [
+        "Routing snapshot for NOC and troubleshooting dashboards."
+      ]
     },
     "security.audit.events": {
       "method": "GET",
       "path": "/audit/events",
       "polling_hint_seconds": 300,
-      "notes": ["SOC dashboard event source."]
+      "notes": [
+        "SOC dashboard event source."
+      ]
+    },
+    "appliance.health": {
+      "method": "POST",
+      "path": "/health",
+      "polling_hint_seconds": 60,
+      "notes": [
+        "Real HPE endpoint: loss/latency/jitter/MOS health summary per nePk."
+      ]
     }
   }
 }
