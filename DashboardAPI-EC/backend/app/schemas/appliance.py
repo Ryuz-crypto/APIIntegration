@@ -7,6 +7,7 @@ class ApplianceCreate(BaseModel):
     orchestrator_id: uuid.UUID
     hostname: str
     serial_number: str | None = None
+    ne_pk: str | None = None
     site: str | None = None
     model: str | None = None
     software_version: str | None = None
@@ -18,6 +19,7 @@ class ApplianceRead(BaseModel):
     orchestrator_id: uuid.UUID
     hostname: str
     serial_number: str | None
+    ne_pk: str | None
     site: str | None
     model: str | None
     software_version: str | None

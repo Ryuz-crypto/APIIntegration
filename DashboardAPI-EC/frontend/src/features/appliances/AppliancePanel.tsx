@@ -41,6 +41,7 @@ export function AppliancePanel({ items, onChanged }: { items: Appliance[]; onCha
         <TableHead>
           <TableRow>
             <TableCell>Hostname</TableCell>
+            <TableCell>nePk</TableCell>
             <TableCell>Site</TableCell>
             <TableCell>Version</TableCell>
             <TableCell>Status</TableCell>
@@ -52,6 +53,7 @@ export function AppliancePanel({ items, onChanged }: { items: Appliance[]; onCha
           {items.map((item) => (
             <TableRow key={item.id}>
               <TableCell>{item.hostname}</TableCell>
+              <TableCell>{item.ne_pk ?? "—"}</TableCell>
               <TableCell>{item.site ?? "unset"}</TableCell>
               <TableCell>{item.software_version ?? "unknown"}</TableCell>
               <TableCell>

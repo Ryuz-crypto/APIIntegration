@@ -65,6 +65,7 @@ export type Appliance = {
   orchestrator_id: string;
   hostname: string;
   serial_number: string | null;
+  ne_pk: string | null;
   site: string | null;
   model: string | null;
   software_version: string | null;

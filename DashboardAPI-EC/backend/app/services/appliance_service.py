@@ -85,7 +85,12 @@ def collect_appliance_metrics(
         raise EdgeConnectClientError("Validate the Orchestrator version before collecting metrics")
     client = EdgeConnectClient(orchestrator, engine)
     operation_id = "appliance.performance"
-    appliance_key = appliance.serial_number or appliance.hostname
+    appliance_key = appliance.ne_pk or appliance.hostname or appliance.serial_number
+    if not appliance_key:
+        raise EdgeConnectClientError(
+            "El appliance no tiene identificador nePk; ejecuta el descubrimiento para "
+            "obtenerlo desde GET /gms/rest/appliance."
+        )
     try:
         response = client.call_operation(version, operation_id, {"appliance_id": appliance_key})
     except EdgeConnectClientError as exc:
@@ -129,13 +134,21 @@ def _extract_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _upsert_appliance(session: Session, orchestrator: Orchestrator, item: dict[str, Any]) -> Appliance:
-    serial = _first(item, "serialNumber", "serial_number", "serial", "id", "applianceId")
-    hostname = _first(item, "hostName", "hostname", "name", "applianceName") or serial
+    serial = _first(item, "serialNumber", "serial_number", "serial")
+    ne_pk = _first(item, "nePk", "ne_pk", "id", "applianceId")
+    hostname = _first(item, "hostName", "hostname", "name", "applianceName") or ne_pk or serial
     if not hostname:
         hostname = f"edgeconnect-{uuid.uuid4().hex[:8]}"
 
     existing = None
-    if serial:
+    if ne_pk:
+        existing = session.exec(
+            select(Appliance).where(
+                Appliance.orchestrator_id == orchestrator.id,
+                Appliance.ne_pk == str(ne_pk),
+            )
+        ).first()
+    if existing is None and serial:
         existing = session.exec(
             select(Appliance).where(
                 Appliance.orchestrator_id == orchestrator.id,
@@ -157,6 +170,7 @@ def _upsert_appliance(session: Session, orchestrator: Orchestrator, item: dict[s
     )
     appliance.hostname = str(hostname)
     appliance.serial_number = str(serial) if serial else appliance.serial_number
+    appliance.ne_pk = str(ne_pk) if ne_pk else appliance.ne_pk
     appliance.site = _first(item, "site", "siteName", "location") or appliance.site
     appliance.model = _first(item, "model", "platform", "applianceModel") or appliance.model
     appliance.software_version = (

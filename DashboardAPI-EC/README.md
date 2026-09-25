@@ -21,6 +21,15 @@ sudo ./scripts/install-ubuntu.sh
 
 El script instala dependencias, construye el `.deb`, configura los servicios y verifica `/api/v1/health`. Al terminar muestra la dirección que debes abrir. La guía completa de instalación, actualización, respaldo y diagnóstico está en [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
+## Cambios de 1.1
+
+- El descubrimiento persiste el identificador `nePk` (por ejemplo `1.NE`) que devuelve
+  `GET /gms/rest/appliance` de cada Orchestrator.
+- Las llamadas por-appliance (`/appliances/{id}/performance`, `interfaces`, `tunnels`)
+  usan el `nePk` del EdgeConnect en lugar de la dirección MAC o el hostname; la API del
+  Orchestrator no acepta MAC como identificador de ruta.
+- El panel de appliances muestra la columna `nePk` para verificar el identificador real.
+
 ## Alcance de 1.0
 
 - Asistente web para conectar Orchestrator on-premises y Orchestrator as a Service.

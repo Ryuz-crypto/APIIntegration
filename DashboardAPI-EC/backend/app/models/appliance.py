@@ -10,6 +10,7 @@ class Appliance(TimestampMixin, SQLModel, table=True):
     orchestrator_id: uuid.UUID = Field(foreign_key="orchestrator.id", index=True)
     hostname: str = Field(index=True, max_length=160)
     serial_number: str | None = Field(default=None, index=True, max_length=120)
+    ne_pk: str | None = Field(default=None, index=True, max_length=120)
     site: str | None = Field(default=None, index=True, max_length=160)
     model: str | None = Field(default=None, max_length=120)
     software_version: str | None = Field(default=None, index=True, max_length=40)

@@ -31,7 +31,7 @@ def normalize_inventory(
     now = datetime.now(UTC)
     sites: set[str] = set()
     for appliance, raw in zip(appliances, raw_items, strict=False):
-        external_id = appliance.serial_number or appliance.hostname
+        external_id = appliance.ne_pk or appliance.serial_number or appliance.hostname
         _upsert_resource(
             session,
             orchestrator_id=orchestrator_id,
@@ -44,6 +44,7 @@ def normalize_inventory(
                 "site": appliance.site,
                 "model": appliance.model,
                 "software_version": appliance.software_version,
+                "ne_pk": appliance.ne_pk,
                 "raw": raw,
             },
             sample=sample,
