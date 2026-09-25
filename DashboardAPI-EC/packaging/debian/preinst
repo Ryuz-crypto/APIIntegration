@@ -8,8 +8,8 @@ else
     exit 1
 fi
 
-if [ "${ID:-}" != "ubuntu" ] || [ "${VERSION_ID:-}" != "24.04" ]; then
-    echo "DashboardAPI-EC 1.0 requires Ubuntu 24.04 LTS with Python 3.12." >&2
+if [ "${ID:-}" != "ubuntu" ]; then
+    echo "DashboardAPI-EC 1.0 requires Ubuntu with Python 3.12 or newer." >&2
     echo "Detected system: ${PRETTY_NAME:-unknown}." >&2
     exit 1
 fi

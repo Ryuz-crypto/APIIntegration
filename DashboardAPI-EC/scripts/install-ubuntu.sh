@@ -12,16 +12,15 @@ if [[ ! -r /etc/os-release ]]; then
   exit 1
 fi
 . /etc/os-release
-if [[ "${ID:-}" != "ubuntu" || "${VERSION_ID:-}" != "24.04" ]]; then
-  echo "DashboardAPI-EC 1.0 requiere Ubuntu 24.04 LTS con Python 3.12." >&2
+if [[ "${ID:-}" != "ubuntu" ]]; then
+  echo "DashboardAPI-EC 1.0 solo se instala en Ubuntu con Python 3.12 o superior." >&2
   echo "Sistema detectado: ${PRETTY_NAME:-desconocido}." >&2
-  echo "Actualiza el servidor a Ubuntu 24.04 LTS y vuelve a ejecutar este instalador." >&2
   exit 1
 fi
 
-if ! python3 -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))'; then
-  echo "DashboardAPI-EC 1.0 requiere Python 3.12; se detectó: $(python3 --version)." >&2
-  echo "Repara la instalación de Python de Ubuntu 24.04 antes de continuar." >&2
+if ! python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 12))'; then
+  echo "DashboardAPI-EC 1.0 requiere Python 3.12 o superior; se detectó: $(python3 --version)." >&2
+  echo "Actualiza Python o utiliza una versión de Ubuntu que incluya Python 3.12 o posterior." >&2
   exit 1
 fi
 

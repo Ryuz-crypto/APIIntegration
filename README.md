@@ -1,13 +1,13 @@
 # DashboardAPI-EC
 
 [![Version](https://img.shields.io/badge/version-1.0%20stable-2fbf9b)](https://github.com/Ryuz-crypto/APIIntegration)
-[![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-Python%203.12%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 
 DashboardAPI-EC es una plataforma web para descubrir, consultar y visualizar entornos **HPE Aruba Networking EdgeConnect** mediante sus APIs. Detecta la versión del Orchestrator, identifica las capacidades disponibles y ensambla un dashboard específico con datos reales.
 
-La versión **1.0 stable** funciona exclusivamente en **Ubuntu 24.04 LTS con Python 3.12** y se distribuye como paquete `.deb`. Ubuntu 20.04 (Python 3.8) y 22.04 (Python 3.10) no son compatibles.
+La versión **1.0 stable** funciona exclusivamente en **Ubuntu con Python 3.12 o superior** y se distribuye como paquete `.deb`. Ubuntu 20.04 (Python 3.8) y 22.04 (Python 3.10) no son compatibles con su Python predeterminado; versiones posteriores de Ubuntu sí están admitidas.
 
 ## Contenido
 
@@ -42,7 +42,7 @@ La versión **1.0 stable** funciona exclusivamente en **Ubuntu 24.04 LTS con Pyt
 
 Requisitos mínimos:
 
-- Ubuntu 24.04 LTS, `amd64` o `arm64`.
+- Ubuntu con Python 3.12 o superior, `amd64` o `arm64`.
 - 4 GB de RAM; 8 GB recomendados.
 - 10 GB de espacio disponible.
 - Acceso HTTPS desde el servidor hacia los Orchestrators.

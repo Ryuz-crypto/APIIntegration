@@ -2,11 +2,11 @@
 
 DashboardAPI-EC es un servicio web para descubrir, consultar y visualizar entornos HPE Aruba Networking EdgeConnect. La aplicación identifica la versión del Orchestrator, carga su perfil de compatibilidad, descubre los appliances administrados y conserva evidencia de cada llamada API utilizada para construir el dashboard.
 
-La versión 1.0 se soporta exclusivamente en Ubuntu 24.04 LTS con Python 3.12 y se distribuye como paquete `.deb`. Ubuntu 20.04 y 22.04 no son compatibles.
+La versión 1.0 se soporta exclusivamente en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. Ubuntu 20.04 y 22.04 no son compatibles con su Python predeterminado; versiones posteriores de Ubuntu sí están admitidas.
 
 ## Instalación rápida
 
-En un servidor Ubuntu 24.04:
+En un servidor Ubuntu con Python 3.12 o superior:
 
 ```bash
 sudo apt update && sudo apt install -y git
@@ -160,7 +160,7 @@ La importación conserva el documento original, genera un perfil normalizado y c
 
 ### Requisitos
 
-- Ubuntu 24.04 LTS.
+- Ubuntu con Python 3.12 o superior.
 - Arquitectura `amd64` o `arm64`.
 - 4 GB de RAM como mínimo; 8 GB recomendados.
 - Acceso HTTPS desde el servidor hacia el Orchestrator y los appliances que se consultarán.
