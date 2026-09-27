@@ -73,6 +73,7 @@ def normalize_metrics(
     appliance: Appliance,
     payload: dict[str, Any],
     sample: ApiSample,
+    namespace: str = "appliance.performance",
 ) -> dict[str, float]:
     values = dict(_numeric_values(payload))
     for metric_name, value in values.items():
@@ -80,7 +81,7 @@ def normalize_metrics(
             MetricPoint(
                 orchestrator_id=orchestrator_id,
                 appliance_id=appliance.id,
-                namespace="appliance.performance",
+                namespace=namespace,
                 metric_name=metric_name,
                 value=value,
                 unit=_infer_unit(metric_name),

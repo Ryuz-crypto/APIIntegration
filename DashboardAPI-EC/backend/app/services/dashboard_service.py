@@ -122,6 +122,7 @@ def compose_dashboard(session: Session, orchestrator: Orchestrator) -> Dashboard
                     description="Inventario y estado de interfaces cuando la API los expone.",
                     visualization="table",
                     required=["appliance.interfaces"],
+                    data=_sample_rows(latest.get("appliance.interfaces"), "interfaces"),
                 ),
                 _widget(
                     operations,
@@ -131,6 +132,7 @@ def compose_dashboard(session: Session, orchestrator: Orchestrator) -> Dashboard
                     description="Estado de túneles SD-WAN publicado por los appliances.",
                     visualization="table",
                     required=["appliance.tunnels"],
+                    data=_sample_rows(latest.get("appliance.tunnels"), "tunnels"),
                 ),
                 _widget(
                     operations,
@@ -169,6 +171,21 @@ def compose_dashboard(session: Session, orchestrator: Orchestrator) -> Dashboard
         generated_at=datetime.now(UTC),
         sections=sections,
     )
+
+
+def _sample_rows(sample: ApiSample | None, preferred_key: str) -> list[dict]:
+    if sample is None or not isinstance(sample.payload, dict):
+        return []
+    payload = sample.payload
+    for key in (preferred_key, "items", "data", "result"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [item for item in value[:50] if isinstance(item, dict)]
+        if isinstance(value, dict):
+            nested = [item for item in value.values() if isinstance(item, dict)]
+            if nested:
+                return nested[:50]
+    return [payload]
 
 
 def _widget(

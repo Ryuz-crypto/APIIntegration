@@ -84,48 +84,61 @@ def collect_appliance_metrics(
     version = orchestrator.api_version
     if not version:
         raise EdgeConnectClientError("Validate the Orchestrator version before collecting metrics")
-    client = EdgeConnectClient(orchestrator, engine)
-    operation_id = "appliance.performance"
-    appliance_key = appliance.ne_pk or appliance.hostname or appliance.serial_number
+    appliance_key = appliance.ne_pk
     if not appliance_key:
         raise EdgeConnectClientError(
             "El appliance no tiene identificador nePk; ejecuta el descubrimiento para "
             "obtenerlo desde GET /gms/rest/appliance."
         )
     now = int(time.time())
-    path_params = {
+    common_params = {
         "appliance_id": appliance_key,
         "start_time": str(now - 900),
         "end_time": str(now),
         "granularity": "minute",
         "traffic_type": "all_traffic",
+        "cached": "true",
     }
-    try:
-        response = client.call_operation(version, operation_id, path_params)
-    except EdgeConnectClientError as exc:
-        record_error(session, orchestrator.id, version, operation_id, exc, appliance.id)
-        session.commit()
-        raise
-
-    sample = record_success(
-        session,
-        orchestrator.id,
-        version,
-        response,
-        appliance.id,
-        request_params=path_params,
-        transformations=["Flatten numeric fields", "Persist normalized metric points"],
-    )
-    session.flush()
-    values = normalize_metrics(session, orchestrator.id, appliance, response.payload, sample)
-    sample.extracted_values = values
-    session.add(sample)
-    _mark_verified(orchestrator, operation_id)
+    operations = ("appliance.performance", "appliance.interfaces", "appliance.tunnels")
+    client = EdgeConnectClient(orchestrator, engine)
+    payloads: dict[str, dict] = {}
+    errors: list[EdgeConnectClientError] = []
+    for operation_id in operations:
+        try:
+            response = client.call_operation(version, operation_id, common_params)
+        except EdgeConnectClientError as exc:
+            record_error(session, orchestrator.id, version, operation_id, exc, appliance.id)
+            errors.append(exc)
+            continue
+        sample = record_success(
+            session,
+            orchestrator.id,
+            version,
+            response,
+            appliance.id,
+            request_params=common_params,
+            transformations=["Flatten numeric fields", "Persist normalized metric points"],
+        )
+        session.flush()
+        values = normalize_metrics(
+            session,
+            orchestrator.id,
+            appliance,
+            response.payload,
+            sample,
+            namespace=operation_id,
+        )
+        sample.extracted_values = values
+        session.add(sample)
+        _mark_verified(orchestrator, operation_id)
+        payloads[operation_id] = response.payload
     session.add(orchestrator)
-    appliance.status = "sampled"
+    appliance.status = "sampled" if payloads else "collection_error"
     session.add(appliance)
     session.commit()
-    return response.payload
+    if not payloads and errors:
+        raise errors[0]
+    return payloads
 
 
 def _extract_items(payload: dict[str, Any]) -> list[dict[str, Any]]:

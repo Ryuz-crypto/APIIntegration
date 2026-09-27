@@ -8,11 +8,13 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.db.session import get_session
-from app.schemas.system import SystemOverview
+from app.models.system_setting import SystemSetting
+from app.schemas.system import AppearanceSettings, SystemOverview
 from app.services.system_service import get_system_overview
 from app.services.tls_service import MAX_UPLOAD, normalize
 
 router = APIRouter()
+APPEARANCE_KEY = "appearance"
 
 
 def tls_authorized(request: Request, x_tls_admin_token: str = Header(default="")):
@@ -81,3 +83,21 @@ async def upload_tls(
 @router.get("/overview", response_model=SystemOverview)
 def overview(session: Session = Depends(get_session)) -> SystemOverview:
     return get_system_overview(session)
+
+
+@router.get("/appearance", response_model=AppearanceSettings)
+def appearance(session: Session = Depends(get_session)) -> AppearanceSettings:
+    item = session.get(SystemSetting, APPEARANCE_KEY)
+    return AppearanceSettings.model_validate(item.value if item else {})
+
+
+@router.put("/appearance", response_model=AppearanceSettings)
+def update_appearance(
+    payload: AppearanceSettings,
+    session: Session = Depends(get_session),
+) -> AppearanceSettings:
+    item = session.get(SystemSetting, APPEARANCE_KEY) or SystemSetting(key=APPEARANCE_KEY)
+    item.value = payload.model_dump()
+    session.add(item)
+    session.commit()
+    return payload

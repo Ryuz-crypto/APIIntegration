@@ -1,6 +1,6 @@
 import { Box, Button, CssBaseline, Grid, MenuItem, Paper, Select, Stack, ThemeProvider, Typography } from "@mui/material";
-import { Activity, Boxes, Database, Gauge, Network, Plus, RadioTower, ShieldCheck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Activity, Boxes, Database, Gauge, Network, Palette, Plus, RadioTower, ShieldCheck, Workflow } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { MetricCard } from "./components/MetricCard";
 import { AppliancePanel } from "./features/appliances/AppliancePanel";
 import { DynamicDashboard } from "./features/dashboard/DynamicDashboard";
@@ -9,8 +9,9 @@ import { SetupWizard } from "./features/setup/SetupWizard";
 import { CompatibilityPanel } from "./features/system/CompatibilityPanel";
 import { SamplesPanel } from "./features/system/SamplesPanel";
 import { TlsDialog } from "./features/system/TlsDialog";
-import { api, ApiSample, Appliance, CompatibilityProfile, Dashboard, Orchestrator, SystemOverview } from "./lib/api";
-import { theme } from "./theme/theme";
+import { AppearanceDialog } from "./features/system/AppearanceDialog";
+import { api, ApiSample, Appliance, AppearanceSettings, CompatibilityProfile, Dashboard, Orchestrator, SystemOverview } from "./lib/api";
+import { createDashboardTheme, defaultAppearance } from "./theme/theme";
 
 const navigation = [
   { label: "Resumen", icon: <Gauge size={18} />, active: true },
@@ -30,6 +31,10 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [tlsOpen, setTlsOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [appearance, setAppearance] = useState<AppearanceSettings>(defaultAppearance);
+  const theme = useMemo(() => createDashboardTheme(appearance), [appearance]);
+  const BrandIcon = { network: Network, activity: Activity, gauge: Gauge, workflow: Workflow }[appearance.icon];
 
   async function load() {
     try {
@@ -49,6 +54,7 @@ function App() {
   }
 
   useEffect(() => { void load(); }, []);
+  useEffect(() => { api.appearance().then(setAppearance).catch(() => undefined); }, []);
   useEffect(() => {
     if (!selectedOrchestrator) { setDashboard(null); return; }
     api.dashboard(selectedOrchestrator).then(setDashboard).catch((err) => setError(err instanceof Error ? err.message : String(err)));
@@ -64,7 +70,7 @@ function App() {
             width: 232,
             p: 2,
             borderRight: "1px solid rgba(255,255,255,.07)",
-            bgcolor: "#0C0F11",
+            bgcolor: appearance.header,
             display: { xs: "none", md: "flex" },
             flexDirection: "column",
             position: "fixed",
@@ -73,11 +79,11 @@ function App() {
         >
           <Stack direction="row" spacing={1.25} alignItems="center" sx={{ px: 1, py: 1.5, mb: 2 }}>
             <Box sx={{ width: 34, height: 34, display: "grid", placeItems: "center", borderRadius: 2, bgcolor: "primary.main", color: "#07110E" }}>
-              <Network size={20} />
+              <BrandIcon size={20} />
             </Box>
             <Box>
-              <Typography fontWeight={900} lineHeight={1.1}>DashboardAPI</Typography>
-              <Typography variant="caption" color="primary.main">EdgeConnect · 1.0</Typography>
+              <Typography fontWeight={900} lineHeight={1.1}>{appearance.panel_name}</Typography>
+              <Typography variant="caption" color="primary.main">EdgeConnect · 1.1</Typography>
             </Box>
           </Stack>
           <Stack spacing={0.75}>
@@ -96,7 +102,7 @@ function App() {
             <Typography variant="caption" color="text.secondary">Plataforma</Typography>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
               <ShieldCheck size={17} color="#53C57B" />
-              <Typography variant="body2" fontWeight={800}>1.0 stable</Typography>
+              <Typography variant="body2" fontWeight={800}>1.1 stable</Typography>
             </Stack>
           </Paper>
         </Box>
@@ -106,12 +112,13 @@ function App() {
             <Stack direction={{ xs: "column", xl: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", xl: "center" }} spacing={2} sx={{ mb: 3 }}>
               <Box>
                 <Typography variant="h1">Estado de la red</Typography>
-                <Typography color="text.secondary">Inventario y capacidades obtenidas desde las APIs de EdgeConnect</Typography>
+                <Typography color="text.secondary">{appearance.welcome_message}</Typography>
               </Box>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} useFlexGap flexWrap="wrap">
                 {orchestrators.length ? <Select size="small" value={selectedOrchestrator} onChange={(event) => setSelectedOrchestrator(event.target.value)} sx={{ minWidth: 220 }}>{orchestrators.map((item) => <MenuItem key={item.id} value={item.id}>{item.name} · {item.api_version ?? "sin validar"}</MenuItem>)}</Select> : null}
                 <Button variant="contained" startIcon={<Plus size={17} />} onClick={() => setWizardOpen(true)}>Conectar Orchestrator</Button>
                 <Button variant="outlined" startIcon={<ShieldCheck size={17} />} onClick={() => setTlsOpen(true)}>Certificado HTTPS</Button>
+                <Button variant="outlined" startIcon={<Palette size={17} />} onClick={() => setAppearanceOpen(true)}>Apariencia</Button>
               </Stack>
             </Stack>
 
@@ -128,11 +135,13 @@ function App() {
               <Grid item xs={12} lg={7}><AppliancePanel items={appliances} onChanged={load} /></Grid>
               <Grid item xs={12}><SamplesPanel items={samples} /></Grid>
             </Grid>
+            <Typography component="footer" variant="caption" color="text.secondary" textAlign="center" sx={{ display: "block", py: 3 }}>Powered by Emilio Abundis</Typography>
           </Box>
         </Box>
       </Box>
       <SetupWizard open={wizardOpen} onClose={() => setWizardOpen(false)} onComplete={load} />
       {tlsOpen && <TlsDialog onClose={() => setTlsOpen(false)} />}
+      {appearanceOpen && <AppearanceDialog value={appearance} onClose={() => setAppearanceOpen(false)} onSaved={setAppearance} />}
     </ThemeProvider>
   );
 }

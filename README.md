@@ -1,13 +1,14 @@
 # DashboardAPI-EC
 
-[![Version](https://img.shields.io/badge/version-1.0%20stable-2fbf9b)](https://github.com/Ryuz-crypto/APIIntegration)
+[![Version](https://img.shields.io/badge/version-1.1.0%20stable-2fbf9b)](DashboardAPI-EC/README.md)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-Python%203.12%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
+[![Human Tested](https://img.shields.io/badge/Human%20Tested-EdgeConnect%209.7.1-7B61FF?logo=checkmarx&logoColor=white)](#validación)
 
 DashboardAPI-EC es una plataforma web para descubrir, consultar y visualizar entornos **HPE Aruba Networking EdgeConnect** mediante sus APIs. Detecta la versión del Orchestrator, identifica las capacidades disponibles y ensambla un dashboard específico con datos reales.
 
-La versión **1.0 stable** funciona exclusivamente en **Ubuntu con Python 3.12 o superior** y se distribuye como paquete `.deb`. Ubuntu 20.04 (Python 3.8) y 22.04 (Python 3.10) no son compatibles con su Python predeterminado; versiones posteriores de Ubuntu sí están admitidas.
+La versión **1.1.0 stable** funciona en **Ubuntu con Python 3.12 o superior** y se distribuye como paquete `.deb`. Ubuntu 20.04 y 22.04 no son compatibles con su Python predeterminado; Ubuntu 24.04 y versiones posteriores sí están admitidas.
 
 ## Contenido
 
@@ -17,6 +18,8 @@ La versión **1.0 stable** funciona exclusivamente en **Ubuntu con Python 3.12 o
 - [Varios Orchestrators](#varios-orchestrators)
 - [Cómo funciona](#cómo-funciona)
 - [Operación y diagnóstico](#operación-y-diagnóstico)
+- [HTTPS y apariencia](#https-y-apariencia)
+- [Validación](#validación)
 - [Documentación](#documentación)
 - [Seguridad](#seguridad)
 - [Licencia](#licencia)
@@ -36,6 +39,9 @@ La versión **1.0 stable** funciona exclusivamente en **Ubuntu con Python 3.12 o
 - Credenciales independientes y cifradas para múltiples Orchestrators.
 - Rotación de API keys y contraseñas desde la interfaz.
 - Polling automático de inventario y rendimiento mediante Celery.
+- Recolección por `nePk` de rendimiento, interfaces y túneles con evidencia independiente por API.
+- HTTPS administrado desde la interfaz con certificados PEM, DER o PFX/P12.
+- Editor global de nombre, mensaje, seis colores, icono y tipografía.
 - Backend FastAPI, frontend React, PostgreSQL, Redis y Nginx.
 - Instalación nativa con paquete `.deb` y servicios `systemd`.
 
@@ -63,7 +69,7 @@ El instalador:
 
 1. valida que el sistema sea Ubuntu;
 2. instala las dependencias necesarias;
-3. construye el paquete `dashboardapi-ec_1.0.0_<arquitectura>.deb`;
+3. construye el paquete `dashboardapi-ec_1.1.0_<arquitectura>.deb`;
 4. configura PostgreSQL, Redis, Nginx y `systemd`;
 5. ejecuta las migraciones;
 6. inicia los servicios;
@@ -82,6 +88,19 @@ Comprueba la instalación:
 curl http://127.0.0.1/api/v1/health
 sudo systemctl status dashboardapi-ec dashboardapi-ec-worker nginx
 ```
+
+## HTTPS y apariencia
+
+En la cabecera del dashboard encontrarás dos apartados:
+
+- **Certificado HTTPS** acepta PEM, DER y PFX/P12, valida SAN, vigencia y correspondencia de la clave, y aplica la configuración de Nginx mediante el servicio privilegiado de Ubuntu. La rutina completa está documentada en [HTTPS.md](DashboardAPI-EC/docs/HTTPS.md).
+- **Apariencia** permite cambiar el nombre y mensaje del panel, seis colores, cinco familias tipográficas y cuatro iconos. La configuración se guarda en PostgreSQL y se aplica globalmente. El crédito **Powered by Emilio Abundis** permanece visible.
+
+Para cargar el primer certificado desde una instalación HTTP remota utiliza el túnel SSH descrito en la guía HTTPS; la API bloquea la transmisión remota del certificado por HTTP.
+
+## Validación
+
+El distintivo **Human Tested** indica que el flujo de conexión, autenticación OTP, detección del Orchestrator **9.7.1.42046** y selección del perfil API 9.6 fue comprobado manualmente en una instalación real. Las pruebas automatizadas validan adicionalmente backend, frontend, migraciones, creación e instalación del `.deb`, actualización y activación HTTPS en Ubuntu. No implica certificación de HPE ni garantiza permisos específicos de cada cuenta.
 
 ## Primer uso
 

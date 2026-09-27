@@ -1,6 +1,6 @@
 # Instalación y primer uso
 
-DashboardAPI-EC 1.0 stable se instala únicamente en Ubuntu. El método recomendado construye un paquete `.deb`, lo instala y configura PostgreSQL, Redis, Nginx, la API y el recolector automático.
+DashboardAPI-EC 1.1.0 stable se instala únicamente en Ubuntu. El método recomendado construye un paquete `.deb`, lo instala y configura PostgreSQL, Redis, Nginx, la API y el recolector automático.
 
 ## Requisitos
 
@@ -61,6 +61,14 @@ Las actualizaciones usan el mismo comando con el paquete nuevo. Las migraciones 
 9. Pulsa **Conectar y detectar**.
 
 La plataforma valida la autenticación, detecta la versión, selecciona el contrato API, descubre los equipos y construye el dashboard adecuado.
+
+Después de actualizar desde 1.0, ejecuta nuevamente **Descubrir** en cada Orchestrator. Esto llena el campo `nePk`, obligatorio para consultar rendimiento, interfaces y túneles. El recolector ya no utiliza MAC, serial ni hostname como sustitutos.
+
+## HTTPS y apariencia
+
+Usa **Certificado HTTPS** en la cabecera para cargar PEM, DER o PFX/P12. La primera carga desde una instalación HTTP remota debe hacerse mediante el túnel SSH seguro descrito en [HTTPS.md](HTTPS.md). El panel valida el certificado antes de entregarlo al activador de Nginx.
+
+Usa **Apariencia** para elegir nombre, mensaje, seis colores, icono y tipografía. El cambio se guarda en PostgreSQL y se conserva al actualizar el paquete. **Powered by Emilio Abundis** permanece visible como atribución del proyecto.
 
 ## Varios Orchestrators y credenciales
 

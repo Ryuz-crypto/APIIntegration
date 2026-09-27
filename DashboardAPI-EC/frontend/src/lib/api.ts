@@ -8,6 +8,19 @@ export type SystemOverview = {
   services: Record<string, string>;
 };
 
+export type AppearanceSettings = {
+  primary: string;
+  secondary: string;
+  header: string;
+  background: string;
+  surface: string;
+  text: string;
+  icon: "network" | "activity" | "gauge" | "workflow";
+  font: "inter" | "system" | "humanist" | "technical" | "mono";
+  panel_name: string;
+  welcome_message: string;
+};
+
 export type Orchestrator = {
   id: string;
   name: string;
@@ -151,6 +164,8 @@ export const api = {
   completeOtp: (id: string, challenge_id: string, otp: string) => request<ValidationResult>(`/orchestrators/${id}/auth/complete`, { method: "POST", body: JSON.stringify({ challenge_id, otp }) }),
   cancelOtp: (id: string, challenge_id: string) => request<{ status: string }>(`/orchestrators/${id}/auth/cancel`, { method: "POST", body: JSON.stringify({ challenge_id }) }),
   overview: () => request<SystemOverview>("/system/overview"),
+  appearance: () => request<AppearanceSettings>("/system/appearance"),
+  updateAppearance: (payload: AppearanceSettings) => request<AppearanceSettings>("/system/appearance", { method: "PUT", body: JSON.stringify(payload) }),
   orchestrators: () => request<Orchestrator[]>("/orchestrators"),
   appliances: () => request<Appliance[]>("/appliances"),
   profiles: () => request<CompatibilityProfile[]>("/compatibility/profiles"),

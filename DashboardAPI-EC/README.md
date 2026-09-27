@@ -1,4 +1,8 @@
-# DashboardAPI-EC 1.1
+# DashboardAPI-EC 1.1.0 stable
+
+[![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
+[![Human Tested](https://img.shields.io/badge/Human%20Tested-EdgeConnect%209.7.1-7B61FF?logo=checkmarx&logoColor=white)](#validación-humana-y-automatizada)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-Python%203.12%2B-E95420?logo=ubuntu&logoColor=white)](docs/INSTALLATION.md)
 
 DashboardAPI-EC es un servicio web para descubrir, consultar y visualizar entornos HPE Aruba Networking EdgeConnect. La aplicación identifica la versión del Orchestrator, carga su perfil de compatibilidad, descubre los appliances administrados y conserva evidencia de cada llamada API utilizada para construir el dashboard.
 
@@ -35,6 +39,10 @@ Para actualizar desde la versión 1.0, vuelve a ejecutar `sudo ./scripts/install
   (resumen de pérdida, latencia, jitter y MOS). La recolección usa una ventana de
   15 minutos con granularidad por minuto.
 - El panel de appliances muestra la columna `nePk` para verificar el identificador real.
+- La recolección exige `nePk` y no intenta sustituirlo con hostname, serial o MAC.
+- Cada ciclo consulta rendimiento, interfaces y túneles; un endpoint opcional que falle queda registrado sin descartar las respuestas correctas de los demás.
+- Editor global inspirado en WAN_SIM para nombre, mensaje, seis colores, tipografía e icono, con vista previa y persistencia en PostgreSQL.
+- Crédito fijo **Powered by Emilio Abundis**.
 
 ## Alcance de 1.0
 
@@ -77,6 +85,23 @@ Después de la conexión, el frontend solicita `/api/v1/dashboard/{id}`. El back
 
 El frontend no supone que todos los Orchestrators ofrecen los mismos datos. Muestra cada módulo según la definición devuelta por el backend y explica por qué una capacidad todavía no está disponible.
 
+## HTTPS y personalización
+
+La cabecera incluye **Certificado HTTPS** y **Apariencia**. HTTPS acepta PEM, DER y PFX/P12, comprueba SAN, vigencia y clave privada, y solicita al servicio privilegiado de Ubuntu que active Nginx de forma transaccional. Consulta [docs/HTTPS.md](docs/HTTPS.md) para la primera carga mediante túnel SSH, renovación, almacenamiento y recuperación.
+
+El editor de apariencia guarda globalmente:
+
+- nombre y mensaje principal;
+- colores principal, secundario, encabezado, fondo, paneles y texto;
+- icono de red, actividad, tablero o flujo;
+- tipografía Inter, sistema, humanista, técnica o monoespaciada.
+
+La vista previa se actualiza antes de guardar. La atribución **Powered by Emilio Abundis** es fija y permanece visible con cualquier configuración.
+
+## Validación humana y automatizada
+
+El badge **Human Tested** corresponde a la comprobación manual del acceso a un Orchestrator 9.7.1.42046, autenticación en dos etapas con OTP y detección mediante el perfil API 9.6. La CI ejecuta lint, pruebas backend, compilación frontend, paquete `.deb`, instalación, actualización y activación HTTPS en Ubuntu. Esta validación no sustituye la matriz de permisos ni constituye certificación oficial de HPE.
+
 ## Normalización y trazabilidad
 
 Las respuestas del fabricante se conservan como muestras inmutables en `apisample`. Sobre ellas se construye un modelo común:
@@ -102,7 +127,7 @@ recursos + métricas ──► compositor de widgets
                         dashboard + inspector API
 ```
 
-Durante el descubrimiento, el inventario se transforma en recursos `appliance` y `site`. Durante la colección de rendimiento, todos los campos numéricos se aplanan en puntos métricos. Los booleanos no se interpretan como números. La respuesta original continúa disponible para auditoría.
+Durante el descubrimiento, el inventario se transforma en recursos `appliance` y `site`. Durante la colección de rendimiento, interfaces y túneles, los campos numéricos se aplanan en puntos métricos con el namespace de su operación. Los booleanos no se interpretan como números. Cada respuesta original continúa disponible para auditoría.
 
 ## Inspector API
 
@@ -415,7 +440,7 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 
 ## Estado de la versión
 
-La versión 1.0 stable cubre los pasos 1 a 10: estabilización, Swagger 9.6, autenticación, asistente de configuración, múltiples Orchestrators con credenciales independientes, detección de versión, inventario normalizado, composición dinámica de widgets, inspector visual de API, recolección automática y entrega `.deb` para Ubuntu. La versión 1.1 añade el identificador `nePk` para las llamadas por-appliance; tras actualizar desde 1.0, ejecuta el descubrimiento de appliances en cada Orchestrator para poblarlo.
+La versión 1.0 stable cubrió los pasos 1 a 10: estabilización, Swagger 9.6, autenticación, asistente de configuración, múltiples Orchestrators con credenciales independientes, detección de versión, inventario normalizado, composición dinámica de widgets, inspector visual de API, recolección automática y entrega `.deb` para Ubuntu. La versión 1.1.0 añade `nePk`, endpoints reales de rendimiento, interfaces y túneles, HTTPS administrado y apariencia persistente; tras actualizar desde 1.0, ejecuta el descubrimiento en cada Orchestrator para poblar `nePk`.
 
 ## Referencias oficiales
 

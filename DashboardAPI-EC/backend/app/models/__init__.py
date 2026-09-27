@@ -4,6 +4,7 @@ from app.models.audit import AuditEvent
 from app.models.compatibility import ApiCompatibilityProfile
 from app.models.network_resource import MetricPoint, NetworkResource
 from app.models.orchestrator import Orchestrator
+from app.models.system_setting import SystemSetting
 
 __all__ = [
     "ApiCompatibilityProfile",
@@ -13,4 +14,5 @@ __all__ = [
     "MetricPoint",
     "NetworkResource",
     "Orchestrator",
+    "SystemSetting",
 ]

@@ -1,6 +1,7 @@
 import { Box, Button, Grid, LinearProgress, Paper, Stack, Typography } from "@mui/material";
 import { Braces, CircleOff, Clock3 } from "lucide-react";
 import { useState } from "react";
+import { alpha } from "@mui/material/styles";
 import { Dashboard, DashboardWidget } from "../../lib/api";
 import { ApiInspector } from "../system/ApiInspector";
 
@@ -9,7 +10,7 @@ export function DynamicDashboard({ dashboard }: { dashboard: Dashboard | null })
   if (!dashboard) return null;
   return (
     <>
-      <Paper sx={{ p: { xs: 2, md: 2.5 }, background: "linear-gradient(135deg, rgba(47,191,155,.08), rgba(20,26,29,.82) 45%)" }}>
+      <Paper sx={(theme) => ({ p: { xs: 2, md: 2.5 }, background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, .08)}, ${theme.palette.background.paper} 45%)` })}>
         <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1} sx={{ mb: 2.5 }}>
           <Box>
             <Typography variant="overline" color="primary.main">Dashboard ensamblado · API {dashboard.api_version ?? "por detectar"}</Typography>
@@ -51,6 +52,17 @@ function WidgetCard({ widget, inspect }: { widget: DashboardWidget; inspect: () 
       {widget.visualization === "timeseries" && widget.data.length ? (
         <Stack spacing={0.75} sx={{ mt: 1.5 }}>
           {widget.data.slice(0, 5).map((row, index) => <Stack key={`${String(row.name)}-${index}`} direction="row" justifyContent="space-between"><Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: "65%" }}>{String(row.hostname ?? "")} · {String(row.name)}</Typography><Typography variant="caption" fontWeight={800}>{String(row.value)} {String(row.unit ?? "")}</Typography></Stack>)}
+        </Stack>
+      ) : null}
+      {widget.visualization === "table" && widget.data.length ? (
+        <Stack spacing={0.75} sx={{ mt: 1.5 }}>
+          {widget.data.slice(0, 5).map((row, index) => {
+            const entries = Object.entries(row).slice(0, 3);
+            return <Stack key={index} direction="row" justifyContent="space-between" spacing={1} sx={{ borderBottom: "1px solid", borderColor: "divider", pb: 0.6 }}>
+              <Typography variant="caption" noWrap sx={{ maxWidth: "45%" }}>{String(entries[0]?.[1] ?? `Fila ${index + 1}`)}</Typography>
+              <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: "55%" }}>{entries.slice(1).map(([key, value]) => `${key}: ${String(value)}`).join(" · ")}</Typography>
+            </Stack>;
+          })}
         </Stack>
       ) : null}
       {widget.reason ? <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>{widget.reason}</Typography> : null}

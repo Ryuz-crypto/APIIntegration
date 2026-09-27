@@ -11,7 +11,7 @@ Phase 2 connects the platform to real EdgeConnect APIs through the Compatibility
 - Real HTTP client with TLS verification, timeout and redirect handling.
 - Validation flow based on `orchestrator.version`.
 - Inventory discovery based on `orchestrator.inventory.summary`.
-- Appliance metric collection based on `appliance.performance`.
+- Per-appliance collection based on `appliance.performance`, `appliance.interfaces` and `appliance.tunnels`, using the discovered `nePk` and retaining an independent API sample for every operation.
 - Raw API sample persistence for auditing and troubleshooting.
 - UI controls for credential entry, validation, discovery, metrics collection and sample review.
 

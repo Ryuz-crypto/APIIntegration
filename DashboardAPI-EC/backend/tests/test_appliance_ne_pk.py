@@ -117,7 +117,12 @@ def test_metrics_call_uses_ne_pk_instead_of_mac():
         finally:
             service.EdgeConnectClient = original
 
-        assert payload == {"health": {"cpuPercent": 12.5}}
+        assert set(payload) == {
+            "appliance.performance",
+            "appliance.interfaces",
+            "appliance.tunnels",
+        }
+        assert payload["appliance.performance"] == {"health": {"cpuPercent": 12.5}}
 
 
 def test_metrics_fail_when_appliance_has_no_identifier():
@@ -135,3 +140,24 @@ def test_metrics_fail_when_appliance_has_no_identifier():
             pass
         else:
             raise AssertionError("expected failure for appliance without identifier")
+
+
+def test_metrics_do_not_fall_back_to_hostname_or_serial():
+    with _session() as session:
+        orchestrator = Orchestrator(name="Lab", base_url="https://lab.example", api_version="9.6")
+        session.add(orchestrator)
+        session.flush()
+        appliance = Appliance(
+            orchestrator_id=orchestrator.id,
+            hostname="edge-mty",
+            serial_number="00-1B-BC-33-D5-C0",
+            ne_pk=None,
+        )
+        session.add(appliance)
+        session.commit()
+        try:
+            collect_appliance_metrics(session, appliance, orchestrator, _StubEngine())
+        except EdgeConnectClientError as error:
+            assert "nePk" in str(error)
+        else:
+            raise AssertionError("expected nePk to be mandatory")
