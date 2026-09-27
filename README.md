@@ -14,6 +14,7 @@ La versión **1.4.0 beta** funciona en **Ubuntu con Python 3.12 o superior** y s
 
 - [Características](#características)
 - [Instalación rápida](#instalación-rápida)
+- [Actualizar a 1.4.0](#actualizar-a-140)
 - [Primer uso](#primer-uso)
 - [Control de acceso](#control-de-acceso)
 - [Varios Orchestrators](#varios-orchestrators)
@@ -93,6 +94,28 @@ curl http://127.0.0.1/api/v1/health
 sudo systemctl status dashboardapi-ec dashboardapi-ec-worker nginx
 ```
 
+## Actualizar a 1.4.0
+
+Si ya tienes la **1.3.0 estable** instalada, actualiza desde el propio dashboard:
+
+1. Entra al dashboard y abre **Actualizar**.
+2. Introduce tu clave administrativa (`TLS_ADMIN_TOKEN`).
+3. Pulsa **Buscar versiones** y elige `v1.4.0-stable`.
+4. Escribe la confirmación exacta que muestra el panel y aplica.
+
+El motor respalda la base de datos y la configuración antes de instalar; si algo falla, reinstala automáticamente la versión anterior. La guía completa está en [UPDATES.md](DashboardAPI-EC/docs/UPDATES.md).
+
+Si actualizas en el servidor con `git`, ejecuta:
+
+```bash
+cd ~/APIIntegration
+git pull
+cd DashboardAPI-EC
+sudo ./scripts/install-ubuntu.sh
+```
+
+Tras actualizar verás la pantalla de inicio de sesión. Crea tu primer usuario `admin` con la clave administrativa y quedarán activos los roles de acceso. Hasta que crees ese usuario, el dashboard queda abierto igual que antes; no pierdes datos ni credenciales.
+
 ## HTTPS y apariencia
 
 En la cabecera del dashboard encontrarás tres apartados administrativos:
@@ -125,20 +148,25 @@ Para OaaS se recomienda una API key dedicada con permisos de solo lectura. Las s
 
 ## Control de acceso
 
-El dashboard incorpora un menú de **Control de acceso** con gestión de usuarios al estilo WAN SIM:
+El dashboard tiene inicio de sesión por usuario, igual que WAN SIM. El menú **Control de acceso** permite administrar los usuarios del dashboard.
 
-- **Primer administrador**: mientras no existan usuarios el acceso permanece abierto. La pantalla de inicio de sesión permite crear el primer usuario `admin` con la clave administrativa `TLS_ADMIN_TOKEN`.
-- **Roles RBAC**: `viewer` consulta el dashboard, `operator` ejecuta operaciones y `admin` gestiona usuarios y la configuración global.
-- **Usuarios**: alta, cambio de rol, habilitar/deshabilitar y eliminación desde la interfaz, con protección del último administrador habilitado.
-- **Contraseñas**: mínimo 12 caracteres, cifradas con scrypt; la rotación cierra las sesiones activas del usuario.
-- **Sesiones**: tokens opacos con caducidad (`ACCESS_TOKEN_EXPIRE_MINUTES`, 60 minutos por defecto); el token nunca se guarda en claro.
-- **Auditoría**: cada acción de acceso (inicio de sesión, alta, cambio y eliminación de usuarios, rotación de contraseñas) queda registrada con actor, rol y fecha.
-
-Consulta la clave administrativa en el servidor:
+**Primer uso**: al entrar verás la pantalla de login. Crea el primer usuario `admin` con tu clave administrativa. Consultala en el servidor:
 
 ```bash
 sudo sed -n 's/^TLS_ADMIN_TOKEN=//p' /etc/dashboardapi-ec/dashboardapi-ec.env
 ```
+
+Hasta que crees ese usuario, el dashboard queda abierto igual que antes.
+
+**Roles**:
+
+| Rol | Puede |
+| --- | --- |
+| `viewer` | Ver el dashboard |
+| `operator` | Ver y ejecutar operaciones |
+| `admin` | Todo: gestionar usuarios y configuración |
+
+Desde el menú puedes crear usuarios, cambiar roles, habilitar o deshabilitar cuentas, eliminar usuarios, rotar tu contraseña y consultar la auditoría de accesos.
 
 ## Varios Orchestrators
 
