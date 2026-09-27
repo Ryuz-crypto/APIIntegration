@@ -1,6 +1,6 @@
 [project]
 name = "dashboardapi-ec-backend"
-version = "1.4.0"
+version = "1.4.1"
 description = "EdgeConnect API-driven NOC dashboard"
 requires-python = ">=3.12"
 dependencies = [

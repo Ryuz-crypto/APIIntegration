@@ -24,10 +24,9 @@ La petición utiliza la URL, validación TLS, timeout y credencial cifrada del O
 
 ## Operaciones que modifican configuración
 
-Los métodos `POST`, `PUT`, `PATCH` y `DELETE` pueden cambiar el comportamiento del Orchestrator. Para ejecutarlos se requieren estas tres condiciones:
+Los métodos `POST`, `PUT`, `PATCH` y `DELETE` pueden cambiar el comportamiento del Orchestrator. Para ejecutarlos se requieren estas condiciones:
 
-- acceso al dashboard mediante HTTPS o túnel SSH local;
-- `TLS_ADMIN_TOKEN` de `/etc/dashboardapi-ec/dashboardapi-ec.env`;
+- sesión con rol administrador;
 - confirmación exacta `EJECUTAR MÉTODO /path/del/swagger`.
 
 El backend comprueba que el método y el path pertenezcan al Swagger seleccionado. No acepta URLs arbitrarias. Cada ejecución queda en las muestras API y cada operación de cambio genera además un evento de auditoría con método, path, status y sample ID; no registra credenciales.
@@ -62,7 +61,8 @@ Los snapshots se muestran al final de Try Me. Puedes abrirlos, exportarlos o eli
 - **Sólo aparecen algunas APIs:** importa el Swagger completo; el perfil integrado contiene las operaciones comprobadas por el dashboard.
 - **HTTP 401/403:** revisa permisos de la API key o renueva la sesión OTP.
 - **HTTP 404:** confirma que el documento corresponde a la versión del Orchestrator.
-- **No permite un cambio:** utiliza HTTPS, comprueba `TLS_ADMIN_TOKEN` y copia literalmente la confirmación mostrada.
+- **No permite un cambio:** comprueba que tu cuenta sea administradora y copia literalmente la confirmación mostrada.
+- **HTTP 413 al importar:** actualiza a 1.4.1 o posterior; Nginx acepta 50 MiB y el backend valida Swagger de hasta 32 MiB.
 - **El schema no incluye ejemplo:** Try Me genera una estructura inicial según tipos y valores predeterminados; ajústala antes de ejecutar.
 
 Referencia: [HPE Aruba Networking — Orchestrator and EdgeConnect API endpoints](https://developer.arubanetworks.com/edgeconnect/docs/aruba-orchestrator-and-edgeconnect-api-endpoints).

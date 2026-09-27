@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import { api, type ReleaseStatus, type UpdateStatus } from "../../lib/api";
 
 export function UpdateDialog({ onClose }: { onClose: () => void }) {
-  const [token, setToken] = useState("");
   const [releases, setReleases] = useState<ReleaseStatus>();
   const [status, setStatus] = useState<UpdateStatus>();
   const [selected, setSelected] = useState("");
@@ -18,10 +17,10 @@ export function UpdateDialog({ onClose }: { onClose: () => void }) {
   async function check() {
     setBusy(true); setError("");
     try {
-      const result = await api.releases(token);
+      const result = await api.releases();
       setReleases(result);
       setSelected(result.latest_stable || result.latest || "");
-      setStatus(await api.updateStatus(token));
+      setStatus(await api.updateStatus());
       if (!result.ok) setError(result.error || "No se pudo consultar el canal oficial.");
     } catch (err) { setError(err instanceof Error ? err.message : "No se pudo consultar el canal oficial."); }
     finally { setBusy(false); }
@@ -29,30 +28,29 @@ export function UpdateDialog({ onClose }: { onClose: () => void }) {
 
   async function update() {
     setBusy(true); setError("");
-    try { setStatus(await api.updateSystem(token, selected, confirmation)); setConfirmation(""); }
+    try { setStatus(await api.updateSystem(selected, confirmation)); setConfirmation(""); }
     catch (err) { setError(err instanceof Error ? err.message : "No se pudo programar la actualización."); }
     finally { setBusy(false); }
   }
 
   useEffect(() => {
-    if (!token || !status || !["pending", "running"].includes(status.state)) return;
+    if (!status || !["pending", "running"].includes(status.state)) return;
     const timer = window.setInterval(() => {
-      void api.updateStatus(token).then((next) => {
+      void api.updateStatus().then((next) => {
         setStatus(next);
         if (next.state === "success") window.setTimeout(() => window.location.reload(), 1500);
       }).catch(() => undefined);
     }, 3000);
     return () => window.clearInterval(timer);
-  }, [status?.state, token]);
+  }, [status?.state]);
 
   const expected = selected ? `ACTUALIZAR ${selected}` : "";
   return <Dialog open onClose={busy || status?.state === "running" ? undefined : onClose} fullWidth maxWidth="sm">
     <DialogTitle>Actualizar DashboardAPI-EC</DialogTitle>
     <DialogContent>
       <Stack spacing={2} sx={{ pt: 1 }}>
-        <Typography color="text.secondary">Consulta únicamente etiquetas oficiales. Antes de instalar se respalda PostgreSQL, configuración, Nginx y certificados.</Typography>
-        <TextField label="Clave administrativa" type="password" value={token} autoComplete="off" onChange={(event) => setToken(event.target.value)} helperText="Es la misma TLS_ADMIN_TOKEN utilizada para administrar HTTPS." />
-        <Button variant="outlined" startIcon={<RefreshCw size={17} />} disabled={!token || busy} onClick={() => void check()}>Buscar versiones</Button>
+        <Typography color="text.secondary">Busca versiones estables directamente en GitHub. Antes de instalar se respaldan PostgreSQL, configuración, Nginx y certificados.</Typography>
+        <Button variant="outlined" startIcon={<RefreshCw size={17} />} disabled={busy} onClick={() => void check()}>Buscar versiones en GitHub</Button>
         {error ? <Alert severity="error">{error}</Alert> : null}
         {releases?.ok ? <Stack spacing={1.5}>
           <Typography>Instalada: <strong>{releases.current_release}</strong></Typography>

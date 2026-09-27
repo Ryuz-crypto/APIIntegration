@@ -3,7 +3,7 @@ import os
 import secrets
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlmodel import Session
 
 from app.core.config import settings
@@ -19,35 +19,21 @@ router = APIRouter()
 APPEARANCE_KEY = "appearance"
 
 
-def _admin_authorized(request: Request, token: str) -> None:
-    if not settings.tls_admin_token or not secrets.compare_digest(
-        token.encode(), settings.tls_admin_token.encode()
-    ):
-        raise HTTPException(403, "Clave de administración incorrecta.")
-    # Uvicorn trusts forwarded headers only from the local Nginx proxy.
-    if request.url.scheme != "https" and (
-        not request.client or request.client.host not in {"127.0.0.1", "::1"}
-    ):
-        raise HTTPException(400, "Utiliza HTTPS o el túnel SSH local para esta operación administrativa.")
-
-
-def tls_authorized(request: Request, x_tls_admin_token: str = Header(default="")):
+def tls_available():
     if not settings.tls_enabled:
         raise HTTPException(
             503, "HTTPS administrado requiere la instalación nativa Ubuntu actualizada."
         )
-    _admin_authorized(request, x_tls_admin_token)
 
 
-def update_authorized(request: Request, x_tls_admin_token: str = Header(default="")):
+def update_available():
     if not settings.update_enabled:
         raise HTTPException(
             503, "Actualización administrada requiere DashboardAPI-EC 1.2 o posterior en Ubuntu."
         )
-    _admin_authorized(request, x_tls_admin_token)
 
 
-@router.get("/tls", dependencies=[Depends(tls_authorized)])
+@router.get("/tls", dependencies=[Depends(tls_available)])
 def tls_status():
     directory = Path(settings.tls_state_dir)
     result = {"state": "http"}
@@ -60,7 +46,7 @@ def tls_status():
     return result
 
 
-@router.post("/tls", status_code=202, dependencies=[Depends(tls_authorized)])
+@router.post("/tls", status_code=202, dependencies=[Depends(tls_available)])
 async def upload_tls(
     hostname: str = Form(...),
     certificate: UploadFile = File(...),
@@ -117,17 +103,17 @@ def update_appearance(
     return payload
 
 
-@router.get("/releases", dependencies=[Depends(update_authorized)])
+@router.get("/releases", dependencies=[Depends(update_available)])
 def releases():
     return release_status()
 
 
-@router.get("/update", dependencies=[Depends(update_authorized)])
+@router.get("/update", dependencies=[Depends(update_available)])
 def get_update_status():
     return update_status()
 
 
-@router.post("/update", status_code=202, dependencies=[Depends(update_authorized)])
+@router.post("/update", status_code=202, dependencies=[Depends(update_available)])
 def apply_update(payload: UpdateRequest, session: Session = Depends(get_session)):
     if payload.confirmation != f"ACTUALIZAR {payload.version}":
         raise HTTPException(409, "Escribe la confirmación exacta mostrada en el panel.")

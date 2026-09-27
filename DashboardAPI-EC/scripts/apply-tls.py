@@ -50,7 +50,7 @@ server {{
     ssl_certificate /etc/dashboardapi-ec/tls/fullchain.pem;
     ssl_certificate_key /etc/dashboardapi-ec/tls/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
-    client_max_body_size 1m;
+    client_max_body_size 50m;
     root /usr/share/dashboardapi-ec/frontend;
     index index.html;
     location /api/ {{

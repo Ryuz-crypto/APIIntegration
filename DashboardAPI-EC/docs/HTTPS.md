@@ -27,43 +27,24 @@ Para cadenas con intermedios, prefiere PEM completo o PFX. La comprobación loca
 no garantiza que tu navegador confíe en la CA: instala la CA corporativa en los
 clientes si corresponde. No se emiten ni renuevan certificados automáticamente.
 
-## Primera carga segura
+## Cargar y activar
 
-En el servidor, consulta exclusivamente la clave de administración HTTPS:
+Inicia sesión con una cuenta administradora, abre **Certificado HTTPS** y completa:
 
-```bash
-sudo sed -n 's/^TLS_ADMIN_TOKEN=//p' /etc/dashboardapi-ec/dashboardapi-ec.env
-```
+1. DNS o IP real del dashboard cubierto por el certificado, sin protocolo ni ruta.
+2. Certificado y clave, o sólo el paquete PFX/P12.
+3. Contraseña del archivo, cuando corresponda.
 
-Es una credencial administrativa: no la compartas ni la publiques. Es distinta
-de `SECRET_KEY` y no se almacena en el navegador de manera persistente.
-
-Desde tu computadora abre este túnel y deja la terminal abierta:
-
-```bash
-ssh -L 8080:127.0.0.1:8081 usuario@IP_DEL_SERVIDOR
-```
-
-Abre **http://localhost:8080**, pulsa **Certificado HTTPS** y completa:
-
-1. Clave de administración HTTPS.
-2. DNS o IP real del dashboard cubierto por el certificado, sin protocolo ni ruta.
-3. Certificado y clave, o solo el paquete PFX/P12.
-4. Contraseña del archivo, cuando corresponda.
-
-Pulsa **Cargar y activar HTTPS**. El panel muestra primero la validación y luego
+Pulsa **Validar y activar HTTPS**. El panel muestra primero la validación y luego
 el resultado de Nginx, normalmente en unos 15 segundos. Cuando indique **HTTPS
 activo**, abre `https://TU_DNS` y comprueba que el navegador confía en el certificado.
-Puedes cerrar el túnel. El panel y la API bloquean la carga por HTTP remoto.
-El puerto de preparación 8081 escucha únicamente en `127.0.0.1` y permanece
-disponible por SSH para recuperación.
 
 ## Renovar o cambiar el certificado
 
 Entra mediante el HTTPS vigente, abre el mismo panel y carga el certificado nuevo.
 Para cambiar de PEM a PFX, cierra y vuelve a abrir el diálogo para vaciar los archivos.
-Si el certificado ya venció o no puedes acceder mediante su DNS, utiliza el túnel
-SSH. **Consultar estado** funciona después de volver a introducir la clave.
+Si el certificado ya venció, entra por la URL HTTP disponible en tu red administrativa.
+**Consultar estado** muestra el último resultado de activación.
 Las actualizaciones del paquete conservan la configuración y los certificados activos.
 
 ## Funcionamiento y almacenamiento
@@ -82,15 +63,14 @@ Las actualizaciones del paquete conservan la configuración y los certificados a
 - La contraseña del archivo no se persiste ni aparece en las respuestas de la API.
 
 API: `POST /api/v1/system/tls` (multipart: `hostname`, `certificate`, `key` opcional,
-`password` opcional) y `GET /api/v1/system/tls`. Ambas requieren `X-TLS-Admin-Token`.
-Respuestas: 202 pendiente, 400 material/canal inválido, 403 clave administrativa
-incorrecta, 409 solicitud pendiente, 503 instalación no habilitada. Estas rutas
+`password` opcional) y `GET /api/v1/system/tls`. Requieren una sesión del dashboard;
+la carga requiere rol administrador. Respuestas: 202 pendiente, 400 material inválido,
+409 solicitud pendiente y 503 instalación no habilitada. Estas rutas
 no se incluyen en el inspector de llamadas de Orchestrators.
 
 La activación automática depende de systemd/Nginx del paquete Ubuntu. En desarrollo
 y Docker permanece deshabilitada (`TLS_ENABLED=false`); configura allí tu propio proxy.
-La clave de administración protege estas operaciones; no sustituye controles de
-acceso al resto del dashboard. Mantén el servicio en una red administrativa.
+El control de usuarios protege estas operaciones. Mantén el servicio en una red administrativa.
 
 ## Diagnóstico y recuperación
 
@@ -113,6 +93,4 @@ Para respaldar HTTPS, guarda con acceso restringido `/etc/dashboardapi-ec/tls`,
 PostgreSQL. Al restaurar, conserva propiedad root, permisos 0700/0600 para TLS,
 ejecuta `sudo nginx -t` y solo entonces `sudo systemctl reload nginx`.
 
-Para rotar la clave de administración, cambia `TLS_ADMIN_TOKEN` en el archivo de
-entorno por un valor aleatorio de al menos 32 bytes y reinicia `dashboardapi-ec`.
 No cambies `SECRET_KEY`, que cifra las credenciales de los Orchestrators.

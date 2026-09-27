@@ -1,4 +1,4 @@
-# DashboardAPI-EC 1.4.0 stable
+# DashboardAPI-EC 1.4.1 stable
 
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 [![Human Tested](https://img.shields.io/badge/Human%20Tested-EdgeConnect%209.7.1-7B61FF?logo=checkmarx&logoColor=white)](#validación-humana-y-automatizada)
@@ -29,6 +29,9 @@ Para pasar de una versión anterior a 1.2, ejecuta una vez `git pull && sudo ./s
 
 ## Cambios de 1.4
 
+- Actualización simplificada: busca tags estables en GitHub y sólo solicita la confirmación de la versión.
+- Certificados simplificados: carga, validación y activación sin una segunda clave administrativa.
+- Importación de Swagger de hasta 32 MiB; Nginx acepta cargas de hasta 50 MiB para evitar errores HTTP 413 prematuros.
 - Pantalla de acceso obligatoria y creación segura del primer administrador con `TLS_ADMIN_TOKEN`.
 - Menú **Acceso** para administrar usuarios, roles, estado de cuentas, contraseña propia y auditoría.
 - Roles `viewer`, `operator` y `admin` aplicados por el backend.
@@ -41,14 +44,14 @@ La versión 1.3 añadió:
 - Búsqueda por método, path, operación o tag; formularios interactivos para parámetros de path, query y headers.
 - Editor JSON para cuerpos de `POST`, `PUT` y `PATCH`, con ejemplos generados desde el schema.
 - Ejecución con las credenciales cifradas ya asociadas al Orchestrator y soporte de la sesión OTP vigente.
-- Confirmación reforzada y clave administrativa para operaciones que pueden cambiar configuración.
+- Confirmación exacta para operaciones que pueden cambiar configuración; el rol administrador protege la ejecución.
 - Exportación de request/response como JSON o CSV y snapshots persistentes para conservar evidencia.
 - Importación del Swagger completo desde Try Me sin activar el documento para el dashboard.
 
 ## Cambios de 1.2
 
 - Motor de actualización desde el dashboard, basado exclusivamente en tags estables oficiales con formato `vX.Y.Z-stable`.
-- Confirmación explícita de la versión y la misma clave administrativa utilizada para HTTPS.
+- Confirmación explícita de la versión seleccionada.
 - Ejecución privilegiada aislada mediante `systemd`; el proceso web sólo puede dejar una solicitud validada.
 - Respaldo previo de PostgreSQL, entorno, Nginx y certificados, verificación de salud y reinstalación automática del paquete anterior si falla la actualización.
 - Estado visible en tiempo real y registro operativo mediante `journalctl`.
@@ -113,9 +116,9 @@ El frontend no supone que todos los Orchestrators ofrecen los mismos datos. Mues
 
 ## HTTPS y personalización
 
-La cabecera incluye **Certificado HTTPS** y **Apariencia**. HTTPS acepta PEM, DER y PFX/P12, comprueba SAN, vigencia y clave privada, y solicita al servicio privilegiado de Ubuntu que active Nginx de forma transaccional. Consulta [docs/HTTPS.md](docs/HTTPS.md) para la primera carga mediante túnel SSH, renovación, almacenamiento y recuperación.
+La cabecera incluye **Certificado HTTPS** y **Apariencia**. HTTPS acepta PEM, DER y PFX/P12, comprueba SAN, vigencia y clave privada, y solicita al servicio privilegiado de Ubuntu que active Nginx de forma transaccional. Consulta [docs/HTTPS.md](docs/HTTPS.md) para carga, renovación, almacenamiento y recuperación.
 
-La opción **Actualizar** consulta el canal oficial, muestra la versión instalada y permite elegir una versión posterior. La operación requiere HTTPS o acceso local por túnel SSH, la clave `TLS_ADMIN_TOKEN` y la frase exacta que muestra el panel. La guía de [actualizaciones administradas](docs/UPDATES.md) explica el flujo, los respaldos y la recuperación.
+La opción **Actualizar** consulta el canal oficial de GitHub, muestra la versión instalada y permite elegir una versión posterior. Sólo debes escribir la frase exacta que muestra el panel. La guía de [actualizaciones administradas](docs/UPDATES.md) explica el flujo, los respaldos y la recuperación.
 
 El menú **Acceso** gestiona identidades locales con tres roles. La [guía de acceso](docs/ACCESS.md) documenta el administrador inicial, sesiones, permisos, auditoría y autenticación Bearer para la API.
 
@@ -247,7 +250,7 @@ La importación conserva el documento original, genera un perfil normalizado y c
 Instalar el paquete generado:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.4.0_amd64.deb
+sudo apt install ./dashboardapi-ec_1.4.1_amd64.deb
 ```
 
 El instalador:
@@ -292,7 +295,7 @@ sudo apt install -y build-essential dpkg-dev python3 python3-pip python3-venv no
 ./scripts/build-deb.sh
 ```
 
-El resultado se guarda en `dist/dashboardapi-ec_1.4.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
+El resultado se guarda en `dist/dashboardapi-ec_1.4.1_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
 
 ## Operación del servicio
 
@@ -336,7 +339,7 @@ Variables relevantes:
 | `BACKEND_CORS_ORIGINS` | Orígenes web permitidos |
 | `AUTO_CREATE_SCHEMA` | Solo desarrollo; en producción debe ser `false` |
 | `SESSION_EXPIRE_HOURS` | Duración de las sesiones locales; 12 horas por defecto |
-| `TLS_ADMIN_TOKEN` | Segundo control para alta inicial, HTTPS, actualización y cambios sensibles |
+| `TLS_ADMIN_TOKEN` | Token utilizado únicamente para crear el primer administrador |
 
 No debe cambiarse `SECRET_KEY` después de guardar credenciales: hacerlo vuelve indescifrables los secretos existentes.
 
@@ -385,7 +388,7 @@ Los servicios no codifican rutas de EdgeConnect directamente. Solicitan operacio
 | `POST` | `/api/v1/try-me/execute` | Ejecutar una operación validada contra el contrato |
 | `GET/POST/DELETE` | `/api/v1/try-me/snapshots` | Conservar y administrar evidencia de Try Me |
 
-Salvo salud, estado de acceso, login, bootstrap y OpenAPI, las rutas requieren `Authorization: Bearer TOKEN`. Las mutaciones también validan el rol. Algunas tareas sensibles conservan `TLS_ADMIN_TOKEN` como segundo control.
+Salvo salud, estado de acceso, login, bootstrap y OpenAPI, las rutas requieren `Authorization: Bearer TOKEN`. Las mutaciones también validan el rol y las operaciones peligrosas solicitan una confirmación explícita.
 
 ### Ejemplo de dashboard dinámico
 
@@ -488,13 +491,13 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 - Mantener la verificación TLS activa.
 - Instalar una CA interna en Ubuntu cuando el Orchestrator use certificados privados.
 - No exponer el puerto interno `8010` fuera del host.
-- Activar **Certificado HTTPS** antes de publicar el servicio. La [guía de certificados](docs/HTTPS.md) explica la carga PEM/DER/PFX, el túnel SSH inicial, la renovación y la recuperación.
+- Activar **Certificado HTTPS** antes de publicar el servicio. La [guía de certificados](docs/HTTPS.md) explica la carga PEM/DER/PFX, la renovación y la recuperación.
 - Limitar por firewall el acceso al dashboard.
 - Rotar API keys sin cambiar `SECRET_KEY`.
 
 ## Estado de la versión
 
-La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorporó el canal de actualizaciones. La versión 1.3.0 añadió Try Me, exportaciones y snapshots para el Swagger completo. La versión 1.4.0 añade acceso por usuarios, roles, sesiones revocables y auditoría.
+La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorporó el canal de actualizaciones. La versión 1.3.0 añadió Try Me, exportaciones y snapshots para el Swagger completo. La versión 1.4.0 añadió acceso por usuarios, roles, sesiones revocables y auditoría. La versión 1.4.1 simplifica actualizaciones y certificados, y corrige cargas Swagger grandes.
 
 ## Referencias oficiales
 

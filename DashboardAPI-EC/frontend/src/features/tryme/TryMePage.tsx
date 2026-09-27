@@ -28,7 +28,6 @@ export function TryMePage({ orchestrators, selectedId, onSelect }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [body, setBody] = useState("");
   const [headers, setHeaders] = useState("{}");
-  const [adminToken, setAdminToken] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [result, setResult] = useState<VisibleOutput>();
   const [responseTab, setResponseTab] = useState(0);
@@ -89,7 +88,7 @@ export function TryMePage({ orchestrators, selectedId, onSelect }: Props) {
         orchestrator_id: selectedId, method: selected.method, path: selected.path,
         path_params: pathParams, query_params: queryParams, headers: parsedHeaders,
         body: parsedBody, confirmation
-      }, adminToken);
+      });
       setResult(next); setResponseTab(0); setSnapshotName(`${selected.method} ${selected.summary}`.slice(0, 150));
     } catch (reason) { setError(reason instanceof Error ? reason.message : "No se pudo ejecutar la API."); }
     finally { setBusy(false); }
@@ -161,8 +160,8 @@ export function TryMePage({ orchestrators, selectedId, onSelect }: Props) {
           <Paper sx={{ p: 2 }}><Typography variant="h2" sx={{ mb: 1.5 }}>Parámetros</Typography><Grid container spacing={1.5}>{selected.parameters.map((parameter) => <Grid item xs={12} md={6} key={`${parameter.location}:${parameter.name}`}><TextField fullWidth size="small" required={parameter.required} label={`${parameter.name} · ${parameter.location}`} value={values[`${parameter.location}:${parameter.name}`] ?? ""} onChange={(event) => setValues((current) => ({ ...current, [`${parameter.location}:${parameter.name}`]: event.target.value }))} helperText={parameter.description || String(parameter.schema.type ?? "string")} /></Grid>)}</Grid>{!selected.parameters.length ? <Typography color="text.secondary">Esta operación no declara parámetros.</Typography> : null}</Paper>
           {selected.method !== "GET" || Object.keys(selected.request_schema).length ? <Paper sx={{ p: 2 }}><Typography variant="h2" sx={{ mb: 1.5 }}>Request body · JSON</Typography><TextField fullWidth multiline minRows={8} maxRows={22} value={body} onChange={(event) => setBody(event.target.value)} placeholder="{}" inputProps={{ style: { fontFamily: "monospace", fontSize: 13 } }} /></Paper> : null}
           <Paper sx={{ p: 2 }}><Typography variant="h2" sx={{ mb: 1.5 }}>Headers adicionales</Typography><TextField fullWidth multiline minRows={2} value={headers} onChange={(event) => setHeaders(event.target.value)} inputProps={{ style: { fontFamily: "monospace" } }} helperText="JSON. Authorization, cookies y X-Auth-Token siempre provienen de la credencial cifrada del Orchestrator." /></Paper>
-          {selected.mutating ? <Alert severity="warning"><Typography fontWeight={800}>Esta operación puede cambiar el comportamiento del Orchestrator.</Typography><Typography variant="body2">Requiere HTTPS, la clave administrativa y la confirmación exacta.</Typography><Stack spacing={1.25} sx={{ mt: 1.5 }}><TextField size="small" type="password" label="TLS_ADMIN_TOKEN" value={adminToken} onChange={(event) => setAdminToken(event.target.value)} /><Typography variant="caption">Escribe: <code>{expected}</code></Typography><TextField size="small" label="Confirmación" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></Stack></Alert> : null}
-          <Button size="large" variant="contained" startIcon={<Play size={18} />} disabled={busy || (selected.mutating && (!adminToken || confirmation !== expected))} onClick={() => void execute()}>Ejecutar {selected.method}</Button>
+          {selected.mutating ? <Alert severity="warning"><Typography fontWeight={800}>Esta operación puede cambiar el comportamiento del Orchestrator.</Typography><Typography variant="body2">Revisa los datos y escribe la confirmación exacta.</Typography><Stack spacing={1.25} sx={{ mt: 1.5 }}><Typography variant="caption">Escribe: <code>{expected}</code></Typography><TextField size="small" label="Confirmación" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></Stack></Alert> : null}
+          <Button size="large" variant="contained" startIcon={<Play size={18} />} disabled={busy || (selected.mutating && confirmation !== expected)} onClick={() => void execute()}>Ejecutar {selected.method}</Button>
           {result ? <ResponsePanel result={result} tab={responseTab} onTab={setResponseTab} snapshotName={snapshotName} setSnapshotName={setSnapshotName} onSnapshot={saveSnapshot} busy={busy} /> : null}
         </Stack> : <Paper sx={{ p: 4 }}><Typography color="text.secondary">Selecciona una operación Swagger.</Typography></Paper>}
       </Grid>

@@ -1,6 +1,6 @@
 # Acceso de usuarios
 
-DashboardAPI-EC 1.4.0 protege el dashboard y la API con cuentas locales. Las contraseñas se derivan con `scrypt`; los tokens de sesión se guardan únicamente como hashes SHA-256 y vencen después de 12 horas. Cerrar sesión o deshabilitar una cuenta revoca su acceso.
+DashboardAPI-EC 1.4 protege el dashboard y la API con cuentas locales. Las contraseñas se derivan con `scrypt`; los tokens de sesión se guardan únicamente como hashes SHA-256 y vencen después de 12 horas. Cerrar sesión o deshabilitar una cuenta revoca su acceso.
 
 ## Crear el primer administrador
 

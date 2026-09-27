@@ -35,7 +35,7 @@ echo "[2/4] Construyendo el paquete para $(dpkg --print-architecture)..."
 BUILD_USER="${SUDO_USER:-root}"
 BUILD_HOME="$(getent passwd "$BUILD_USER" | cut -d: -f6)"
 runuser -u "$BUILD_USER" -- env HOME="$BUILD_HOME" "$ROOT_DIR/scripts/build-deb.sh"
-PACKAGE_PATH="$(find "$ROOT_DIR/dist" -maxdepth 1 -name 'dashboardapi-ec_1.4.0_*.deb' -print -quit)"
+PACKAGE_PATH="$(find "$ROOT_DIR/dist" -maxdepth 1 -name 'dashboardapi-ec_1.4.1_*.deb' -print -quit)"
 if [[ -z "$PACKAGE_PATH" ]]; then
   echo "No se generó el paquete .deb." >&2
   exit 1

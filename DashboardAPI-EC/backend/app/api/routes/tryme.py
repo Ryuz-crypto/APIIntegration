@@ -1,10 +1,8 @@
-import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session
 
-from app.core.config import settings
 from app.db.session import get_session
 from app.models.api_sample import ApiSample
 from app.models.orchestrator import Orchestrator
@@ -35,17 +33,6 @@ def _orchestrator(session: Session, orchestrator_id: uuid.UUID) -> Orchestrator:
     return item
 
 
-def _authorize_mutation(request: Request, token: str) -> None:
-    if not settings.tls_admin_token or not secrets.compare_digest(
-        token.encode(), settings.tls_admin_token.encode()
-    ):
-        raise HTTPException(403, "Clave administrativa incorrecta.")
-    if request.url.scheme != "https" and (
-        not request.client or request.client.host not in {"127.0.0.1", "::1"}
-    ):
-        raise HTTPException(400, "Usa HTTPS o el túnel SSH local para ejecutar cambios.")
-
-
 @router.get("/catalog/{orchestrator_id}", response_model=TryMeCatalog)
 def get_catalog(orchestrator_id: uuid.UUID, session: Session = Depends(get_session)):
     try:
@@ -65,12 +52,8 @@ def synchronize_catalog(orchestrator_id: uuid.UUID, session: Session = Depends(g
 @router.post("/execute", response_model=TryMeExecuteResult)
 def run_operation(
     payload: TryMeExecuteRequest,
-    request: Request,
-    x_tls_admin_token: str = Header(default=""),
     session: Session = Depends(get_session),
 ):
-    if payload.method != "GET":
-        _authorize_mutation(request, x_tls_admin_token)
     orchestrator = _orchestrator(session, payload.orchestrator_id)
     try:
         result = execute(session, orchestrator, payload)

@@ -283,13 +283,21 @@ export const api = {
   overview: () => request<SystemOverview>("/system/overview"),
   appearance: () => request<AppearanceSettings>("/system/appearance"),
   updateAppearance: (payload: AppearanceSettings) => request<AppearanceSettings>("/system/appearance", { method: "PUT", body: JSON.stringify(payload) }),
-  releases: (token: string) => request<ReleaseStatus>("/system/releases", { headers: { "X-TLS-Admin-Token": token } }),
-  updateStatus: (token: string) => request<UpdateStatus>("/system/update", { headers: { "X-TLS-Admin-Token": token } }),
-  updateSystem: (token: string, version: string, confirmation: string) => request<UpdateStatus>("/system/update", {
+  releases: () => request<ReleaseStatus>("/system/releases"),
+  updateStatus: () => request<UpdateStatus>("/system/update"),
+  updateSystem: (version: string, confirmation: string) => request<UpdateStatus>("/system/update", {
     method: "POST",
-    headers: { "X-TLS-Admin-Token": token },
     body: JSON.stringify({ version, confirmation })
   }),
+  tlsStatus: () => request<{ state: string; message?: string; hostname?: string; expires_at?: string }>("/system/tls"),
+  uploadTls: (hostname: string, certificate: File, key?: File, password = "") => {
+    const form = new FormData();
+    form.append("hostname", hostname);
+    form.append("certificate", certificate);
+    if (key) form.append("key", key);
+    form.append("password", password);
+    return request<{ state: string; message?: string; hostname?: string; expires_at?: string }>("/system/tls", { method: "POST", body: form });
+  },
   tryMeCatalog: (orchestratorId: string) => request<TryMeCatalog>(`/try-me/catalog/${orchestratorId}`),
   syncTryMeCatalog: (orchestratorId: string) => request<TryMeCatalog>(`/try-me/catalog/${orchestratorId}/sync`, { method: "POST" }),
   executeTryMe: (payload: {
@@ -301,9 +309,8 @@ export const api = {
     headers: Record<string, string>;
     body: unknown;
     confirmation: string;
-  }, adminToken: string) => request<TryMeResult>("/try-me/execute", {
+  }) => request<TryMeResult>("/try-me/execute", {
     method: "POST",
-    headers: adminToken ? { "X-TLS-Admin-Token": adminToken } : {},
     body: JSON.stringify(payload)
   }),
   tryMeSnapshots: (orchestratorId: string) => request<TryMeSnapshot[]>(`/try-me/snapshots/${orchestratorId}`),

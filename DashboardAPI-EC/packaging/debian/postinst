@@ -19,7 +19,7 @@ if [ ! -f "$ENV_FILE" ]; then
     SECRET_KEY=$(openssl rand -hex 32)
     cat >"$ENV_FILE" <<EOF
 ENVIRONMENT=production
-APP_VERSION=1.4.0
+APP_VERSION=1.4.1
 AUTO_CREATE_SCHEMA=false
 PYTHONDONTWRITEBYTECODE=1
 DATABASE_URL=postgresql+psycopg:///dashboardapi_ec
@@ -39,9 +39,9 @@ if ! grep -q '^TLS_ENABLED=' "$ENV_FILE"; then
   printf 'TLS_ENABLED=true\n' >> "$ENV_FILE"
 fi
 if grep -q '^APP_VERSION=' "$ENV_FILE"; then
-  sed -i 's/^APP_VERSION=.*/APP_VERSION=1.4.0/' "$ENV_FILE"
+  sed -i 's/^APP_VERSION=.*/APP_VERSION=1.4.1/' "$ENV_FILE"
 else
-  printf 'APP_VERSION=1.4.0\n' >> "$ENV_FILE"
+  printf 'APP_VERSION=1.4.1\n' >> "$ENV_FILE"
 fi
 if ! grep -q '^UPDATE_ENABLED=' "$ENV_FILE"; then
   printf 'UPDATE_ENABLED=true\n' >> "$ENV_FILE"
@@ -59,7 +59,7 @@ fi
 
 python3 -m venv "$APP_ROOT/venv"
 "$APP_ROOT/venv/bin/pip" install --no-index --find-links "$APP_ROOT/wheels" \
-    --upgrade --force-reinstall dashboardapi-ec-backend==1.4.0
+    --upgrade --force-reinstall dashboardapi-ec-backend==1.4.1
 
 set -a
 . "$ENV_FILE"
@@ -78,6 +78,7 @@ fi
 if ! grep -q 'include /opt/dashboardapi-ec/nginx-bootstrap.conf;' /etc/nginx/sites-available/dashboardapi-ec; then
   sed -i '1i include /opt/dashboardapi-ec/nginx-bootstrap.conf;' /etc/nginx/sites-available/dashboardapi-ec
 fi
+sed -i 's/client_max_body_size 1m;/client_max_body_size 50m;/g' /etc/nginx/sites-available/dashboardapi-ec
 sed -i 's/proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;/proxy_set_header X-Forwarded-For $remote_addr;/' /etc/nginx/sites-available/dashboardapi-ec
 rm -f /etc/nginx/sites-enabled/default
 nginx -t

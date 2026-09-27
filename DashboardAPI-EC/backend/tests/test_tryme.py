@@ -153,9 +153,9 @@ def test_mutation_requires_admin_confirmation_and_can_be_snapshotted(monkeypatch
         "body": {"enabled": True, "password": "must-not-be-stored"},
         "confirmation": f"EJECUTAR POST {path}",
     }
-    assert client.post("/execute", json=payload).status_code == 403
-    headers = {"X-TLS-Admin-Token": "admin-test"}
-    changed = client.post("/execute", json=payload, headers=headers)
+    invalid = dict(payload, confirmation="CONFIRMAR")
+    assert client.post("/execute", json=invalid).status_code == 409
+    changed = client.post("/execute", json=payload)
     assert changed.status_code == 200
     assert changed.json()["path"].endswith("/configuration/1.NE")
     assert changed.json()["response"] == {

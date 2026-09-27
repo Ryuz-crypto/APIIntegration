@@ -54,9 +54,8 @@ def test_update_queue_is_atomic_and_rejects_duplicates(tmp_path, monkeypatch):
         assert "pendiente" in str(exc)
 
 
-def test_update_endpoints_require_admin_channel(tmp_path, monkeypatch):
+def test_update_endpoints_use_official_channel_without_second_key(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "update_enabled", True)
-    monkeypatch.setattr(settings, "tls_admin_token", "admin-test")
     monkeypatch.setattr(settings, "update_state_dir", str(tmp_path))
     monkeypatch.setattr(
         update_service.httpx,
@@ -67,10 +66,7 @@ def test_update_endpoints_require_admin_channel(tmp_path, monkeypatch):
     app.include_router(router)
     local = TestClient(app, client=("127.0.0.1", 12345))
 
-    assert local.get("/releases").status_code == 403
-    headers = {"X-TLS-Admin-Token": "admin-test"}
-    assert local.get("/releases", headers=headers).status_code == 200
-    remote = TestClient(app, client=("203.0.113.1", 12345))
-    assert remote.get("/update", headers=headers).status_code == 400
-    secure = TestClient(app, base_url="https://dashboard.example.com", client=("203.0.113.1", 1))
-    assert secure.get("/update", headers=headers).json()["state"] == "idle"
+    assert local.get("/releases").status_code == 200
+    assert local.get("/update").json()["state"] == "idle"
+    monkeypatch.setattr(settings, "update_enabled", False)
+    assert local.get("/update").status_code == 503

@@ -22,6 +22,7 @@ from app.services.compatibility_service import (
 )
 
 router = APIRouter()
+MAX_SWAGGER_UPLOAD = 32 * 1024 * 1024
 
 
 @router.get("/profiles", response_model=list[CompatibilityProfileRead])
@@ -73,7 +74,9 @@ async def upload_swagger(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ) -> SwaggerLoadResult:
-    content = await file.read()
+    content = await file.read(MAX_SWAGGER_UPLOAD + 1)
+    if len(content) > MAX_SWAGGER_UPLOAD:
+        raise HTTPException(status_code=413, detail="El Swagger supera el límite de 32 MiB.")
     try:
         document = json.loads(content.decode("utf-8"))
     except json.JSONDecodeError:

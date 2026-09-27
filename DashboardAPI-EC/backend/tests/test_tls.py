@@ -84,9 +84,8 @@ def test_invalid_certificates():
         normalize(b"bad-pfx", b"", "wrong", "dashboard.example.com")
 
 
-def test_upload_authorization_and_queue(tmp_path, monkeypatch):
+def test_upload_validation_and_queue(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "tls_enabled", True)
-    monkeypatch.setattr(settings, "tls_admin_token", "admin-test")
     monkeypatch.setattr(settings, "tls_state_dir", str(tmp_path))
     app = FastAPI()
     app.include_router(router)
@@ -94,22 +93,14 @@ def test_upload_authorization_and_queue(tmp_path, monkeypatch):
     cert, key = pem(*material())
     files = {"certificate": ("cert.pem", cert), "key": ("key.pem", key)}
     data = {"hostname": "dashboard.example.com"}
-    assert client.post("/tls", files=files, data=data).status_code == 403
-    headers = {"X-TLS-Admin-Token": "admin-test"}
-    response = client.post("/tls", files=files, data=data, headers=headers)
+    response = client.post("/tls", files=files, data=data)
     assert response.status_code == 202
     assert "PRIVATE KEY" not in response.text
     assert json.loads((tmp_path / "request.json").read_text())["hostname"] == data["hostname"]
-    assert client.get("/tls", headers=headers).json()["state"] == "pending"
-    assert client.post("/tls", files=files, data=data, headers=headers).status_code == 409
-    remote = TestClient(app, client=("203.0.113.1", 12345))
-    assert remote.get("/tls", headers=headers).status_code == 400
-    secure = TestClient(
-        app, base_url="https://dashboard.example.com", client=("203.0.113.1", 12345)
-    )
-    assert secure.get("/tls", headers=headers).status_code == 200
+    assert client.get("/tls").json()["state"] == "pending"
+    assert client.post("/tls", files=files, data=data).status_code == 409
     monkeypatch.setattr(settings, "tls_enabled", False)
-    assert client.get("/tls", headers=headers).status_code == 503
+    assert client.get("/tls").status_code == 503
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Ubuntu privileged activator")

@@ -1,6 +1,6 @@
 # Instalación y primer uso
 
-DashboardAPI-EC 1.4.0 stable se instala en Ubuntu. El método recomendado construye un paquete `.deb`, lo instala y configura PostgreSQL, Redis, Nginx, la API, el recolector y el motor de actualización.
+DashboardAPI-EC 1.4.1 stable se instala en Ubuntu. El método recomendado construye un paquete `.deb`, lo instala y configura PostgreSQL, Redis, Nginx, la API, el recolector y el motor de actualización.
 
 ## Requisitos
 
@@ -40,10 +40,10 @@ sudo systemctl status dashboardapi-ec dashboardapi-ec-worker nginx
 
 ## Instalación de un paquete ya construido
 
-Si recibiste `dashboardapi-ec_1.4.0_amd64.deb` o la variante `arm64`:
+Si recibiste `dashboardapi-ec_1.4.1_amd64.deb` o la variante `arm64`:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.4.0_amd64.deb
+sudo apt install ./dashboardapi-ec_1.4.1_amd64.deb
 ```
 
 Las actualizaciones usan el mismo comando con el paquete nuevo. Las migraciones se ejecutan automáticamente y conservan conexiones, credenciales y muestras.
@@ -72,7 +72,7 @@ La [guía de acceso](ACCESS.md) explica los roles, la administración de cuentas
 
 ## Actualizar desde el dashboard
 
-La versión 1.4.0 incluye el motor de actualización. Entra con una cuenta administradora, abre **Actualizar**, introduce `TLS_ADMIN_TOKEN`, pulsa **Buscar versiones**, selecciona un tag estable posterior y escribe la confirmación exacta mostrada por la interfaz. El sistema crea un respaldo, instala el nuevo `.deb`, ejecuta migraciones y comprueba la salud del servicio. Si falla, intenta reinstalar el paquete anterior.
+La versión 1.4.1 incluye el motor de actualización. Entra con una cuenta administradora, abre **Actualizar**, pulsa **Buscar versiones en GitHub**, selecciona un tag estable posterior y escribe la confirmación exacta mostrada por la interfaz. El sistema crea un respaldo, instala el nuevo `.deb`, ejecuta migraciones y comprueba la salud del servicio. Si falla, intenta reinstalar el paquete anterior.
 
 No necesitas Vagrant, Docker ni una máquina virtual para instalar o actualizar. El flujo soportado usa Ubuntu, el paquete `.deb` y servicios `systemd`. Consulta [UPDATES.md](UPDATES.md) para diagnóstico y recuperación.
 
@@ -80,7 +80,7 @@ Después de actualizar desde 1.0, ejecuta nuevamente **Descubrir** en cada Orche
 
 ## HTTPS y apariencia
 
-Usa **Certificado HTTPS** en la cabecera para cargar PEM, DER o PFX/P12. La primera carga desde una instalación HTTP remota debe hacerse mediante el túnel SSH seguro descrito en [HTTPS.md](HTTPS.md). El panel valida el certificado antes de entregarlo al activador de Nginx.
+Usa **Certificado HTTPS** en la cabecera para cargar PEM, DER o PFX/P12. Selecciona los archivos, indica el DNS o IP y pulsa **Validar y activar HTTPS**. El panel valida el certificado antes de entregarlo al activador de Nginx.
 
 Usa **Apariencia** para elegir nombre, mensaje, seis colores, icono y tipografía. El cambio se guarda en PostgreSQL y se conserva al actualizar el paquete. **Powered by Emilio Abundis** permanece visible como atribución del proyecto.
 

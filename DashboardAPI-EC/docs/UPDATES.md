@@ -1,6 +1,6 @@
 # Actualizaciones administradas
 
-DashboardAPI-EC 1.2 incorpora un motor para instalar versiones oficiales desde la interfaz. El botón **Actualizar** está en la cabecera y usa la misma clave administrativa que el panel de certificados HTTPS.
+DashboardAPI-EC incorpora un motor para instalar versiones oficiales desde la interfaz. El botón **Actualizar** está disponible para los administradores.
 
 ## Activación inicial
 
@@ -17,17 +17,11 @@ El instalador conserva la base de datos, las credenciales cifradas, la configura
 
 ## Actualizar desde el dashboard
 
-1. Entra por HTTPS. Si la instalación aún utiliza HTTP, crea el túnel local descrito en [HTTPS.md](HTTPS.md).
+1. Inicia sesión con una cuenta administradora.
 2. Abre **Actualizar**.
-3. Introduce `TLS_ADMIN_TOKEN`. Puedes consultarlo localmente con:
-
-   ```bash
-   sudo sed -n 's/^TLS_ADMIN_TOKEN=//p' /etc/dashboardapi-ec/dashboardapi-ec.env
-   ```
-
-4. Pulsa **Buscar versiones** y elige una versión posterior.
-5. Escribe la confirmación exacta, por ejemplo `ACTUALIZAR v1.4.1-stable`.
-6. Pulsa **Aplicar actualización**. La interfaz mostrará `pending`, `running`, `success` o `error` y se recargará cuando la API vuelva a estar disponible.
+3. Pulsa **Buscar versiones en GitHub** y elige una versión posterior.
+4. Escribe la confirmación exacta, por ejemplo `ACTUALIZAR v1.4.1-stable`.
+5. Pulsa **Aplicar actualización**. La interfaz mostrará `pending`, `running`, `success` o `error` y se recargará cuando la API vuelva a estar disponible.
 
 El canal admite únicamente tags estables oficiales con este formato:
 
@@ -78,8 +72,8 @@ La restauración del volcado PostgreSQL puede descartar datos recientes. Hazla s
 
 ## Controles de seguridad
 
-- La clave administrativa se compara en tiempo constante y nunca se almacena en el navegador.
-- Las operaciones remotas requieren HTTPS; el acceso HTTP sólo se permite desde loopback para el túnel inicial.
+- Sólo una sesión con rol administrador puede programar la actualización.
+- La confirmación incluye el tag exacto que se instalará.
 - La solicitud contiene únicamente el tag validado y se publica de forma atómica.
 - El proceso web no ejecuta `apt`, comandos de shell ni tareas como `root`.
 - El activador acepta una lista fija de formatos, repositorio, ejecutables y rutas.
