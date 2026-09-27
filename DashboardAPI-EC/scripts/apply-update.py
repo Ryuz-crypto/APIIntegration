@@ -18,7 +18,7 @@ STATE = Path("/var/lib/dashboardapi-ec-update")
 BACKUPS = Path("/var/backups/dashboardapi-ec")
 REPOSITORY = "https://github.com/Ryuz-crypto/APIIntegration.git"
 PACKAGE_CACHE = STATE / "packages"
-TAG_PATTERN = re.compile(r"^v\d+\.\d+\.\d+-stable$")
+TAG_PATTERN = re.compile(r"^v\d+\.\d+\.\d+-(stable|beta)$")
 
 
 def _account():

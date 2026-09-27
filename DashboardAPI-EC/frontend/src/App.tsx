@@ -147,7 +147,7 @@ function App() {
             </Box>
             <Box>
               <Typography fontWeight={900} lineHeight={1.1}>{appearance.panel_name}</Typography>
-              <Typography variant="caption" color="primary.main">EdgeConnect · 1.3</Typography>
+              <Typography variant="caption" color="primary.main">EdgeConnect · 1.4</Typography>
             </Box>
           </Stack>
           <Stack spacing={0.75}>
@@ -167,7 +167,7 @@ function App() {
             <Typography variant="caption" color="text.secondary">Plataforma</Typography>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
               <ShieldCheck size={17} color="#53C57B" />
-              <Typography variant="body2" fontWeight={800}>1.3 stable</Typography>
+              <Typography variant="body2" fontWeight={800}>1.4 beta</Typography>
             </Stack>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
               <Typography variant="caption" color="text.secondary" sx={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>

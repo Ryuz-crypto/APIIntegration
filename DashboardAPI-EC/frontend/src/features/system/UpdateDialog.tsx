@@ -57,6 +57,7 @@ export function UpdateDialog({ onClose }: { onClose: () => void }) {
         {releases?.ok ? <Stack spacing={1.5}>
           <Typography>Instalada: <strong>{releases.current_release}</strong></Typography>
           <Typography>Última estable: <strong>{releases.latest_stable || "Sin publicación"}</strong></Typography>
+          {releases.latest_beta ? <Typography>Última beta: <strong>{releases.latest_beta}</strong> · revísala antes de promoverla a estable.</Typography> : null}
           <TextField select label="Versión oficial" value={selected} onChange={(event) => { setSelected(event.target.value); setConfirmation(""); }}>
             {releases.releases.map((release) => <MenuItem key={release} value={release}>{release}</MenuItem>)}
           </TextField>
@@ -73,7 +74,8 @@ export function UpdateDialog({ onClose }: { onClose: () => void }) {
 }
 
 function releaseKey(value: string): number {
-  const match = value.match(/^v?(\d+)\.(\d+)\.(\d+)-stable$/);
+  const match = value.match(/^v?(\d+)\.(\d+)\.(\d+)-(stable|beta)$/);
   if (!match) return 0;
-  return Number(match[1]) * 1_000_000 + Number(match[2]) * 1_000 + Number(match[3]);
+  const channel = match[4] === "stable" ? 1 : 0;
+  return channel * 1_000_000_000 + Number(match[1]) * 1_000_000 + Number(match[2]) * 1_000 + Number(match[3]);
 }

@@ -8,15 +8,16 @@ import httpx
 
 from app.core.config import settings
 
-TAG_PATTERN = re.compile(r"^v(\d+)\.(\d+)\.(\d+)-stable$")
+TAG_PATTERN = re.compile(r"^v(\d+)\.(\d+)\.(\d+)-(stable|beta)$")
 MAX_RELEASES = 20
 
 
-def release_key(tag: str) -> tuple[int, int, int]:
+def release_key(tag: str) -> tuple[int, int, int, int]:
     match = TAG_PATTERN.fullmatch(tag)
     if not match:
-        return (0, 0, 0)
-    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        return (0, 0, 0, 0)
+    channel = 0 if match.group(4) == "stable" else -1
+    return (int(match.group(1)), int(match.group(2)), int(match.group(3)), channel)
 
 
 def current_release() -> str:
@@ -29,7 +30,9 @@ def current_release() -> str:
             return version
     except (FileNotFoundError, json.JSONDecodeError, OSError, AttributeError):
         pass
-    return f"v{settings.app_version}-stable"
+    base = settings.app_version.split("-", 1)[0]
+    channel = "beta" if "beta" in settings.app_version else "stable"
+    return f"v{base}-{channel}"
 
 
 def release_status() -> dict:
@@ -60,11 +63,13 @@ def release_status() -> dict:
             "current_release": installed_release,
             "latest": "",
             "latest_stable": "",
+            "latest_beta": "",
             "update_available": False,
             "releases": [],
             "error": f"No se pudo consultar el canal oficial: {type(exc).__name__}.",
         }
     stable = next((tag for tag in tags if tag.endswith("-stable")), "")
+    beta = next((tag for tag in tags if tag.endswith("-beta")), "")
     latest = tags[0] if tags else ""
     current_key = release_key(installed_release)
     return {
@@ -73,6 +78,7 @@ def release_status() -> dict:
         "current_release": installed_release,
         "latest": latest,
         "latest_stable": stable,
+        "latest_beta": beta,
         "update_available": bool(latest and release_key(latest) > current_key),
         "releases": tags[:MAX_RELEASES],
     }

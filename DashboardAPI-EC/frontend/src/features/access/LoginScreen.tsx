@@ -56,7 +56,7 @@ export function LoginScreen({ onAuthenticated }: Props) {
           </Box>
           <Box>
             <Typography fontWeight={900} lineHeight={1.1}>DashboardAPI-EC</Typography>
-            <Typography variant="caption" color="text.secondary">EdgeConnect · 1.3 stable</Typography>
+            <Typography variant="caption" color="text.secondary">EdgeConnect · 1.4 beta</Typography>
           </Box>
         </Stack>
         {needsBootstrap ? (

@@ -16,6 +16,7 @@ class Response:
         return [
             {"name": "v1.2.0-stable"},
             {"name": "v1.3.0-stable"},
+            {"name": "v1.4.0-beta"},
             {"name": "latest"},
         ]
 
@@ -30,6 +31,7 @@ def test_release_channel_filters_and_orders_official_tags(monkeypatch):
     assert result["current_release"] == "v1.2.0-stable"
     assert result["latest_stable"] == "v1.3.0-stable"
     assert result["releases"] == [
+        "v1.4.0-beta",
         "v1.3.0-stable",
         "v1.2.0-stable",
     ]
@@ -74,3 +76,26 @@ def test_update_endpoints_require_admin_channel(tmp_path, monkeypatch):
     assert remote.get("/update", headers=headers).status_code == 400
     secure = TestClient(app, base_url="https://dashboard.example.com", client=("203.0.113.1", 1))
     assert secure.get("/update", headers=headers).json()["state"] == "idle"
+
+
+def test_release_channel_lists_beta_tags(monkeypatch):
+    monkeypatch.setattr(update_service.httpx, "get", lambda *args, **kwargs: Response())
+    monkeypatch.setattr(settings, "app_version", "1.3.0")
+    result = update_service.release_status()
+    assert result["ok"] is True
+    assert result["latest_beta"] == "v1.4.0-beta"
+    assert result["latest_stable"] == "v1.3.0-stable"
+    assert result["releases"][0] == "v1.4.0-beta"
+    assert result["update_available"] is True
+
+
+def test_queue_update_accepts_beta_tag(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "app_version", "1.3.0")
+    monkeypatch.setattr(settings, "update_state_dir", str(tmp_path))
+    monkeypatch.setattr(
+        update_service,
+        "release_status",
+        lambda: {"ok": True, "releases": ["v1.4.0-beta", "v1.3.0-stable"]},
+    )
+    assert update_service.queue_update("v1.4.0-beta")["state"] == "pending"
+    assert json.loads((tmp_path / "request.json").read_text())["version"] == "v1.4.0-beta"

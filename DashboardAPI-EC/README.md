@@ -1,4 +1,4 @@
-# DashboardAPI-EC 1.3.0 stable
+# DashboardAPI-EC 1.4.0 beta
 
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 [![Human Tested](https://img.shields.io/badge/Human%20Tested-EdgeConnect%209.7.1-7B61FF?logo=checkmarx&logoColor=white)](#validación-humana-y-automatizada)
@@ -6,7 +6,7 @@
 
 DashboardAPI-EC es un servicio web para descubrir, consultar y visualizar entornos HPE Aruba Networking EdgeConnect. La aplicación identifica la versión del Orchestrator, carga su perfil de compatibilidad, descubre los appliances administrados y conserva evidencia de cada llamada API utilizada para construir el dashboard.
 
-La versión 1.3 se soporta en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. El instalador acepta cualquier versión de Ubuntu que cumpla los requisitos técnicos, incluidas las posteriores a 24.04.
+La versión 1.4 se soporta en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. El instalador acepta cualquier versión de Ubuntu que cumpla los requisitos técnicos, incluidas las posteriores a 24.04.
 
 ## Instalación rápida
 
@@ -250,7 +250,7 @@ La importación conserva el documento original, genera un perfil normalizado y c
 Instalar el paquete generado:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.3.0_amd64.deb
+sudo apt install ./dashboardapi-ec_1.4.0_amd64.deb
 ```
 
 El instalador:
@@ -287,7 +287,7 @@ sudo apt install -y build-essential dpkg-dev python3 python3-pip python3-venv no
 ./scripts/build-deb.sh
 ```
 
-El resultado se guarda en `dist/dashboardapi-ec_1.3.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
+El resultado se guarda en `dist/dashboardapi-ec_1.4.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
 
 ## Operación del servicio
 
@@ -493,7 +493,7 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 
 ## Estado de la versión
 
-La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorporó el canal de actualizaciones. La versión 1.3.0 añade Try Me, exportaciones y snapshots para el Swagger completo.
+La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorporó el canal de actualizaciones. La versión 1.3.0 añadió Try Me, exportaciones y snapshots para el Swagger completo. La 1.4.0 añade el menú Control de acceso con usuarios, roles y auditoría.
 
 ## Referencias oficiales
 

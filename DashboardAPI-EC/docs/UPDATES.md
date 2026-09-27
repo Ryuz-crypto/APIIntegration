@@ -29,11 +29,14 @@ El instalador conserva la base de datos, las credenciales cifradas, la configura
 5. Escribe la confirmación exacta, por ejemplo `ACTUALIZAR v1.3.0-stable`.
 6. Pulsa **Aplicar actualización**. La interfaz mostrará `pending`, `running`, `success` o `error` y se recargará cuando la API vuelva a estar disponible.
 
-El canal admite únicamente tags estables oficiales con este formato:
+El canal admite únicamente tags oficiales con estos formatos:
 
 ```text
 v1.2.0-stable
+v1.4.0-beta
 ```
+
+Las etiquetas `-beta` publican cambios para revisión antes de promoverlos a `-stable`. Una vez validada una beta, publica el mismo commit con el tag estable correspondiente.
 
 No se permiten ramas, commits arbitrarios, versiones iguales ni retrocesos desde la interfaz.
 

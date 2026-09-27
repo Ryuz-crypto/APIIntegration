@@ -37,6 +37,7 @@ export type ReleaseStatus = {
   current_release: string;
   latest: string;
   latest_stable: string;
+  latest_beta?: string;
   update_available: boolean;
   releases: string[];
   error?: string;
