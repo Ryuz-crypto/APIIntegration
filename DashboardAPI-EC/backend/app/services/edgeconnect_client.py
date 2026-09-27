@@ -1,5 +1,5 @@
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
@@ -37,6 +37,7 @@ class EdgeConnectResponse:
     status_code: int
     duration_ms: int
     payload: dict
+    response_headers: dict[str, str] = field(default_factory=dict)
 
 
 class EdgeConnectClient:
@@ -145,6 +146,85 @@ class EdgeConnectClient:
                 if exc.status_code != 404 or exc.method == "POST":
                     raise
         raise last_error or EdgeConnectClientError("No compatible version endpoint is available")
+
+    def call_custom(
+        self,
+        operation_id: str,
+        method: str,
+        path: str,
+        query_params: dict[str, Any] | None = None,
+        body: Any = None,
+        extra_headers: dict[str, str] | None = None,
+    ) -> EdgeConnectResponse:
+        method = method.upper()
+        headers = {**self._headers(), **(extra_headers or {})}
+        auth = self._auth()
+        started = time.perf_counter()
+        try:
+            with httpx.Client(
+                verify=self.orchestrator.verify_tls,
+                timeout=self.orchestrator.timeout_seconds,
+                follow_redirects=False,
+            ) as client:
+                if self.orchestrator.auth_type == "session_otp":
+                    try:
+                        cookies = interactive_auth.load(
+                            interactive_auth.active_key(self.orchestrator), self.orchestrator
+                        )
+                    except interactive_auth.InteractiveAuthError as exc:
+                        raise EdgeConnectClientError(str(exc), method=method, path=path) from None
+                    interactive_auth.restore_cookies(client, cookies)
+                    self._csrf(client, headers)
+                elif self.orchestrator.auth_type == "session":
+                    self._login(client, headers)
+                response = client.request(
+                    method,
+                    self._url(path),
+                    params=query_params or None,
+                    json=body if body is not None else None,
+                    headers=headers,
+                    auth=auth,
+                )
+                if self.orchestrator.auth_type == "session":
+                    self._logout(client, headers)
+                if self.orchestrator.auth_type == "session_otp" and response.status_code in {
+                    401,
+                    403,
+                }:
+                    interactive_auth.invalidate(self.orchestrator)
+        except interactive_auth.InteractiveAuthError as exc:
+            raise EdgeConnectClientError(str(exc), method=method, path=path) from None
+        except httpx.HTTPError as exc:
+            duration = int((time.perf_counter() - started) * 1000)
+            raise EdgeConnectClientError(
+                str(exc), duration_ms=duration, method=method, path=path
+            ) from exc
+
+        duration = int((time.perf_counter() - started) * 1000)
+        payload = self._payload(response)
+        if response.is_error or response.is_redirect:
+            raise EdgeConnectClientError(
+                f"{method} {path}: HTTP {response.status_code}.",
+                status_code=response.status_code,
+                duration_ms=duration,
+                payload=payload,
+                method=method,
+                path=path,
+            )
+        visible_headers = {
+            key: value
+            for key, value in response.headers.items()
+            if key.lower() in {"content-type", "content-length", "location", "etag", "last-modified"}
+        }
+        return EdgeConnectResponse(
+            operation_id=operation_id,
+            method=method,
+            path=path,
+            status_code=response.status_code,
+            duration_ms=duration,
+            payload=payload,
+            response_headers=visible_headers,
+        )
 
     def _headers(self) -> dict[str, str]:
         token = decrypt_secret(self.orchestrator.encrypted_api_token)

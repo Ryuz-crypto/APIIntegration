@@ -1,6 +1,6 @@
 # DashboardAPI-EC
 
-[![Version](https://img.shields.io/badge/version-1.2.0%20stable-2fbf9b)](DashboardAPI-EC/README.md)
+[![Version](https://img.shields.io/badge/version-1.3.0%20stable-2fbf9b)](DashboardAPI-EC/README.md)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-Python%203.12%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
@@ -8,7 +8,7 @@
 
 DashboardAPI-EC es una plataforma web para descubrir, consultar y visualizar entornos **HPE Aruba Networking EdgeConnect** mediante sus APIs. Detecta la versión del Orchestrator, identifica las capacidades disponibles y ensambla un dashboard específico con datos reales.
 
-La versión **1.2.0 stable** funciona en **Ubuntu con Python 3.12 o superior** y se distribuye como paquete `.deb`. Se admiten versiones posteriores de Ubuntu siempre que cumplan estos requisitos.
+La versión **1.3.0 stable** funciona en **Ubuntu con Python 3.12 o superior** y se distribuye como paquete `.deb`. Se admiten versiones posteriores de Ubuntu siempre que cumplan estos requisitos.
 
 ## Contenido
 
@@ -42,6 +42,7 @@ La versión **1.2.0 stable** funciona en **Ubuntu con Python 3.12 o superior** y
 - Recolección por `nePk` de rendimiento, interfaces y túneles con evidencia independiente por API.
 - HTTPS administrado desde la interfaz con certificados PEM, DER o PFX/P12.
 - Actualización de versiones estables oficiales desde el dashboard, con respaldo, verificación de salud y recuperación del paquete anterior.
+- Pestaña Try Me para ejecutar todas las APIs del Swagger, exportar salidas y guardar snapshots.
 - Editor global de nombre, mensaje, seis colores, icono y tipografía.
 - Backend FastAPI, frontend React, PostgreSQL, Redis y Nginx.
 - Instalación nativa con paquete `.deb` y servicios `systemd`.
@@ -70,7 +71,7 @@ El instalador:
 
 1. valida que el sistema sea Ubuntu;
 2. instala las dependencias necesarias;
-3. construye el paquete `dashboardapi-ec_1.2.0_<arquitectura>.deb`;
+3. construye el paquete `dashboardapi-ec_1.3.0_<arquitectura>.deb`;
 4. configura PostgreSQL, Redis, Nginx y `systemd`;
 5. ejecuta las migraciones;
 6. inicia los servicios;
@@ -196,6 +197,7 @@ http://IP-DEL-SERVIDOR/api/v1/docs
 | [README técnico](DashboardAPI-EC/README.md) | Arquitectura, APIs, configuración, desarrollo y operación |
 | [Instalación y primer uso](DashboardAPI-EC/docs/INSTALLATION.md) | Instalación, actualización, respaldo y diagnóstico |
 | [Actualizaciones administradas](DashboardAPI-EC/docs/UPDATES.md) | Canal oficial, respaldos, recuperación y diagnóstico |
+| [Try Me y snapshots](DashboardAPI-EC/docs/TRYME.md) | Swagger completo, ejecución interactiva, cambios y exportaciones |
 | [ADR de compatibilidad](DashboardAPI-EC/docs/ADR/ADR-0001-compatibility-layer.md) | Diseño de la capa por versiones |
 | [ADR de muestras reales](DashboardAPI-EC/docs/ADR/ADR-0002-real-api-samples.md) | Evidencia, respuestas y trazabilidad |
 | [Arquitectura inicial](DashboardAPI-EC/docs/MTDS/MTDS-0.1-Architecture.md) | Componentes y decisiones iniciales |

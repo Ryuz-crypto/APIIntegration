@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlmodel import Session, select
 
 from app.compatibility.engine import CompatibilityError
+from app.compatibility.loader import profile_from_openapi_document
 from app.db.session import get_session
 from app.models.compatibility import ApiCompatibilityProfile
 from app.schemas.compatibility import (
@@ -68,6 +69,7 @@ def resolve_operation(
 async def upload_swagger(
     version: str,
     activate: bool = False,
+    catalog_only: bool = False,
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ) -> SwaggerLoadResult:
@@ -81,14 +83,24 @@ async def upload_swagger(
             raise HTTPException(status_code=400, detail="Swagger/OpenAPI document must be JSON or YAML") from exc
 
     try:
-        item = store_openapi_profile(session, document, version, activate)
+        item = store_openapi_profile(session, document, version, activate, catalog_only)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return SwaggerLoadResult(
         version=item.version,
         status=item.status,
-        operation_count=len(item.profile["operations"]),
-        message="OpenAPI profile stored and activated." if activate else "OpenAPI profile stored as a draft.",
+        operation_count=len(
+            profile_from_openapi_document(document, version)["operations"]
+            if catalog_only
+            else item.profile["operations"]
+        ),
+        message=(
+            "OpenAPI stored for Try Me; active profile unchanged."
+            if catalog_only
+            else "OpenAPI profile stored and activated."
+            if activate
+            else "OpenAPI profile stored as a draft."
+        ),
         checksum=item.checksum or "",
         activated=item.is_active,
     )

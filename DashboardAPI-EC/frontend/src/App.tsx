@@ -1,6 +1,6 @@
 import { Box, Button, CssBaseline, Grid, MenuItem, Paper, Select, Stack, ThemeProvider, Typography } from "@mui/material";
-import { Activity, Boxes, Database, Download, Gauge, Network, Palette, Plus, RadioTower, ShieldCheck, Workflow } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Activity, Boxes, Database, Download, FlaskConical, Gauge, Network, Palette, Plus, RadioTower, ShieldCheck, Workflow } from "lucide-react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { MetricCard } from "./components/MetricCard";
 import { AppliancePanel } from "./features/appliances/AppliancePanel";
 import { DynamicDashboard } from "./features/dashboard/DynamicDashboard";
@@ -14,11 +14,14 @@ import { UpdateDialog } from "./features/system/UpdateDialog";
 import { api, ApiSample, Appliance, AppearanceSettings, CompatibilityProfile, Dashboard, Orchestrator, SystemOverview } from "./lib/api";
 import { createDashboardTheme, defaultAppearance } from "./theme/theme";
 
+const TryMePage = lazy(() => import("./features/tryme/TryMePage").then((module) => ({ default: module.TryMePage })));
+
 const navigation = [
-  { label: "Resumen", icon: <Gauge size={18} />, active: true },
-  { label: "Orchestrators", icon: <RadioTower size={18} /> },
-  { label: "Appliances", icon: <Boxes size={18} /> },
-  { label: "API Explorer", icon: <Database size={18} /> }
+  { id: "summary", view: "dashboard", label: "Resumen", icon: <Gauge size={18} /> },
+  { id: "orchestrators", view: "dashboard", label: "Orchestrators", icon: <RadioTower size={18} /> },
+  { id: "appliances", view: "dashboard", label: "Appliances", icon: <Boxes size={18} /> },
+  { id: "explorer", view: "dashboard", label: "API Explorer", icon: <Database size={18} /> },
+  { id: "tryme", view: "tryme", label: "Try Me", icon: <FlaskConical size={18} /> }
 ];
 
 function App() {
@@ -34,6 +37,7 @@ function App() {
   const [tlsOpen, setTlsOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
+  const [view, setView] = useState<"dashboard" | "tryme">("dashboard");
   const [appearance, setAppearance] = useState<AppearanceSettings>(defaultAppearance);
   const theme = useMemo(() => createDashboardTheme(appearance), [appearance]);
   const BrandIcon = { network: Network, activity: Activity, gauge: Gauge, workflow: Workflow }[appearance.icon];
@@ -85,16 +89,17 @@ function App() {
             </Box>
             <Box>
               <Typography fontWeight={900} lineHeight={1.1}>{appearance.panel_name}</Typography>
-              <Typography variant="caption" color="primary.main">EdgeConnect · 1.2</Typography>
+              <Typography variant="caption" color="primary.main">EdgeConnect · 1.3</Typography>
             </Box>
           </Stack>
           <Stack spacing={0.75}>
             {navigation.map((item) => (
               <Button
                 key={item.label}
-                color={item.active ? "primary" : "inherit"}
+                color={(item.id === "summary" && view === "dashboard") || view === item.view && item.view === "tryme" ? "primary" : "inherit"}
                 startIcon={item.icon}
-                sx={{ justifyContent: "flex-start", px: 1.5, bgcolor: item.active ? "rgba(47,191,155,.1)" : "transparent" }}
+                onClick={() => setView(item.view as "dashboard" | "tryme")}
+                sx={{ justifyContent: "flex-start", px: 1.5, bgcolor: (item.id === "summary" && view === "dashboard") || view === item.view && item.view === "tryme" ? "rgba(47,191,155,.1)" : "transparent" }}
               >
                 {item.label}
               </Button>
@@ -104,7 +109,7 @@ function App() {
             <Typography variant="caption" color="text.secondary">Plataforma</Typography>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
               <ShieldCheck size={17} color="#53C57B" />
-              <Typography variant="body2" fontWeight={800}>1.2 stable</Typography>
+              <Typography variant="body2" fontWeight={800}>1.3 stable</Typography>
             </Stack>
           </Paper>
         </Box>
@@ -113,8 +118,8 @@ function App() {
           <Box sx={{ p: { xs: 2, md: 3.5 }, maxWidth: 1500, mx: "auto" }}>
             <Stack direction={{ xs: "column", xl: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", xl: "center" }} spacing={2} sx={{ mb: 3 }}>
               <Box>
-                <Typography variant="h1">Estado de la red</Typography>
-                <Typography color="text.secondary">{appearance.welcome_message}</Typography>
+                <Typography variant="h1">{view === "tryme" ? "Laboratorio de APIs" : "Estado de la red"}</Typography>
+                <Typography color="text.secondary">{view === "tryme" ? "Explora, ejecuta y conserva salidas de los Swagger conectados." : appearance.welcome_message}</Typography>
               </Box>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} useFlexGap flexWrap="wrap">
                 {orchestrators.length ? <Select size="small" value={selectedOrchestrator} onChange={(event) => setSelectedOrchestrator(event.target.value)} sx={{ minWidth: 220 }}>{orchestrators.map((item) => <MenuItem key={item.id} value={item.id}>{item.name} · {item.api_version ?? "sin validar"}</MenuItem>)}</Select> : null}
@@ -127,7 +132,7 @@ function App() {
 
             {error ? <Paper sx={{ p: 2, mb: 2, borderColor: "error.main" }}><Typography color="error">{error}</Typography></Paper> : null}
 
-            <Grid container spacing={2}>
+            {view === "tryme" ? <Suspense fallback={<Paper sx={{ p: 4 }}><Typography color="text.secondary">Cargando Swagger Explorer…</Typography></Paper>}><TryMePage orchestrators={orchestrators} selectedId={selectedOrchestrator} onSelect={setSelectedOrchestrator} /></Suspense> : <Grid container spacing={2}>
               <Grid item xs={12} sm={6} lg={3}><MetricCard label="Orchestrators" value={overview?.orchestrators ?? 0} detail="Conexiones configuradas" icon={<Network size={22} />} /></Grid>
               <Grid item xs={12} sm={6} lg={3}><MetricCard label="Appliances" value={overview?.appliances ?? 0} detail={`${overview?.selected_appliances ?? 0} seleccionados`} icon={<Activity size={22} />} /></Grid>
               <Grid item xs={12} sm={6} lg={3}><MetricCard label="Perfiles API" value={overview?.compatibility_profiles ?? profiles.length} detail="9.3–9.6 · 9.7 usa API 9.6" icon={<Database size={22} />} /></Grid>
@@ -137,7 +142,7 @@ function App() {
               <Grid item xs={12} lg={5}><CompatibilityPanel profiles={profiles} /></Grid>
               <Grid item xs={12} lg={7}><AppliancePanel items={appliances} onChanged={load} /></Grid>
               <Grid item xs={12}><SamplesPanel items={samples} /></Grid>
-            </Grid>
+            </Grid>}
             <Typography component="footer" variant="caption" color="text.secondary" textAlign="center" sx={{ display: "block", py: 3 }}>Powered by Emilio Abundis</Typography>
           </Box>
         </Box>

@@ -5,6 +5,7 @@ from app.models.compatibility import ApiCompatibilityProfile
 from app.models.network_resource import MetricPoint, NetworkResource
 from app.models.orchestrator import Orchestrator
 from app.models.system_setting import SystemSetting
+from app.models.tryme_snapshot import TryMeSnapshot
 
 __all__ = [
     "ApiCompatibilityProfile",
@@ -15,4 +16,5 @@ __all__ = [
     "NetworkResource",
     "Orchestrator",
     "SystemSetting",
+    "TryMeSnapshot",
 ]

@@ -41,6 +41,65 @@ export type UpdateStatus = {
   completed_at?: string;
 };
 
+export type TryMeParameter = {
+  name: string;
+  location: "path" | "query" | "header" | "body";
+  required: boolean;
+  description: string;
+  schema: Record<string, unknown>;
+  example: unknown;
+};
+
+export type TryMeOperation = {
+  operation_id: string;
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path: string;
+  summary: string;
+  description: string;
+  tags: string[];
+  parameters: TryMeParameter[];
+  request_schema: Record<string, unknown>;
+  request_example: unknown;
+  mutating: boolean;
+};
+
+export type TryMeCatalog = {
+  orchestrator_id: string;
+  version: string;
+  source: string;
+  title: string;
+  operations: TryMeOperation[];
+};
+
+export type TryMeResult = {
+  sample_id: string;
+  ok: boolean;
+  operation_id: string;
+  method: string;
+  path: string;
+  status_code: number | null;
+  duration_ms: number | null;
+  request: Record<string, unknown>;
+  response: Record<string, unknown>;
+  response_headers: Record<string, string>;
+  error?: string | null;
+  executed_at: string;
+};
+
+export type TryMeSnapshot = {
+  id: string;
+  orchestrator_id: string;
+  sample_id: string;
+  name: string;
+  operation_id: string;
+  method: string;
+  path: string;
+  status_code: number | null;
+  request_data: Record<string, unknown>;
+  response_data: Record<string, unknown>;
+  created_at: string;
+};
+
 export type Orchestrator = {
   id: string;
   name: string;
@@ -176,6 +235,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     try { detail = JSON.parse(text).detail; } catch { /* Non-JSON proxy error. */ }
     throw new Error(typeof detail === "string" ? detail : `HTTP ${response.status}: no se pudo completar la solicitud.`);
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -193,6 +253,37 @@ export const api = {
     headers: { "X-TLS-Admin-Token": token },
     body: JSON.stringify({ version, confirmation })
   }),
+  tryMeCatalog: (orchestratorId: string) => request<TryMeCatalog>(`/try-me/catalog/${orchestratorId}`),
+  syncTryMeCatalog: (orchestratorId: string) => request<TryMeCatalog>(`/try-me/catalog/${orchestratorId}/sync`, { method: "POST" }),
+  executeTryMe: (payload: {
+    orchestrator_id: string;
+    method: string;
+    path: string;
+    path_params: Record<string, string>;
+    query_params: Record<string, unknown>;
+    headers: Record<string, string>;
+    body: unknown;
+    confirmation: string;
+  }, adminToken: string) => request<TryMeResult>("/try-me/execute", {
+    method: "POST",
+    headers: adminToken ? { "X-TLS-Admin-Token": adminToken } : {},
+    body: JSON.stringify(payload)
+  }),
+  tryMeSnapshots: (orchestratorId: string) => request<TryMeSnapshot[]>(`/try-me/snapshots/${orchestratorId}`),
+  saveTryMeSnapshot: (sampleId: string, name: string) => request<TryMeSnapshot>("/try-me/snapshots", {
+    method: "POST", body: JSON.stringify({ sample_id: sampleId, name })
+  }),
+  deleteTryMeSnapshot: (snapshotId: string) => request<void>(`/try-me/snapshots/${snapshotId}`, { method: "DELETE" }),
+  uploadSwagger: async (version: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch(`${API_BASE}/compatibility/swagger?version=${encodeURIComponent(version)}&activate=false&catalog_only=true`, { method: "POST", body: form });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${response.status}`);
+    }
+    return response.json() as Promise<{ version: string; operation_count: number; checksum: string }>;
+  },
   orchestrators: () => request<Orchestrator[]>("/orchestrators"),
   appliances: () => request<Appliance[]>("/appliances"),
   profiles: () => request<CompatibilityProfile[]>("/compatibility/profiles"),

@@ -30,17 +30,19 @@ def store_openapi_profile(
     document: dict,
     version: str,
     activate: bool = False,
+    catalog_only: bool = False,
 ) -> ApiCompatibilityProfile:
     profile = profile_from_openapi_document(document, version)
     checksum = document_checksum(document)
     existing = session.get(ApiCompatibilityProfile, version)
     item = existing or ApiCompatibilityProfile(version=version)
-    item.status = "supported" if activate else "draft"
-    item.source = "openapi-upload"
-    item.checksum = checksum
-    item.is_active = activate
-    item.profile = {**profile, "status": item.status}
     item.raw_document = document
+    if not catalog_only or existing is None:
+        item.checksum = checksum
+        item.status = "supported" if activate else "draft"
+        item.source = "openapi-upload"
+        item.is_active = activate
+        item.profile = {**profile, "status": item.status}
     session.add(item)
     session.commit()
     session.refresh(item)

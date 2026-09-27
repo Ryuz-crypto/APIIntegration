@@ -1,4 +1,4 @@
-# DashboardAPI-EC 1.2.0 stable
+# DashboardAPI-EC 1.3.0 stable
 
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 [![Human Tested](https://img.shields.io/badge/Human%20Tested-EdgeConnect%209.7.1-7B61FF?logo=checkmarx&logoColor=white)](#validación-humana-y-automatizada)
@@ -6,7 +6,7 @@
 
 DashboardAPI-EC es un servicio web para descubrir, consultar y visualizar entornos HPE Aruba Networking EdgeConnect. La aplicación identifica la versión del Orchestrator, carga su perfil de compatibilidad, descubre los appliances administrados y conserva evidencia de cada llamada API utilizada para construir el dashboard.
 
-La versión 1.2 se soporta en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. El instalador acepta cualquier versión de Ubuntu que cumpla los requisitos técnicos, incluidas las posteriores a 24.04.
+La versión 1.3 se soporta en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. El instalador acepta cualquier versión de Ubuntu que cumpla los requisitos técnicos, incluidas las posteriores a 24.04.
 
 ## Instalación rápida
 
@@ -26,6 +26,16 @@ sudo ./scripts/install-ubuntu.sh
 El script instala dependencias, construye el `.deb`, configura los servicios y verifica `/api/v1/health`. Al terminar muestra la dirección que debes abrir. La guía completa de instalación, actualización, respaldo y diagnóstico está en [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 Para pasar de una versión anterior a 1.2, ejecuta una vez `git pull && sudo ./scripts/install-ubuntu.sh`. A partir de 1.2 puedes instalar versiones oficiales desde **Actualizar** en la cabecera. El motor valida el tag de GitHub, crea un respaldo y conserva el paquete anterior para recuperación. Consulta [docs/UPDATES.md](docs/UPDATES.md).
+
+## Cambios de 1.3
+
+- Nueva pestaña **Try Me** con catálogo completo derivado del Swagger de cada Orchestrator.
+- Búsqueda por método, path, operación o tag; formularios interactivos para parámetros de path, query y headers.
+- Editor JSON para cuerpos de `POST`, `PUT` y `PATCH`, con ejemplos generados desde el schema.
+- Ejecución con las credenciales cifradas ya asociadas al Orchestrator y soporte de la sesión OTP vigente.
+- Confirmación reforzada y clave administrativa para operaciones que pueden cambiar configuración.
+- Exportación de request/response como JSON o CSV y snapshots persistentes para conservar evidencia.
+- Importación del Swagger completo desde Try Me sin activar el documento para el dashboard.
 
 ## Cambios de 1.2
 
@@ -98,6 +108,8 @@ El frontend no supone que todos los Orchestrators ofrecen los mismos datos. Mues
 La cabecera incluye **Certificado HTTPS** y **Apariencia**. HTTPS acepta PEM, DER y PFX/P12, comprueba SAN, vigencia y clave privada, y solicita al servicio privilegiado de Ubuntu que active Nginx de forma transaccional. Consulta [docs/HTTPS.md](docs/HTTPS.md) para la primera carga mediante túnel SSH, renovación, almacenamiento y recuperación.
 
 La opción **Actualizar** consulta el canal oficial, muestra la versión instalada y permite elegir una versión posterior. La operación requiere HTTPS o acceso local por túnel SSH, la clave `TLS_ADMIN_TOKEN` y la frase exacta que muestra el panel. La guía de [actualizaciones administradas](docs/UPDATES.md) explica el flujo, los respaldos y la recuperación.
+
+La pestaña **Try Me** presenta todas las operaciones del Swagger almacenado, incluidos endpoints que no forman parte del dashboard. Consulta [docs/TRYME.md](docs/TRYME.md) para importar el contrato del Orchestrator, ejecutar lecturas y cambios, exportar resultados y administrar snapshots.
 
 El editor de apariencia guarda globalmente:
 
@@ -225,7 +237,7 @@ La importación conserva el documento original, genera un perfil normalizado y c
 Instalar el paquete generado:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.2.0_amd64.deb
+sudo apt install ./dashboardapi-ec_1.3.0_amd64.deb
 ```
 
 El instalador:
@@ -262,7 +274,7 @@ sudo apt install -y build-essential dpkg-dev python3 python3-pip python3-venv no
 ./scripts/build-deb.sh
 ```
 
-El resultado se guarda en `dist/dashboardapi-ec_1.2.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
+El resultado se guarda en `dist/dashboardapi-ec_1.3.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
 
 ## Operación del servicio
 
@@ -345,6 +357,9 @@ Los servicios no codifican rutas de EdgeConnect directamente. Solicitan operacio
 | `GET` | `/api/v1/system/releases` | Consultar tags oficiales disponibles |
 | `GET` | `/api/v1/system/update` | Consultar el estado del activador |
 | `POST` | `/api/v1/system/update` | Programar una actualización validada |
+| `GET` | `/api/v1/try-me/catalog/{orchestrator_id}` | Obtener todas las operaciones Swagger |
+| `POST` | `/api/v1/try-me/execute` | Ejecutar una operación validada contra el contrato |
+| `GET/POST/DELETE` | `/api/v1/try-me/snapshots` | Conservar y administrar evidencia de Try Me |
 
 ### Ejemplo de dashboard dinámico
 
@@ -408,7 +423,7 @@ cd frontend
 npm run build
 ```
 
-Validaciones utilizadas para la versión 1.2:
+Validaciones utilizadas para la versión 1.3:
 
 ```bash
 cd backend
@@ -453,7 +468,7 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 
 ## Estado de la versión
 
-La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorpora el canal de versiones y la actualización transaccional desde el dashboard.
+La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorporó el canal de actualizaciones. La versión 1.3.0 añade Try Me, exportaciones y snapshots para el Swagger completo.
 
 ## Referencias oficiales
 

@@ -42,7 +42,7 @@ def tls_authorized(request: Request, x_tls_admin_token: str = Header(default="")
 def update_authorized(request: Request, x_tls_admin_token: str = Header(default="")):
     if not settings.update_enabled:
         raise HTTPException(
-            503, "Actualización administrada requiere DashboardAPI-EC 1.2 en Ubuntu."
+            503, "Actualización administrada requiere DashboardAPI-EC 1.2 o posterior en Ubuntu."
         )
     _admin_authorized(request, x_tls_admin_token)
 

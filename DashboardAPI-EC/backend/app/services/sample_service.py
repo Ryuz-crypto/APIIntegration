@@ -43,6 +43,7 @@ def record_error(
     operation_id: str,
     error: EdgeConnectClientError,
     appliance_id: uuid.UUID | None = None,
+    request_params: dict | None = None,
 ) -> ApiSample:
     sample = ApiSample(
         orchestrator_id=orchestrator_id,
@@ -55,7 +56,7 @@ def record_error(
         duration_ms=error.duration_ms,
         ok=False,
         payload=error.payload,
-        request_params={},
+        request_params=request_params or {},
         extracted_values={},
         transformations=[],
         error=str(error),

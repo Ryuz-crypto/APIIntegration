@@ -8,6 +8,7 @@ from app.api.routes import (
     orchestrators,
     samples,
     system,
+    tryme,
 )
 
 api_router = APIRouter()
@@ -18,3 +19,4 @@ api_router.include_router(appliances.router, prefix="/appliances", tags=["applia
 api_router.include_router(compatibility.router, prefix="/compatibility", tags=["compatibility"])
 api_router.include_router(samples.router, prefix="/samples", tags=["samples"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
+api_router.include_router(tryme.router, prefix="/try-me", tags=["try-me"])

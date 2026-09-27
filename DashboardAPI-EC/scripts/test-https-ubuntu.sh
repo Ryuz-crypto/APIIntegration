@@ -3,7 +3,7 @@ set -euo pipefail
 TLS_TEST_STAGE="install"
 trap 'echo "::error title=HTTPS integration::Stage ${TLS_TEST_STAGE} failed at line ${LINENO}" >&2; sudo nginx -T' ERR
 # Disposable CI host only: installs the package and configures its Nginx site.
-sudo apt-get install -y ./dist/dashboardapi-ec_1.2.0_*.deb
+sudo apt-get install -y ./dist/dashboardapi-ec_1.3.0_*.deb
 TLS_TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TLS_TEST_DIR"' EXIT
 TLS_TEST_STAGE="generate certificate"
@@ -21,6 +21,11 @@ sudo systemctl is-active --quiet dashboardapi-ec-update.timer
 curl -fsS -H "X-TLS-Admin-Token: $TLS_TEST_TOKEN" \
   http://127.0.0.1:8081/api/v1/system/update \
   | python3 -c 'import json,sys; assert json.load(sys.stdin)["state"] == "idle"'
+TLS_TEST_STAGE="Try Me API and migration"
+curl -fsS http://127.0.0.1:8010/api/v1/openapi.json \
+  | python3 -c 'import json,sys; paths=json.load(sys.stdin)["paths"]; assert "/api/v1/try-me/execute" in paths; assert "/api/v1/try-me/snapshots" in paths'
+sudo runuser -u postgres -- psql -d dashboardapi_ec -tAc \
+  "SELECT to_regclass('public.trymesnapshot') IS NOT NULL" | grep -qx t
 TLS_TEST_STAGE="upload"
 curl -fsS -H "X-TLS-Admin-Token: $TLS_TEST_TOKEN" \
   -F hostname=localhost -F "certificate=@$TLS_TEST_DIR/cert.pem" -F "key=@$TLS_TEST_DIR/key.pem" \
@@ -40,7 +45,7 @@ TLS_KEY_MODE="$(sudo stat -c '%a' /etc/dashboardapi-ec/tls/privkey.pem)"
 echo "Private key permissions: $TLS_KEY_MODE"
 test "$TLS_KEY_MODE" = 600
 TLS_TEST_STAGE="reinstall"
-sudo apt-get install --reinstall -y ./dist/dashboardapi-ec_1.2.0_*.deb
+sudo apt-get install --reinstall -y ./dist/dashboardapi-ec_1.3.0_*.deb
 TLS_TEST_STAGE="HTTPS after reinstall"
 curl --cacert "$TLS_TEST_DIR/cert.pem" -fsS https://localhost/ >/dev/null
 sudo nginx -t

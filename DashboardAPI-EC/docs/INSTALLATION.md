@@ -1,6 +1,6 @@
 # Instalación y primer uso
 
-DashboardAPI-EC 1.2.0 stable se instala en Ubuntu. El método recomendado construye un paquete `.deb`, lo instala y configura PostgreSQL, Redis, Nginx, la API, el recolector y el motor de actualización.
+DashboardAPI-EC 1.3.0 stable se instala en Ubuntu. El método recomendado construye un paquete `.deb`, lo instala y configura PostgreSQL, Redis, Nginx, la API, el recolector y el motor de actualización.
 
 ## Requisitos
 
@@ -40,10 +40,10 @@ sudo systemctl status dashboardapi-ec dashboardapi-ec-worker nginx
 
 ## Instalación de un paquete ya construido
 
-Si recibiste `dashboardapi-ec_1.2.0_amd64.deb` o la variante `arm64`:
+Si recibiste `dashboardapi-ec_1.3.0_amd64.deb` o la variante `arm64`:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.2.0_amd64.deb
+sudo apt install ./dashboardapi-ec_1.3.0_amd64.deb
 ```
 
 Las actualizaciones usan el mismo comando con el paquete nuevo. Las migraciones se ejecutan automáticamente y conservan conexiones, credenciales y muestras.
@@ -71,6 +71,10 @@ Después de actualizar desde 1.0, ejecuta nuevamente **Descubrir** en cada Orche
 Usa **Certificado HTTPS** en la cabecera para cargar PEM, DER o PFX/P12. La primera carga desde una instalación HTTP remota debe hacerse mediante el túnel SSH seguro descrito en [HTTPS.md](HTTPS.md). El panel valida el certificado antes de entregarlo al activador de Nginx.
 
 Usa **Apariencia** para elegir nombre, mensaje, seis colores, icono y tipografía. El cambio se guarda en PostgreSQL y se conserva al actualizar el paquete. **Powered by Emilio Abundis** permanece visible como atribución del proyecto.
+
+## Try Me y Swagger completo
+
+Después de validar el primer Orchestrator abre **Try Me**. La plataforma intentará utilizar el Swagger almacenado para su versión. Pulsa **Traer del Orchestrator** para sincronizar el documento publicado por el entorno o **Importar Swagger** para cargar JSON/YAML manualmente. La guía [TRYME.md](TRYME.md) explica operaciones de lectura y cambio, exportaciones JSON/CSV y snapshots persistentes.
 
 ## Varios Orchestrators y credenciales
 
