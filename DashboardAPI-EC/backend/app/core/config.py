@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     project_name: str = "DashboardAPI-EC"
     environment: str = "local"
-    app_version: str = "1.3.0"
+    app_version: str = "1.4.0"
     auto_create_schema: bool = True
     api_v1_prefix: str = "/api/v1"
     backend_cors_origins: str = Field(
@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     celery_result_backend: str = "redis://redis:6379/2"
     secret_key: str = "change-me-before-production"
     access_token_expire_minutes: int = 60
+    session_expire_hours: int = 12
     tls_admin_token: str = ""
     tls_enabled: bool = False
     tls_state_dir: str = "/var/lib/dashboardapi-ec-tls"

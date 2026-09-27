@@ -1,6 +1,6 @@
 # DashboardAPI-EC
 
-[![Version](https://img.shields.io/badge/version-1.3.0%20stable-2fbf9b)](DashboardAPI-EC/README.md)
+[![Version](https://img.shields.io/badge/version-1.4.0%20stable-2fbf9b)](DashboardAPI-EC/README.md)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-Python%203.12%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
@@ -8,12 +8,13 @@
 
 DashboardAPI-EC es una plataforma web para descubrir, consultar y visualizar entornos **HPE Aruba Networking EdgeConnect** mediante sus APIs. Detecta la versión del Orchestrator, identifica las capacidades disponibles y ensambla un dashboard específico con datos reales.
 
-La versión **1.3.0 stable** funciona en **Ubuntu con Python 3.12 o superior** y se distribuye como paquete `.deb`. Se admiten versiones posteriores de Ubuntu siempre que cumplan estos requisitos.
+La versión **1.4.0 stable** funciona en **Ubuntu con Python 3.12 o superior** y se distribuye como paquete `.deb`. Se admiten versiones posteriores de Ubuntu siempre que cumplan estos requisitos.
 
 ## Contenido
 
 - [Características](#características)
 - [Instalación rápida](#instalación-rápida)
+- [Actualizar una instalación existente a 1.4.0](#actualizar-una-instalación-existente-a-140)
 - [Primer uso](#primer-uso)
 - [Varios Orchestrators](#varios-orchestrators)
 - [Cómo funciona](#cómo-funciona)
@@ -38,6 +39,7 @@ La versión **1.3.0 stable** funciona en **Ubuntu con Python 3.12 o superior** y
 - Ejemplos reproducibles en cURL, Python y JavaScript.
 - Credenciales independientes y cifradas para múltiples Orchestrators.
 - Rotación de API keys y contraseñas desde la interfaz.
+- Inicio de sesión local, sesiones revocables y roles de consulta, operador y administrador.
 - Polling automático de inventario y rendimiento mediante Celery.
 - Recolección por `nePk` de rendimiento, interfaces y túneles con evidencia independiente por API.
 - HTTPS administrado desde la interfaz con certificados PEM, DER o PFX/P12.
@@ -71,7 +73,7 @@ El instalador:
 
 1. valida que el sistema sea Ubuntu;
 2. instala las dependencias necesarias;
-3. construye el paquete `dashboardapi-ec_1.3.0_<arquitectura>.deb`;
+3. construye el paquete `dashboardapi-ec_1.4.0_<arquitectura>.deb`;
 4. configura PostgreSQL, Redis, Nginx y `systemd`;
 5. ejecuta las migraciones;
 6. inicia los servicios;
@@ -91,6 +93,22 @@ curl http://127.0.0.1/api/v1/health
 sudo systemctl status dashboardapi-ec dashboardapi-ec-worker nginx
 ```
 
+### Actualizar una instalación existente a 1.4.0
+
+Si ya tienes 1.2 o 1.3, abre **Actualizar**, introduce `TLS_ADMIN_TOKEN`, elige `v1.4.0-stable` y escribe la confirmación exacta. Al volver a cargar, crea el primer administrador; las conexiones, credenciales, certificados, apariencia y muestras existentes se conservan.
+
+Si vienes de 1.0 o 1.1, o el motor no puede consultar GitHub, actualiza una vez desde la terminal:
+
+```bash
+cd ~/APIIntegration
+git switch main
+git pull --ff-only
+cd DashboardAPI-EC
+sudo ./scripts/install-ubuntu.sh
+```
+
+La instalación y las actualizaciones son nativas en Ubuntu mediante `.deb` y `systemd`; no requieren Vagrant ni una máquina virtual.
+
 ## HTTPS y apariencia
 
 En la cabecera del dashboard encontrarás tres apartados administrativos:
@@ -108,18 +126,18 @@ El distintivo **Human Tested** indica que el flujo de conexión, autenticación 
 ## Primer uso
 
 1. Abre la dirección mostrada por el instalador.
-2. Pulsa **Conectar Orchestrator**.
-3. Selecciona **Orchestrator as a Service** u **On-premises**.
-4. Introduce un nombre y la URL HTTPS del Orchestrator.
-5. Escribe una etiqueta para identificar la credencial.
-6. Selecciona el método de autenticación.
-7. Introduce la API key o las credenciales de sesión.
-8. Mantén activa la verificación TLS.
-9. Pulsa **Conectar y detectar**.
+2. En el servidor, consulta `TLS_ADMIN_TOKEN` con `sudo sed -n 's/^TLS_ADMIN_TOKEN=//p' /etc/dashboardapi-ec/dashboardapi-ec.env`.
+3. Crea la primera cuenta administradora desde la pantalla de acceso.
+4. Pulsa **Conectar Orchestrator**.
+5. Selecciona **Orchestrator as a Service** u **On-premises**.
+6. Introduce un nombre, la URL HTTPS y la credencial del Orchestrator.
+7. Mantén activa la verificación TLS y pulsa **Conectar y detectar**.
 
 La plataforma validará el acceso, detectará la versión, cargará el perfil compatible, descubrirá los appliances y construirá el dashboard.
 
 Para OaaS se recomienda una API key dedicada con permisos de solo lectura. Las sesiones con OTP se pueden validar de forma interactiva, pero no participan en el polling automático porque el código de un solo uso nunca se almacena.
+
+El menú **Acceso** permite crear usuarios, asignar roles, deshabilitar cuentas, cambiar la contraseña y revisar auditoría. Consulta la [guía de acceso](DashboardAPI-EC/docs/ACCESS.md).
 
 ## Varios Orchestrators
 
@@ -196,6 +214,7 @@ http://IP-DEL-SERVIDOR/api/v1/docs
 | --- | --- |
 | [README técnico](DashboardAPI-EC/README.md) | Arquitectura, APIs, configuración, desarrollo y operación |
 | [Instalación y primer uso](DashboardAPI-EC/docs/INSTALLATION.md) | Instalación, actualización, respaldo y diagnóstico |
+| [Acceso de usuarios](DashboardAPI-EC/docs/ACCESS.md) | Administrador inicial, roles, sesiones y auditoría |
 | [Actualizaciones administradas](DashboardAPI-EC/docs/UPDATES.md) | Canal oficial, respaldos, recuperación y diagnóstico |
 | [Try Me y snapshots](DashboardAPI-EC/docs/TRYME.md) | Swagger completo, ejecución interactiva, cambios y exportaciones |
 | [ADR de compatibilidad](DashboardAPI-EC/docs/ADR/ADR-0001-compatibility-layer.md) | Diseño de la capa por versiones |

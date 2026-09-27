@@ -4,7 +4,7 @@ import { useState } from "react";
 import { StatusChip } from "../../components/StatusChip";
 import { api, Appliance } from "../../lib/api";
 
-export function AppliancePanel({ items, onChanged }: { items: Appliance[]; onChanged: () => void }) {
+export function AppliancePanel({ items, onChanged, canOperate = true }: { items: Appliance[]; onChanged: () => void; canOperate?: boolean }) {
   const [message, setMessage] = useState<string | null>(null);
 
   async function collect(id: string) {
@@ -59,9 +59,9 @@ export function AppliancePanel({ items, onChanged }: { items: Appliance[]; onCha
               <TableCell>
                 <StatusChip status={item.status} />
               </TableCell>
-              <TableCell><Switch size="small" checked={item.selected_for_monitoring} onChange={() => toggleMonitoring(item)} /></TableCell>
+              <TableCell><Switch size="small" disabled={!canOperate} checked={item.selected_for_monitoring} onChange={() => toggleMonitoring(item)} /></TableCell>
               <TableCell align="right">
-                <Button size="small" onClick={() => collect(item.id)} startIcon={<Activity size={15} />}>
+                <Button size="small" disabled={!canOperate} onClick={() => collect(item.id)} startIcon={<Activity size={15} />}>
                   Metrics
                 </Button>
               </TableCell>

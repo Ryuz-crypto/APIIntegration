@@ -200,6 +200,7 @@ def test_api_start_complete_validate_and_discover(mfa, monkeypatch, release):
             yield db
 
     app.dependency_overrides[get_session] = session
+    app.state.auth_disabled = True
     monkeypatch.setattr(routes, "build_compatibility_engine", lambda session: engine)
     try:
         client = TestClient(app)
@@ -220,4 +221,5 @@ def test_api_start_complete_validate_and_discover(mfa, monkeypatch, release):
         assert client.post(f"{url}/discover-appliances").status_code == 200
         assert len(calls) == 4
     finally:
+        app.state.auth_disabled = False
         app.dependency_overrides.clear()

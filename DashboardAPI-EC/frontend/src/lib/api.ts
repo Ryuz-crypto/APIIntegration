@@ -1,4 +1,27 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
+let accessToken = sessionStorage.getItem("dashboardapi-session") ?? "";
+
+export function setAccessToken(token: string) {
+  accessToken = token;
+  if (token) sessionStorage.setItem("dashboardapi-session", token);
+  else sessionStorage.removeItem("dashboardapi-session");
+}
+
+export type UserRole = "viewer" | "operator" | "admin";
+export type AuthUser = {
+  id: string;
+  username: string;
+  display_name: string;
+  role: UserRole;
+  enabled: boolean;
+  created_at: string;
+  last_login_at: string | null;
+};
+export type AuthSession = { token: string; expires_at: string; user: AuthUser };
+export type AuditEvent = {
+  id: string; actor: string; action: string; resource_type: string;
+  resource_id: string | null; details: Record<string, unknown>; created_at: string;
+};
 
 export type SystemOverview = {
   orchestrators: number;
@@ -225,9 +248,12 @@ export type Dashboard = {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (!(init?.body instanceof FormData)) headers.set("Content-Type", "application/json");
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-    ...init
+    ...init,
+    headers
   });
   if (!response.ok) {
     const text = await response.text();
@@ -240,6 +266,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  authStatus: () => request<{ users_configured: boolean; version: string }>("/auth/status"),
+  bootstrap: (payload: { username: string; password: string; display_name: string; admin_token: string }) => request<AuthSession>("/auth/bootstrap", { method: "POST", body: JSON.stringify(payload) }),
+  login: (username: string, password: string) => request<AuthSession>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+  me: () => request<AuthUser>("/auth/me"),
+  logout: () => request<void>("/auth/logout", { method: "POST" }),
+  users: () => request<AuthUser[]>("/auth/users"),
+  createUser: (payload: { username: string; password: string; display_name: string; role: UserRole }) => request<AuthUser>("/auth/users", { method: "POST", body: JSON.stringify(payload) }),
+  updateUser: (id: string, payload: { display_name?: string; role?: UserRole; enabled?: boolean }) => request<AuthUser>(`/auth/users/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteUser: (id: string) => request<void>(`/auth/users/${id}`, { method: "DELETE" }),
+  changePassword: (current_password: string, new_password: string) => request<void>("/auth/password", { method: "POST", body: JSON.stringify({ current_password, new_password }) }),
+  audit: () => request<AuditEvent[]>("/auth/audit"),
   startOtp: (id: string) => request<{ status: string; challenge_id: string; expires_in: number; message: string }>(`/orchestrators/${id}/auth/start`, { method: "POST" }),
   completeOtp: (id: string, challenge_id: string, otp: string) => request<ValidationResult>(`/orchestrators/${id}/auth/complete`, { method: "POST", body: JSON.stringify({ challenge_id, otp }) }),
   cancelOtp: (id: string, challenge_id: string) => request<{ status: string }>(`/orchestrators/${id}/auth/cancel`, { method: "POST", body: JSON.stringify({ challenge_id }) }),
@@ -277,7 +314,7 @@ export const api = {
   uploadSwagger: async (version: string, file: File) => {
     const form = new FormData();
     form.append("file", file);
-    const response = await fetch(`${API_BASE}/compatibility/swagger?version=${encodeURIComponent(version)}&activate=false&catalog_only=true`, { method: "POST", body: form });
+    const response = await fetch(`${API_BASE}/compatibility/swagger?version=${encodeURIComponent(version)}&activate=false&catalog_only=true`, { method: "POST", body: form, headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${response.status}`);

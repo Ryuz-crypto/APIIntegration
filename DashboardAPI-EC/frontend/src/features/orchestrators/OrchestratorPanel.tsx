@@ -2,16 +2,17 @@ import { Box, Button, Paper, Stack, Typography } from "@mui/material";
 import { Cloud, KeyRound, Plus, Radar, RefreshCw, Server } from "lucide-react";
 import { useState } from "react";
 import { StatusChip } from "../../components/StatusChip";
-import { api, Orchestrator } from "../../lib/api";
+import { api, Orchestrator, UserRole } from "../../lib/api";
 import { CredentialDialog } from "./CredentialDialog";
 
 type Props = {
   items: Orchestrator[];
   onChanged: () => void;
   onAdd: () => void;
+  role: UserRole;
 };
 
-export function OrchestratorPanel({ items, onChanged, onAdd }: Props) {
+export function OrchestratorPanel({ items, onChanged, onAdd, role }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [credentialTarget, setCredentialTarget] = useState<Orchestrator | null>(null);
 
@@ -38,7 +39,7 @@ export function OrchestratorPanel({ items, onChanged, onAdd }: Props) {
         </Box>
         <Stack direction="row" spacing={1}>
           <Button onClick={onChanged} color="inherit" startIcon={<RefreshCw size={15} />}>Actualizar</Button>
-          <Button onClick={onAdd} variant="contained" startIcon={<Plus size={16} />}>Conectar</Button>
+          {role === "admin" ? <Button onClick={onAdd} variant="contained" startIcon={<Plus size={16} />}>Conectar</Button> : null}
         </Stack>
       </Stack>
 
@@ -84,8 +85,8 @@ export function OrchestratorPanel({ items, onChanged, onAdd }: Props) {
                 <Typography fontWeight={800}>{item.credential_label || (item.has_secret ? "Configurada" : "Pendiente")}</Typography>
               </Box>
               <Stack direction="row" spacing={0.5}>
-                <Button size="small" onClick={() => setCredentialTarget(item)} startIcon={<KeyRound size={15} />}>Credenciales</Button>
-                <Button size="small" onClick={() => validate(item)} startIcon={<Radar size={15} />}>Validar · {count || 0}</Button>
+                {role === "admin" ? <Button size="small" onClick={() => setCredentialTarget(item)} startIcon={<KeyRound size={15} />}>Credenciales</Button> : null}
+                {role !== "viewer" ? <Button size="small" onClick={() => validate(item)} startIcon={<Radar size={15} />}>Validar · {count || 0}</Button> : null}
               </Stack>
             </Box>
           );

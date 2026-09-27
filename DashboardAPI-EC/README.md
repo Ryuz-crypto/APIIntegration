@@ -1,4 +1,4 @@
-# DashboardAPI-EC 1.3.0 stable
+# DashboardAPI-EC 1.4.0 stable
 
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 [![Human Tested](https://img.shields.io/badge/Human%20Tested-EdgeConnect%209.7.1-7B61FF?logo=checkmarx&logoColor=white)](#validación-humana-y-automatizada)
@@ -6,7 +6,7 @@
 
 DashboardAPI-EC es un servicio web para descubrir, consultar y visualizar entornos HPE Aruba Networking EdgeConnect. La aplicación identifica la versión del Orchestrator, carga su perfil de compatibilidad, descubre los appliances administrados y conserva evidencia de cada llamada API utilizada para construir el dashboard.
 
-La versión 1.3 se soporta en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. El instalador acepta cualquier versión de Ubuntu que cumpla los requisitos técnicos, incluidas las posteriores a 24.04.
+La versión 1.4 se soporta en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. El instalador acepta cualquier versión de Ubuntu que cumpla los requisitos técnicos, incluidas las posteriores a 24.04.
 
 ## Instalación rápida
 
@@ -27,7 +27,15 @@ El script instala dependencias, construye el `.deb`, configura los servicios y v
 
 Para pasar de una versión anterior a 1.2, ejecuta una vez `git pull && sudo ./scripts/install-ubuntu.sh`. A partir de 1.2 puedes instalar versiones oficiales desde **Actualizar** en la cabecera. El motor valida el tag de GitHub, crea un respaldo y conserva el paquete anterior para recuperación. Consulta [docs/UPDATES.md](docs/UPDATES.md).
 
-## Cambios de 1.3
+## Cambios de 1.4
+
+- Pantalla de acceso obligatoria y creación segura del primer administrador con `TLS_ADMIN_TOKEN`.
+- Menú **Acceso** para administrar usuarios, roles, estado de cuentas, contraseña propia y auditoría.
+- Roles `viewer`, `operator` y `admin` aplicados por el backend.
+- Sesiones revocables de 12 horas, tokens almacenados como SHA-256 y contraseñas derivadas con scrypt.
+- Motor de actualización desde el dashboard incluido y documentado para instalación nativa en Ubuntu.
+
+La versión 1.3 añadió:
 
 - Nueva pestaña **Try Me** con catálogo completo derivado del Swagger de cada Orchestrator.
 - Búsqueda por método, path, operación o tag; formularios interactivos para parámetros de path, query y headers.
@@ -108,6 +116,8 @@ El frontend no supone que todos los Orchestrators ofrecen los mismos datos. Mues
 La cabecera incluye **Certificado HTTPS** y **Apariencia**. HTTPS acepta PEM, DER y PFX/P12, comprueba SAN, vigencia y clave privada, y solicita al servicio privilegiado de Ubuntu que active Nginx de forma transaccional. Consulta [docs/HTTPS.md](docs/HTTPS.md) para la primera carga mediante túnel SSH, renovación, almacenamiento y recuperación.
 
 La opción **Actualizar** consulta el canal oficial, muestra la versión instalada y permite elegir una versión posterior. La operación requiere HTTPS o acceso local por túnel SSH, la clave `TLS_ADMIN_TOKEN` y la frase exacta que muestra el panel. La guía de [actualizaciones administradas](docs/UPDATES.md) explica el flujo, los respaldos y la recuperación.
+
+El menú **Acceso** gestiona identidades locales con tres roles. La [guía de acceso](docs/ACCESS.md) documenta el administrador inicial, sesiones, permisos, auditoría y autenticación Bearer para la API.
 
 La pestaña **Try Me** presenta todas las operaciones del Swagger almacenado, incluidos endpoints que no forman parte del dashboard. Consulta [docs/TRYME.md](docs/TRYME.md) para importar el contrato del Orchestrator, ejecutar lecturas y cambios, exportar resultados y administrar snapshots.
 
@@ -237,7 +247,7 @@ La importación conserva el documento original, genera un perfil normalizado y c
 Instalar el paquete generado:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.3.0_amd64.deb
+sudo apt install ./dashboardapi-ec_1.4.0_amd64.deb
 ```
 
 El instalador:
@@ -258,6 +268,14 @@ Después de instalar, abrir:
 http://IP-DEL-SERVIDOR/
 ```
 
+La primera pantalla crea la cuenta administradora. Obtén el token de instalación en el servidor y usa una contraseña de al menos 12 caracteres:
+
+```bash
+sudo sed -n 's/^TLS_ADMIN_TOKEN=//p' /etc/dashboardapi-ec/dashboardapi-ec.env
+```
+
+Después inicia sesión y abre **Conectar Orchestrator**. Para transmitir el token inicial mediante un túnel local o configurar usuarios y roles, sigue [docs/ACCESS.md](docs/ACCESS.md).
+
 Swagger de DashboardAPI-EC:
 
 ```text
@@ -274,7 +292,7 @@ sudo apt install -y build-essential dpkg-dev python3 python3-pip python3-venv no
 ./scripts/build-deb.sh
 ```
 
-El resultado se guarda en `dist/dashboardapi-ec_1.3.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
+El resultado se guarda en `dist/dashboardapi-ec_1.4.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
 
 ## Operación del servicio
 
@@ -317,6 +335,8 @@ Variables relevantes:
 | `SECRET_KEY` | Cifra credenciales de EdgeConnect |
 | `BACKEND_CORS_ORIGINS` | Orígenes web permitidos |
 | `AUTO_CREATE_SCHEMA` | Solo desarrollo; en producción debe ser `false` |
+| `SESSION_EXPIRE_HOURS` | Duración de las sesiones locales; 12 horas por defecto |
+| `TLS_ADMIN_TOKEN` | Segundo control para alta inicial, HTTPS, actualización y cambios sensibles |
 
 No debe cambiarse `SECRET_KEY` después de guardar credenciales: hacerlo vuelve indescifrables los secretos existentes.
 
@@ -341,6 +361,10 @@ Los servicios no codifican rutas de EdgeConnect directamente. Solicitan operacio
 | Método | Ruta | Propósito |
 | --- | --- | --- |
 | `GET` | `/api/v1/health` | Salud de la API |
+| `POST` | `/api/v1/auth/bootstrap` | Crear el primer administrador una sola vez |
+| `POST` | `/api/v1/auth/login` | Abrir una sesión y obtener un token Bearer |
+| `GET` | `/api/v1/auth/users` | Administrar cuentas con rol administrador |
+| `GET` | `/api/v1/auth/audit` | Consultar actividad reciente |
 | `POST` | `/api/v1/orchestrators` | Registrar una conexión |
 | `POST` | `/api/v1/orchestrators/{id}/validate` | Autenticar y detectar versión |
 | `GET` | `/api/v1/orchestrators/{id}/credential-status` | Consultar estado seguro de la credencial |
@@ -360,6 +384,8 @@ Los servicios no codifican rutas de EdgeConnect directamente. Solicitan operacio
 | `GET` | `/api/v1/try-me/catalog/{orchestrator_id}` | Obtener todas las operaciones Swagger |
 | `POST` | `/api/v1/try-me/execute` | Ejecutar una operación validada contra el contrato |
 | `GET/POST/DELETE` | `/api/v1/try-me/snapshots` | Conservar y administrar evidencia de Try Me |
+
+Salvo salud, estado de acceso, login, bootstrap y OpenAPI, las rutas requieren `Authorization: Bearer TOKEN`. Las mutaciones también validan el rol. Algunas tareas sensibles conservan `TLS_ADMIN_TOKEN` como segundo control.
 
 ### Ejemplo de dashboard dinámico
 
@@ -423,7 +449,7 @@ cd frontend
 npm run build
 ```
 
-Validaciones utilizadas para la versión 1.3:
+Validaciones utilizadas para la versión 1.4:
 
 ```bash
 cd backend
@@ -468,7 +494,7 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 
 ## Estado de la versión
 
-La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorporó el canal de actualizaciones. La versión 1.3.0 añade Try Me, exportaciones y snapshots para el Swagger completo.
+La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorporó el canal de actualizaciones. La versión 1.3.0 añadió Try Me, exportaciones y snapshots para el Swagger completo. La versión 1.4.0 añade acceso por usuarios, roles, sesiones revocables y auditoría.
 
 ## Referencias oficiales
 

@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     appliances,
+    auth,
     compatibility,
     dashboard,
     health,
@@ -13,6 +14,7 @@ from app.api.routes import (
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
+api_router.include_router(auth.router, prefix="/auth", tags=["access"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
 api_router.include_router(orchestrators.router, prefix="/orchestrators", tags=["orchestrators"])
 api_router.include_router(appliances.router, prefix="/appliances", tags=["appliances"])

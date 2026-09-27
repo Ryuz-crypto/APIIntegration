@@ -26,7 +26,7 @@ El instalador conserva la base de datos, las credenciales cifradas, la configura
    ```
 
 4. Pulsa **Buscar versiones** y elige una versión posterior.
-5. Escribe la confirmación exacta, por ejemplo `ACTUALIZAR v1.3.0-stable`.
+5. Escribe la confirmación exacta, por ejemplo `ACTUALIZAR v1.4.1-stable`.
 6. Pulsa **Aplicar actualización**. La interfaz mostrará `pending`, `running`, `success` o `error` y se recargará cuando la API vuelva a estar disponible.
 
 El canal admite únicamente tags estables oficiales con este formato:

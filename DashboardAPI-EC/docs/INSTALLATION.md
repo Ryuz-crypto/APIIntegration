@@ -1,6 +1,6 @@
 # Instalación y primer uso
 
-DashboardAPI-EC 1.3.0 stable se instala en Ubuntu. El método recomendado construye un paquete `.deb`, lo instala y configura PostgreSQL, Redis, Nginx, la API, el recolector y el motor de actualización.
+DashboardAPI-EC 1.4.0 stable se instala en Ubuntu. El método recomendado construye un paquete `.deb`, lo instala y configura PostgreSQL, Redis, Nginx, la API, el recolector y el motor de actualización.
 
 ## Requisitos
 
@@ -40,29 +40,41 @@ sudo systemctl status dashboardapi-ec dashboardapi-ec-worker nginx
 
 ## Instalación de un paquete ya construido
 
-Si recibiste `dashboardapi-ec_1.3.0_amd64.deb` o la variante `arm64`:
+Si recibiste `dashboardapi-ec_1.4.0_amd64.deb` o la variante `arm64`:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.3.0_amd64.deb
+sudo apt install ./dashboardapi-ec_1.4.0_amd64.deb
 ```
 
 Las actualizaciones usan el mismo comando con el paquete nuevo. Las migraciones se ejecutan automáticamente y conservan conexiones, credenciales y muestras.
 
 La primera actualización desde 1.0 o 1.1 se hace manualmente con ese comando o con `sudo ./scripts/install-ubuntu.sh`. Una vez instalada la versión 1.2, usa **Actualizar** en el dashboard. Consulta [UPDATES.md](UPDATES.md) para conocer la validación de versiones, respaldos y recuperación.
 
-## Primera conexión
+## Primer acceso y primera conexión
 
 1. Abre la URL del servidor.
-2. Pulsa **Conectar Orchestrator**.
-3. Selecciona **Orchestrator as a Service** u **On-premises**.
-4. Asigna un nombre claro, por ejemplo `Producción México`.
-5. Introduce la URL HTTPS del Orchestrator.
-6. Escribe una etiqueta para la credencial, por ejemplo `API lectura · producción`.
-7. Selecciona el método de autenticación e introduce el secreto.
-8. Mantén la verificación TLS activada.
-9. Pulsa **Conectar y detectar**.
+2. Consulta `TLS_ADMIN_TOKEN` localmente:
+
+   ```bash
+   sudo sed -n 's/^TLS_ADMIN_TOKEN=//p' /etc/dashboardapi-ec/dashboardapi-ec.env
+   ```
+
+3. Crea el administrador inicial con una contraseña de al menos 12 caracteres.
+4. Pulsa **Conectar Orchestrator**.
+5. Selecciona **Orchestrator as a Service** u **On-premises**.
+6. Asigna un nombre claro e introduce la URL HTTPS del Orchestrator.
+7. Escribe una etiqueta, selecciona el método de autenticación e introduce el secreto.
+8. Mantén la verificación TLS activada y pulsa **Conectar y detectar**.
 
 La plataforma valida la autenticación, detecta la versión, selecciona el contrato API, descubre los equipos y construye el dashboard adecuado.
+
+La [guía de acceso](ACCESS.md) explica los roles, la administración de cuentas, el cambio de contraseña y el uso de tokens Bearer para automatización.
+
+## Actualizar desde el dashboard
+
+La versión 1.4.0 incluye el motor de actualización. Entra con una cuenta administradora, abre **Actualizar**, introduce `TLS_ADMIN_TOKEN`, pulsa **Buscar versiones**, selecciona un tag estable posterior y escribe la confirmación exacta mostrada por la interfaz. El sistema crea un respaldo, instala el nuevo `.deb`, ejecuta migraciones y comprueba la salud del servicio. Si falla, intenta reinstalar el paquete anterior.
+
+No necesitas Vagrant, Docker ni una máquina virtual para instalar o actualizar. El flujo soportado usa Ubuntu, el paquete `.deb` y servicios `systemd`. Consulta [UPDATES.md](UPDATES.md) para diagnóstico y recuperación.
 
 Después de actualizar desde 1.0, ejecuta nuevamente **Descubrir** en cada Orchestrator. Esto llena el campo `nePk`, obligatorio para consultar rendimiento, interfaces y túneles. El recolector ya no utiliza MAC, serial ni hostname como sustitutos.
 

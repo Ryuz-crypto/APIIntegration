@@ -20,6 +20,7 @@ def test_setup_api_stores_secret_without_returning_it():
             yield session
 
     app.dependency_overrides[get_session] = test_session
+    app.state.auth_disabled = True
     client = TestClient(app)
     try:
         response = client.post(
@@ -44,4 +45,5 @@ def test_setup_api_stores_secret_without_returning_it():
         assert "api_token" not in body
         assert "encrypted_api_token" not in body
     finally:
+        app.state.auth_disabled = False
         app.dependency_overrides.clear()
