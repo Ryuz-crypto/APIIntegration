@@ -1,5 +1,15 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
+let sessionToken = "";
+
+export function configureSessionToken(value: string) {
+  sessionToken = value;
+}
+
+export function currentSessionToken() {
+  return sessionToken;
+}
+
 export type SystemOverview = {
   orchestrators: number;
   appliances: number;
@@ -226,8 +236,12 @@ export type Dashboard = {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-    ...init
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+      ...(init?.headers ?? {})
+    }
   });
   if (!response.ok) {
     const text = await response.text();
@@ -239,7 +253,69 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export type Identity = {
+  id: string;
+  username: string;
+  full_name: string | null;
+  role: "viewer" | "operator" | "admin";
+  enabled: boolean;
+  expires_at?: string | null;
+};
+
+export type DashboardUser = {
+  id: string;
+  username: string;
+  full_name: string | null;
+  role: "viewer" | "operator" | "admin";
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  last_login_at: string | null;
+};
+
+export type AuthStatus = {
+  users_configured: boolean;
+  session_minutes: number;
+  login_required: boolean;
+};
+
+export type AuditEvent = {
+  id: string;
+  actor: string;
+  role: string;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  created_at: string;
+};
+
 export const api = {
+  authStatus: () => request<AuthStatus>("/auth/status"),
+  login: (username: string, password: string) =>
+    request<{ token: string; expires_at: string; user: DashboardUser }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password })
+    }),
+  logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+  me: () => request<Identity>("/auth/me"),
+  bootstrapAdmin: (username: string, password: string, adminToken: string) =>
+    request<DashboardUser>("/auth/bootstrap", {
+      method: "POST",
+      headers: { "X-TLS-Admin-Token": adminToken },
+      body: JSON.stringify({ username, password, role: "admin" })
+    }),
+  users: () => request<DashboardUser[]>("/auth/users"),
+  createUser: (payload: { username: string; password: string; role: string; full_name?: string }) =>
+    request<DashboardUser>("/auth/users", { method: "POST", body: JSON.stringify(payload) }),
+  updateUser: (id: string, payload: { role?: string; enabled?: boolean; password?: string; full_name?: string }) =>
+    request<DashboardUser>(`/auth/users/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteUser: (id: string) => request<{ ok: boolean }>(`/auth/users/${id}`, { method: "DELETE" }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/auth/password", {
+      method: "POST",
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+    }),
+  auditEvents: () => request<AuditEvent[]>("/auth/audit"),
   startOtp: (id: string) => request<{ status: string; challenge_id: string; expires_in: number; message: string }>(`/orchestrators/${id}/auth/start`, { method: "POST" }),
   completeOtp: (id: string, challenge_id: string, otp: string) => request<ValidationResult>(`/orchestrators/${id}/auth/complete`, { method: "POST", body: JSON.stringify({ challenge_id, otp }) }),
   cancelOtp: (id: string, challenge_id: string) => request<{ status: string }>(`/orchestrators/${id}/auth/cancel`, { method: "POST", body: JSON.stringify({ challenge_id }) }),

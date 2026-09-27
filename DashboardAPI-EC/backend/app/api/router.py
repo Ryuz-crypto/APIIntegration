@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.api.routes import (
     appliances,
+    auth,
     compatibility,
     dashboard,
     health,
@@ -10,9 +11,11 @@ from app.api.routes import (
     system,
     tryme,
 )
+from app.services.access_guard import access_guard
 
-api_router = APIRouter()
+api_router = APIRouter(dependencies=[Depends(access_guard)])
 api_router.include_router(health.router, tags=["health"])
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
 api_router.include_router(orchestrators.router, prefix="/orchestrators", tags=["orchestrators"])
 api_router.include_router(appliances.router, prefix="/appliances", tags=["appliances"])
