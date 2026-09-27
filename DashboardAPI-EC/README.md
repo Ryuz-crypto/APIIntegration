@@ -1,4 +1,4 @@
-# DashboardAPI-EC 1.1.0 stable
+# DashboardAPI-EC 1.2.0 stable
 
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 [![Human Tested](https://img.shields.io/badge/Human%20Tested-EdgeConnect%209.7.1-7B61FF?logo=checkmarx&logoColor=white)](#validación-humana-y-automatizada)
@@ -6,7 +6,7 @@
 
 DashboardAPI-EC es un servicio web para descubrir, consultar y visualizar entornos HPE Aruba Networking EdgeConnect. La aplicación identifica la versión del Orchestrator, carga su perfil de compatibilidad, descubre los appliances administrados y conserva evidencia de cada llamada API utilizada para construir el dashboard.
 
-La versión 1.1 se soporta exclusivamente en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. Ubuntu 20.04 y 22.04 no son compatibles con su Python predeterminado; versiones posteriores de Ubuntu sí están admitidas.
+La versión 1.2 se soporta en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. El instalador acepta cualquier versión de Ubuntu que cumpla los requisitos técnicos, incluidas las posteriores a 24.04.
 
 ## Instalación rápida
 
@@ -25,7 +25,15 @@ sudo ./scripts/install-ubuntu.sh
 
 El script instala dependencias, construye el `.deb`, configura los servicios y verifica `/api/v1/health`. Al terminar muestra la dirección que debes abrir. La guía completa de instalación, actualización, respaldo y diagnóstico está en [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
-Para actualizar desde la versión 1.0, vuelve a ejecutar `sudo ./scripts/install-ubuntu.sh` o instala el paquete nuevo con `sudo apt install ./dashboardapi-ec_1.1.0_amd64.deb`. Los datos y credenciales se conservan y las migraciones se aplican solas; después ejecuta el descubrimiento de appliances para poblar el `nePk` antes de recolectar métricas.
+Para pasar de una versión anterior a 1.2, ejecuta una vez `git pull && sudo ./scripts/install-ubuntu.sh`. A partir de 1.2 puedes instalar versiones oficiales desde **Actualizar** en la cabecera. El motor valida el tag de GitHub, crea un respaldo y conserva el paquete anterior para recuperación. Consulta [docs/UPDATES.md](docs/UPDATES.md).
+
+## Cambios de 1.2
+
+- Motor de actualización desde el dashboard, basado exclusivamente en tags estables oficiales con formato `vX.Y.Z-stable`.
+- Confirmación explícita de la versión y la misma clave administrativa utilizada para HTTPS.
+- Ejecución privilegiada aislada mediante `systemd`; el proceso web sólo puede dejar una solicitud validada.
+- Respaldo previo de PostgreSQL, entorno, Nginx y certificados, verificación de salud y reinstalación automática del paquete anterior si falla la actualización.
+- Estado visible en tiempo real y registro operativo mediante `journalctl`.
 
 ## Cambios de 1.1
 
@@ -88,6 +96,8 @@ El frontend no supone que todos los Orchestrators ofrecen los mismos datos. Mues
 ## HTTPS y personalización
 
 La cabecera incluye **Certificado HTTPS** y **Apariencia**. HTTPS acepta PEM, DER y PFX/P12, comprueba SAN, vigencia y clave privada, y solicita al servicio privilegiado de Ubuntu que active Nginx de forma transaccional. Consulta [docs/HTTPS.md](docs/HTTPS.md) para la primera carga mediante túnel SSH, renovación, almacenamiento y recuperación.
+
+La opción **Actualizar** consulta el canal oficial, muestra la versión instalada y permite elegir una versión posterior. La operación requiere HTTPS o acceso local por túnel SSH, la clave `TLS_ADMIN_TOKEN` y la frase exacta que muestra el panel. La guía de [actualizaciones administradas](docs/UPDATES.md) explica el flujo, los respaldos y la recuperación.
 
 El editor de apariencia guarda globalmente:
 
@@ -215,7 +225,7 @@ La importación conserva el documento original, genera un perfil normalizado y c
 Instalar el paquete generado:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.1.0_amd64.deb
+sudo apt install ./dashboardapi-ec_1.2.0_amd64.deb
 ```
 
 El instalador:
@@ -252,7 +262,7 @@ sudo apt install -y build-essential dpkg-dev python3 python3-pip python3-venv no
 ./scripts/build-deb.sh
 ```
 
-El resultado se guarda en `dist/dashboardapi-ec_1.1.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
+El resultado se guarda en `dist/dashboardapi-ec_1.2.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
 
 ## Operación del servicio
 
@@ -332,6 +342,9 @@ Los servicios no codifican rutas de EdgeConnect directamente. Solicitan operacio
 | `GET` | `/api/v1/samples/{id}/trace` | Obtener evidencia sanitizada y ejemplos de código |
 | `GET` | `/api/v1/dashboard/{orchestrator_id}` | Componer widgets según capacidades y datos disponibles |
 | `POST` | `/api/v1/compatibility/swagger` | Importar OpenAPI/Swagger |
+| `GET` | `/api/v1/system/releases` | Consultar tags oficiales disponibles |
+| `GET` | `/api/v1/system/update` | Consultar el estado del activador |
+| `POST` | `/api/v1/system/update` | Programar una actualización validada |
 
 ### Ejemplo de dashboard dinámico
 
@@ -395,7 +408,7 @@ cd frontend
 npm run build
 ```
 
-Validaciones utilizadas para la versión 1.1:
+Validaciones utilizadas para la versión 1.2:
 
 ```bash
 cd backend
@@ -440,7 +453,7 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 
 ## Estado de la versión
 
-La versión 1.0 stable cubrió los pasos 1 a 10: estabilización, Swagger 9.6, autenticación, asistente de configuración, múltiples Orchestrators con credenciales independientes, detección de versión, inventario normalizado, composición dinámica de widgets, inspector visual de API, recolección automática y entrega `.deb` para Ubuntu. La versión 1.1.0 añade `nePk`, endpoints reales de rendimiento, interfaces y túneles, HTTPS administrado y apariencia persistente; tras actualizar desde 1.0, ejecuta el descubrimiento en cada Orchestrator para poblar `nePk`.
+La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorpora el canal de versiones y la actualización transaccional desde el dashboard.
 
 ## Referencias oficiales
 

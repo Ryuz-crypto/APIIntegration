@@ -9,12 +9,26 @@ from sqlmodel import Session
 from app.core.config import settings
 from app.db.session import get_session
 from app.models.system_setting import SystemSetting
-from app.schemas.system import AppearanceSettings, SystemOverview
+from app.schemas.system import AppearanceSettings, SystemOverview, UpdateRequest
+from app.services.audit_service import record_event
 from app.services.system_service import get_system_overview
 from app.services.tls_service import MAX_UPLOAD, normalize
+from app.services.update_service import queue_update, release_status, update_status
 
 router = APIRouter()
 APPEARANCE_KEY = "appearance"
+
+
+def _admin_authorized(request: Request, token: str) -> None:
+    if not settings.tls_admin_token or not secrets.compare_digest(
+        token.encode(), settings.tls_admin_token.encode()
+    ):
+        raise HTTPException(403, "Clave de administración incorrecta.")
+    # Uvicorn trusts forwarded headers only from the local Nginx proxy.
+    if request.url.scheme != "https" and (
+        not request.client or request.client.host not in {"127.0.0.1", "::1"}
+    ):
+        raise HTTPException(400, "Utiliza HTTPS o el túnel SSH local para esta operación administrativa.")
 
 
 def tls_authorized(request: Request, x_tls_admin_token: str = Header(default="")):
@@ -22,15 +36,15 @@ def tls_authorized(request: Request, x_tls_admin_token: str = Header(default="")
         raise HTTPException(
             503, "HTTPS administrado requiere la instalación nativa Ubuntu actualizada."
         )
-    if not settings.tls_admin_token or not secrets.compare_digest(
-        x_tls_admin_token.encode(), settings.tls_admin_token.encode()
-    ):
-        raise HTTPException(403, "Clave de administración incorrecta.")
-    # Uvicorn trusts forwarded headers only from the local Nginx proxy.
-    if request.url.scheme != "https" and (
-        not request.client or request.client.host not in {"127.0.0.1", "::1"}
-    ):
-        raise HTTPException(400, "Utiliza HTTPS o el túnel SSH local para cargar el certificado.")
+    _admin_authorized(request, x_tls_admin_token)
+
+
+def update_authorized(request: Request, x_tls_admin_token: str = Header(default="")):
+    if not settings.update_enabled:
+        raise HTTPException(
+            503, "Actualización administrada requiere DashboardAPI-EC 1.2 en Ubuntu."
+        )
+    _admin_authorized(request, x_tls_admin_token)
 
 
 @router.get("/tls", dependencies=[Depends(tls_authorized)])
@@ -101,3 +115,32 @@ def update_appearance(
     session.add(item)
     session.commit()
     return payload
+
+
+@router.get("/releases", dependencies=[Depends(update_authorized)])
+def releases():
+    return release_status()
+
+
+@router.get("/update", dependencies=[Depends(update_authorized)])
+def get_update_status():
+    return update_status()
+
+
+@router.post("/update", status_code=202, dependencies=[Depends(update_authorized)])
+def apply_update(payload: UpdateRequest, session: Session = Depends(get_session)):
+    if payload.confirmation != f"ACTUALIZAR {payload.version}":
+        raise HTTPException(409, "Escribe la confirmación exacta mostrada en el panel.")
+    try:
+        result = queue_update(payload.version)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    record_event(
+        session,
+        "system.update_queued",
+        "system",
+        payload.version,
+        {"version": payload.version},
+    )
+    session.commit()
+    return result

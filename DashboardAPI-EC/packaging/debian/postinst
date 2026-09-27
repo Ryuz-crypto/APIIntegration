@@ -11,14 +11,15 @@ if ! id "$APP_USER" >/dev/null 2>&1; then
     adduser --system --group --home "$DATA_DIR" --no-create-home "$APP_USER"
 fi
 
-install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$DATA_DIR" /var/lib/dashboardapi-ec-tls
+install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$DATA_DIR" /var/lib/dashboardapi-ec-tls /var/lib/dashboardapi-ec-update
+install -d -o root -g root -m 0700 /var/lib/dashboardapi-ec-update/packages
 install -d -o root -g "$APP_USER" -m 0750 "$CONFIG_DIR"
 
 if [ ! -f "$ENV_FILE" ]; then
     SECRET_KEY=$(openssl rand -hex 32)
     cat >"$ENV_FILE" <<EOF
 ENVIRONMENT=production
-APP_VERSION=1.1.0
+APP_VERSION=1.2.0
 AUTO_CREATE_SCHEMA=false
 PYTHONDONTWRITEBYTECODE=1
 DATABASE_URL=postgresql+psycopg:///dashboardapi_ec
@@ -37,6 +38,14 @@ fi
 if ! grep -q '^TLS_ENABLED=' "$ENV_FILE"; then
   printf 'TLS_ENABLED=true\n' >> "$ENV_FILE"
 fi
+if grep -q '^APP_VERSION=' "$ENV_FILE"; then
+  sed -i 's/^APP_VERSION=.*/APP_VERSION=1.2.0/' "$ENV_FILE"
+else
+  printf 'APP_VERSION=1.2.0\n' >> "$ENV_FILE"
+fi
+if ! grep -q '^UPDATE_ENABLED=' "$ENV_FILE"; then
+  printf 'UPDATE_ENABLED=true\n' >> "$ENV_FILE"
+fi
 chown root:"$APP_USER" "$ENV_FILE"
 chmod 0640 "$ENV_FILE"
 
@@ -50,7 +59,7 @@ fi
 
 python3 -m venv "$APP_ROOT/venv"
 "$APP_ROOT/venv/bin/pip" install --no-index --find-links "$APP_ROOT/wheels" \
-    --upgrade --force-reinstall dashboardapi-ec-backend==1.1.0
+    --upgrade --force-reinstall dashboardapi-ec-backend==1.2.0
 
 set -a
 . "$ENV_FILE"
@@ -75,6 +84,7 @@ nginx -t
 systemctl daemon-reload
 systemctl enable --now postgresql redis-server dashboardapi-ec dashboardapi-ec-worker nginx
 systemctl enable --now dashboardapi-ec-tls.timer
+systemctl enable --now dashboardapi-ec-update.timer
 systemctl restart dashboardapi-ec dashboardapi-ec-worker
 systemctl reload nginx
 

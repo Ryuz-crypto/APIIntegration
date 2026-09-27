@@ -1,5 +1,5 @@
 import { Box, Button, CssBaseline, Grid, MenuItem, Paper, Select, Stack, ThemeProvider, Typography } from "@mui/material";
-import { Activity, Boxes, Database, Gauge, Network, Palette, Plus, RadioTower, ShieldCheck, Workflow } from "lucide-react";
+import { Activity, Boxes, Database, Download, Gauge, Network, Palette, Plus, RadioTower, ShieldCheck, Workflow } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MetricCard } from "./components/MetricCard";
 import { AppliancePanel } from "./features/appliances/AppliancePanel";
@@ -10,6 +10,7 @@ import { CompatibilityPanel } from "./features/system/CompatibilityPanel";
 import { SamplesPanel } from "./features/system/SamplesPanel";
 import { TlsDialog } from "./features/system/TlsDialog";
 import { AppearanceDialog } from "./features/system/AppearanceDialog";
+import { UpdateDialog } from "./features/system/UpdateDialog";
 import { api, ApiSample, Appliance, AppearanceSettings, CompatibilityProfile, Dashboard, Orchestrator, SystemOverview } from "./lib/api";
 import { createDashboardTheme, defaultAppearance } from "./theme/theme";
 
@@ -32,6 +33,7 @@ function App() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [tlsOpen, setTlsOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [updateOpen, setUpdateOpen] = useState(false);
   const [appearance, setAppearance] = useState<AppearanceSettings>(defaultAppearance);
   const theme = useMemo(() => createDashboardTheme(appearance), [appearance]);
   const BrandIcon = { network: Network, activity: Activity, gauge: Gauge, workflow: Workflow }[appearance.icon];
@@ -83,7 +85,7 @@ function App() {
             </Box>
             <Box>
               <Typography fontWeight={900} lineHeight={1.1}>{appearance.panel_name}</Typography>
-              <Typography variant="caption" color="primary.main">EdgeConnect · 1.1</Typography>
+              <Typography variant="caption" color="primary.main">EdgeConnect · 1.2</Typography>
             </Box>
           </Stack>
           <Stack spacing={0.75}>
@@ -102,7 +104,7 @@ function App() {
             <Typography variant="caption" color="text.secondary">Plataforma</Typography>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
               <ShieldCheck size={17} color="#53C57B" />
-              <Typography variant="body2" fontWeight={800}>1.1 stable</Typography>
+              <Typography variant="body2" fontWeight={800}>1.2 stable</Typography>
             </Stack>
           </Paper>
         </Box>
@@ -119,6 +121,7 @@ function App() {
                 <Button variant="contained" startIcon={<Plus size={17} />} onClick={() => setWizardOpen(true)}>Conectar Orchestrator</Button>
                 <Button variant="outlined" startIcon={<ShieldCheck size={17} />} onClick={() => setTlsOpen(true)}>Certificado HTTPS</Button>
                 <Button variant="outlined" startIcon={<Palette size={17} />} onClick={() => setAppearanceOpen(true)}>Apariencia</Button>
+                <Button variant="outlined" startIcon={<Download size={17} />} onClick={() => setUpdateOpen(true)}>Actualizar</Button>
               </Stack>
             </Stack>
 
@@ -142,6 +145,7 @@ function App() {
       <SetupWizard open={wizardOpen} onClose={() => setWizardOpen(false)} onComplete={load} />
       {tlsOpen && <TlsDialog onClose={() => setTlsOpen(false)} />}
       {appearanceOpen && <AppearanceDialog value={appearance} onClose={() => setAppearanceOpen(false)} onSaved={setAppearance} />}
+      {updateOpen && <UpdateDialog onClose={() => setUpdateOpen(false)} />}
     </ThemeProvider>
   );
 }

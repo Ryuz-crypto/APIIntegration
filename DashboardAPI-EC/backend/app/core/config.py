@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     project_name: str = "DashboardAPI-EC"
     environment: str = "local"
-    app_version: str = "1.1.0"
+    app_version: str = "1.2.0"
     auto_create_schema: bool = True
     api_v1_prefix: str = "/api/v1"
     backend_cors_origins: str = Field(
@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     tls_admin_token: str = ""
     tls_enabled: bool = False
     tls_state_dir: str = "/var/lib/dashboardapi-ec-tls"
+    update_enabled: bool = False
+    update_state_dir: str = "/var/lib/dashboardapi-ec-update"
+    update_repository: str = "Ryuz-crypto/APIIntegration"
 
     @computed_field
     @cached_property

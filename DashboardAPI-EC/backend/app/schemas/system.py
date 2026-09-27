@@ -25,3 +25,10 @@ class AppearanceSettings(BaseModel):
         default="Inventario y capacidades obtenidas desde las APIs de EdgeConnect",
         max_length=240,
     )
+
+
+class UpdateRequest(BaseModel):
+    version: str = Field(
+        pattern=r"^v\d+\.\d+\.\d+-stable$"
+    )
+    confirmation: str = Field(min_length=8, max_length=160)

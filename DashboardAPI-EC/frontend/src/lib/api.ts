@@ -21,6 +21,26 @@ export type AppearanceSettings = {
   welcome_message: string;
 };
 
+export type ReleaseStatus = {
+  ok: boolean;
+  current: string;
+  current_release: string;
+  latest: string;
+  latest_stable: string;
+  update_available: boolean;
+  releases: string[];
+  error?: string;
+};
+
+export type UpdateStatus = {
+  state: "idle" | "pending" | "running" | "success" | "error";
+  current?: string;
+  version?: string;
+  message?: string;
+  backup?: string;
+  completed_at?: string;
+};
+
 export type Orchestrator = {
   id: string;
   name: string;
@@ -166,6 +186,13 @@ export const api = {
   overview: () => request<SystemOverview>("/system/overview"),
   appearance: () => request<AppearanceSettings>("/system/appearance"),
   updateAppearance: (payload: AppearanceSettings) => request<AppearanceSettings>("/system/appearance", { method: "PUT", body: JSON.stringify(payload) }),
+  releases: (token: string) => request<ReleaseStatus>("/system/releases", { headers: { "X-TLS-Admin-Token": token } }),
+  updateStatus: (token: string) => request<UpdateStatus>("/system/update", { headers: { "X-TLS-Admin-Token": token } }),
+  updateSystem: (token: string, version: string, confirmation: string) => request<UpdateStatus>("/system/update", {
+    method: "POST",
+    headers: { "X-TLS-Admin-Token": token },
+    body: JSON.stringify({ version, confirmation })
+  }),
   orchestrators: () => request<Orchestrator[]>("/orchestrators"),
   appliances: () => request<Appliance[]>("/appliances"),
   profiles: () => request<CompatibilityProfile[]>("/compatibility/profiles"),

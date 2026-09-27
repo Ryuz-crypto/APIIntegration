@@ -5,7 +5,7 @@ BUILD_STAGE="initialization"
 trap 'status=$?; echo "::error title=DashboardAPI-EC package build::${BUILD_STAGE} failed at line ${LINENO}" >&2; exit "$status"' ERR
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PACKAGE_VERSION="1.1.0"
+PACKAGE_VERSION="1.2.0"
 
 if [[ ! -r /etc/os-release ]]; then
   echo "This package must be built on Ubuntu." >&2
@@ -64,6 +64,9 @@ install -m 0644 "$ROOT_DIR/packaging/nginx/bootstrap.conf" "$STAGE/opt/dashboard
 install -m 0644 "$ROOT_DIR/packaging/systemd/dashboardapi-ec-tls.service" "$STAGE/lib/systemd/system/"
 install -m 0644 "$ROOT_DIR/packaging/systemd/dashboardapi-ec-tls.timer" "$STAGE/lib/systemd/system/"
 install -m 0755 "$ROOT_DIR/scripts/apply-tls.py" "$STAGE/opt/dashboardapi-ec/apply-tls.py"
+install -m 0644 "$ROOT_DIR/packaging/systemd/dashboardapi-ec-update.service" "$STAGE/lib/systemd/system/"
+install -m 0644 "$ROOT_DIR/packaging/systemd/dashboardapi-ec-update.timer" "$STAGE/lib/systemd/system/"
+install -m 0755 "$ROOT_DIR/scripts/apply-update.py" "$STAGE/opt/dashboardapi-ec/apply-update.py"
 install -m 0644 "$ROOT_DIR/../LICENSE" "$STAGE/usr/share/dashboardapi-ec/LICENSE"
 
 mkdir -p "$ROOT_DIR/dist"

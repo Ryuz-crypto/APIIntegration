@@ -1,6 +1,6 @@
 # Instalación y primer uso
 
-DashboardAPI-EC 1.1.0 stable se instala únicamente en Ubuntu. El método recomendado construye un paquete `.deb`, lo instala y configura PostgreSQL, Redis, Nginx, la API y el recolector automático.
+DashboardAPI-EC 1.2.0 stable se instala en Ubuntu. El método recomendado construye un paquete `.deb`, lo instala y configura PostgreSQL, Redis, Nginx, la API, el recolector y el motor de actualización.
 
 ## Requisitos
 
@@ -40,13 +40,15 @@ sudo systemctl status dashboardapi-ec dashboardapi-ec-worker nginx
 
 ## Instalación de un paquete ya construido
 
-Si recibiste `dashboardapi-ec_1.1.0_amd64.deb` o la variante `arm64`:
+Si recibiste `dashboardapi-ec_1.2.0_amd64.deb` o la variante `arm64`:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.1.0_amd64.deb
+sudo apt install ./dashboardapi-ec_1.2.0_amd64.deb
 ```
 
 Las actualizaciones usan el mismo comando con el paquete nuevo. Las migraciones se ejecutan automáticamente y conservan conexiones, credenciales y muestras.
+
+La primera actualización desde 1.0 o 1.1 se hace manualmente con ese comando o con `sudo ./scripts/install-ubuntu.sh`. Una vez instalada la versión 1.2, usa **Actualizar** en el dashboard. Consulta [UPDATES.md](UPDATES.md) para conocer la validación de versiones, respaldos y recuperación.
 
 ## Primera conexión
 
