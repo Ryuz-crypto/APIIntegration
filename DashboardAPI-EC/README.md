@@ -103,6 +103,19 @@ Después de la conexión, el frontend solicita `/api/v1/dashboard/{id}`. El back
 
 El frontend no supone que todos los Orchestrators ofrecen los mismos datos. Muestra cada módulo según la definición devuelta por el backend y explica por qué una capacidad todavía no está disponible.
 
+## Control de acceso
+
+El menú lateral incluye **Control de acceso**, con gestión de usuarios y sesiones:
+
+- **Primer administrador**: hasta que existe al menos un usuario, la API permanece abierta para no interrumpir instalaciones existentes. La pantalla de inicio de sesión ofrece crear el primer `admin` con la clave `TLS_ADMIN_TOKEN`.
+- **Roles**: `viewer` consulta, `operator` opera y `admin` administra usuarios y configuración global. El ranking interno es viewer < operator < admin.
+- **Usuarios**: alta con nombre y contraseña, cambio de rol, habilitar/deshabilitar y eliminación. La plataforma impide retirar el último administrador habilitado y eliminar tu propio usuario.
+- **Sesiones**: token opaco en cabecera `Authorization: Bearer`; en la base de datos solo se guarda su hash SHA-256. Caducan según `ACCESS_TOKEN_EXPIRE_MINUTES` y se revocan al rotar la contraseña o deshabilitar el usuario.
+- **Contraseñas**: mínimo 12 caracteres, cifradas con scrypt (salt aleatorio por usuario).
+- **Auditoría**: inicios de sesión, altas, cambios y eliminaciones quedan registrados con actor, rol y fecha, visibles en el panel para `admin`.
+
+Con usuarios configurados, toda la API exige sesión válida salvo `/auth`, `/health`, `/system/appearance` y `/system/overview`.
+
 ## HTTPS y personalización
 
 La cabecera incluye **Certificado HTTPS** y **Apariencia**. HTTPS acepta PEM, DER y PFX/P12, comprueba SAN, vigencia y clave privada, y solicita al servicio privilegiado de Ubuntu que active Nginx de forma transaccional. Consulta [docs/HTTPS.md](docs/HTTPS.md) para la primera carga mediante túnel SSH, renovación, almacenamiento y recuperación.
@@ -317,6 +330,8 @@ Variables relevantes:
 | `SECRET_KEY` | Cifra credenciales de EdgeConnect |
 | `BACKEND_CORS_ORIGINS` | Orígenes web permitidos |
 | `AUTO_CREATE_SCHEMA` | Solo desarrollo; en producción debe ser `false` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Vida de las sesiones de usuario (60 minutos por defecto) |
+| `TLS_ADMIN_TOKEN` | Clave administrativa para HTTPS, Try Me, actualizaciones y el primer usuario `admin` |
 
 No debe cambiarse `SECRET_KEY` después de guardar credenciales: hacerlo vuelve indescifrables los secretos existentes.
 
@@ -360,6 +375,15 @@ Los servicios no codifican rutas de EdgeConnect directamente. Solicitan operacio
 | `GET` | `/api/v1/try-me/catalog/{orchestrator_id}` | Obtener todas las operaciones Swagger |
 | `POST` | `/api/v1/try-me/execute` | Ejecutar una operación validada contra el contrato |
 | `GET/POST/DELETE` | `/api/v1/try-me/snapshots` | Conservar y administrar evidencia de Try Me |
+| `GET` | `/api/v1/auth/status` | Consultar si existen usuarios configurados |
+| `POST` | `/api/v1/auth/login` | Iniciar sesión y obtener token Bearer |
+| `POST` | `/api/v1/auth/logout` | Cerrar la sesión activa |
+| `GET` | `/api/v1/auth/me` | Identidad y rol de la sesión actual |
+| `POST` | `/api/v1/auth/bootstrap` | Crear el primer `admin` con la clave administrativa |
+| `GET/POST` | `/api/v1/auth/users` | Listar y crear usuarios (rol `admin`) |
+| `PATCH/DELETE` | `/api/v1/auth/users/{id}` | Cambiar rol, habilitar o eliminar (rol `admin`) |
+| `POST` | `/api/v1/auth/password` | Rotar la contraseña propia |
+| `GET` | `/api/v1/auth/audit` | Auditoría de acciones de acceso (rol `admin`) |
 
 ### Ejemplo de dashboard dinámico
 
@@ -465,6 +489,7 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 - Activar **Certificado HTTPS** antes de publicar el servicio. La [guía de certificados](docs/HTTPS.md) explica la carga PEM/DER/PFX, el túnel SSH inicial, la renovación y la recuperación.
 - Limitar por firewall el acceso al dashboard.
 - Rotar API keys sin cambiar `SECRET_KEY`.
+- Crear el primer usuario `admin` desde **Control de acceso** al terminar la instalación; el acceso abierto previo es solo para el arranque inicial.
 
 ## Estado de la versión
 

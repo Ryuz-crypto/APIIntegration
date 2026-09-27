@@ -15,6 +15,7 @@ La versión **1.3.0 stable** funciona en **Ubuntu con Python 3.12 o superior** y
 - [Características](#características)
 - [Instalación rápida](#instalación-rápida)
 - [Primer uso](#primer-uso)
+- [Control de acceso](#control-de-acceso)
 - [Varios Orchestrators](#varios-orchestrators)
 - [Cómo funciona](#cómo-funciona)
 - [Operación y diagnóstico](#operación-y-diagnóstico)
@@ -43,6 +44,7 @@ La versión **1.3.0 stable** funciona en **Ubuntu con Python 3.12 o superior** y
 - HTTPS administrado desde la interfaz con certificados PEM, DER o PFX/P12.
 - Actualización de versiones estables oficiales desde el dashboard, con respaldo, verificación de salud y recuperación del paquete anterior.
 - Pestaña Try Me para ejecutar todas las APIs del Swagger, exportar salidas y guardar snapshots.
+- Menú **Control de acceso** con inicio de sesión por usuario, roles `viewer`, `operator` y `admin`, rotación de contraseñas y auditoría de acciones.
 - Editor global de nombre, mensaje, seis colores, icono y tipografía.
 - Backend FastAPI, frontend React, PostgreSQL, Redis y Nginx.
 - Instalación nativa con paquete `.deb` y servicios `systemd`.
@@ -120,6 +122,23 @@ El distintivo **Human Tested** indica que el flujo de conexión, autenticación 
 La plataforma validará el acceso, detectará la versión, cargará el perfil compatible, descubrirá los appliances y construirá el dashboard.
 
 Para OaaS se recomienda una API key dedicada con permisos de solo lectura. Las sesiones con OTP se pueden validar de forma interactiva, pero no participan en el polling automático porque el código de un solo uso nunca se almacena.
+
+## Control de acceso
+
+El dashboard incorpora un menú de **Control de acceso** con gestión de usuarios al estilo WAN SIM:
+
+- **Primer administrador**: mientras no existan usuarios el acceso permanece abierto. La pantalla de inicio de sesión permite crear el primer usuario `admin` con la clave administrativa `TLS_ADMIN_TOKEN`.
+- **Roles RBAC**: `viewer` consulta el dashboard, `operator` ejecuta operaciones y `admin` gestiona usuarios y la configuración global.
+- **Usuarios**: alta, cambio de rol, habilitar/deshabilitar y eliminación desde la interfaz, con protección del último administrador habilitado.
+- **Contraseñas**: mínimo 12 caracteres, cifradas con scrypt; la rotación cierra las sesiones activas del usuario.
+- **Sesiones**: tokens opacos con caducidad (`ACCESS_TOKEN_EXPIRE_MINUTES`, 60 minutos por defecto); el token nunca se guarda en claro.
+- **Auditoría**: cada acción de acceso (inicio de sesión, alta, cambio y eliminación de usuarios, rotación de contraseñas) queda registrada con actor, rol y fecha.
+
+Consulta la clave administrativa en el servidor:
+
+```bash
+sudo sed -n 's/^TLS_ADMIN_TOKEN=//p' /etc/dashboardapi-ec/dashboardapi-ec.env
+```
 
 ## Varios Orchestrators
 
@@ -209,6 +228,7 @@ http://IP-DEL-SERVIDOR/api/v1/docs
 - Las credenciales nunca se devuelven mediante la API.
 - El inspector elimina contraseñas, tokens, cookies y encabezados sensibles.
 - El OTP se utiliza una sola vez y no se persiste.
+- El menú **Control de acceso** exige sesión válida en cuanto existe un usuario; las contraseñas se guardan con scrypt y las sesiones caducan automáticamente.
 - El instalador genera una `SECRET_KEY` aleatoria.
 - La verificación TLS hacia los Orchestrators está activada de forma predeterminada.
 - Para servir el dashboard por HTTPS, carga un certificado desde **Certificado HTTPS** siguiendo la [guía HTTPS](DashboardAPI-EC/docs/HTTPS.md). Nginx redirige HTTP a HTTPS después de activarlo.
