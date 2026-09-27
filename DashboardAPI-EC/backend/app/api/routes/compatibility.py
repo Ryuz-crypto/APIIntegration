@@ -6,6 +6,7 @@ from sqlmodel import Session, select
 
 from app.compatibility.engine import CompatibilityError
 from app.compatibility.loader import profile_from_openapi_document
+from app.compatibility.postman import is_postman_collection, postman_to_openapi
 from app.db.session import get_session
 from app.models.compatibility import ApiCompatibilityProfile
 from app.schemas.compatibility import (
@@ -83,8 +84,13 @@ async def upload_swagger(
         try:
             document = yaml.safe_load(content.decode("utf-8"))
         except yaml.YAMLError as exc:
-            raise HTTPException(status_code=400, detail="Swagger/OpenAPI document must be JSON or YAML") from exc
+            raise HTTPException(
+                status_code=400, detail="Swagger/OpenAPI document must be JSON or YAML"
+            ) from exc
 
+    source = "Postman" if is_postman_collection(document) else "OpenAPI"
+    if source == "Postman":
+        document = postman_to_openapi(document, version)
     try:
         item = store_openapi_profile(session, document, version, activate, catalog_only)
     except ValueError as exc:
@@ -98,7 +104,7 @@ async def upload_swagger(
             else item.profile["operations"]
         ),
         message=(
-            "OpenAPI stored for Try Me; active profile unchanged."
+            f"{source} almacenado para Try Me; el perfil activo no cambió."
             if catalog_only
             else "OpenAPI profile stored and activated."
             if activate

@@ -112,7 +112,7 @@ export function TryMePage({ orchestrators, selectedId, onSelect }: Props) {
     const version = parts[0] === "9" && parts[1] === "7" ? "9.6" : parts.slice(0, 2).join(".");
     setBusy(true); setError("");
     try { await api.uploadSwagger(version, file); await load(selectedId); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "No se pudo importar el Swagger."); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "No se pudo importar el contrato API."); }
     finally { setBusy(false); if (upload.current) upload.current.value = ""; }
   }
 
@@ -127,13 +127,13 @@ export function TryMePage({ orchestrators, selectedId, onSelect }: Props) {
   return <Stack spacing={2.5}>
     <Paper sx={{ p: 2.25 }}>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} alignItems={{ md: "center" }}>
-        <Box sx={{ flex: 1 }}><Typography variant="h2">Try Me · Swagger Explorer</Typography><Typography color="text.secondary">Prueba todas las operaciones del contrato de cada Orchestrator y conserva evidencia exportable.</Typography></Box>
+        <Box sx={{ flex: 1 }}><Typography variant="h2">Try Me · API Explorer</Typography><Typography color="text.secondary">Importa Swagger/OpenAPI o Postman Collection 2.x, prueba sus operaciones y conserva evidencia exportable.</Typography></Box>
         <Select size="small" value={selectedId} onChange={(event) => onSelect(event.target.value)} sx={{ minWidth: 240 }}>
           {orchestrators.map((item) => <MenuItem key={item.id} value={item.id}>{item.name} · {item.api_version ?? "sin validar"}</MenuItem>)}
         </Select>
-        <input ref={upload} hidden type="file" accept=".json,.yaml,.yml,application/json" onChange={(event) => void importSwagger(event.target.files?.[0])} />
+        <input ref={upload} hidden type="file" accept=".json,.yaml,.yml,.postman_collection.json,application/json" onChange={(event) => void importSwagger(event.target.files?.[0])} />
         <Button variant="outlined" startIcon={<Download size={17} />} onClick={() => void synchronize()} disabled={!selectedId || busy}>Traer del Orchestrator</Button>
-        <Button variant="outlined" startIcon={<Upload size={17} />} onClick={() => upload.current?.click()} disabled={!selectedId || busy}>Importar Swagger</Button>
+        <Button variant="outlined" startIcon={<Upload size={17} />} onClick={() => upload.current?.click()} disabled={!selectedId || busy}>Importar Swagger / Postman</Button>
       </Stack>
       {catalog ? <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} alignItems="center"><Chip size="small" label={`${catalog.operations.length} APIs`} color="primary" /><Chip size="small" label={`v${catalog.version}`} /><Typography variant="caption" color="text.secondary">{catalog.source}</Typography></Stack> : null}
     </Paper>
@@ -163,7 +163,7 @@ export function TryMePage({ orchestrators, selectedId, onSelect }: Props) {
           {selected.mutating ? <Alert severity="warning"><Typography fontWeight={800}>Esta operación puede cambiar el comportamiento del Orchestrator.</Typography><Typography variant="body2">Revisa los datos y escribe la confirmación exacta.</Typography><Stack spacing={1.25} sx={{ mt: 1.5 }}><Typography variant="caption">Escribe: <code>{expected}</code></Typography><TextField size="small" label="Confirmación" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></Stack></Alert> : null}
           <Button size="large" variant="contained" startIcon={<Play size={18} />} disabled={busy || (selected.mutating && confirmation !== expected)} onClick={() => void execute()}>Ejecutar {selected.method}</Button>
           {result ? <ResponsePanel result={result} tab={responseTab} onTab={setResponseTab} snapshotName={snapshotName} setSnapshotName={setSnapshotName} onSnapshot={saveSnapshot} busy={busy} /> : null}
-        </Stack> : <Paper sx={{ p: 4 }}><Typography color="text.secondary">Selecciona una operación Swagger.</Typography></Paper>}
+        </Stack> : <Paper sx={{ p: 4 }}><Typography color="text.secondary">Selecciona una operación del contrato API.</Typography></Paper>}
       </Grid>
       <Grid item xs={12}><SnapshotPanel items={snapshots} onOpen={(item) => { setResult({ request: item.request_data, response: item.response_data, response_headers: {} }); setResponseTab(0); window.scrollTo({ top: 0, behavior: "smooth" }); }} onDelete={async (id) => { await api.deleteTryMeSnapshot(id); setSnapshots(await api.tryMeSnapshots(selectedId)); }} /></Grid>
     </Grid>

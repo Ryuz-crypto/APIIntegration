@@ -7,6 +7,13 @@ export function setAccessToken(token: string) {
   else sessionStorage.removeItem("dashboardapi-session");
 }
 
+export function dashboardSocket(orchestratorId: string): WebSocket {
+  const base = new URL(API_BASE, window.location.origin);
+  base.protocol = base.protocol === "https:" ? "wss:" : "ws:";
+  base.pathname = `${base.pathname.replace(/\/$/, "")}/realtime/dashboard/${orchestratorId}`;
+  return new WebSocket(base.toString(), ["dashboardapi", accessToken]);
+}
+
 export type UserRole = "viewer" | "operator" | "admin";
 export type AuthUser = {
   id: string;

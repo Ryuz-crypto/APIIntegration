@@ -13,7 +13,7 @@ import { AppearanceDialog } from "./features/system/AppearanceDialog";
 import { UpdateDialog } from "./features/system/UpdateDialog";
 import { AccessControl } from "./features/access/AccessControl";
 import { LoginPage } from "./features/access/LoginPage";
-import { api, ApiSample, Appliance, AppearanceSettings, AuthSession, AuthUser, CompatibilityProfile, Dashboard, Orchestrator, setAccessToken, SystemOverview } from "./lib/api";
+import { api, ApiSample, Appliance, AppearanceSettings, AuthSession, AuthUser, CompatibilityProfile, Dashboard, Orchestrator, dashboardSocket, setAccessToken, SystemOverview } from "./lib/api";
 import { createDashboardTheme, defaultAppearance } from "./theme/theme";
 
 const TryMePage = lazy(() => import("./features/tryme/TryMePage").then((module) => ({ default: module.TryMePage })));
@@ -37,6 +37,8 @@ function App() {
   const [profiles, setProfiles] = useState<CompatibilityProfile[]>([]);
   const [samples, setSamples] = useState<ApiSample[]>([]);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [liveState, setLiveState] = useState<"connecting" | "live" | "offline">("connecting");
+  const [lastLiveEvent, setLastLiveEvent] = useState<string | null>(null);
   const [selectedOrchestrator, setSelectedOrchestrator] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -79,6 +81,33 @@ function App() {
     if (!selectedOrchestrator) { setDashboard(null); return; }
     api.dashboard(selectedOrchestrator).then(setDashboard).catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, [selectedOrchestrator, samples, appliances]);
+  useEffect(() => {
+    if (!selectedOrchestrator || !identity) return;
+    let socket: WebSocket | undefined;
+    let stopped = false;
+    let retry: number | undefined;
+    let delay = 1000;
+    const connect = () => {
+      if (stopped) return;
+      setLiveState("connecting");
+      socket = dashboardSocket(selectedOrchestrator);
+      socket.onopen = () => { delay = 1000; setLiveState("live"); };
+      socket.onmessage = (event) => {
+        const message = JSON.parse(event.data) as { type: string; sent_at: string; data?: Dashboard };
+        setLastLiveEvent(message.sent_at);
+        if (message.type === "dashboard.snapshot" && message.data) setDashboard(message.data);
+      };
+      socket.onerror = () => setLiveState("offline");
+      socket.onclose = () => {
+        if (stopped) return;
+        setLiveState("offline");
+        retry = window.setTimeout(connect, delay);
+        delay = Math.min(delay * 2, 15000);
+      };
+    };
+    connect();
+    return () => { stopped = true; if (retry) window.clearTimeout(retry); socket?.close(); };
+  }, [selectedOrchestrator, identity?.id]);
 
   function authenticated(session: AuthSession) {
     setAccessToken(session.token);
@@ -137,7 +166,7 @@ function App() {
               <Typography variant="caption" color="text.secondary">{identity.display_name || identity.username}</Typography>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
                 <ShieldCheck size={17} color="#53C57B" />
-              <Typography variant="body2" fontWeight={800}>{identity.role} · 1.4 stable</Typography>
+              <Typography variant="body2" fontWeight={800}>{identity.role} · 1.5 stable</Typography>
               </Stack>
               <Button size="small" color="inherit" startIcon={<LogOut size={15} />} onClick={() => void logout()} sx={{ mt: 1 }}>Cerrar sesión</Button>
           </Paper>
@@ -166,7 +195,7 @@ function App() {
               <Grid item xs={12} sm={6} lg={3}><MetricCard label="Appliances" value={overview?.appliances ?? 0} detail={`${overview?.selected_appliances ?? 0} seleccionados`} icon={<Activity size={22} />} /></Grid>
               <Grid item xs={12} sm={6} lg={3}><MetricCard label="Perfiles API" value={overview?.compatibility_profiles ?? profiles.length} detail="9.3–9.6 · 9.7 usa API 9.6" icon={<Database size={22} />} /></Grid>
               <Grid item xs={12} sm={6} lg={3}><MetricCard label="Muestras API" value={overview?.services?.api_samples ?? "0"} detail="Trazabilidad disponible" icon={<ShieldCheck size={22} />} /></Grid>
-              <Grid item xs={12}><DynamicDashboard dashboard={dashboard} /></Grid>
+              <Grid item xs={12}><DynamicDashboard dashboard={dashboard} liveState={liveState} lastEvent={lastLiveEvent} /></Grid>
               <Grid item xs={12}><OrchestratorPanel items={orchestrators} role={identity.role} onChanged={load} onAdd={() => setWizardOpen(true)} /></Grid>
               <Grid item xs={12} lg={5}><CompatibilityPanel profiles={profiles} /></Grid>
               <Grid item xs={12} lg={7}><AppliancePanel items={appliances} canOperate={identity.role !== "viewer"} onChanged={load} /></Grid>

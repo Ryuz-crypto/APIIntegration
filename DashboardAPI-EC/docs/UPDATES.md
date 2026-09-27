@@ -20,7 +20,7 @@ El instalador conserva la base de datos, las credenciales cifradas, la configura
 1. Inicia sesión con una cuenta administradora.
 2. Abre **Actualizar**.
 3. Pulsa **Buscar versiones en GitHub** y elige una versión posterior.
-4. Escribe la confirmación exacta, por ejemplo `ACTUALIZAR v1.4.1-stable`.
+4. Escribe la confirmación exacta, por ejemplo `ACTUALIZAR v1.5.0-stable`.
 5. Pulsa **Aplicar actualización**. La interfaz mostrará `pending`, `running`, `success` o `error` y se recargará cuando la API vuelva a estar disponible.
 
 El canal admite únicamente tags estables oficiales con este formato:

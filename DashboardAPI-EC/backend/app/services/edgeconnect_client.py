@@ -56,6 +56,7 @@ class EdgeConnectClient:
         version: str,
         operation_id: str,
         path_params: dict[str, str] | None = None,
+        body: dict[str, Any] | None = None,
     ) -> EdgeConnectResponse:
         operation = self.engine.resolve(version, operation_id, path_params)
         url = self._url(operation.path)
@@ -80,7 +81,9 @@ class EdgeConnectClient:
                     self._csrf(client, headers)
                 elif self.orchestrator.auth_type == "session":
                     self._login(client, headers)
-                response = client.request(operation.method, url, headers=headers, auth=auth)
+                response = client.request(
+                    operation.method, url, headers=headers, auth=auth, json=body
+                )
                 if self.orchestrator.auth_type == "session":
                     self._logout(client, headers)
                 if self.orchestrator.auth_type == "session_otp" and response.status_code in {
@@ -214,7 +217,8 @@ class EdgeConnectClient:
         visible_headers = {
             key: value
             for key, value in response.headers.items()
-            if key.lower() in {"content-type", "content-length", "location", "etag", "last-modified"}
+            if key.lower()
+            in {"content-type", "content-length", "location", "etag", "last-modified"}
         }
         return EdgeConnectResponse(
             operation_id=operation_id,

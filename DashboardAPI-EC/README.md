@@ -1,4 +1,4 @@
-# DashboardAPI-EC 1.4.1 stable
+# DashboardAPI-EC 1.5.0 stable
 
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 [![Human Tested](https://img.shields.io/badge/Human%20Tested-EdgeConnect%209.7.1-7B61FF?logo=checkmarx&logoColor=white)](#validación-humana-y-automatizada)
@@ -6,7 +6,7 @@
 
 DashboardAPI-EC es un servicio web para descubrir, consultar y visualizar entornos HPE Aruba Networking EdgeConnect. La aplicación identifica la versión del Orchestrator, carga su perfil de compatibilidad, descubre los appliances administrados y conserva evidencia de cada llamada API utilizada para construir el dashboard.
 
-La versión 1.4 se soporta en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. El instalador acepta cualquier versión de Ubuntu que cumpla los requisitos técnicos, incluidas las posteriores a 24.04.
+La versión 1.5 se soporta en Ubuntu con Python 3.12 o superior y se distribuye como paquete `.deb`. El instalador acepta cualquier versión de Ubuntu que cumpla los requisitos técnicos, incluidas las posteriores a 24.04.
 
 ## Instalación rápida
 
@@ -26,6 +26,17 @@ sudo ./scripts/install-ubuntu.sh
 El script instala dependencias, construye el `.deb`, configura los servicios y verifica `/api/v1/health`. Al terminar muestra la dirección que debes abrir. La guía completa de instalación, actualización, respaldo y diagnóstico está en [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 Para pasar de una versión anterior a 1.2, ejecuta una vez `git pull && sudo ./scripts/install-ubuntu.sh`. A partir de 1.2 puedes instalar versiones oficiales desde **Actualizar** en la cabecera. El motor valida el tag de GitHub, crea un respaldo y conserva el paquete anterior para recuperación. Consulta [docs/UPDATES.md](docs/UPDATES.md).
+
+## Cambios de 1.5
+
+- Dashboard en tiempo real mediante WebSocket autenticado, compatible con `ws://` y `wss://` detrás de Nginx.
+- Reconexión automática del navegador y heartbeat del servidor; el dashboard cambia apenas aparecen nuevas muestras.
+- Índice de salud correlacionado con éxito y latencia API, métricas, interfaces y túneles.
+- Priorización por sitio, señales activas, frescura de telemetría y sparkline de rendimiento.
+- Recolección opcional de `POST /health` cuando el perfil detectado declara esa capacidad.
+- Try Me acepta Postman Collection v2.0/v2.1 además de OpenAPI 3 y Swagger 2.
+
+Consulta [docs/MONITORING.md](docs/MONITORING.md) para el flujo WebSocket, las reglas de correlación y la operación detrás de HTTPS.
 
 ## Cambios de 1.4
 
@@ -122,7 +133,7 @@ La opción **Actualizar** consulta el canal oficial de GitHub, muestra la versi�
 
 El menú **Acceso** gestiona identidades locales con tres roles. La [guía de acceso](docs/ACCESS.md) documenta el administrador inicial, sesiones, permisos, auditoría y autenticación Bearer para la API.
 
-La pestaña **Try Me** presenta todas las operaciones del Swagger almacenado, incluidos endpoints que no forman parte del dashboard. Consulta [docs/TRYME.md](docs/TRYME.md) para importar el contrato del Orchestrator, ejecutar lecturas y cambios, exportar resultados y administrar snapshots.
+La pestaña **Try Me** presenta todas las operaciones del Swagger, OpenAPI o Postman Collection almacenado, incluidos endpoints que no forman parte del dashboard. Consulta [docs/TRYME.md](docs/TRYME.md) para importar el contrato del Orchestrator, ejecutar lecturas y cambios, exportar resultados y administrar snapshots.
 
 El editor de apariencia guarda globalmente:
 
@@ -250,7 +261,7 @@ La importación conserva el documento original, genera un perfil normalizado y c
 Instalar el paquete generado:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.4.1_amd64.deb
+sudo apt install ./dashboardapi-ec_1.5.0_amd64.deb
 ```
 
 El instalador:
@@ -295,7 +306,7 @@ sudo apt install -y build-essential dpkg-dev python3 python3-pip python3-venv no
 ./scripts/build-deb.sh
 ```
 
-El resultado se guarda en `dist/dashboardapi-ec_1.4.1_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
+El resultado se guarda en `dist/dashboardapi-ec_1.5.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
 
 ## Operación del servicio
 
@@ -497,7 +508,7 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 
 ## Estado de la versión
 
-La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorporó el canal de actualizaciones. La versión 1.3.0 añadió Try Me, exportaciones y snapshots para el Swagger completo. La versión 1.4.0 añadió acceso por usuarios, roles, sesiones revocables y auditoría. La versión 1.4.1 simplifica actualizaciones y certificados, y corrige cargas Swagger grandes.
+La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorporó el canal de actualizaciones. La versión 1.3.0 añadió Try Me, exportaciones y snapshots para el Swagger completo. La versión 1.4.0 añadió acceso por usuarios, roles, sesiones revocables y auditoría. La versión 1.4.1 simplificó actualizaciones y certificados y corrigió cargas grandes. La versión 1.5.0 añade monitoreo WebSocket, correlación operativa e importación Postman.
 
 ## Referencias oficiales
 

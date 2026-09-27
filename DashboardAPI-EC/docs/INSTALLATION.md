@@ -1,6 +1,6 @@
 # Instalación y primer uso
 
-DashboardAPI-EC 1.4.1 stable se instala en Ubuntu. El método recomendado construye un paquete `.deb`, lo instala y configura PostgreSQL, Redis, Nginx, la API, el recolector y el motor de actualización.
+DashboardAPI-EC 1.5.0 stable se instala en Ubuntu. El método recomendado construye un paquete `.deb`, lo instala y configura PostgreSQL, Redis, Nginx, la API, el recolector y el motor de actualización.
 
 ## Requisitos
 
@@ -40,10 +40,10 @@ sudo systemctl status dashboardapi-ec dashboardapi-ec-worker nginx
 
 ## Instalación de un paquete ya construido
 
-Si recibiste `dashboardapi-ec_1.4.1_amd64.deb` o la variante `arm64`:
+Si recibiste `dashboardapi-ec_1.5.0_amd64.deb` o la variante `arm64`:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.4.1_amd64.deb
+sudo apt install ./dashboardapi-ec_1.5.0_amd64.deb
 ```
 
 Las actualizaciones usan el mismo comando con el paquete nuevo. Las migraciones se ejecutan automáticamente y conservan conexiones, credenciales y muestras.
@@ -72,7 +72,7 @@ La [guía de acceso](ACCESS.md) explica los roles, la administración de cuentas
 
 ## Actualizar desde el dashboard
 
-La versión 1.4.1 incluye el motor de actualización. Entra con una cuenta administradora, abre **Actualizar**, pulsa **Buscar versiones en GitHub**, selecciona un tag estable posterior y escribe la confirmación exacta mostrada por la interfaz. El sistema crea un respaldo, instala el nuevo `.deb`, ejecuta migraciones y comprueba la salud del servicio. Si falla, intenta reinstalar el paquete anterior.
+La versión 1.5.0 incluye el motor de actualización. Entra con una cuenta administradora, abre **Actualizar**, pulsa **Buscar versiones en GitHub**, selecciona un tag estable posterior y escribe la confirmación exacta mostrada por la interfaz. El sistema crea un respaldo, instala el nuevo `.deb`, ejecuta migraciones y comprueba la salud del servicio. Si falla, intenta reinstalar el paquete anterior.
 
 No necesitas Vagrant, Docker ni una máquina virtual para instalar o actualizar. El flujo soportado usa Ubuntu, el paquete `.deb` y servicios `systemd`. Consulta [UPDATES.md](UPDATES.md) para diagnóstico y recuperación.
 

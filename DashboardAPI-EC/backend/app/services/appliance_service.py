@@ -61,6 +61,20 @@ def discover_appliances(
     sample.extracted_values = {**sample.extracted_values, **normalized}
     session.add(sample)
     _mark_verified(orchestrator, operation_id)
+    if orchestrator.capabilities.get("operations", {}).get("orchestrator.topology"):
+        topology_operation = "orchestrator.topology"
+        try:
+            topology = client.call_operation(version, topology_operation)
+            record_success(
+                session,
+                orchestrator.id,
+                version,
+                topology,
+                transformations=["Preserve topology for dashboard correlation"],
+            )
+            _mark_verified(orchestrator, topology_operation)
+        except EdgeConnectClientError as exc:
+            record_error(session, orchestrator.id, version, topology_operation, exc)
     session.add(orchestrator)
     record_event(
         session,
@@ -99,13 +113,23 @@ def collect_appliance_metrics(
         "traffic_type": "all_traffic",
         "cached": "true",
     }
-    operations = ("appliance.performance", "appliance.interfaces", "appliance.tunnels")
+    operations = ["appliance.performance", "appliance.interfaces", "appliance.tunnels"]
+    if orchestrator.capabilities.get("operations", {}).get("appliance.health"):
+        operations.append("appliance.health")
     client = EdgeConnectClient(orchestrator, engine)
     payloads: dict[str, dict] = {}
     errors: list[EdgeConnectClientError] = []
     for operation_id in operations:
         try:
-            response = client.call_operation(version, operation_id, common_params)
+            if operation_id == "appliance.health":
+                response = client.call_operation(
+                    version,
+                    operation_id,
+                    common_params,
+                    {"nePk": appliance_key, "startTime": now - 900, "endTime": now},
+                )
+            else:
+                response = client.call_operation(version, operation_id, common_params)
         except EdgeConnectClientError as exc:
             record_error(session, orchestrator.id, version, operation_id, exc, appliance.id)
             errors.append(exc)
@@ -155,7 +179,9 @@ def _extract_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [payload] if payload else []
 
 
-def _upsert_appliance(session: Session, orchestrator: Orchestrator, item: dict[str, Any]) -> Appliance:
+def _upsert_appliance(
+    session: Session, orchestrator: Orchestrator, item: dict[str, Any]
+) -> Appliance:
     serial = _first(item, "serialNumber", "serial_number", "serial")
     ne_pk = _first(item, "nePk", "ne_pk", "id", "applianceId")
     hostname = _first(item, "hostName", "hostname", "name", "applianceName") or ne_pk or serial

@@ -7,6 +7,7 @@ from app.api.routes import (
     dashboard,
     health,
     orchestrators,
+    realtime,
     samples,
     system,
     tryme,
@@ -21,4 +22,5 @@ api_router.include_router(appliances.router, prefix="/appliances", tags=["applia
 api_router.include_router(compatibility.router, prefix="/compatibility", tags=["compatibility"])
 api_router.include_router(samples.router, prefix="/samples", tags=["samples"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
+api_router.include_router(realtime.router, prefix="/realtime", tags=["realtime"])
 api_router.include_router(tryme.router, prefix="/try-me", tags=["try-me"])

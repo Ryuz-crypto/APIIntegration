@@ -89,7 +89,9 @@ def _parameter(document: dict, raw: dict) -> dict:
         "required": bool(item.get("required", False)),
         "description": str(item.get("description", "")),
         "schema": schema if isinstance(schema, dict) else {},
-        "example": item.get("example", _schema_example(schema) if isinstance(schema, dict) else None),
+        "example": item.get(
+            "example", _schema_example(schema) if isinstance(schema, dict) else None
+        ),
     }
 
 
@@ -151,9 +153,11 @@ def _document_catalog(orchestrator: Orchestrator, version: str, item: ApiCompati
     return TryMeCatalog(
         orchestrator_id=orchestrator.id,
         version=version,
-        source=f"Swagger importado · {document_checksum(document)[:12]}",
+        source=f"{'Postman importado' if document.get('x-dashboard-source') == 'postman' else 'Swagger importado'} · {document_checksum(document)[:12]}",
         title=str(info.get("title", "EdgeConnect API")),
-        operations=sorted(operations, key=lambda value: (value["tags"], value["path"], value["method"])),
+        operations=sorted(
+            operations, key=lambda value: (value["tags"], value["path"], value["method"])
+        ),
     )
 
 
@@ -183,7 +187,9 @@ def catalog(session: Session, orchestrator: Orchestrator) -> TryMeCatalog:
                     "required": True,
                     "schema": {"type": "string"},
                 }
-                for name in dict.fromkeys(re.findall(r"\{([A-Za-z_][A-Za-z0-9_]*)\}", operation["path"]))
+                for name in dict.fromkeys(
+                    re.findall(r"\{([A-Za-z_][A-Za-z0-9_]*)\}", operation["path"])
+                )
             ],
             "request_schema": {},
             "request_example": None,
@@ -221,14 +227,17 @@ def sync_catalog(session: Session, orchestrator: Orchestrator) -> TryMeCatalog:
         return catalog(session, orchestrator)
     raise ValueError(
         "El Orchestrator no publicó un Swagger compatible en las rutas conocidas. "
-        "Descárgalo desde Support → REST APIs e impórtalo manualmente. "
-        + "; ".join(errors)
+        "Descárgalo desde Support → REST APIs e impórtalo manualmente. " + "; ".join(errors)
     )
 
 
 def _operation(selected: TryMeCatalog, method: str, path: str):
     return next(
-        (operation for operation in selected.operations if operation.method == method and operation.path == path),
+        (
+            operation
+            for operation in selected.operations
+            if operation.method == method and operation.path == path
+        ),
         None,
     )
 
@@ -241,7 +250,7 @@ def execute(
     selected = catalog(session, orchestrator)
     operation = _operation(selected, payload.method, payload.path)
     if operation is None:
-        raise ValueError("La operación no pertenece al Swagger seleccionado.")
+        raise ValueError("La operación no pertenece al contrato API seleccionado.")
     if operation.mutating and payload.confirmation != f"EJECUTAR {payload.method} {payload.path}":
         raise ValueError("Escribe la confirmación exacta para ejecutar esta operación.")
     path = payload.path
@@ -250,9 +259,7 @@ def execute(
     if re.search(r"\{[^{}]+\}", path):
         raise ValueError("Completa todos los parámetros del path.")
     headers = {
-        key: value
-        for key, value in payload.headers.items()
-        if key.lower() not in BLOCKED_HEADERS
+        key: value for key, value in payload.headers.items() if key.lower() not in BLOCKED_HEADERS
     }
     if len(headers) != len(payload.headers):
         raise ValueError("No se permite reemplazar encabezados de autenticación o transporte.")

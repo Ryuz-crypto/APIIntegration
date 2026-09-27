@@ -1,4 +1,4 @@
-# Try Me · Swagger Explorer
+# Try Me · Swagger, OpenAPI y Postman Explorer
 
 La pestaña **Try Me** permite ejecutar las APIs disponibles en el Swagger de cada Orchestrator. El explorador no se limita a las operaciones que construyen el dashboard: muestra todos los paths y métodos del documento importado.
 
@@ -8,7 +8,7 @@ El perfil integrado permite comenzar con las operaciones verificadas por Dashboa
 
 HPE documenta el archivo del Orchestrator como `gmsApiInfo.json` y lo ubica en la interfaz **Support → REST APIs**. La definición debe corresponder a la versión del entorno. Orchestrator 9.7 usa el contrato 9.6 en esta plataforma mientras no exista un perfil específico importado.
 
-La importación acepta OpenAPI 3 o Swagger 2 en JSON o YAML. El documento queda almacenado como borrador: alimenta Try Me, pero no reemplaza automáticamente el perfil activo del dashboard.
+La importación acepta OpenAPI 3 o Swagger 2 en JSON/YAML y Postman Collection v2.0/v2.1 en JSON. En Postman se recorren carpetas anidadas y se convierten URL, variables, query params, headers permitidos y cuerpos JSON. El documento queda almacenado como catálogo: alimenta Try Me, pero no reemplaza automáticamente el perfil activo del dashboard.
 
 ## Explorar y ejecutar
 
@@ -62,7 +62,8 @@ Los snapshots se muestran al final de Try Me. Puedes abrirlos, exportarlos o eli
 - **HTTP 401/403:** revisa permisos de la API key o renueva la sesión OTP.
 - **HTTP 404:** confirma que el documento corresponde a la versión del Orchestrator.
 - **No permite un cambio:** comprueba que tu cuenta sea administradora y copia literalmente la confirmación mostrada.
-- **HTTP 413 al importar:** actualiza a 1.4.1 o posterior; Nginx acepta 50 MiB y el backend valida Swagger de hasta 32 MiB.
+- **HTTP 413 al importar:** usa 1.4.1 o posterior; Nginx acepta 50 MiB y el backend valida contratos de hasta 32 MiB.
+- **Postman sin operaciones:** exporta como Collection v2.0 o v2.1. Los scripts de pre-request/test no se ejecutan; Try Me importa las peticiones HTTP declaradas.
 - **El schema no incluye ejemplo:** Try Me genera una estructura inicial según tipos y valores predeterminados; ajústala antes de ejecutar.
 
 Referencia: [HPE Aruba Networking — Orchestrator and EdgeConnect API endpoints](https://developer.arubanetworks.com/edgeconnect/docs/aruba-orchestrator-and-edgeconnect-api-endpoints).

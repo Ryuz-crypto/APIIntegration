@@ -87,6 +87,8 @@ def mfa(monkeypatch):
             return httpx.Response(outcome["data"], json={"release": outcome.get("release", "9.6.2.0")})
         if path.endswith("/appliance"):
             return httpx.Response(200, json=[])
+        if path.endswith("/topology"):
+            return httpx.Response(200, json={"links": []})
         pytest.fail(f"Unexpected request: {request.method} {path}")
 
     original = httpx.Client
@@ -219,7 +221,7 @@ def test_api_start_complete_validate_and_discover(mfa, monkeypatch, release):
         assert complete.json()["capabilities"]["orchestrator.inventory.summary"]
         assert "123456" not in complete.text
         assert client.post(f"{url}/discover-appliances").status_code == 200
-        assert len(calls) == 4
+        assert len(calls) == 5
     finally:
         app.state.auth_disabled = False
         app.dependency_overrides.clear()
