@@ -67,6 +67,7 @@ export type UpdateStatus = {
   current?: string;
   version?: string;
   message?: string;
+  diagnostic?: string;
   backup?: string;
   completed_at?: string;
 };

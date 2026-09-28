@@ -166,7 +166,7 @@ function App() {
               <Typography variant="caption" color="text.secondary">{identity.display_name || identity.username}</Typography>
               <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
                 <ShieldCheck size={17} color="#53C57B" />
-              <Typography variant="body2" fontWeight={800}>{identity.role} · 1.5 stable</Typography>
+              <Typography variant="body2" fontWeight={800}>{identity.role} · 1.5.1 stable</Typography>
               </Stack>
               <Button size="small" color="inherit" startIcon={<LogOut size={15} />} onClick={() => void logout()} sx={{ mt: 1 }}>Cerrar sesión</Button>
           </Paper>

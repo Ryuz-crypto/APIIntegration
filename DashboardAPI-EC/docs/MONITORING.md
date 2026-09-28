@@ -1,6 +1,6 @@
 # Monitoreo en tiempo real y correlación
 
-DashboardAPI-EC 1.5.0 mantiene una conexión WebSocket por el Orchestrator seleccionado. La URL es `/api/v1/realtime/dashboard/{id}` y el navegador cambia automáticamente entre `ws://` y `wss://` según el acceso al panel. Nginx conserva el upgrade de conexión en HTTP y HTTPS.
+DashboardAPI-EC 1.5.1 mantiene una conexión WebSocket por el Orchestrator seleccionado. La URL es `/api/v1/realtime/dashboard/{id}` y el navegador cambia automáticamente entre `ws://` y `wss://` según el acceso al panel. Nginx conserva el upgrade de conexión en HTTP y HTTPS.
 
 ## Autenticación y actualización
 

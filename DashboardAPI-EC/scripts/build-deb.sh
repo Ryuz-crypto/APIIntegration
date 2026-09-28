@@ -5,7 +5,7 @@ BUILD_STAGE="initialization"
 trap 'status=$?; echo "::error title=DashboardAPI-EC package build::${BUILD_STAGE} failed at line ${LINENO}" >&2; exit "$status"' ERR
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PACKAGE_VERSION="1.5.0"
+PACKAGE_VERSION="1.5.1"
 
 if [[ ! -r /etc/os-release ]]; then
   echo "This package must be built on Ubuntu." >&2
@@ -31,6 +31,15 @@ ARCH="$(dpkg --print-architecture)"
 BUILD_DIR="$(mktemp -d)"
 STAGE="$BUILD_DIR/dashboardapi-ec_${PACKAGE_VERSION}_${ARCH}"
 trap 'rm -rf "$BUILD_DIR"' EXIT
+
+# Managed updates run inside a hardened systemd service with ProtectHome=true.
+# Keep package-manager caches inside the disposable build tree instead of /root.
+BUILD_HOME="$BUILD_DIR/home"
+mkdir -p "$BUILD_HOME/.cache/pip" "$BUILD_HOME/.npm"
+export HOME="$BUILD_HOME"
+export XDG_CACHE_HOME="$BUILD_HOME/.cache"
+export PIP_CACHE_DIR="$BUILD_HOME/.cache/pip"
+export npm_config_cache="$BUILD_HOME/.npm"
 
 mkdir -p "$STAGE/DEBIAN" \
   "$STAGE/opt/dashboardapi-ec/backend" \

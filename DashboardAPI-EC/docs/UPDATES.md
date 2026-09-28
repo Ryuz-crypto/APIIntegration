@@ -20,7 +20,7 @@ El instalador conserva la base de datos, las credenciales cifradas, la configura
 1. Inicia sesión con una cuenta administradora.
 2. Abre **Actualizar**.
 3. Pulsa **Buscar versiones en GitHub** y elige una versión posterior.
-4. Escribe la confirmación exacta, por ejemplo `ACTUALIZAR v1.5.0-stable`.
+4. Escribe la confirmación exacta, por ejemplo `ACTUALIZAR v1.5.1-stable`.
 5. Pulsa **Aplicar actualización**. La interfaz mostrará `pending`, `running`, `success` o `error` y se recargará cuando la API vuelva a estar disponible.
 
 El canal admite únicamente tags estables oficiales con este formato:
@@ -55,6 +55,8 @@ curl http://127.0.0.1:8010/api/v1/health
 ```
 
 Si GitHub no es accesible, la consulta de versiones falla sin cambiar el servidor. La construcción también requiere salida HTTPS hacia GitHub, PyPI y el registro de npm. Comprueba DNS, las reglas de salida y el proxy corporativo.
+
+Desde 1.5.1, `pip` y `npm` usan cachés desechables fuera de `/root` y `/home`, compatibles con el aislamiento `ProtectHome` del servicio. Si una fase falla, el panel muestra las últimas líneas sanitizadas del diagnóstico; `journalctl` conserva el registro completo.
 
 ## Recuperación manual
 

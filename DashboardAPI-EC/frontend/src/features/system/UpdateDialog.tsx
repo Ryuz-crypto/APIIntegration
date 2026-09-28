@@ -60,7 +60,7 @@ export function UpdateDialog({ onClose }: { onClose: () => void }) {
           </TextField>
           {selected ? <><Typography variant="caption">Escribe exactamente: <code>{expected}</code></Typography><TextField label="Confirmación" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></> : null}
         </Stack> : null}
-        {status ? <Alert severity={status.state === "error" ? "error" : status.state === "success" ? "success" : "info"}>{status.message || `Estado: ${status.state}`}{status.backup ? ` Respaldo: ${status.backup}` : ""}</Alert> : null}
+        {status ? <Alert severity={status.state === "error" ? "error" : status.state === "success" ? "success" : "info"}>{status.message || `Estado: ${status.state}`}{status.backup ? ` Respaldo: ${status.backup}` : ""}{status.diagnostic ? <Typography component="pre" sx={{ mt: 1, mb: 0, whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 12 }}>{status.diagnostic}</Typography> : null}</Alert> : null}
       </Stack>
     </DialogContent>
     <DialogActions>

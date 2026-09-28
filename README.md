@@ -1,6 +1,6 @@
 # DashboardAPI-EC
 
-[![Version](https://img.shields.io/badge/version-1.5.0%20stable-2fbf9b)](DashboardAPI-EC/README.md)
+[![Version](https://img.shields.io/badge/version-1.5.1%20stable-2fbf9b)](DashboardAPI-EC/README.md)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-Python%203.12%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
@@ -8,13 +8,13 @@
 
 DashboardAPI-EC es una plataforma web para descubrir, consultar y visualizar entornos **HPE Aruba Networking EdgeConnect** mediante sus APIs. Detecta la versión del Orchestrator, identifica las capacidades disponibles y ensambla un dashboard específico con datos reales.
 
-La versión **1.5.0 stable** funciona en **Ubuntu con Python 3.12 o superior** y se distribuye como paquete `.deb`. Se admiten versiones posteriores de Ubuntu siempre que cumplan estos requisitos.
+La versión **1.5.1 stable** funciona en **Ubuntu con Python 3.12 o superior** y se distribuye como paquete `.deb`. Se admiten versiones posteriores de Ubuntu siempre que cumplan estos requisitos.
 
 ## Contenido
 
 - [Características](#características)
 - [Instalación rápida](#instalación-rápida)
-- [Actualizar una instalación existente a 1.5.0](#actualizar-una-instalación-existente-a-150)
+- [Actualizar una instalación existente a 1.5.1](#actualizar-una-instalación-existente-a-151)
 - [Primer uso](#primer-uso)
 - [Varios Orchestrators](#varios-orchestrators)
 - [Cómo funciona](#cómo-funciona)
@@ -76,7 +76,7 @@ El instalador:
 
 1. valida que el sistema sea Ubuntu;
 2. instala las dependencias necesarias;
-3. construye el paquete `dashboardapi-ec_1.5.0_<arquitectura>.deb`;
+3. construye el paquete `dashboardapi-ec_1.5.1_<arquitectura>.deb`;
 4. configura PostgreSQL, Redis, Nginx y `systemd`;
 5. ejecuta las migraciones;
 6. inicia los servicios;
@@ -96,9 +96,9 @@ curl http://127.0.0.1/api/v1/health
 sudo systemctl status dashboardapi-ec dashboardapi-ec-worker nginx
 ```
 
-### Actualizar una instalación existente a 1.5.0
+### Actualizar una instalación existente a 1.5.1
 
-Si ya tienes 1.2, 1.3, 1.4.0 o 1.4.1, abre **Actualizar**, pulsa **Buscar versiones en GitHub**, elige `v1.5.0-stable` y escribe la confirmación exacta. Las conexiones, credenciales, certificados, apariencia y muestras existentes se conservan.
+Si ya tienes 1.2, 1.3, 1.4.0, 1.4.1 o un intento fallido de 1.5.0, abre **Actualizar**, pulsa **Buscar versiones en GitHub**, elige `v1.5.1-stable` y escribe la confirmación exacta. Las conexiones, credenciales, certificados, apariencia y muestras existentes se conservan.
 
 Si vienes de 1.0 o 1.1, o el motor no puede consultar GitHub, actualiza una vez desde la terminal:
 

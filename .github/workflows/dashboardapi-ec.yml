@@ -46,11 +46,12 @@ jobs:
       - name: Install package build dependencies
         run: sudo apt-get update && sudo apt-get install -y dpkg-dev python3-pip python3-venv nodejs npm
       - name: Build deb
-        run: ./scripts/build-deb.sh
+        # Reproduce el ProtectHome del actualizador: el build no debe depender de /root o /home.
+        run: HOME=/proc/dashboardapi-forbidden ./scripts/build-deb.sh
       - name: Install, activate HTTPS and verify upgrade on Ubuntu
         run: bash ./scripts/test-https-ubuntu.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: dashboardapi-ec-1.5.0-deb
+          name: dashboardapi-ec-1.5.1-deb
           path: DashboardAPI-EC/dist/*.deb
           if-no-files-found: error

@@ -1,4 +1,4 @@
-# DashboardAPI-EC 1.5.0 stable
+# DashboardAPI-EC 1.5.1 stable
 
 [![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 [![Human Tested](https://img.shields.io/badge/Human%20Tested-EdgeConnect%209.7.1-7B61FF?logo=checkmarx&logoColor=white)](#validación-humana-y-automatizada)
@@ -29,6 +29,7 @@ Para pasar de una versión anterior a 1.2, ejecuta una vez `git pull && sudo ./s
 
 ## Cambios de 1.5
 
+- **1.5.1:** corrige la construcción desde el motor de actualización cuando `systemd` protege `/root` y `/home`, y muestra un diagnóstico sanitizado directamente en el panel si vuelve a fallar.
 - Dashboard en tiempo real mediante WebSocket autenticado, compatible con `ws://` y `wss://` detrás de Nginx.
 - Reconexión automática del navegador y heartbeat del servidor; el dashboard cambia apenas aparecen nuevas muestras.
 - Índice de salud correlacionado con éxito y latencia API, métricas, interfaces y túneles.
@@ -261,7 +262,7 @@ La importación conserva el documento original, genera un perfil normalizado y c
 Instalar el paquete generado:
 
 ```bash
-sudo apt install ./dashboardapi-ec_1.5.0_amd64.deb
+sudo apt install ./dashboardapi-ec_1.5.1_amd64.deb
 ```
 
 El instalador:
@@ -306,7 +307,7 @@ sudo apt install -y build-essential dpkg-dev python3 python3-pip python3-venv no
 ./scripts/build-deb.sh
 ```
 
-El resultado se guarda en `dist/dashboardapi-ec_1.5.0_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
+El resultado se guarda en `dist/dashboardapi-ec_1.5.1_<arquitectura>.deb`. El paquete incluye las ruedas Python necesarias, por lo que la instalación del runtime no descarga paquetes desde PyPI.
 
 ## Operación del servicio
 
@@ -508,7 +509,7 @@ El respaldo del archivo de entorno contiene la clave utilizada para cifrar crede
 
 ## Estado de la versión
 
-La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorporó el canal de actualizaciones. La versión 1.3.0 añadió Try Me, exportaciones y snapshots para el Swagger completo. La versión 1.4.0 añadió acceso por usuarios, roles, sesiones revocables y auditoría. La versión 1.4.1 simplificó actualizaciones y certificados y corrigió cargas grandes. La versión 1.5.0 añade monitoreo WebSocket, correlación operativa e importación Postman.
+La versión 1.0 stable cubrió los pasos 1 a 10. La versión 1.1.0 añadió `nePk`, métricas reales, HTTPS administrado y apariencia persistente. La versión 1.2.0 incorporó el canal de actualizaciones. La versión 1.3.0 añadió Try Me, exportaciones y snapshots para el Swagger completo. La versión 1.4.0 añadió acceso por usuarios, roles, sesiones revocables y auditoría. La versión 1.4.1 simplificó actualizaciones y certificados y corrigió cargas grandes. La versión 1.5.0 añadió monitoreo WebSocket, correlación operativa e importación Postman; 1.5.1 corrige la actualización dentro del sandbox de `systemd`.
 
 ## Referencias oficiales
 

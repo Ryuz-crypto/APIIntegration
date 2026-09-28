@@ -40,6 +40,15 @@ def write_status(payload: dict) -> None:
 
 
 def run(command: list[str], *, cwd: Path | None = None, timeout: int = 900) -> None:
+    runtime_home = STATE / "runtime-home"
+    runtime_home.mkdir(mode=0o700, parents=True, exist_ok=True)
+    environment = {
+        **os.environ,
+        "HOME": str(runtime_home),
+        "XDG_CACHE_HOME": str(runtime_home / ".cache"),
+        "PIP_CACHE_DIR": str(runtime_home / ".cache" / "pip"),
+        "npm_config_cache": str(runtime_home / ".npm"),
+    }
     result = subprocess.run(
         command,
         cwd=cwd,
@@ -47,6 +56,7 @@ def run(command: list[str], *, cwd: Path | None = None, timeout: int = 900) -> N
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         timeout=timeout,
+        env=environment,
     )
     if result.returncode:
         output = result.stdout.decode(errors="replace")[-6000:]
@@ -195,7 +205,7 @@ def read_request() -> str | None:
 def main() -> None:
     try:
         version = read_request()
-    except Exception:
+    except (OSError, ValueError, json.JSONDecodeError, KeyError, TypeError):
         write_status({"state": "error", "message": "La solicitud de actualización es inválida."})
         return
     if version is None:
@@ -212,15 +222,23 @@ def main() -> None:
                 "completed_at": datetime.now(UTC).isoformat(),
             }
         )
-    except Exception:
+    except Exception as exc:
         write_status(
             {
                 "state": "error",
                 "version": version,
-                "message": "La actualización falló. Los datos y el respaldo previo se conservaron; revisa journalctl.",
+                "message": "La actualización falló. Los datos y el respaldo previo se conservaron.",
+                "diagnostic": public_diagnostic(exc),
             }
         )
         raise
+
+
+def public_diagnostic(error: Exception) -> str:
+    value = str(error).strip().replace(str(STATE), "$UPDATE_STATE")
+    value = re.sub(r"(?i)(token|password|secret|authorization)[=: ]+\S+", r"\1=[REDACTED]", value)
+    lines = [line.strip() for line in value.splitlines() if line.strip()]
+    return "\n".join(lines[-18:])[-3000:] or type(error).__name__
 
 
 if __name__ == "__main__":
