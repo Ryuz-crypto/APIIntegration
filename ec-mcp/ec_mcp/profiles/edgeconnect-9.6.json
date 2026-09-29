@@ -68,6 +68,125 @@
       "notes": [
         "Real HPE endpoint: loss/latency/jitter/MOS health summary per nePk."
       ]
+    },
+    "orchestrator.events": {
+      "method": "GET",
+      "path": "/event",
+      "risk": "read",
+      "notes": [
+        "Recent Orchestrator events and alarms."
+      ]
+    },
+    "appliance.event.history": {
+      "method": "GET",
+      "path": "/event2/appliance/{appliance_id}",
+      "risk": "read",
+      "path_params": [
+        "appliance_id"
+      ],
+      "notes": [
+        "Per-appliance event history."
+      ]
+    },
+    "appliance.interface.set_admin_state": {
+      "method": "PUT",
+      "path": "/interfaceState/{appliance_id}/{interface_name}",
+      "risk": "write",
+      "path_params": [
+        "appliance_id",
+        "interface_name"
+      ],
+      "body_example": {
+        "adminStatus": "up"
+      },
+      "notes": [
+        "Set interface admin state (up/down) on an appliance."
+      ]
+    },
+    "appliance.interface.set_description": {
+      "method": "PUT",
+      "path": "/interfaceConfig/{appliance_id}/{interface_name}",
+      "risk": "write",
+      "path_params": [
+        "appliance_id",
+        "interface_name"
+      ],
+      "body_example": {
+        "description": "updated by MCP"
+      },
+      "notes": [
+        "Update interface configuration such as description."
+      ]
+    },
+    "appliance.suspend_traffic": {
+      "method": "POST",
+      "path": "/appliance/suspend/{appliance_id}",
+      "risk": "write",
+      "path_params": [
+        "appliance_id"
+      ],
+      "body_example": {
+        "suspend": true
+      },
+      "notes": [
+        "Suspend or resume appliance traffic handling for failover tests."
+      ]
+    },
+    "appliance.reboot": {
+      "method": "POST",
+      "path": "/appliance/reboot/{appliance_id}",
+      "risk": "write",
+      "path_params": [
+        "appliance_id"
+      ],
+      "body_example": {},
+      "notes": [
+        "Reboot an appliance. Extremely disruptive; require explicit operator approval."
+      ]
+    },
+    "policy_group.update": {
+      "method": "PUT",
+      "path": "/policyGroup/{group_id}",
+      "risk": "write",
+      "path_params": [
+        "group_id"
+      ],
+      "body_example": {
+        "name": "default-group"
+      },
+      "notes": [
+        "Update a policy group used for steering overrides."
+      ]
+    },
+    "appliance.tag.assign": {
+      "method": "POST",
+      "path": "/appliance/{appliance_id}/tags",
+      "risk": "write",
+      "path_params": [
+        "appliance_id"
+      ],
+      "body_example": {
+        "tags": [
+          "failover-test"
+        ]
+      },
+      "notes": [
+        "Assign tags to an appliance to drive steering/policy overrides."
+      ]
+    },
+    "appliance.send_command": {
+      "method": "POST",
+      "path": "/appliance/restInvoke/{appliance_id}",
+      "risk": "write",
+      "path_params": [
+        "appliance_id"
+      ],
+      "body_example": {
+        "cli": "show version"
+      },
+      "notes": [
+        "Proxy an ECOS CLI command through the Orchestrator appliance REST gateway."
+      ]
     }
   }
 }

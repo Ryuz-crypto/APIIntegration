@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from functools import wraps
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -36,6 +35,40 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         text = json.dumps(payload, ensure_ascii=False, default=str)
         return sanitize_output(text, max_chars)
 
+    def operation_details(version: str, operation_id: str) -> dict:
+        profile = engine._profiles[version]
+        operation = profile["operations"][operation_id]
+        return {
+            "operation": operation_id,
+            "method": operation["method"],
+            "path": operation["path"],
+            "risk": operation.get("risk"),
+            "path_params": operation.get("path_params", []),
+            "query_params": operation.get("query_params", []),
+            "body_example": operation.get("body_example"),
+        }
+
+    def build_params(version: str, operation_id: str, appliance_id: str, group_id: str, interface_name: str, extras: dict) -> tuple[dict, dict]:
+        operation = engine._profiles[version]["operations"][operation_id]
+        path_params: dict[str, str] = {}
+        query_params: dict[str, str] = {}
+        source = {
+            "appliance_id": appliance_id,
+            "group_id": group_id,
+            "interface_name": interface_name,
+            **extras,
+        }
+        for name in operation.get("path_params", []):
+            value = source.get(name) or ""
+            if not value:
+                raise SecurityError(f"Missing required path parameter '{name}' for operation '{operation_id}'")
+            path_params[name] = value
+        for name in operation.get("query_params", []):
+            value = source.get(name)
+            if value:
+                query_params[name] = str(value)
+        return path_params, query_params
+
     @mcp.tool()
     def orchestrator_info() -> str:
         """Detect the Orchestrator version and the matching API compatibility profile."""
@@ -59,15 +92,25 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def list_api_operations() -> str:
-        """List the stable operation IDs available for each supported API version."""
-        payload = {version: engine.list_operations(version) for version in engine.versions}
+    def list_api_operations(version: str = "") -> str:
+        """List the stable operation IDs available for each supported API version, with method, risk and parameters."""
+        if version and version not in engine._profiles:
+            return f"Unknown version {version}. Available: {engine.versions}"
+        versions = [version] if version else engine.versions
+        payload = {v: {op: operation_details(v, op) for op in engine.list_operations(v)} for v in versions}
         audit.record("list_api_operations", "read", "profiles", "ok")
         return json_result(payload, settings.max_output_chars)
 
     @mcp.tool()
-    def call_read_api(operation_id: str, appliance_id: str = "", start_time: str = "", end_time: str = "", granularity: str = "") -> str:
-        """Invoke a read-only Orchestrator API operation by stable operation ID (e.g. orchestrator.topology, orchestrator.inventory.summary, appliance.tunnels, appliance.interfaces, appliance.performance)."""
+    def call_read_api(
+        operation_id: str,
+        appliance_id: str = "",
+        group_id: str = "",
+        start_time: str = "",
+        end_time: str = "",
+        granularity: str = "",
+    ) -> str:
+        """Invoke a read-only Orchestrator API operation by stable operation ID (e.g. orchestrator.topology, orchestrator.inventory.summary, orchestrator.events, appliance.tunnels, appliance.interfaces, appliance.performance)."""
         try:
             client = require_client()
             if client is None:
@@ -75,17 +118,20 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             version = client.resolve_active_profile()
             operation = engine.resolve(version, operation_id)
             if operation.method != "GET":
-                raise SecurityError(f"Operation '{operation_id}' is not read-only; use a write tool")
-            path_params = {"appliance_id": appliance_id} if appliance_id else {}
-            payload = client.call(
+                raise SecurityError(f"Operation '{operation_id}' is not read-only; use apply_change")
+            path_params, query_params = build_params(
                 version,
                 operation_id,
-                path_params=path_params,
-                cached="false",
-                start_time=start_time or None,
-                end_time=end_time or None,
-                granularity=granularity or None,
+                appliance_id,
+                group_id,
+                "",
+                {
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "granularity": granularity,
+                },
             )
+            payload = client.call(version, operation_id, path_params=path_params, **query_params)
             audit.record("call_read_api", operation_id, settings.orchestrator_url, "ok")
             return json_result(payload, settings.max_output_chars)
         except Exception as error:
@@ -108,8 +154,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             pool.close_all()
 
     @mcp.tool()
-    def apply_change(operation_id: str, body_json: str = "", confirm: bool = False) -> str:
-        """Apply a configuration change through the Orchestrator API. Dry-run by default: without confirm=true it only returns the operation and body that would be executed."""
+    def apply_change(
+        operation_id: str,
+        body_json: str = "",
+        appliance_id: str = "",
+        group_id: str = "",
+        interface_name: str = "",
+        confirm: bool = False,
+    ) -> str:
+        """Apply a configuration change through the Orchestrator API. Dry-run by default: without confirm=true it returns the exact method, path and body that would be executed. The effective permissions are those of the authenticated Orchestrator user."""
         try:
             require_writes()
             client = require_client()
@@ -119,6 +172,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             operation = engine.resolve(version, operation_id)
             if operation.method == "GET":
                 raise SecurityError("Use call_read_api for GET operations")
+            path_params, query_params = build_params(
+                version, operation_id, appliance_id, group_id, interface_name, {}
+            )
             body: dict | None = None
             if body_json.strip():
                 parsed = json.loads(body_json)
@@ -126,16 +182,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     raise SecurityError("body_json must be a JSON object")
                 body = parsed
             audit_entry = {
-                "operation": operation_id,
-                "method": operation.method,
-                "path": operation.path,
+                **operation_details(version, operation_id),
+                "resolved_path": operation.path,
                 "body": body,
                 "confirmed": confirm,
             }
             if not confirm:
                 audit.record("apply_change", operation_id, operation.path, "dry-run", dry_run=True, details=audit_entry)
                 return json_result({"dry_run": True, "would_execute": audit_entry}, settings.max_output_chars)
-            payload = client.call(version, operation_id, json_body=body)
+            payload = client.call(version, operation_id, path_params=path_params, json_body=body, **query_params)
             audit.record("apply_change", operation_id, operation.path, "ok", dry_run=False, details=audit_entry)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
         except json.JSONDecodeError as error:

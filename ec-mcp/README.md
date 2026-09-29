@@ -20,7 +20,7 @@ EdgeConnect SD-WAN a asistentes de IA (Claude Desktop, Cursor, Le Chat, etc.).
 | `list_api_operations` | lectura | Lista operation IDs por versión |
 | `call_read_api` | lectura | Ejecuta una operación GET del perfil |
 | `run_show_command` | lectura | Comando `show` ECOS whitelisteado vía SSH |
-| `apply_change` | escritura | Dry-run por defecto; requiere `confirm=true` y `EC_ALLOW_WRITE_TOOLS` |
+| `apply_change` | escritura | Dry-run por defecto; requiere `confirm=true` y `EC_ALLOW_WRITE_TOOLS`. Soporta path params (`appliance_id`, `group_id`, `interface_name`) y body JSON. Los permisos efectivos son los del usuario autenticado en el Orchestrator |
 
 ## Configuración (`.env`)
 
@@ -72,11 +72,31 @@ ec-mcp serve --transport sse --port 8808  # HTTP/SSE
 
 ## Ampliar perfiles con colecciones Postman
 
-El workspace público de Postman de HPE Aruba contiene las APIs de EdgeConnect.
-Exporta la colección (JSON v2.1) y reutiliza el conversor de
-`DashboardAPI-EC/backend/app/compatibility/postman.py`
-(`postman_to_openapi` + `profile_from_openapi_document`) para generar un perfil
-adicional, o añade operaciones manualmente en `ec_mcp/profiles/`.
+El workspace público de Postman de HPE Aruba (oficial) contiene las APIs de
+EdgeConnect SD-WAN. Exporta la colección (JSON v2.0/v2.1) e impórtala:
+
+```bash
+# Perfil nuevo
+python -m ec_mcp.import_postman EdgeConnect-Orchestrator.postman_collection.json --version 9.7
+# O fusionar con un perfil existente
+python -m ec_mcp.import_postman EdgeConnect-Orchestrator.postman_collection.json --version 9.7 --merge-into 9.6
+```
+
+El importador detecta method, path, path/query params, ejemplos de body y
+clasifica riesgo `read`/`write` automáticamente.
+
+## Operaciones de escritura incluidas
+
+Los perfiles incluyen operaciones de cambio reales (`appliance.interface.set_admin_state`,
+`appliance.suspend_traffic`, `policy_group.update`, `appliance.tag.assign`,
+`appliance.send_command`, `appliance.reboot`, entre otras). Todas pasan por
+`apply_change` con dry-run, whitelist global (`EC_ALLOW_WRITE_TOOLS`) y auditoría;
+la autorización final es la del usuario autenticado contra el Orchestrator.
+
+```bash
+pip install -e "ec-mcp[mcp]"
+python -m ec_mcp.import_postman EdgeConnect-API.postman_collection.json --version 9.7 --merge-into 9.6
+```
 
 ## Estado
 
