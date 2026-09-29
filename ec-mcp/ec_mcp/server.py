@@ -69,6 +69,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 query_params[name] = str(value)
         return path_params, query_params
 
+    def _parse_json_object(raw: str, name: str) -> dict:
+        if not raw.strip():
+            return {}
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            raise SecurityError(f"{name} must be a JSON object")
+        return {str(k): str(v) for k, v in parsed.items()}
+
     @mcp.tool()
     def orchestrator_info() -> str:
         """Detect the Orchestrator version and the matching API compatibility profile."""
@@ -99,7 +107,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         versions = [version] if version else engine.versions
         payload = {v: {op: operation_details(v, op) for op in engine.list_operations(v)} for v in versions}
         audit.record("list_api_operations", "read", "profiles", "ok")
-        return json_result(payload, settings.max_output_chars)
+        return json_result(payload, settings.max_output_chars * 8)
 
     @mcp.tool()
     def call_read_api(
@@ -109,8 +117,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         start_time: str = "",
         end_time: str = "",
         granularity: str = "",
+        extra_path_params_json: str = "",
+        extra_query_params_json: str = "",
     ) -> str:
-        """Invoke a read-only Orchestrator API operation by stable operation ID (e.g. orchestrator.topology, orchestrator.inventory.summary, orchestrator.events, appliance.tunnels, appliance.interfaces, appliance.performance)."""
+        """Invoke a read-only Orchestrator/Appliance API operation by stable operation ID. Use list_api_operations to discover the ~1500 available operations (topology, tunnels, interfaces, events, stats, BGP, VRF, overlays...). Path/query params required by each operation are listed there."""
         try:
             client = require_client()
             if client is None:
@@ -129,6 +139,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     "start_time": start_time,
                     "end_time": end_time,
                     "granularity": granularity,
+                    **_parse_json_object(extra_path_params_json, "extra_path_params_json"),
+                    **_parse_json_object(extra_query_params_json, "extra_query_params_json"),
                 },
             )
             payload = client.call(version, operation_id, path_params=path_params, **query_params)
@@ -160,9 +172,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         appliance_id: str = "",
         group_id: str = "",
         interface_name: str = "",
+        extra_path_params_json: str = "",
+        extra_query_params_json: str = "",
         confirm: bool = False,
     ) -> str:
-        """Apply a configuration change through the Orchestrator API. Dry-run by default: without confirm=true it returns the exact method, path and body that would be executed. The effective permissions are those of the authenticated Orchestrator user."""
+        """Apply a configuration change through the Orchestrator/Appliance API. Dry-run by default: without confirm=true it returns the exact method, path and body that would be executed. Effective permissions are those of the authenticated user. Use list_api_operations to discover available write operations and their required parameters."""
         try:
             require_writes()
             client = require_client()
@@ -173,7 +187,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if operation.method == "GET":
                 raise SecurityError("Use call_read_api for GET operations")
             path_params, query_params = build_params(
-                version, operation_id, appliance_id, group_id, interface_name, {}
+                version,
+                operation_id,
+                appliance_id,
+                group_id,
+                interface_name,
+                {
+                    **_parse_json_object(extra_path_params_json, "extra_path_params_json"),
+                    **_parse_json_object(extra_query_params_json, "extra_query_params_json"),
+                },
             )
             body: dict | None = None
             if body_json.strip():

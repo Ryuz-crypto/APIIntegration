@@ -87,3 +87,51 @@ def test_write_operations_in_builtin_profiles():
 
 
 PROFILES_DIR = __import__("pathlib").Path(__file__).parent.parent / "ec_mcp" / "profiles"
+
+
+def test_oas_import_generates_profile():
+    from ec_mcp.import_oas import oas_to_profile
+
+    doc = {
+        "openapi": "3.0.0",
+        "info": {"title": "Orchestrator REST APIs", "version": "9.6"},
+        "servers": [{"url": "https://orch.example.com/gms/rest"}],
+        "paths": {
+            "/appliance/{nePk}/interfaceState/{ifName}": {
+                "put": {
+                    "operationId": "updateInterfaceState",
+                    "summary": "Update interface admin state",
+                    "parameters": [
+                        {"name": "nePk", "in": "path", "required": True},
+                        {"name": "cached", "in": "query"},
+                    ],
+                    "requestBody": {
+                        "content": {"application/json": {"schema": {"type": "object", "properties": {"adminUp": {"type": "boolean"}}}}}
+                    },
+                }
+            }
+        },
+    }
+    profile = oas_to_profile(doc, "9.6", "orchestrator")
+    ops = profile["operations"]
+    assert len(ops) == 1
+    op = ops["orchestrator.updateinterfacestate"]
+    assert op["method"] == "PUT"
+    assert op["risk"] == "write"
+    assert op["path_params"] == ["ifName", "nePk"]
+    assert op["query_params"] == ["cached"]
+    assert op["body_example"] == {"adminUp": False}
+    assert profile["api_root"] == "https://orch.example.com/gms/rest"
+
+
+def test_builtin_profiles_have_official_oas_operations():
+    from ec_mcp.compat import load_profiles
+
+    for profile in load_profiles(PROFILES_DIR):
+        ops = profile["operations"]
+        assert profile["status"] == "merged-official-oas"
+        orch = [k for k in ops if k.startswith("orchestrator.")]
+        appl = [k for k in ops if k.startswith("appliance.")]
+        assert len(orch) > 500, f"too few orchestrator ops in {profile['version']}"
+        assert len(appl) > 300, f"too few appliance ops in {profile['version']}"
+        assert any(v.get("body_example") for v in ops.values())

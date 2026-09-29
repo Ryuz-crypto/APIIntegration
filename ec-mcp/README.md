@@ -70,20 +70,43 @@ ec-mcp serve --transport sse --port 8808  # HTTP/SSE
 }
 ```
 
-## Ampliar perfiles con colecciones Postman
+## Perfiles generados desde los OAS oficiales
 
-El workspace público de Postman de HPE Aruba (oficial) contiene las APIs de
-EdgeConnect SD-WAN. Exporta la colección (JSON v2.0/v2.1) e impórtala:
+Los perfiles incluidos (`9.3`–`9.6`, ~1550 operaciones cada uno) se generaron
+a partir de las definiciones OpenAPI **oficiales** publicadas por HPE Aruba en
+su developer hub (ReadMe):
+
+- **Orchestrator REST APIs** (695 paths)
+- **Silver Peak Unity ECOS REST APIs** (388 paths, appliance level)
+
+Descarga de los OAS (registries de ReadMe):
 
 ```bash
-# Perfil nuevo
-python -m ec_mcp.import_postman EdgeConnect-Orchestrator.postman_collection.json --version 9.7
-# O fusionar con un perfil existente
-python -m ec_mcp.import_postman EdgeConnect-Orchestrator.postman_collection.json --version 9.7 --merge-into 9.6
+python - <<'EOF'
+import urllib.request
+for name, uuid in [("orchestrator", "s7ggtll0fec04"), ("ecos-appliance", "aspw2wm6k1xidx")]:
+    urllib.request.urlretrieve(f"https://dash.readme.com/api/v1/api-registry/{uuid}", f"{name}.json")
+EOF
+
+# Regenerar / ampliar perfiles
+python -m ec_mcp.import_oas orchestrator.json --version 9.6 --prefix orchestrator --merge-into 9.6
+python -m ec_mcp.import_oas ecos-appliance.json --version 9.6 --prefix appliance --merge-into 9.6
 ```
 
-El importador detecta method, path, path/query params, ejemplos de body y
-clasifica riesgo `read`/`write` automáticamente.
+Cada operación incluye method, path, path/query params, ejemplo de body
+derivado del schema y clasificación de riesgo `read`/`write`. Las versiones
+9.3–9.5 usan el mismo OAS oficial (la API documentada del hub cubre ese
+rango); al publicar HPE un OAS nuevo, basta reimportar con `--merge-into`.
+
+## Ampliar perfiles con colecciones Postman
+
+El workspace público de Postman de HPE Aruba (oficial) contiene las mismas
+APIs en formato colección. Exporta la colección (JSON v2.0/v2.1) e impórtala
+como alternativa o complemento:
+
+```bash
+python -m ec_mcp.import_postman EdgeConnect-Orchestrator.postman_collection.json --version 9.7 --merge-into 9.6
+```
 
 ## Operaciones de escritura incluidas
 
