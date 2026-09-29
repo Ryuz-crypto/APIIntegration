@@ -110,8 +110,10 @@ class _Capture:
         scope["_capture"] = self
 
 
-async def _receive():
-    return {"type": "http.request", "body": b""}
+def _receive():
+    async def receive():
+        return {"type": "http.request", "body": b""}
+    return receive
 
 
 def _send_status(status):
