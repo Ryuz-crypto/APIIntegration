@@ -88,10 +88,10 @@ def test_denied_patterns_still_reject():
             pass
 
 
-def test_cli_catalog_over_500_commands():
+def test_cli_catalog_over_1000_commands():
     from ec_mcp.cli_catalog import total_commands, catalog_entries
 
-    assert total_commands() >= 500
+    assert total_commands() >= 1000
     entries = catalog_entries()
     assert len(entries) == total_commands()
     risks = {e["risk"] for e in entries}

@@ -168,7 +168,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def list_cli_commands(category: str = "") -> str:
-        """List the official ECOS CLI commands available via run_cli_command/run_show_command, from the HPE Aruba EdgeConnect CLI Reference: 579 commands across categories monitoring (read), troubleshooting (diagnostic), alarm, administration, configuration and negation (write)."""
+        """List the official ECOS CLI commands available via run_cli_command/run_show_command, from the HPE Aruba EdgeConnect CLI Reference: 1367 commands across categories monitoring (read), troubleshooting (diagnostic), alarm, administration, configuration and negation (write)."""
         entries = catalog_entries()
         if category:
             lowered = category.strip().lower()
@@ -199,7 +199,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def run_cli_command(command: str, host: str = "", confirm: bool = False) -> str:
-        """Run any official ECOS CLI command from the CLI Reference on an appliance over SSH. Monitoring/troubleshooting commands execute directly; configuration/administration/negation commands are dry-run by default and require confirm=true plus EC_ALLOW_WRITE_TOOLS=true. Use list_cli_commands to discover the 579 available commands."""
+        """Run any official ECOS CLI command from the CLI Reference on an appliance over SSH. Monitoring/troubleshooting commands execute directly; configuration/administration/negation commands are dry-run by default and require confirm=true plus EC_ALLOW_WRITE_TOOLS=true. Use list_cli_commands to discover the 1367 available commands."""
         pool = ApplianceSshPool(settings)
         target = host or settings.ssh_host
         try:

@@ -15,8 +15,8 @@ Plataforma para descubrir, consultar, visualizar y **conversar** con entornos **
 
 ## ec-mcp — tu SD-WAN conversacional
 
-- **~1550 operaciones API** por versión (9.3–9.6, con fallback 9.7→9.6) importadas de las especificaciones oficiales OpenAPI de HPE Aruba Networking.
-- **579 comandos CLI ECOS** catalogados: monitoreo, troubleshooting, alarmas, administración y configuración, con ejecución basada en riesgo.
+- **~2000–2250 operaciones API únicas** por versión (9.3–9.6, con fallback 9.7→9.6), fusionadas desde las especificaciones oficiales OpenAPI y las colecciones Postman oficiales de HPE Aruba Networking (`ec-mcp/api-collections/`).
+- **1367 comandos CLI ECOS** catalogados: monitoreo, troubleshooting, alarmas, administración y configuración, con ejecución basada en riesgo.
 - **Seguridad por diseño**: `show ...` con whitelist oficial, dry-run por defecto en cambios, `confirm=true` explícito, kill switch `EC_ALLOW_WRITE_TOOLS` y audit log JSONL de cada operación (evidencia ISO 27001 / CIS).
 - Los permisos efectivos son los del usuario autenticado contra el Orchestrator.
 - **Transportes**: stdio, HTTP streamable y SSE con autenticación Bearer y endpoint público `/health`.

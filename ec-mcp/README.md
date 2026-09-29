@@ -7,7 +7,7 @@ ChatGPT, Vibe, etc.).
 - **Orchestrator + Appliance (REST)**: ~1550 operaciones por versión (9.3–9.6)
   generadas desde los **OpenAPI oficiales** de HPE Aruba (Orchestrator REST
   APIs, 695 paths; Silver Peak Unity ECOS REST APIs, 388 paths).
-- **Appliances (SSH)**: **579 comandos ECOS** del CLI Reference oficial,
+- **Appliances (SSH)**: **1367 comandos ECOS** del CLI Reference oficial,
   clasificados por riesgo (monitoreo, troubleshooting, alarmas,
   administración, configuración, negación).
 - **Seguridad**: dry-run por defecto en toda operación de escritura, whitelist
@@ -24,7 +24,7 @@ ChatGPT, Vibe, etc.).
 | `orchestrator_info` | lectura | Detecta versión del Orchestrator y perfil activo |
 | `list_api_operations` | lectura | Lista las ~1550 operaciones API con method, path, params y riesgo |
 | `call_read_api` | lectura | Ejecuta una operación GET del perfil (topología, túneles, eventos, stats...) |
-| `list_cli_commands` | lectura | Catálogo de los 579 comandos ECOS oficiales, con filtro por categoría |
+| `list_cli_commands` | lectura | Catálogo de los 1367 comandos ECOS oficiales, con filtro por categoría |
 | `run_show_command` | lectura | Comando `show` whitelisteado vía SSH |
 | `run_cli_command` | según riesgo | Cualquier comando del catálogo ECOS: monitoreo/troubleshooting directo; configuración en dry-run |
 | `apply_change` | escritura | Operación API de cambio; dry-run por defecto, requiere `confirm=true` + `EC_ALLOW_WRITE_TOOLS=true` |
@@ -259,17 +259,18 @@ Cada operación incluye method, path, path/query params, ejemplo de body
 derivado del schema y clasificación de riesgo `read`/`write`. Al publicar HPE
 un OAS nuevo, basta reimportar con `--merge-into`.
 
-### Ampliar perfiles con colecciones Postman
+### Colecciones Postman oficiales
 
-El workspace público de Postman de HPE Aruba contiene las mismas APIs en
-formato colección. Exporta la colección (JSON v2.0/v2.1) e impórtala como
-alternativa o complemento:
+Las colecciones oficiales del workspace de HPE Aruba ya están incluidas en
+[`api-collections/`](api-collections/) (9.3–9.6) y fusionadas en los perfiles:
+cada versión expone ~2000–2250 operaciones únicas (OAS + Postman deduplicadas
+por método y ruta). Para reimportar o importar otra colección:
 
 ```bash
 python -m ec_mcp.import_postman EdgeConnect-Orchestrator.postman_collection.json --version 9.7 --merge-into 9.6
 ```
 
-## Catálogo CLI ECOS (579 comandos)
+## Catálogo CLI ECOS (1367 comandos)
 
 Extraído del **CLI Reference oficial** de HPE Aruba EdgeConnect SD-WAN:
 

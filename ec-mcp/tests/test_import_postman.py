@@ -129,9 +129,11 @@ def test_builtin_profiles_have_official_oas_operations():
 
     for profile in load_profiles(PROFILES_DIR):
         ops = profile["operations"]
-        assert profile["status"] == "merged-official-oas"
+        assert profile["status"] == "merged-official-oas+postman"
         orch = [k for k in ops if k.startswith("orchestrator.")]
         appl = [k for k in ops if k.startswith("appliance.")]
         assert len(orch) > 500, f"too few orchestrator ops in {profile['version']}"
         assert len(appl) > 300, f"too few appliance ops in {profile['version']}"
+        total = len(ops)
+        assert total > 1900, f"too few total ops in {profile['version']}"
         assert any(v.get("body_example") for v in ops.values())
