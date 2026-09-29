@@ -22,24 +22,50 @@ Plataforma para descubrir, consultar, visualizar y **conversar** con entornos **
 - **Transportes**: stdio, HTTP streamable y SSE con autenticación Bearer y endpoint público `/health`.
 - Publicación segura detrás de tu plataforma **ZTNA** con HTTPS: ver la [guía en ec-mcp/README.md](ec-mcp/README.md).
 
-### Instalación rápida de ec-mcp
+### Instalación rápida de ec-mcp (Linux recién instalado)
 
 ```bash
-cd ec-mcp
-python3 -m venv .venv
-source .venv/bin/activate
+# Paso 0: prerrequisitos (una vez)
+sudo apt update && sudo apt install -y git python3-venv python3-pip
+
+# Paso 1: descargar el proyecto
+git clone https://github.com/Ryuz-crypto/APIIntegration.git
+cd APIIntegration/ec-mcp
+
+# Paso 2: instalar el servidor
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 
-export EC_ORCHESTRATOR_URL="https://orchestrator.example.com"
-export EC_ORCHESTRATOR_API_KEY="tu-api-key"
-export EC_MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
-
-ec-mcp            # stdio, para Claude Desktop / Cursor / Le Chat
-ec-mcp http       # HTTP streamable en 127.0.0.1:8000/mcp (para publicar tras ZTNA/nginx)
+# Paso 3: credenciales reales
+export EC_ORCHESTRATOR_URL="https://TU-ORCHESTRATOR-REAL"
+export EC_ORCHESTRATOR_API_KEY="TU-API-KEY-REAL"
 ```
 
-Configuración de clientes IA, variables de entorno, systemd y nginx: [ec-mcp/README.md](ec-mcp/README.md).
+**Paso 4 — conectar tu asistente de IA:** no ejecutas `ec-mcp` a mano; Claude Desktop lo lanza por ti. Añade a `claude_desktop_config.json` (Settings → Developer → Edit Config):
 
+```json
+{
+  "mcpServers": {
+    "ec-mcp": {
+      "command": "/home/TU-USUARIO/APIIntegration/ec-mcp/.venv/bin/ec-mcp",
+      "env": {
+        "EC_ORCHESTRATOR_URL": "https://TU-ORCHESTRATOR-REAL",
+        "EC_ORCHESTRATOR_API_KEY": "TU-API-KEY-REAL"
+      }
+    }
+  }
+}
+```
+
+Reinicia Claude Desktop y pregunta: *"¿qué appliances tengo?"* o *"ejecuta show system"*.
+
+| Quieres... | Haces... |
+| --- | --- |
+| Probar que el servidor arranca | `ec-mcp` en la terminal (Ctrl+C para salir) |
+| Usarlo desde Claude/Cursor/Le Chat | El JSON del Paso 4 — nada más |
+| Exponerlo remoto por ZTNA | `ec-mcp http` + nginx + token `EC_MCP_AUTH_TOKEN` (producción) |
+
+Guía completa, HTTP/SSE, systemd y nginx: [ec-mcp/README.md](ec-mcp/README.md).
 ---
 
 ## DashboardAPI-EC

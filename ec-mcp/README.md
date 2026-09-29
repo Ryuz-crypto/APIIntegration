@@ -41,14 +41,66 @@ auditoría) pero no los sustituye.
 
 ## Instalación
 
-### Desde el repositorio
+### Linux recién instalado: de cero a funcionar en 4 pasos
+
+**Paso 0 — Prerrequisitos (una sola vez):**
 
 ```bash
-cd ec-mcp
-python -m venv .venv && source .venv/bin/activate
-pip install -e .
+sudo apt update
+sudo apt install -y git python3-venv python3-pip
+```
 
-# Copia y completa la configuración
+**Paso 1 — Descargar el proyecto:**
+
+```bash
+git clone https://github.com/Ryuz-crypto/APIIntegration.git
+cd APIIntegration/ec-mcp
+```
+
+**Paso 2 — Instalar el servidor:**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+**Paso 3 — Credenciales reales (los `export` viven solo en esta sesión):**
+
+```bash
+export EC_ORCHESTRATOR_URL="https://TU-ORCHESTRATOR-REAL"
+export EC_ORCHESTRATOR_API_KEY="TU-API-KEY-REAL"
+```
+
+`EC_MCP_AUTH_TOKEN` solo se necesita en el modo HTTP remoto (ver "Uso por HTTP/SSE"); para stdio sáltalo.
+
+**Paso 4 — Conectar tu asistente de IA:** no ejecutas `ec-mcp` a mano; el cliente IA lo lanza por ti. Solo dile dónde vive el servidor. En **Claude Desktop** (Settings → Developer → Edit Config, `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "ec-mcp": {
+      "command": "/home/TU-USUARIO/APIIntegration/ec-mcp/.venv/bin/ec-mcp",
+      "env": {
+        "EC_ORCHESTRATOR_URL": "https://TU-ORCHESTRATOR-REAL",
+        "EC_ORCHESTRATOR_API_KEY": "TU-API-KEY-REAL"
+      }
+    }
+  }
+}
+```
+
+Reinicia Claude Desktop y aparecerá "ec-mcp" con sus 7 herramientas. Prueba preguntando: *"¿qué appliances tengo?"*, *"muéstrame los túneles"*, *"ejecuta show system"*.
+
+| Quieres... | Haces... |
+| --- | --- |
+| Probar que el servidor arranca | `ec-mcp` en la terminal (Ctrl+C para salir) |
+| Usarlo desde Claude/Cursor/Le Chat | El JSON del Paso 4 — nada más |
+| Exponerlo remoto por ZTNA | `ec-mcp http` + nginx + token (producción) |
+
+### Instalación alternativa con `.env`
+
+```bash
 cp .env.example .env       # revisa EC_ORCHESTRATOR_URL y credenciales
 set -a; source .env; set +a
 ```
