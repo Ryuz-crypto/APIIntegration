@@ -44,8 +44,31 @@ EC_MCP_AUDIT_LOG=logs/mcp-audit.jsonl
 cd ec-mcp
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
-ec-mcp                                 # stdio (Claude Desktop, Cursor)
-ec-mcp serve --transport sse --port 8808  # HTTP/SSE
+
+# stdio (Claude Desktop, Cursor)
+ec-mcp
+
+# HTTP streamable (recomendado para clientes remotos: ChatGPT, Le Chat)
+export EC_MCP_AUTH_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+ec-mcp http --host 127.0.0.1 --port 8000
+
+# Legacy SSE
+ec-mcp sse --host 127.0.0.1 --port 8000
+```
+
+### Autenticación HTTP/SSE
+
+Los transportes de red exigen `Authorization: Bearer <token>` en cada petición.
+El token se define en `EC_MCP_AUTH_TOKEN`; sin él el servidor se niega a arrancar
+en modo `http`/`sse` (nunca queda expuesto sin auth). Con un token inválido o
+ausente responde `401` antes de crear cualquier sesión MCP.
+
+Para clientes remotos (ChatGPT connectors, Le Chat), publica el endpoint detrás
+de un reverse proxy con TLS (p. ej. Nginx) y usa HTTPS + el bearer token:
+
+```
+POST https://tu-servidor/mcp
+Authorization: Bearer <EC_MCP_AUTH_TOKEN>
 ```
 
 ### Claude Desktop (`claude_desktop_config.json`)
