@@ -1,16 +1,54 @@
-# DashboardAPI-EC
+# APIIntegration — EdgeConnect SD-WAN Platform
 
-[![Version](https://img.shields.io/badge/version-1.5.1%20stable-2fbf9b)](DashboardAPI-EC/README.md)
-[![Ubuntu](https://img.shields.io/badge/Ubuntu-Python%203.12%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
+[![DashboardAPI-EC](https://img.shields.io/badge/DashboardAPI--EC-1.5.1%20stable-2fbf9b)](DashboardAPI-EC/README.md)
+[![ec-mcp](https://img.shields.io/badge/ec--mcp-0.1.0%20MCP%20server-7B61FF)](ec-mcp/README.md)
+[![DashboardAPI-EC CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
+[![ec-mcp CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
-[![DashboardAPI-EC](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
-[![Human Tested](https://img.shields.io/badge/Human%20Tested-EdgeConnect%209.7.1-7B61FF?logo=checkmarx&logoColor=white)](#validación)
+
+Plataforma para descubrir, consultar, visualizar y **conversar** con entornos **HPE Aruba Networking EdgeConnect SD-WAN** mediante sus APIs y su CLI ECOS.
+
+| Componente | Qué hace | Documentación |
+| --- | --- | --- |
+| **DashboardAPI-EC** | Plataforma web: detecta la versión del Orchestrator, identifica capacidades y ensambla un dashboard con datos reales. Paquete `.deb` para Ubuntu, Python 3.12+. | [DashboardAPI-EC/README.md](DashboardAPI-EC/README.md) |
+| **ec-mcp** | Servidor MCP (Model Context Protocol) para asistentes de IA (Claude Desktop, Le Chat, Cursor, ChatGPT): consulta la API REST del Orchestrator, ejecuta comandos `show ...` ECOS por SSH y aplica cambios con dry-run, whitelist y audit log. | [ec-mcp/README.md](ec-mcp/README.md) |
+
+## ec-mcp — tu SD-WAN conversacional
+
+- **~1550 operaciones API** por versión (9.3–9.6, con fallback 9.7→9.6) importadas de las especificaciones oficiales OpenAPI de HPE Aruba Networking.
+- **579 comandos CLI ECOS** catalogados: monitoreo, troubleshooting, alarmas, administración y configuración, con ejecución basada en riesgo.
+- **Seguridad por diseño**: `show ...` con whitelist oficial, dry-run por defecto en cambios, `confirm=true` explícito, kill switch `EC_ALLOW_WRITE_TOOLS` y audit log JSONL de cada operación (evidencia ISO 27001 / CIS).
+- Los permisos efectivos son los del usuario autenticado contra el Orchestrator.
+- **Transportes**: stdio, HTTP streamable y SSE con autenticación Bearer y endpoint público `/health`.
+- Publicación segura detrás de tu plataforma **ZTNA** con HTTPS: ver la [guía en ec-mcp/README.md](ec-mcp/README.md).
+
+### Instalación rápida de ec-mcp
+
+```bash
+cd ec-mcp
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
+export EC_ORCHESTRATOR_URL="https://orchestrator.example.com"
+export EC_ORCHESTRATOR_API_KEY="tu-api-key"
+export EC_MCP_AUTH_TOKEN="$(openssl rand -hex 32)"
+
+ec-mcp            # stdio, para Claude Desktop / Cursor / Le Chat
+ec-mcp http       # HTTP streamable en 127.0.0.1:8000/mcp (para publicar tras ZTNA/nginx)
+```
+
+Configuración de clientes IA, variables de entorno, systemd y nginx: [ec-mcp/README.md](ec-mcp/README.md).
+
+---
+
+## DashboardAPI-EC
 
 DashboardAPI-EC es una plataforma web para descubrir, consultar y visualizar entornos **HPE Aruba Networking EdgeConnect** mediante sus APIs. Detecta la versión del Orchestrator, identifica las capacidades disponibles y ensambla un dashboard específico con datos reales.
 
 La versión **1.5.1 stable** funciona en **Ubuntu con Python 3.12 o superior** y se distribuye como paquete `.deb`. Se admiten versiones posteriores de Ubuntu siempre que cumplan estos requisitos.
 
-## Contenido
+### Contenido
 
 - [Características](#características)
 - [Instalación rápida](#instalación-rápida)
