@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ec-mcp"
+version = "0.1.0"
+description = "MCP server for HPE Aruba EdgeConnect SD-WAN (Orchestrator REST + ECOS SSH)"
+requires-python = ">=3.12"
+dependencies = [
+  "mcp[cli]>=1.2",
+  "httpx>=0.27",
+  "netmiko>=4.3",
+  "uvicorn>=0.30",
+  "starlette>=0.38",
+]
+
+[project.scripts]
+ec-mcp = "ec_mcp.server:main"
+
+[tool.setuptools.packages.find]
+include = ["ec_mcp*"]
+
+[tool.setuptools.package-data]
+ec_mcp = ["profiles/*.json"]

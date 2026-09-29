@@ -1,0 +1,28 @@
+name: ec-mcp
+
+on:
+  push:
+    paths:
+      - "ec-mcp/**"
+  pull_request:
+    paths:
+      - "ec-mcp/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ec-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: pip install -e . pytest
+      - name: Run tests
+        run: python -m pytest tests -q
+      - name: Smoke test MCP stdio
+        run: |
+          printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}\n{"jsonrpc":"2.0","method":"notifications/initialized"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n' | timeout 30 ec-mcp | grep -c '"id"'
