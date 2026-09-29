@@ -86,3 +86,37 @@ def test_denied_patterns_still_reject():
             raise AssertionError(f"should have rejected: {command}")
         except SecurityError:
             pass
+
+
+def test_cli_catalog_over_500_commands():
+    from ec_mcp.cli_catalog import total_commands, catalog_entries
+
+    assert total_commands() >= 500
+    entries = catalog_entries()
+    assert len(entries) == total_commands()
+    risks = {e["risk"] for e in entries}
+    assert risks == {"read", "diagnostic", "write"}
+    categories = {e["category"] for e in entries}
+    assert categories == {"monitoring", "troubleshooting", "alarm", "administration", "configuration", "negation"}
+
+
+def test_classify_cli_command():
+    from ec_mcp.cli_catalog import catalog_entries
+
+    risk_by_command = {e["command"]: e["risk"] for e in catalog_entries()}
+
+    def classify(command: str) -> str | None:
+        lowered = command.strip().lower()
+        for entry in sorted(risk_by_command, key=len, reverse=True):
+            if lowered == entry or lowered.startswith(entry + " "):
+                return risk_by_command[entry]
+        return None
+
+    assert classify("show version") == "read"
+    assert classify("show interfaces tunnel 1/2") == "read"
+    assert classify("ping 10.0.0.1") == "diagnostic"
+    assert classify("interface shutdown 1") == "write"
+    assert classify("no interface shutdown 1") == "write"
+    assert classify("configure terminal") == "write"
+    assert classify("show fakecommand123") is None
+    assert classify("rm -rf /") is None

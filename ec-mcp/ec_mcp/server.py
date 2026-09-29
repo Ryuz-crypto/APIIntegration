@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -8,10 +9,11 @@ except ModuleNotFoundError:
     from mcp.server.mcpserver import MCPServer as FastMCP
 
 from .audit import AuditLog
+from .cli_catalog import ADMINISTRATION, ALARM, CONFIGURATION, DIAGNOSTIC, MONITORING, NEGATION, TROUBLESHOOTING, catalog_entries, total_commands
 from .compat import CompatibilityEngine, load_profiles
 from .config import Settings
 from .orchestrator_client import OrchestratorClient
-from .security import ALLOWED_SHOW_COMMANDS, SecurityError, sanitize_output
+from .security import ALLOWED_SHOW_COMMANDS, SecurityError, sanitize_output, validate_show_command
 from .ssh_ecos import ApplianceSshPool
 
 
@@ -20,6 +22,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     engine = CompatibilityEngine(load_profiles(settings.profiles_dir))
     audit = AuditLog(settings.audit_log_path)
     mcp = FastMCP("edgeconnect-sdwan")
+
+    cli_risk_by_command: dict[str, str] = {}
+    for entry in catalog_entries():
+        cli_risk_by_command[entry["command"]] = entry["risk"]
 
     def require_client() -> OrchestratorClient | None:
         try:
@@ -77,6 +83,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             raise SecurityError(f"{name} must be a JSON object")
         return {str(k): str(v) for k, v in parsed.items()}
 
+    def classify_cli_command(command: str) -> str | None:
+        lowered = command.strip().lower()
+        if not lowered:
+            return None
+        for entry in sorted(cli_risk_by_command, key=len, reverse=True):
+            if lowered == entry or lowered.startswith(entry + " "):
+                return cli_risk_by_command[entry]
+        return None
+
     @mcp.tool()
     def orchestrator_info() -> str:
         """Detect the Orchestrator version and the matching API compatibility profile."""
@@ -92,6 +107,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 "available_profiles": engine.versions,
                 "write_tools_enabled": settings.allow_write_tools,
                 "ssh_enabled": settings.ssh_enabled,
+                "cli_commands_available": total_commands(),
             }
             audit.record("orchestrator_info", "detect", settings.orchestrator_url, "ok", details=payload)
             return json_result(payload, settings.max_output_chars)
@@ -151,8 +167,24 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
+    def list_cli_commands(category: str = "") -> str:
+        """List the official ECOS CLI commands available via run_cli_command/run_show_command, from the HPE Aruba EdgeConnect CLI Reference: 579 commands across categories monitoring (read), troubleshooting (diagnostic), alarm, administration, configuration and negation (write)."""
+        entries = catalog_entries()
+        if category:
+            lowered = category.strip().lower()
+            entries = [e for e in entries if e["category"] == lowered]
+        payload = {
+            "count": len(entries),
+            "total": total_commands(),
+            "categories": ["monitoring", "troubleshooting", "alarm", "administration", "configuration", "negation"],
+            "commands": entries,
+        }
+        audit.record("list_cli_commands", "read", "cli-reference", "ok", details={"returned": len(entries)})
+        return json_result(payload, settings.max_output_chars * 8)
+
+    @mcp.tool()
     def run_show_command(command: str, host: str = "") -> str:
-        """Run a whitelisted read-only ECOS 'show' command on an EdgeConnect appliance over SSH. Use list_cli_commands to discover the ~85 official ECOS show commands (from the CLI Reference: interfaces, tunnels, stats, bgp, ospf, overlays, alarms, users, version...)."""
+        """Run a whitelisted read-only ECOS 'show' command on an EdgeConnect appliance over SSH. Use list_cli_commands to discover the official monitoring commands."""
         pool = ApplianceSshPool(settings)
         try:
             session = pool.get(host or None)
@@ -166,11 +198,39 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             pool.close_all()
 
     @mcp.tool()
-    def list_cli_commands() -> str:
-        """List the official ECOS 'show' commands available through run_show_command, extracted from the HPE Aruba EdgeConnect CLI Reference."""
-        payload = {"show_commands": ALLOWED_SHOW_COMMANDS, "count": len(ALLOWED_SHOW_COMMANDS)}
-        audit.record("list_cli_commands", "read", "cli-reference", "ok")
-        return json_result(payload, settings.max_output_chars)
+    def run_cli_command(command: str, host: str = "", confirm: bool = False) -> str:
+        """Run any official ECOS CLI command from the CLI Reference on an appliance over SSH. Monitoring/troubleshooting commands execute directly; configuration/administration/negation commands are dry-run by default and require confirm=true plus EC_ALLOW_WRITE_TOOLS=true. Use list_cli_commands to discover the 579 available commands."""
+        pool = ApplianceSshPool(settings)
+        target = host or settings.ssh_host
+        try:
+            risk = classify_cli_command(command)
+            if risk is None:
+                raise SecurityError(f"Command not in the official ECOS CLI catalog: {command}")
+            if risk == "write":
+                require_writes()
+                if not confirm:
+                    audit.record("run_cli_command", command, target, "dry-run", dry_run=True)
+                    return json_result(
+                        {
+                            "dry_run": True,
+                            "would_execute": command,
+                            "risk": risk,
+                            "hint": "Pass confirm=true to execute. Requires EC_ALLOW_WRITE_TOOLS=true.",
+                        },
+                        settings.max_output_chars,
+                    )
+            session = pool.get(host or None)
+            if risk == "read":
+                output = session.run_show(command)
+            else:
+                output = session.run_raw(command)
+            audit.record("run_cli_command", command, target, "ok", dry_run=False, details={"risk": risk})
+            return output
+        except Exception as error:
+            audit.record("run_cli_command", command, target, f"error: {error}")
+            return f"Error: {error}"
+        finally:
+            pool.close_all()
 
     @mcp.tool()
     def apply_change(

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import re
+
 from .security import SecurityError, sanitize_output, validate_show_command
 
 try:
     from netmiko import ConnectHandler
 except ImportError:
     ConnectHandler = None
+
+FORBIDDEN_CHARS = re.compile(r"[;&`]|\|\||&&|\$\(")
 
 
 class ApplianceSession:
@@ -24,6 +28,15 @@ class ApplianceSession:
     def run_show(self, command: str) -> str:
         validated = validate_show_command(command)
         raw = self._connection.send_command(validated, read_timeout=30)
+        return sanitize_output(raw, self._max_output_chars)
+
+    def run_raw(self, command: str) -> str:
+        normalized = command.strip()
+        if not normalized:
+            raise SecurityError("Empty command")
+        if FORBIDDEN_CHARS.search(normalized):
+            raise SecurityError("Command contains forbidden characters")
+        raw = self._connection.send_command(normalized, read_timeout=60)
         return sanitize_output(raw, self._max_output_chars)
 
     def close(self) -> None:
