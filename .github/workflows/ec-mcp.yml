@@ -43,9 +43,11 @@ jobs:
         with:
           fetch-depth: 0
       - name: Secret scan (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=8.24.3
+          curl -sL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | tar xz -C /tmp gitleaks
+          /tmp/gitleaks git . --redact --verbose --config .gitleaks.toml
 
   audit-deps:
     runs-on: ubuntu-latest
