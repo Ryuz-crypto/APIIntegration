@@ -172,7 +172,7 @@ El MCP nunca debe exponerse directamente a internet. Publica el bind local a
 través de tu reverse proxy con TLS o de tu plataforma ZTNA:
 
 ```
-ec-mcp (127.0.0.1:8000, bearer) ⇄ Nginx/ZTNA (TLS) ⇄ https://mcp.tu-dominio/mcp
+ec-mcp (127.0.0.1:8000, bearer) ⇄ Nginx/ZTNA (TLS, puerto 10001) ⇄ https://mcp.tu-dominio:10001/mcp
 ```
 
 Ejemplo de Nginx en [`packaging/nginx/ec-mcp.conf`](packaging/nginx/ec-mcp.conf)
@@ -182,12 +182,32 @@ Ejemplo de Nginx en [`packaging/nginx/ec-mcp.conf`](packaging/nginx/ec-mcp.conf)
 - Timeouts generosos (las sesiones MCP viven minutos).
 - **Mantén el bearer token** aunque el ZTNA autentique al usuario: doble capa.
 
-Configuración del cliente remoto (ChatGPT connectors, Le Chat, otro agente):
+Configuración del cliente remoto (ChatGPT connectors, Le Chat, Vibe, otro agente):
 
 ```
-URL:     https://mcp.tu-dominio/mcp
+URL:     https://mcp.tu-dominio:10001/mcp
 Headers: Authorization: Bearer <EC_MCP_AUTH_TOKEN>
 ```
+
+### Conexión desde ChatGPT (connectors) y Vibe
+
+**ChatGPT**: Settings → Connectors → Advanced/Create → "Add new MCP server":
+- URL: `https://mcp.tu-dominio:10001/mcp`
+- Authentication: Bearer token → pega `EC_MCP_AUTH_TOKEN`
+- Guarda, abre el chat, activa el connector "ec-mcp" en el selector de herramientas y prueba: *"lista las operaciones API disponibles"*.
+
+**Vibe / otros clientes con MCP remoto**: misma URL y el header
+`Authorization: Bearer <EC_MCP_AUTH_TOKEN>`. Tras conectar verás las 7 herramientas
+(`orchestrator_info`, `list_api_operations`, `call_read_api`, `list_cli_commands`,
+`run_show_command`, `run_cli_command`, `apply_change`).
+
+Verifica la publicación antes de conectar el cliente (health check público):
+
+```bash
+curl https://mcp.tu-dominio:10001/health
+```
+
+Respuesta esperada: `{"status":"ok","service":"ec-mcp"}`
 
 ## Instalación como servicio (Ubuntu + systemd)
 
@@ -231,6 +251,29 @@ Ver [`.env.example`](.env.example) con la referencia completa. Resumen:
 | `EC_MCP_AUDIT_LOG` | `logs/mcp-audit.jsonl` | Audit log JSONL |
 | `EC_MCP_AUTH_TOKEN` | — | Bearer token (obligatorio en http/sse) |
 | `EC_MCP_HOST/PORT` | `127.0.0.1:8000` | Bind del transporte HTTP |
+
+## Credenciales EdgeConnect: qué necesitas y cuándo
+
+La IA no "adivina" credenciales: usa las que tú configuras en el entorno (`.env`,
+systemd o bloque `env` del cliente IA). Con ellas ya tiene acceso; lo que puede
+hacer depende de los permisos de esa cuenta contra el Orchestrator/appliance.
+
+| Acceso | Variables | Cuándo se usa |
+| --- | --- | --- |
+| Orchestrator con **API key** | `EC_ORCHESTRATOR_URL` + `EC_ORCHESTRATOR_API_KEY` | Preferido: OaaS y on-premises con token de larga vida |
+| Orchestrator con **usuario/contraseña** | `EC_ORCHESTRATOR_URL` + `EC_ORCHESTRATOR_USER` + `EC_ORCHESTRATOR_PASSWORD` | Cuando no hay API key; el MCP hace login y mantiene la sesión |
+| **Appliances por SSH** (CLI ECOS) | `EC_SSH_ENABLED=true` + `EC_SSH_HOST`/`EC_SSH_USER`/`EC_SSH_PASSWORD` (+ `EC_SSH_PORT`) | Para `run_show_command`/`run_cli_command`; opcional, solo si quieres CLI en vivo |
+
+Notas:
+
+- Puedes configurar ambos métodos del Orchestrator; el MCP prefiere la API key.
+- Para SSH, `run_cli_command`/`run_show_command` aceptan un parámetro `host`
+  para dirigirte a un appliance concreto sin cambiar la configuración.
+- Si tu usuario de Orchestrator usa OTP, usa una API key para el Orchestrator
+  (el OTP de un solo uso no sirve para sesiones automatizadas) y
+  usuario/contraseña para SSH a los appliances.
+- Recomendación: API key de **solo lectura** para empezar; amplía permisos de
+  escritura solo cuando confíes en el flujo dry-run → confirm.
 
 ## Perfiles generados desde los OAS oficiales
 

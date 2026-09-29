@@ -20,7 +20,8 @@ Plataforma para descubrir, consultar, visualizar y **conversar** con entornos **
 - **Seguridad por diseño**: `show ...` con whitelist oficial, dry-run por defecto en cambios, `confirm=true` explícito, kill switch `EC_ALLOW_WRITE_TOOLS` y audit log JSONL de cada operación (evidencia ISO 27001 / CIS).
 - Los permisos efectivos son los del usuario autenticado contra el Orchestrator.
 - **Transportes**: stdio, HTTP streamable y SSE con autenticación Bearer y endpoint público `/health`.
-- Publicación segura detrás de tu plataforma **ZTNA** con HTTPS: ver la [guía en ec-mcp/README.md](ec-mcp/README.md).
+- Publicación segura detrás de tu plataforma **ZTNA** con HTTPS (ejemplo nginx en puerto 10001): ver la [guía en ec-mcp/README.md](ec-mcp/README.md), que incluye la conexión desde **ChatGPT connectors y Vibe**.
+- **Credenciales**: API key o usuario/contraseña del Orchestrator, y opcionalmente SSH (usuario/contraseña) a los appliances — documentado en [ec-mcp/README.md](ec-mcp/README.md#credenciales-edgeconnect-qué-necesitas-y-cuándo).
 
 ### Instalación rápida de ec-mcp (Linux recién instalado)
 
@@ -63,7 +64,7 @@ Reinicia Claude Desktop y pregunta: *"¿qué appliances tengo?"* o *"ejecuta sho
 | --- | --- |
 | Probar que el servidor arranca | `ec-mcp` en la terminal (Ctrl+C para salir) |
 | Usarlo desde Claude/Cursor/Le Chat | El JSON del Paso 4 — nada más |
-| Exponerlo remoto por ZTNA | `ec-mcp http` + nginx + token `EC_MCP_AUTH_TOKEN` (producción) |
+| Exponerlo remoto por ZTNA | `ec-mcp http` + nginx (puerto 10001, ejemplo incluido) + token `EC_MCP_AUTH_TOKEN` (producción) |
 
 Guía completa, HTTP/SSE, systemd y nginx: [ec-mcp/README.md](ec-mcp/README.md).
 ---
