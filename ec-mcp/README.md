@@ -276,7 +276,7 @@ Extraído del **CLI Reference oficial** de HPE Aruba EdgeConnect SD-WAN:
 
 | Categoría | Comandos | Ejecución |
 |---|---|---|
-| Monitoring (`show ...`) | 85 | Directa (read) |
+| Monitoring (`show ...`) | 249 en whitelist | Directa (read) |
 | Troubleshooting (`ping`, `tcpdump`, `mtr`...) | 8 | Directa (diagnostic) |
 | Alarm (`logging ...`) | 5 | Dry-run + confirm |
 | Administration (`aaa ...`, `image ...`, `configuration ...`) | 106 | Dry-run + confirm |
@@ -289,6 +289,16 @@ run_cli_command("ping 10.0.0.1")                       → ejecuta directo
 run_cli_command("interface shutdown 1")                → dry-run
 run_cli_command("interface shutdown 1", confirm=true)  → ejecuta (requiere EC_ALLOW_WRITE_TOOLS)
 ```
+
+### Flujo de autorización para cambios
+
+Cada cambio (CLI o API) pasa por dos candados y una confirmación:
+
+1. **Kill switch**: `EC_ALLOW_WRITE_TOOLS=true` en el entorno; si está apagado, el MCP nunca ejecuta escrituras.
+2. **Dry-run por defecto**: el primer intento devuelve exactamente qué ejecutaría (`would_execute` / método+path+body), sin tocar el equipo.
+3. **El "aceptar"**: el asistente reenvía la misma llamada con `confirm=true` y el cambio se ejecuta, quedando registrado en el audit log.
+
+Para el asistente es tan simple como: pide el cambio → ve el dry-run → pregunta al usuario → reenvía con `confirm=true`.
 
 Comandos fuera del catálogo se rechazan; metacaracteres de shell (`;`, `` ` ``,
 `&&`, `$()`) bloqueados; todo queda en el audit log.

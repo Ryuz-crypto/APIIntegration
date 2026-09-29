@@ -36,6 +36,8 @@ def test_path_rendering():
 
 
 def test_whitelist_accepts_show():
+    for command in ("show bgp neighbors", "show ipsec sa", "show vrrp interface", "show mpls ldp session"):
+        assert validate_show_command(command).startswith("show")
     assert validate_show_command("show version").startswith("show")
     assert validate_show_command("  show tunnel stats ").startswith("show")
 

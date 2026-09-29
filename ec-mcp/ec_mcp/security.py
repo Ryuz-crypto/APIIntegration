@@ -94,6 +94,10 @@ ALLOWED_SHOW_COMMANDS = [
     "show subtended",
 ]
 
+from ec_mcp.cli_catalog import MONITORING as CATALOG_MONITORING
+
+ALLOWED_SHOW_COMMANDS = list(dict.fromkeys(ALLOWED_SHOW_COMMANDS + CATALOG_MONITORING))
+
 ALLOWED_SHOW_PATTERNS = [
     re.compile(rf"^{re.escape(command)}(\s|$)")
     for command in ALLOWED_SHOW_COMMANDS
