@@ -11,7 +11,7 @@ from .audit import AuditLog
 from .compat import CompatibilityEngine, load_profiles
 from .config import Settings
 from .orchestrator_client import OrchestratorClient
-from .security import SecurityError, sanitize_output
+from .security import ALLOWED_SHOW_COMMANDS, SecurityError, sanitize_output
 from .ssh_ecos import ApplianceSshPool
 
 
@@ -152,7 +152,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def run_show_command(command: str, host: str = "") -> str:
-        """Run a whitelisted read-only ECOS 'show' command on an EdgeConnect appliance over SSH."""
+        """Run a whitelisted read-only ECOS 'show' command on an EdgeConnect appliance over SSH. Use list_cli_commands to discover the ~85 official ECOS show commands (from the CLI Reference: interfaces, tunnels, stats, bgp, ospf, overlays, alarms, users, version...)."""
         pool = ApplianceSshPool(settings)
         try:
             session = pool.get(host or None)
@@ -164,6 +164,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
         finally:
             pool.close_all()
+
+    @mcp.tool()
+    def list_cli_commands() -> str:
+        """List the official ECOS 'show' commands available through run_show_command, extracted from the HPE Aruba EdgeConnect CLI Reference."""
+        payload = {"show_commands": ALLOWED_SHOW_COMMANDS, "count": len(ALLOWED_SHOW_COMMANDS)}
+        audit.record("list_cli_commands", "read", "cli-reference", "ok")
+        return json_result(payload, settings.max_output_chars)
 
     @mcp.tool()
     def apply_change(

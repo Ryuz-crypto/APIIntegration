@@ -19,7 +19,8 @@ EdgeConnect SD-WAN a asistentes de IA (Claude Desktop, Cursor, Le Chat, etc.).
 | `orchestrator_info` | lectura | Detecta versión del Orchestrator y perfil activo |
 | `list_api_operations` | lectura | Lista operation IDs por versión |
 | `call_read_api` | lectura | Ejecuta una operación GET del perfil |
-| `run_show_command` | lectura | Comando `show` ECOS whitelisteado vía SSH |
+| `list_cli_commands` | lectura | Catálogo de comandos `show` ECOS oficiales (del CLI Reference de HPE Aruba) |
+| `run_show_command` | lectura | Comando `show` ECOS whitelisteado vía SSH (~85 comandos del CLI Reference oficial) |
 | `apply_change` | escritura | Dry-run por defecto; requiere `confirm=true` y `EC_ALLOW_WRITE_TOOLS`. Soporta path params (`appliance_id`, `group_id`, `interface_name`) y body JSON. Los permisos efectivos son los del usuario autenticado en el Orchestrator |
 
 ## Configuración (`.env`)

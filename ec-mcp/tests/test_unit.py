@@ -55,3 +55,34 @@ def test_whitelist_rejects_dangerous():
             raise AssertionError(f"should have rejected: {command}")
         except SecurityError:
             pass
+
+
+def test_official_show_catalog_accepted():
+    assert validate_show_command("show interfaces tunnel").startswith("show")
+    assert validate_show_command("show stats tunnel").startswith("show")
+    assert validate_show_command("show overlay").startswith("show")
+    assert validate_show_command("show tech-support").startswith("show")
+    assert validate_show_command("show ip-tracking").startswith("show")
+
+
+def test_show_unknown_command_rejected():
+    for command in ["show supersecret", "showx version"]:
+        try:
+            validate_show_command(command)
+            raise AssertionError(f"should have rejected: {command}")
+        except SecurityError:
+            pass
+
+
+def test_denied_patterns_still_reject():
+    for command in [
+        "show version; reboot",
+        "show version && whoami",
+        "show config",
+        "show version | terminal length 0",
+    ]:
+        try:
+            validate_show_command(command)
+            raise AssertionError(f"should have rejected: {command}")
+        except SecurityError:
+            pass
