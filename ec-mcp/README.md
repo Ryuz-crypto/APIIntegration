@@ -1,99 +1,184 @@
 # ec-mcp: MCP server for EdgeConnect SD-WAN
 
 Servidor MCP (Model Context Protocol) que expone un entorno HPE Aruba Networking
-EdgeConnect SD-WAN a asistentes de IA (Claude Desktop, Cursor, Le Chat, etc.).
+EdgeConnect SD-WAN a asistentes de IA (Claude Desktop, Cursor, Le Chat,
+ChatGPT, Vibe, etc.).
 
-## Componentes
-
-- **Orchestrator (REST)**: operaciones estables (`orchestrator.topology`,
-  `orchestrator.inventory.summary`, `appliance.tunnels`, ...) resueltas por
-  perfil de compatibilidad 9.3–9.6 (heredado de `DashboardAPI-EC`).
-- **Appliances (SSH)**: comandos `show` de ECOS con whitelist de solo lectura.
-- **Seguridad**: cambios con dry-run por defecto, whitelist de comandos,
-  salida truncada y redactada, audit log JSONL de cada operación.
+- **Orchestrator + Appliance (REST)**: ~1550 operaciones por versión (9.3–9.6)
+  generadas desde los **OpenAPI oficiales** de HPE Aruba (Orchestrator REST
+  APIs, 695 paths; Silver Peak Unity ECOS REST APIs, 388 paths).
+- **Appliances (SSH)**: **579 comandos ECOS** del CLI Reference oficial,
+  clasificados por riesgo (monitoreo, troubleshooting, alarmas,
+  administración, configuración, negación).
+- **Seguridad**: dry-run por defecto en toda operación de escritura, whitelist
+  de comandos, kill switch global, salida truncada, y audit log JSONL de cada
+  operación (evidencia ISO 27001 / CIS).
+- **Transportes**: stdio (Claude Desktop/Cursor) y HTTP streamable / SSE con
+  **bearer token obligatorio** y `/health` público, pensado para publicarse
+  detrás de TLS o una plataforma ZTNA.
 
 ## Herramientas MCP
 
 | Tool | Riesgo | Descripción |
 |---|---|---|
 | `orchestrator_info` | lectura | Detecta versión del Orchestrator y perfil activo |
-| `list_api_operations` | lectura | Lista operation IDs por versión |
-| `call_read_api` | lectura | Ejecuta una operación GET del perfil |
-| `list_cli_commands` | lectura | Catálogo de **579 comandos ECOS** del CLI Reference oficial (monitoreo, troubleshooting, alarmas, administración, configuración, negación) |
+| `list_api_operations` | lectura | Lista las ~1550 operaciones API con method, path, params y riesgo |
+| `call_read_api` | lectura | Ejecuta una operación GET del perfil (topología, túneles, eventos, stats...) |
+| `list_cli_commands` | lectura | Catálogo de los 579 comandos ECOS oficiales, con filtro por categoría |
 | `run_show_command` | lectura | Comando `show` whitelisteado vía SSH |
-| `run_cli_command` | según riesgo | Cualquier comando del catálogo ECOS: monitoreo/troubleshooting ejecuta directo; configuración/administración en dry-run con `confirm=true` + `EC_ALLOW_WRITE_TOOLS` |
-| `apply_change` | escritura | Dry-run por defecto; requiere `confirm=true` y `EC_ALLOW_WRITE_TOOLS`. Soporta path params (`appliance_id`, `group_id`, `interface_name`) y body JSON. Los permisos efectivos son los del usuario autenticado en el Orchestrator |
+| `run_cli_command` | según riesgo | Cualquier comando del catálogo ECOS: monitoreo/troubleshooting directo; configuración en dry-run |
+| `apply_change` | escritura | Operación API de cambio; dry-run por defecto, requiere `confirm=true` + `EC_ALLOW_WRITE_TOOLS=true` |
 
-## Configuración (`.env`)
+Los permisos efectivos son siempre los del usuario autenticado contra el
+Orchestrator/appliance; el MCP añade sus capas de control (dry-run, whitelist,
+auditoría) pero no los sustituye.
 
-```
-EC_ORCHESTRATOR_URL=https://orchestrator.example.com
-EC_ORCHESTRATOR_API_KEY=...           # o EC_ORCHESTRATOR_USER + EC_ORCHESTRATOR_PASSWORD
-EC_VERIFY_TLS=true
-EC_SSH_ENABLED=false
-EC_SSH_HOST=192.0.2.10
-EC_SSH_USER=admin
-EC_SSH_PASSWORD=...
-EC_ALLOW_WRITE_TOOLS=false             # arranca read-only
-EC_MCP_AUDIT_LOG=logs/mcp-audit.jsonl
-```
+## Requisitos
+
+- Python 3.12+
+- Acceso al Orchestrator (API key o usuario/contraseña)
+- Para SSH: credenciales de appliance habilitadas
 
 ## Instalación
+
+### Desde el repositorio
 
 ```bash
 cd ec-mcp
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
 
-# stdio (Claude Desktop, Cursor)
-ec-mcp
+# Copia y completa la configuración
+cp .env.example .env       # revisa EC_ORCHESTRATOR_URL y credenciales
+set -a; source .env; set +a
+```
 
-# HTTP streamable (recomendado para clientes remotos: ChatGPT, Le Chat)
+### Verificación rápida
+
+```bash
+python -m pytest tests -q        # 19 tests
+ec-mcp                           # arranca en stdio; Ctrl+C para salir
+```
+
+## Uso por stdio (Claude Desktop, Cursor)
+
+**Claude Desktop** — `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "edgeconnect": {
+      "command": "/ruta/a/ec-mcp/.venv/bin/ec-mcp",
+      "env": {
+        "EC_ORCHESTRATOR_URL": "https://orchestrator.example.com",
+        "EC_ORCHESTRATOR_API_KEY": "..."
+      }
+    }
+  }
+}
+```
+
+**Cursor** — `.cursor/mcp.json`: mismo JSON.
+
+Arranca **read-only** por defecto. Para habilitar operaciones de escritura:
+`EC_ALLOW_WRITE_TOOLS=true` (y aun así, cada cambio requiere `confirm=true`).
+
+## Uso por HTTP/SSE (clientes remotos: ChatGPT, Le Chat, agentes)
+
+```bash
+# 1. Genera el token (obligatorio; sin él el servidor se niega a arrancar)
 export EC_MCP_AUTH_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+
+# 2. Arranca en streamable-HTTP (bind local; se publica vía proxy/ZTNA)
 ec-mcp http --host 127.0.0.1 --port 8000
 
-# Legacy SSE
-ec-mcp sse --host 127.0.0.1 --port 8000
+# 3. Verifica
+curl http://127.0.0.1:8000/health
+# {"status":"ok","service":"ec-mcp"}
+
+curl -X POST http://127.0.0.1:8000/mcp \
+  -H "Authorization: Bearer $EC_MCP_AUTH_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}'
+# → 200 con serverInfo: edgeconnect-sdwan
 ```
 
-### Autenticación HTTP/SSE
+También disponible: `ec-mcp sse` (SSE legacy) y `ec-mcp` (stdio).
 
-Los transportes de red exigen `Authorization: Bearer <token>` en cada petición.
-El token se define en `EC_MCP_AUTH_TOKEN`; sin él el servidor se niega a arrancar
-en modo `http`/`sse` (nunca queda expuesto sin auth). Con un token inválido o
-ausente responde `401` antes de crear cualquier sesión MCP.
+### Autenticación
 
-Para clientes remotos (ChatGPT connectors, Le Chat), publica el endpoint detrás
-de un reverse proxy con TLS (p. ej. Nginx) y usa HTTPS + el bearer token:
+- Cada petición a `/mcp` exige `Authorization: Bearer <EC_MCP_AUTH_TOKEN>`;
+  sin token o inválido responde `401` antes de crear cualquier sesión MCP
+  (comparación en tiempo constante).
+- `/health` es público: para probes de balanceadores y plataformas ZTNA.
+- El servidor **se niega a arrancar** en modo `http`/`sse` sin token.
+
+### Publicación detrás de TLS / plataforma ZTNA
+
+El MCP nunca debe exponerse directamente a internet. Publica el bind local a
+través de tu reverse proxy con TLS o de tu plataforma ZTNA:
 
 ```
-POST https://tu-servidor/mcp
-Authorization: Bearer <EC_MCP_AUTH_TOKEN>
+ec-mcp (127.0.0.1:8000, bearer) ⇄ Nginx/ZTNA (TLS) ⇄ https://mcp.tu-dominio/mcp
 ```
 
-### Claude Desktop (`claude_desktop_config.json`)
+Ejemplo de Nginx en [`packaging/nginx/ec-mcp.conf`](packaging/nginx/ec-mcp.conf)
+(streaming habilitado, timeouts largos, `/health` público). Requisitos del proxy:
 
-```json
-{
-  "mcpServers": {
-    "edgeconnect": {
-      "command": "/ruta/a/ec-mcp/.venv/bin/ec-mcp"
-    }
-  }
-}
+- `proxy_buffering off` — las respuestas SSE/chunked no deben buferizarse.
+- Timeouts generosos (las sesiones MCP viven minutos).
+- **Mantén el bearer token** aunque el ZTNA autentique al usuario: doble capa.
+
+Configuración del cliente remoto (ChatGPT connectors, Le Chat, otro agente):
+
+```
+URL:     https://mcp.tu-dominio/mcp
+Headers: Authorization: Bearer <EC_MCP_AUTH_TOKEN>
 ```
 
-### Cursor (`.cursor/mcp.json`)
+## Instalación como servicio (Ubuntu + systemd)
 
-```json
-{
-  "mcpServers": {
-    "edgeconnect": {
-      "command": "/ruta/a/ec-mcp/.venv/bin/ec-mcp"
-    }
-  }
-}
+```bash
+# 1. Usuario y código
+sudo useradd --system --home /opt/ec-mcp --shell /usr/sbin/nologin ecmcp
+sudo mkdir -p /opt/ec-mcp && sudo chown -R ecmcp:ecmcp /opt/ec-mcp
+sudo -u ecmcp git clone https://github.com/Ryuz-crypto/APIIntegration.git /tmp/repo
+sudo -u ecmcp cp -r /tmp/repo/ec-mcp/* /opt/ec-mcp/
+cd /opt/ec-mcp && sudo -u ecmcp python3 -m venv .venv
+sudo -u ecmcp .venv/bin/pip install -e .
+
+# 2. Configuración (root-only)
+sudo mkdir -p /etc/ec-mcp /var/lib/ec-mcp && sudo chown ecmcp:ecmcp /var/lib/ec-mcp
+sudo cp .env.example /etc/ec-mcp/env
+sudo $EDITOR /etc/ec-mcp/env        # EC_ORCHESTRATOR_*, EC_MCP_AUTH_TOKEN, EC_MCP_AUDIT_LOG=/var/lib/ec-mcp/mcp-audit.jsonl
+sudo chmod 600 /etc/ec-mcp/env && sudo chown root:ecmcp /etc/ec-mcp/env
+
+# 3. Servicio
+sudo cp packaging/systemd/ec-mcp.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now ec-mcp
+systemctl status ec-mcp && curl http://127.0.0.1:8000/health
 ```
+
+El servicio corre con endurecimiento systemd (`NoNewPrivileges`,
+`ProtectSystem=strict`, `ProtectHome`) y solo escucha en `127.0.0.1`.
+
+## Configuración (variables de entorno)
+
+Ver [`.env.example`](.env.example) con la referencia completa. Resumen:
+
+| Variable | Default | Descripción |
+|---|---|---|
+| `EC_ORCHESTRATOR_URL` | — | URL del Orchestrator (obligatoria) |
+| `EC_ORCHESTRATOR_API_KEY` | — | API key (o `EC_ORCHESTRATOR_USER`/`PASSWORD`) |
+| `EC_VERIFY_TLS` | `true` | Verificar certificados TLS |
+| `EC_SSH_ENABLED` | `false` | Habilitar tools SSH |
+| `EC_SSH_HOST/USER/PASSWORD/PORT` | — | Credenciales del appliance |
+| `EC_ALLOW_WRITE_TOOLS` | `false` | Kill switch global de escritura |
+| `EC_MAX_OUTPUT_CHARS` | `12000` | Truncado de respuestas al LLM |
+| `EC_MCP_AUDIT_LOG` | `logs/mcp-audit.jsonl` | Audit log JSONL |
+| `EC_MCP_AUTH_TOKEN` | — | Bearer token (obligatorio en http/sse) |
+| `EC_MCP_HOST/PORT` | `127.0.0.1:8000` | Bind del transporte HTTP |
 
 ## Perfiles generados desde los OAS oficiales
 
@@ -119,35 +204,69 @@ python -m ec_mcp.import_oas ecos-appliance.json --version 9.6 --prefix appliance
 ```
 
 Cada operación incluye method, path, path/query params, ejemplo de body
-derivado del schema y clasificación de riesgo `read`/`write`. Las versiones
-9.3–9.5 usan el mismo OAS oficial (la API documentada del hub cubre ese
-rango); al publicar HPE un OAS nuevo, basta reimportar con `--merge-into`.
+derivado del schema y clasificación de riesgo `read`/`write`. Al publicar HPE
+un OAS nuevo, basta reimportar con `--merge-into`.
 
-## Ampliar perfiles con colecciones Postman
+### Ampliar perfiles con colecciones Postman
 
-El workspace público de Postman de HPE Aruba (oficial) contiene las mismas
-APIs en formato colección. Exporta la colección (JSON v2.0/v2.1) e impórtala
-como alternativa o complemento:
+El workspace público de Postman de HPE Aruba contiene las mismas APIs en
+formato colección. Exporta la colección (JSON v2.0/v2.1) e impórtala como
+alternativa o complemento:
 
 ```bash
 python -m ec_mcp.import_postman EdgeConnect-Orchestrator.postman_collection.json --version 9.7 --merge-into 9.6
 ```
 
-## Operaciones de escritura incluidas
+## Catálogo CLI ECOS (579 comandos)
 
-Los perfiles incluyen operaciones de cambio reales (`appliance.interface.set_admin_state`,
-`appliance.suspend_traffic`, `policy_group.update`, `appliance.tag.assign`,
-`appliance.send_command`, `appliance.reboot`, entre otras). Todas pasan por
-`apply_change` con dry-run, whitelist global (`EC_ALLOW_WRITE_TOOLS`) y auditoría;
-la autorización final es la del usuario autenticado contra el Orchestrator.
+Extraído del **CLI Reference oficial** de HPE Aruba EdgeConnect SD-WAN:
 
-```bash
-pip install -e "ec-mcp[mcp]"
-python -m ec_mcp.import_postman EdgeConnect-API.postman_collection.json --version 9.7 --merge-into 9.6
+| Categoría | Comandos | Ejecución |
+|---|---|---|
+| Monitoring (`show ...`) | 85 | Directa (read) |
+| Troubleshooting (`ping`, `tcpdump`, `mtr`...) | 8 | Directa (diagnostic) |
+| Alarm (`logging ...`) | 5 | Dry-run + confirm |
+| Administration (`aaa ...`, `image ...`, `configuration ...`) | 106 | Dry-run + confirm |
+| Configuration (`interface ...`, `bgp ...`, `ospf ...`, `nat-map ...`...) | ~240 | Dry-run + confirm |
+| Negation (`no ...`) | 135 | Dry-run + confirm |
+
+```
+run_cli_command("show interfaces tunnel 1/2")          → ejecuta directo
+run_cli_command("ping 10.0.0.1")                       → ejecuta directo
+run_cli_command("interface shutdown 1")                → dry-run
+run_cli_command("interface shutdown 1", confirm=true)  → ejecuta (requiere EC_ALLOW_WRITE_TOOLS)
 ```
 
-## Estado
+Comandos fuera del catálogo se rechazan; metacaracteres de shell (`;`, `` ` ``,
+`&&`, `$()`) bloqueados; todo queda en el audit log.
 
-Esqueleto funcional: REST read-only completo, SSH whitelisteado, dry-run de
-escritura y auditoría. `apply_change` envía el body JSON cuando `confirm=true`
-y `EC_ALLOW_WRITE_TOOLS=true`; probar primero en lab.
+## Auditoría
+
+Cada invocación de tool registra en el JSONL: timestamp UTC, tool, acción,
+target, resultado, dry-run/real y detalles. Ejemplo de línea:
+
+```json
+{"timestamp":"2026-09-29T05:10:01+00:00","tool":"apply_change","action":"appliance.suspend_traffic","target":"/appliance/suspend/3.NE","result":"dry-run","dry_run":true,"details":{"confirmed":false}}
+```
+
+## Flujo de trabajo típico
+
+```
+1. orchestrator_info          → detecta versión y perfil
+2. list_api_operations        → el asistente descubre las operaciones y params
+3. call_read_api("orchestrator.topology")
+4. run_cli_command("show interfaces tunnel 1/2")
+5. apply_change(..., confirm=false)   → dry-run: muestra el cambio exacto
+6. apply_change(..., confirm=true)    → lo ejecuta (si el usuario tiene permiso)
+```
+
+## Estado y validación
+
+- Tests: 19 (perfiles, whitelist, catálogo, importadores OAS/Postman, auth HTTP en vivo).
+- CI: pytest + smoke test stdio en cada push/PR que toque `ec-mcp/`.
+- Pendiente: validar paths de escritura contra un Orchestrator real en lab
+  antes de habilitar `EC_ALLOW_WRITE_TOOLS` en producción.
+
+## Licencia
+
+Igual que el repositorio contenedor ([LICENSE](../LICENSE)).

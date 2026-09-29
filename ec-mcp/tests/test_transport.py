@@ -66,3 +66,9 @@ def test_http_accepts_valid_token(http_server):
     assert resp.status == 200
     body = resp.read().decode()
     assert "edgeconnect" in body.lower() or "serverinfo" in body.lower()
+
+
+def test_health_endpoint_public(http_server):
+    resp = urllib.request.urlopen(f"http://127.0.0.1:{PORT}/health", timeout=5)
+    assert resp.status == 200
+    assert b"ok" in resp.read()

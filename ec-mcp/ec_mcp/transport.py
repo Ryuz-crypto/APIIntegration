@@ -1,8 +1,10 @@
 """HTTP transports for the EdgeConnect MCP server with bearer-token authentication.
 
 Exposes the MCP server over streamable-HTTP (recommended for remote clients)
-or legacy SSE, wrapped in a Starlette middleware that enforces an
-Authorization: Bearer <token> header before any MCP session is established.
+or legacy SSE, wrapped in a Starlette app that:
+- serves a public ``/health`` endpoint for load balancers / ZTNA probes;
+- enforces an ``Authorization: Bearer <token>`` header on every other path
+  before any MCP session is established.
 """
 from __future__ import annotations
 
@@ -10,7 +12,6 @@ import hmac
 import os
 from typing import Any
 
-from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 try:
@@ -20,20 +21,21 @@ except ModuleNotFoundError:
 
 
 class BearerAuthMiddleware:
-    """Rejects requests without a valid Authorization: Bearer header."""
+    """Serves /health without auth; rejects every other request without a
+    valid Authorization: Bearer header."""
 
-    def __init__(self, app, token: str, exempt_paths: tuple[str, ...] = ("/health",)):
+    def __init__(self, app, token: str):
         self.app = app
         self.token = token
-        self.exempt_paths = exempt_paths
 
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         path = scope.get("path", "")
-        if path in self.exempt_paths:
-            await self.app(scope, receive, send)
+        if path == "/health":
+            response = JSONResponse({"status": "ok", "service": "ec-mcp"})
+            await response(scope, receive, send)
             return
         headers = {key.decode("latin-1").lower(): value.decode("latin-1") for key, value in scope.get("headers", [])}
         authorization = headers.get("authorization", "")
@@ -46,16 +48,16 @@ class BearerAuthMiddleware:
         await self.app(scope, receive, send)
 
 
-def build_http_app(server: FastMCP, token: str, *, stateless: bool = True) -> Any:
-    """Build the authenticated streamable-HTTP Starlette app."""
-    app = server.streamable_http_app(stateless_http=stateless)
-    return BearerAuthMiddleware(app, token)
+def build_http_app(server: FastMCP, token: str, *, stateless: bool = True):
+    """Build the authenticated streamable-HTTP ASGI app with /health."""
+    mcp_app = server.streamable_http_app(stateless_http=stateless)
+    return BearerAuthMiddleware(mcp_app, token)
 
 
-def build_sse_app(server: FastMCP, token: str) -> Any:
-    """Build the authenticated legacy SSE Starlette app."""
-    app = server.sse_app()
-    return BearerAuthMiddleware(app, token)
+def build_sse_app(server: FastMCP, token: str):
+    """Build the authenticated legacy SSE ASGI app with /health."""
+    mcp_app = server.sse_app()
+    return BearerAuthMiddleware(mcp_app, token)
 
 
 def resolve_auth_token() -> str:

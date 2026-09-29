@@ -1,0 +1,21 @@
+[Unit]
+Description=EdgeConnect SD-WAN MCP server (ec-mcp)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ecmcp
+Group=ecmcp
+EnvironmentFile=/etc/ec-mcp/env
+ExecStart=/opt/ec-mcp/.venv/bin/ec-mcp http --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ec-mcp
+
+[Install]
+WantedBy=multi-user.target
