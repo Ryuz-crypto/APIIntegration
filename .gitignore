@@ -17,3 +17,7 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# ec-mcp runtime artifacts
+logs/
+*.log
