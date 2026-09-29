@@ -63,7 +63,14 @@ class OrchestratorClient:
             )
         return matched
 
-    def call(self, version: str, operation_id: str, path_params: dict[str, str] | None = None, **query: Any) -> dict[str, Any]:
+    def call(
+        self,
+        version: str,
+        operation_id: str,
+        path_params: dict[str, str] | None = None,
+        json_body: dict[str, Any] | None = None,
+        **query: Any,
+    ) -> dict[str, Any]:
         resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params)
         api_root = self._profile_api_root(version)
         response = self._client.request(
@@ -71,6 +78,7 @@ class OrchestratorClient:
             f"{api_root}{resolved.path}",
             headers=self._headers(),
             params={k: v for k, v in query.items() if v is not None},
+            json=json_body,
         )
         response.raise_for_status()
         if not response.content:

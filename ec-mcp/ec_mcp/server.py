@@ -109,7 +109,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def apply_change(operation_id: str, body_json: str = "", confirm: bool = False) -> str:
-        """Apply a configuration change through the Orchestrator API. Dry-run by default: without confirm=true it only returns the operation that would be executed."""
+        """Apply a configuration change through the Orchestrator API. Dry-run by default: without confirm=true it only returns the operation and body that would be executed."""
         try:
             require_writes()
             client = require_client()
@@ -119,19 +119,28 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             operation = engine.resolve(version, operation_id)
             if operation.method == "GET":
                 raise SecurityError("Use call_read_api for GET operations")
+            body: dict | None = None
+            if body_json.strip():
+                parsed = json.loads(body_json)
+                if not isinstance(parsed, dict):
+                    raise SecurityError("body_json must be a JSON object")
+                body = parsed
             audit_entry = {
                 "operation": operation_id,
                 "method": operation.method,
                 "path": operation.path,
-                "body": body_json or None,
+                "body": body,
                 "confirmed": confirm,
             }
             if not confirm:
                 audit.record("apply_change", operation_id, operation.path, "dry-run", dry_run=True, details=audit_entry)
                 return json_result({"dry_run": True, "would_execute": audit_entry}, settings.max_output_chars)
-            payload = client.call(version, operation_id)
+            payload = client.call(version, operation_id, json_body=body)
             audit.record("apply_change", operation_id, operation.path, "ok", dry_run=False, details=audit_entry)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except json.JSONDecodeError as error:
+            audit.record("apply_change", operation_id, "", f"invalid body JSON: {error}")
+            return f"Invalid body_json: {error}"
         except Exception as error:
             audit.record("apply_change", operation_id, "", f"error: {error}")
             return f"Error: {error}"

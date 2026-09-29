@@ -81,5 +81,5 @@ adicional, o añade operaciones manualmente en `ec_mcp/profiles/`.
 ## Estado
 
 Esqueleto funcional: REST read-only completo, SSH whitelisteado, dry-run de
-escritura y auditoría. Escritura real vía `apply_change` aún no envía el body
-(pendiente de mapear per-operation); probar primero en lab.
+escritura y auditoría. `apply_change` envía el body JSON cuando `confirm=true`
+y `EC_ALLOW_WRITE_TOOLS=true`; probar primero en lab.
