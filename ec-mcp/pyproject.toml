@@ -23,3 +23,25 @@ include = ["ec_mcp*"]
 
 [tool.setuptools.package-data]
 ec_mcp = ["profiles/*.json"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "S", "RUF"]
+ignore = [
+  "BLE001",
+  "E501",
+  "E402",
+  "S105",
+  "S108",
+  "S110",
+  "S310",
+  "S112",
+  "TRY004",
+  "PLW0602",
+  "SIM102",
+  "ASYNC251",
+  "S101",
+]

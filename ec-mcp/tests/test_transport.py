@@ -1,3 +1,5 @@
+TOKEN = "test-token-123-test-token-123-test-token-123"
+
 import json
 import threading
 import time
@@ -16,7 +18,9 @@ BASE = f"http://127.0.0.1:{PORT}/mcp"
 @pytest.fixture(scope="module")
 def http_server():
     server = create_server()
-    app = build_http_app(server, "test-token-123")
+    global TOKEN
+
+    app = build_http_app(server, TOKEN)
     config = uvicorn.Config(app, host="127.0.0.1", port=PORT, log_level="error")
     srv = uvicorn.Server(config)
     thread = threading.Thread(target=srv.run, daemon=True)
@@ -60,7 +64,7 @@ def test_http_rejects_bad_token(http_server):
 
 def test_http_accepts_valid_token(http_server):
     resp = urllib.request.urlopen(
-        _post({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}}, "test-token-123"),
+        _post({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}}, TOKEN),
         timeout=10,
     )
     assert resp.status == 200

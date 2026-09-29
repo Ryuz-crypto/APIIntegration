@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from .security import SecurityError, sanitize_output, validate_show_command
+from .security import SecurityError, redact_secrets, sanitize_output, validate_show_command
 
 try:
     from netmiko import ConnectHandler
@@ -28,7 +28,7 @@ class ApplianceSession:
     def run_show(self, command: str) -> str:
         validated = validate_show_command(command)
         raw = self._connection.send_command(validated, read_timeout=30)
-        return sanitize_output(raw, self._max_output_chars)
+        return redact_secrets(sanitize_output(raw, self._max_output_chars), [])
 
     def run_raw(self, command: str) -> str:
         normalized = command.strip()
@@ -36,8 +36,10 @@ class ApplianceSession:
             raise SecurityError("Empty command")
         if FORBIDDEN_CHARS.search(normalized):
             raise SecurityError("Command contains forbidden characters")
+        if re.search(r"[\x00-\x1f\x7f]|[^\x00-\x7f]", normalized):
+            raise SecurityError("Command contains forbidden characters")
         raw = self._connection.send_command(normalized, read_timeout=60)
-        return sanitize_output(raw, self._max_output_chars)
+        return redact_secrets(sanitize_output(raw, self._max_output_chars), [])
 
     def close(self) -> None:
         self._connection.disconnect()

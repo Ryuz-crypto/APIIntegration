@@ -346,6 +346,19 @@ Para el asistente es tan simple como: pide el cambio → ve el dry-run → pregu
 Comandos fuera del catálogo se rechazan; metacaracteres de shell (`;`, `` ` ``,
 `&&`, `$()`) bloqueados; todo queda en el audit log.
 
+## Seguridad y hardening
+
+El servidor aplica un modelo de defensa por capas, alineado con la revisión de seguridad:
+
+- **Token de acceso (transporte HTTP/SSE)**: mínimo 32 bytes aleatorios (`secrets.token_urlsafe(32)`); el servidor rechaza arrancar con tokens débiles. Soporta **dos tokens vigentes** (primario + `EC_MCP_AUTH_TOKEN`) para rotar sin corte de servicio.
+- **Fuerza bruta**: máximo 5 intentos de autenticación fallidos por IP por minuto; al superarlo, responde `429` durante la ventana.
+- **Rutas sin autenticación**: solo `/health`, que devuelve exclusivamente `{"status":"ok"}` sin versión, hosts ni configuración.
+- **Comandos CLI**: la allowlist de `show` es una expresión regular **anclada** (`^...$`) que solo admite argumentos alfanuméricos seguros; se rechazan `;`, `|`, `&`, backticks, `$(...)`, saltos de línea, caracteres de control y Unicode.
+- **Permisos de escritura granulares**: `EC_ALLOW_WRITE_TOOLS=true` habilita escrituras normales; las operaciones peligrosas (reboot, suspend traffic, delete, wipe, factory, ...) exigen además `EC_ALLOW_DANGEROUS_WRITES=true`. Límite configurable de escrituras por minuto (`EC_MAX_WRITES_PER_MINUTE`).
+- **Redacción de secretos**: las salidas y la auditoría redactan passwords, community strings SNMP y claves (`***REDACTED***`).
+- **Auditoría**: registra quién (tool), cuándo, qué operación, resultado y dry-run; nunca guarda tokens, contraseñas ni cuerpos completos de peticiones (solo las claves del body).
+- **CI**: ruff, bandit, pip-audit y gitleaks en cada push/PR a `ec-mcp/**`.
+
 ## Auditoría
 
 Cada invocación de tool registra en el JSONL: timestamp UTC, tool, acción,

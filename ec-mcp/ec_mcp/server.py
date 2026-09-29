@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import time
+from collections import deque
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -9,11 +11,14 @@ except ModuleNotFoundError:
     from mcp.server.mcpserver import MCPServer as FastMCP
 
 from .audit import AuditLog
-from .cli_catalog import ADMINISTRATION, ALARM, CONFIGURATION, DIAGNOSTIC, MONITORING, NEGATION, TROUBLESHOOTING, catalog_entries, total_commands
+from .cli_catalog import (
+    catalog_entries,
+    total_commands,
+)
 from .compat import CompatibilityEngine, load_profiles
 from .config import Settings
 from .orchestrator_client import OrchestratorClient
-from .security import ALLOWED_SHOW_COMMANDS, SecurityError, sanitize_output, validate_show_command
+from .security import SecurityError, redact_secrets, sanitize_output
 from .ssh_ecos import ApplianceSshPool
 
 
@@ -33,13 +38,32 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except ValueError:
             return None
 
-    def require_writes() -> None:
+    DANGEROUS_OPERATION_PATTERN = re.compile(
+        r"(?i)reboot|suspend|delete|remove|wipe|factory|purge|halt|shutdown|decommission"
+    )
+    write_timestamps: deque[float] = deque()
+
+    def require_writes(operation: str = "") -> None:
         if not settings.allow_write_tools:
             raise SecurityError("Write tools are disabled (EC_ALLOW_WRITE_TOOLS != true)")
+        if operation and DANGEROUS_OPERATION_PATTERN.search(operation):
+            if not settings.allow_dangerous_writes:
+                raise SecurityError(
+                    f"Operation '{operation}' is classified as dangerous and requires "
+                    "EC_ALLOW_DANGEROUS_WRITES=true"
+                )
+        now = time.monotonic()
+        while write_timestamps and now - write_timestamps[0] > 60.0:
+            write_timestamps.popleft()
+        if len(write_timestamps) >= settings.max_writes_per_minute:
+            raise SecurityError(
+                f"Write rate limit reached (max {settings.max_writes_per_minute} per minute)"
+            )
+        write_timestamps.append(now)
 
     def json_result(payload, max_chars: int) -> str:
         text = json.dumps(payload, ensure_ascii=False, default=str)
-        return sanitize_output(text, max_chars)
+        return redact_secrets(sanitize_output(text, max_chars), [])
 
     def operation_details(version: str, operation_id: str) -> dict:
         profile = engine._profiles[version]
@@ -245,7 +269,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     ) -> str:
         """Apply a configuration change through the Orchestrator/Appliance API. Dry-run by default: without confirm=true it returns the exact method, path and body that would be executed. Effective permissions are those of the authenticated user. Use list_api_operations to discover available write operations and their required parameters."""
         try:
-            require_writes()
+            require_writes(operation_id)
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
@@ -276,11 +300,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 "body": body,
                 "confirmed": confirm,
             }
+            audit_public_entry = {k: v for k, v in audit_entry.items() if k != "body"}
+            audit_public_entry["body_keys"] = sorted(body.keys()) if body else []
             if not confirm:
-                audit.record("apply_change", operation_id, operation.path, "dry-run", dry_run=True, details=audit_entry)
+                audit.record("apply_change", operation_id, operation.path, "dry-run", dry_run=True, details=audit_public_entry)
                 return json_result({"dry_run": True, "would_execute": audit_entry}, settings.max_output_chars)
             payload = client.call(version, operation_id, path_params=path_params, json_body=body, **query_params)
-            audit.record("apply_change", operation_id, operation.path, "ok", dry_run=False, details=audit_entry)
+            audit.record("apply_change", operation_id, operation.path, "ok", dry_run=False, details=audit_public_entry)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
         except json.JSONDecodeError as error:
             audit.record("apply_change", operation_id, "", f"invalid body JSON: {error}")

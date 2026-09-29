@@ -1,0 +1,8 @@
+title = "gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Example env files use non-secret placeholders and boolean flags"
+paths = ['''\.env\.example$''']

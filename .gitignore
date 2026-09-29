@@ -12,6 +12,10 @@ dist/
 
 # Local configuration
 .env
+*.pem
+
+# Security scan artifacts
+.gitleaks-report.json
 
 # Editors and OS
 .DS_Store
@@ -21,3 +25,4 @@ dist/
 # ec-mcp runtime artifacts
 logs/
 *.log
+audit*.log

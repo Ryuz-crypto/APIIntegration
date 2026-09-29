@@ -1,10 +1,8 @@
-import json
+
+import pathlib
 
 from ec_mcp.compat import CompatibilityEngine, load_profiles
 from ec_mcp.security import SecurityError, validate_show_command
-
-import importlib
-import pathlib
 
 PROFILES = pathlib.Path(__file__).parent.parent / "ec_mcp" / "profiles"
 
@@ -91,7 +89,7 @@ def test_denied_patterns_still_reject():
 
 
 def test_cli_catalog_over_1000_commands():
-    from ec_mcp.cli_catalog import total_commands, catalog_entries
+    from ec_mcp.cli_catalog import catalog_entries, total_commands
 
     assert total_commands() >= 1000
     entries = catalog_entries()
