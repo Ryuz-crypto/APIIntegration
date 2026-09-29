@@ -98,9 +98,16 @@ from ec_mcp.cli_catalog import MONITORING as CATALOG_MONITORING
 
 ALLOWED_SHOW_COMMANDS = list(dict.fromkeys(ALLOWED_SHOW_COMMANDS + CATALOG_MONITORING))
 
+ALLOWED_SHOW_ARGS = re.compile(r"[A-Za-z0-9 ._:/@\-,#()\[\]%]*")
 ALLOWED_SHOW_PATTERNS = [
-    re.compile(rf"^{re.escape(command)}(\s|$)")
+    re.compile(rf"^{re.escape(command)}( {ALLOWED_SHOW_ARGS.pattern})*$")
     for command in ALLOWED_SHOW_COMMANDS
+]
+SHELL_METACHARS = re.compile(r"[;&`|<>$\\]|\$\(|\|\||&&")
+CONTROL_OR_NON_ASCII = re.compile(r"[\x00-\x1f\x7f]|[^\x00-\x7f]")
+SECRET_PATTERNS = [
+    re.compile(r"(?i)(\b(?:password|passwd|md5password|secret|passphrase|psk)\s*[:=]\s*)\S+"),
+    re.compile(r"(?i)(\bcommunity(?:\s+string)?\s+)(?!string\b)\S+"),
 ]
 
 DENIED_PATTERNS = [
@@ -114,11 +121,10 @@ DENIED_PATTERNS = [
     re.compile(r"^delete\s+"),
     re.compile(r"\bshell\b"),
     re.compile(r"\bpwd\b"),
-    re.compile(r";"),
-    re.compile(r"\|\|"),
-    re.compile(r"&&"),
-    re.compile(r"`"),
+    re.compile(r"[;&`|<>$\\]"),
     re.compile(r"\$\("),
+    re.compile(r"[\x00-\x1f\x7f]"),
+    re.compile(r"[^\x00-\x7f]"),
 ]
 
 
@@ -126,6 +132,8 @@ def validate_show_command(command: str) -> str:
     normalized = command.strip()
     if not normalized:
         raise SecurityError("Empty command")
+    if CONTROL_OR_NON_ASCII.search(normalized) or SHELL_METACHARS.search(normalized):
+        raise SecurityError(f"Command contains forbidden characters: {command}")
     lowered = normalized.lower()
     for pattern in DENIED_PATTERNS:
         if pattern.search(lowered):
@@ -147,4 +155,6 @@ def redact_secrets(text: str, secrets: list[str]) -> str:
     for secret in secrets:
         if secret:
             text = text.replace(secret, "***REDACTED***")
+    for pattern in SECRET_PATTERNS:
+        text = pattern.sub(lambda m: m.group(1) + "***REDACTED***", text)
     return text

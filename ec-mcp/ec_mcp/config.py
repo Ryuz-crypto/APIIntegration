@@ -20,14 +20,16 @@ class Settings:
     ssh_port: int = 22
 
     allow_write_tools: bool = False
+    allow_dangerous_writes: bool = False
     max_output_chars: int = 12000
+    max_writes_per_minute: int = 10
 
     audit_log_path: Path = field(default_factory=lambda: Path("logs/mcp-audit.jsonl"))
 
     profiles_dir: Path = field(default_factory=lambda: Path(__file__).parent / "profiles")
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         profiles_dir = os.environ.get("EC_MCP_PROFILES_DIR")
         audit_path = os.environ.get("EC_MCP_AUDIT_LOG")
         return cls(
@@ -42,6 +44,8 @@ class Settings:
             ssh_password=os.environ.get("EC_SSH_PASSWORD", ""),
             ssh_port=int(os.environ.get("EC_SSH_PORT", "22")),
             allow_write_tools=os.environ.get("EC_ALLOW_WRITE_TOOLS", "false").lower() == "true",
+            allow_dangerous_writes=os.environ.get("EC_ALLOW_DANGEROUS_WRITES", "false").lower() == "true",
+            max_writes_per_minute=int(os.environ.get("EC_MAX_WRITES_PER_MINUTE", "10")),
             max_output_chars=int(os.environ.get("EC_MAX_OUTPUT_CHARS", "12000")),
             audit_log_path=Path(audit_path) if audit_path else Path("logs/mcp-audit.jsonl"),
             profiles_dir=Path(profiles_dir) if profiles_dir else Path(__file__).parent / "profiles",

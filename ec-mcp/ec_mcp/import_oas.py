@@ -38,7 +38,7 @@ def schema_to_example(schema: dict[str, Any] | None, components: dict[str, Any],
         return schema_to_example(components.get("schemas", {}).get(ref), components, depth + 1)
     if "example" in schema:
         return schema["example"]
-    if "enum" in schema and schema["enum"]:
+    if schema.get("enum"):
         return schema["enum"][0]
     if schema.get("type") == "object" or "properties" in schema:
         result = {}
