@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import time
 from typing import Any
 
 import httpx
 
 from .compat import CompatibilityEngine, CompatibilityError, ResolvedOperation
 from .config import Settings
+
+logger = logging.getLogger("ec_mcp.orchestrator")
 
 
 class OrchestratorClient:
@@ -18,6 +22,10 @@ class OrchestratorClient:
         self._engine = engine
         self._cached_profile: str | None = None
         self._appliances_cache: list[dict[str, Any]] | None = None
+        self._response_cache: dict[tuple, tuple[float, Any]] = {}
+        self._cache_ttl = float(getattr(settings, "api_cache_ttl", 30.0))
+        self._cache_max_entries = 128
+        self._metrics: dict[str, dict[str, float]] = {}
         self._client = client or httpx.Client(
             base_url=settings.orchestrator_url,
             verify=settings.verify_tls,
@@ -32,6 +40,50 @@ class OrchestratorClient:
 
     def close(self) -> None:
         self._client.close()
+
+    def metrics(self) -> dict[str, dict[str, float]]:
+        return self._metrics
+
+    def _record_metric(self, label: str, elapsed: float, size: int, cache_hit: bool) -> None:
+        entry = self._metrics.setdefault(label, {"calls": 0.0, "total_time": 0.0, "max_time": 0.0, "total_bytes": 0.0, "cache_hits": 0.0})
+        entry["calls"] += 1
+        entry["total_time"] += elapsed
+        entry["max_time"] = max(entry["max_time"], elapsed)
+        entry["total_bytes"] += size
+        if cache_hit:
+            entry["cache_hits"] += 1
+        logger.info(
+            "op=%s elapsed=%.3fs bytes=%d cache=%s",
+            label, elapsed, size, "hit" if cache_hit else "miss",
+        )
+
+    def _cache_key(self, path: str, query: dict[str, Any]) -> tuple:
+        return (path, tuple(sorted((k, str(v)) for k, v in query.items() if v is not None)))
+
+    def get_raw(self, path: str, **query: Any) -> Any:
+        key = self._cache_key(path, query)
+        now = time.monotonic()
+        cached = self._response_cache.get(key)
+        if cached is not None and now - cached[0] < self._cache_ttl:
+            self._record_metric(path, 0.0, 0, cache_hit=True)
+            return cached[1]
+        started = time.monotonic()
+        response = self._client.get(path, headers=self._headers(), params={k: v for k, v in query.items() if v is not None})
+        elapsed = time.monotonic() - started
+        self._record_metric(path, elapsed, len(response.content), cache_hit=False)
+        if response.status_code >= 400:
+            raise RuntimeError(self._error_message(response, f"GET {path}"))
+        if not response.content:
+            return {}
+        try:
+            data = response.json()
+        except json.JSONDecodeError as error:
+            raise RuntimeError(f"Orchestrator returned non-JSON response for GET {path}") from error
+        if len(self._response_cache) >= self._cache_max_entries:
+            oldest = min(self._response_cache, key=lambda k: self._response_cache[k][0])
+            self._response_cache.pop(oldest, None)
+        self._response_cache[key] = (time.monotonic(), data)
+        return data
 
     def _headers(self) -> dict[str, str]:
         return {"X-Auth-Token": self._api_key}
@@ -80,6 +132,8 @@ class OrchestratorClient:
     ) -> dict[str, Any]:
         resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params)
         api_root = self._profile_api_root(version)
+        label = f"{operation_id}"
+        started = time.monotonic()
         response = self._client.request(
             resolved.method,
             f"{api_root}{resolved.path}",
@@ -87,6 +141,7 @@ class OrchestratorClient:
             params={k: v for k, v in query.items() if v is not None},
             json=json_body,
         )
+        self._record_metric(label, time.monotonic() - started, len(response.content), cache_hit=False)
         if response.status_code >= 400:
             raise RuntimeError(
                 self._error_message(response, f"{resolved.method} {api_root}{resolved.path}")
@@ -127,10 +182,11 @@ class OrchestratorClient:
             try:
                 data = self.get_raw(path)
                 break
-            except httpx.HTTPError as error:
+            except RuntimeError as error:
                 last_error = error
-                if isinstance(error, httpx.HTTPStatusError) and error.response.status_code not in (404, 405):
-                    raise RuntimeError(self._error_message(error.response, f"GET {path}")) from error
+                message = str(error)
+                if "HTTP 404" not in message and "HTTP 405" not in message:
+                    raise
         if data is None:
             raise RuntimeError(
                 f"Could not fetch the appliance inventory from the Orchestrator: {last_error}"

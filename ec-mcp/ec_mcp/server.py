@@ -386,6 +386,29 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
+    def orchestrator_metrics() -> str:
+        """Return per-operation API performance metrics: calls, total/max latency seconds, bytes transferred and cache hits. Use it to spot slow operations and tune offset/limit/max_chars."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            rows = []
+            for label, entry in sorted(client.metrics().items()):
+                calls = int(entry.get("calls", 0))
+                rows.append({
+                    "operation": label,
+                    "calls": calls,
+                    "avg_seconds": round(entry.get("total_time", 0.0) / calls, 3) if calls else 0.0,
+                    "max_seconds": round(entry.get("max_time", 0.0), 3),
+                    "total_kb": round(entry.get("total_bytes", 0.0) / 1024, 1),
+                    "cache_hits": int(entry.get("cache_hits", 0)),
+                })
+            return json_result({"count": len(rows), "metrics": rows}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("orchestrator_metrics", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
     def call_read_api(
         operation_id: str,
         appliance_id: str = "",

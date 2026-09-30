@@ -1,5 +1,6 @@
 
 import pathlib
+from typing import ClassVar
 
 from ec_mcp.compat import CompatibilityEngine, load_profiles
 from ec_mcp.security import SecurityError, validate_show_command
@@ -265,3 +266,83 @@ def test_call_read_api_param_required_preflight():
     payload = jsonlib.loads(text)
     assert payload["error"] == "PARAM_REQUIRED"
     assert "granularity" in payload["required_params"]
+
+
+def test_get_raw_caches_and_collects_metrics(monkeypatch):
+    from ec_mcp.orchestrator_client import OrchestratorClient
+
+    class FakeEngine:
+        pass
+
+    class FakeResponse:
+        def __init__(self, status_code, payload):
+            self.status_code = status_code
+            self._payload = payload
+            self.content = b"x" * 16
+
+        def json(self):
+            return self._payload
+
+    class FakeHttpx:
+        def __init__(self):
+            self.calls = []
+
+        def get(self, path, headers=None, params=None):
+            self.calls.append((path, dict(params or {})))
+            return FakeResponse(200, {"data": [self.calls.count((path, dict(params or {})))]})
+
+    class FakeSettings:
+        orchestrator_url = "https://orch.example"
+        verify_tls = True
+        api_cache_ttl = 30.0
+
+    fake = FakeHttpx()
+    client = OrchestratorClient.__new__(OrchestratorClient)
+    client._settings = FakeSettings()
+    client._engine = FakeEngine()
+    client._api_key = "k"
+    client._client = fake
+    client._cached_profile = None
+    client._appliances_cache = None
+    client._response_cache = {}
+    client._cache_ttl = 30.0
+    client._cache_max_entries = 128
+    client._metrics = {}
+
+    first = client.get_raw("/flow", nePk="0.NE")
+    second = client.get_raw("/flow", nePk="0.NE")
+    assert first == second
+    assert len(fake.calls) == 1
+    metrics = client.metrics()["/flow"]
+    assert metrics["calls"] == 2
+    assert metrics["cache_hits"] == 1
+
+
+def test_get_raw_raises_on_http_error():
+    from ec_mcp.orchestrator_client import OrchestratorClient
+
+    class FakeResponse:
+        status_code = 404
+        content = b"not found"
+        text = "not found"
+        headers: ClassVar[dict] = {"content-type": "text/plain"}
+
+        class request:
+            url = type("U", (), {"params": {}})()
+
+    class FakeHttpx:
+        def get(self, path, headers=None, params=None):
+            return FakeResponse()
+
+    client = OrchestratorClient.__new__(OrchestratorClient)
+    client._client = FakeHttpx()
+    client._api_key = "k"
+    client._response_cache = {}
+    client._cache_ttl = 30.0
+    client._cache_max_entries = 128
+    client._metrics = {}
+    try:
+        client.get_raw("/missing")
+        raise AssertionError("should have raised")
+    except RuntimeError as error:
+        assert "404" in str(error)
