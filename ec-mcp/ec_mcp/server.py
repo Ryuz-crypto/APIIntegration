@@ -189,6 +189,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             "interface_name": interface_name,
             **extras,
         }
+        for alias, canonical in (("startTime", "start_time"), ("endTime", "end_time"), ("nePk", "appliance_id"), ("ne", "appliance_id"), ("name", "appliance_id")):
+            if alias in source and not source.get(canonical):
+                source[canonical] = source[alias]
+            if alias not in source and source.get(canonical):
+                source[alias] = source[canonical]
         for name in operation.get("path_params", []):
             value = source.get(name) or ""
             if not value:
@@ -229,6 +234,59 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             "Use list_appliances to discover the registered appliances."
         )
 
+    def resolve_ne_pks(client: OrchestratorClient, appliance_ids: str) -> list[str]:
+        if not appliance_ids.strip():
+            return [str(a.get("nePk")) for a in client.list_appliances()]
+        resolved = []
+        for part in appliance_ids.split(","):
+            part = part.strip()
+            if part:
+                resolved.append(resolve_ne_pk(client, part))
+        return resolved
+
+    KPI_ENDPOINTS: dict[str, dict[str, str]] = {
+        "availability": {"path": "/stats/aggregate/availability/appliance", "fallback": "/availability/appliance"},
+        "mos": {"path": "/stats/aggregate/mos", "fallback": ""},
+        "latency": {"path": "/stats/aggregate/tunnel", "fallback": "/latency"},
+        "top_talkers": {"path": "/stats/aggregate/topTalkers", "fallback": ""},
+        "tunnel_state": {"path": "/tunnelsConfigAndState", "fallback": "/stats/aggregate/availability/tunnel", "appliance_level": True},
+        "brownout": {"path": "/tunnelsConfigAndState", "fallback": "", "appliance_level": True},
+    }
+
+    def kpi_get(client: OrchestratorClient, kpi: str, ne_pk: str = "", granularity: str = "", start_time: str = "", end_time: str = "") -> Any:
+        spec = KPI_ENDPOINTS[kpi]
+        query = {k: v for k, v in {"nePk": ne_pk, "granularity": granularity, "startTime": start_time, "endTime": end_time}.items() if v}
+        paths = [spec["path"], spec.get("fallback", "")]
+        last_error: Exception | None = None
+        for path in paths:
+            if not path:
+                continue
+            try:
+                if spec.get("appliance_level") and ne_pk:
+                    return client.appliance_api_get(ne_pk, path, **{k: v for k, v in query.items() if k != "nePk"})
+                return client.get_raw(path, **query)
+            except RuntimeError as error:
+                last_error = error
+                if "HTTP 404" not in str(error):
+                    raise
+        raise last_error or RuntimeError(f"No endpoint available for KPI {kpi}")
+
+    def brownout_state(payload: Any) -> list[dict[str, Any]]:
+        rows = payload if isinstance(payload, list) else payload.get("tunnels") or payload.get("data") or [] if isinstance(payload, dict) else []
+        result = []
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            state = str(item.get("state") or item.get("tunnelState") or "").lower()
+            reason = item.get("brownoutReason") or item.get("brownout_reason")
+            result.append({
+                "tunnel": item.get("tunnelName") or item.get("name") or item.get("tunnelId"),
+                "state": state or "unknown",
+                "brownout": "brownout" in state or bool(reason),
+                "reason": reason or ("loss/latency/jitter threshold exceeded" if "brownout" in state else None),
+            })
+        return result
+
     def _parse_json_object(raw: str, name: str) -> dict:
         if not raw.strip():
             return {}
@@ -255,6 +313,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             detected = client.detect_version()
             matched = engine.match_version(detected)
+            try:
+                appliances = client.list_appliances()
+            except Exception:
+                appliances = []
             payload = {
                 "detected_version": detected,
                 "active_profile": matched,
@@ -262,6 +324,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 "write_tools_enabled": settings.allow_write_tools,
                 "ssh_enabled": settings.ssh_enabled,
                 "cli_commands_available": total_commands(),
+                "appliance_count": len(appliances),
+                "appliances": [
+                    {"nePk": a.get("nePk"), "name": a.get("name"), "ip": a.get("ip")}
+                    for a in appliances
+                ],
+                "hint": "Use get_wan_health/get_mos/get_tunnel_state for KPIs; the nePk of every appliance is listed here.",
             }
             audit.record("orchestrator_info", "detect", settings.orchestrator_url, "ok", details=payload)
             return json_result(payload, settings.max_output_chars)
@@ -406,6 +474,118 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return json_result({"count": len(rows), "metrics": rows}, settings.max_output_chars)
         except Exception as error:
             audit.record("orchestrator_metrics", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_wan_health(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "", fields: str = "") -> str:
+        """One-call WAN health snapshot: latency, jitter, loss and MOS per tunnel (already aggregated, no raw 70-column rows). appliance_id accepts comma-separated nePks/names/IPs; empty = all appliances. Pass fields to project only some columns."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            targets = resolve_ne_pks(client, appliance_id)
+            rows = []
+            for ne_pk in targets:
+                try:
+                    stats = kpi_get(client, "latency", ne_pk, granularity, start_time, end_time)
+                    rows.append({"nePk": ne_pk, "stats": stats})
+                except Exception as error:
+                    rows.append({"nePk": ne_pk, "error": str(error)[:200]})
+            mos = None
+            try:
+                mos = kpi_get(client, "mos", "", granularity, start_time, end_time)
+            except Exception:
+                mos = None
+            payload = {"appliances": rows, "mos": mos, "granularity": granularity}
+            field_list = [f.strip() for f in fields.split(",") if f.strip()]
+            if field_list:
+                payload, _ = paginate_data(payload, 0, None, field_list)
+            audit.record("get_wan_health", "read", settings.orchestrator_url, "ok", details={"appliances": len(targets)})
+            return json_result(payload, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_wan_health", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_mos(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "") -> str:
+        """Voice MOS score per tunnel/appliance from GET /stats/aggregate/mos (values are typically scaled x100: 440 = MOS 4.40). Use start_time/end_time (epoch ms) and granularity to bound the window."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
+            payload = kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
+            audit.record("get_mos", "read", settings.orchestrator_url, "ok")
+            return json_result({"data": payload, "note": "MOS values may be scaled x100 (440 = 4.40)"}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_mos", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_tunnel_state(appliance_id: str = "") -> str:
+        """Tunnel state per appliance from /tunnelsConfigAndState (proxied via the Orchestrator): up/down/bonded per tunnel. appliance_id accepts a single appliance; empty = error hint to pass one."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            if not appliance_id:
+                return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"], "hint": "Pass one appliance (nePk, name or IP); use list_appliances to discover them."}, settings.max_output_chars)
+            ne_pk = resolve_ne_pk(client, appliance_id)
+            payload = kpi_get(client, "tunnel_state", ne_pk)
+            audit.record("get_tunnel_state", "read", ne_pk, "ok")
+            return json_result({"nePk": ne_pk, "data": payload}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_tunnel_state", "read", appliance_id, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_brownout_state(appliance_id: str = "") -> str:
+        """Brownout/blackout detection per tunnel with reason (loss/latency/jitter threshold exceeded), derived from /tunnelsConfigAndState. Compare against each BIO's brownout thresholds from get_overlays."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            if not appliance_id:
+                return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"], "hint": "Pass one appliance (nePk, name or IP)."}, settings.max_output_chars)
+            ne_pk = resolve_ne_pk(client, appliance_id)
+            payload = kpi_get(client, "brownout", ne_pk)
+            tunnels = brownout_state(payload)
+            audit.record("get_brownout_state", "read", ne_pk, "ok", details={"tunnels": len(tunnels)})
+            return json_result({"nePk": ne_pk, "tunnels": tunnels}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_brownout_state", "read", appliance_id, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_availability(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "") -> str:
+        """Availability per appliance/site from GET /stats/aggregate/availability/appliance (fallback /availability/appliance)."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
+            payload = kpi_get(client, "availability", ne_pk, granularity, start_time, end_time)
+            audit.record("get_availability", "read", settings.orchestrator_url, "ok")
+            return json_result({"data": payload, "granularity": granularity}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_availability", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_top_talkers(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "", limit: int = 20) -> str:
+        """Top talker applications/hosts from GET /stats/aggregate/topTalkers. Use it instead of pulling raw /flow rows."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
+            payload = kpi_get(client, "top_talkers", ne_pk, granularity, start_time, end_time)
+            if isinstance(payload, list) and limit:
+                payload = payload[: max(0, limit)]
+            audit.record("get_top_talkers", "read", settings.orchestrator_url, "ok")
+            return json_result({"data": payload, "granularity": granularity}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_top_talkers", "read", settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()

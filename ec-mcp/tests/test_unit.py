@@ -346,3 +346,21 @@ def test_get_raw_raises_on_http_error():
         raise AssertionError("should have raised")
     except RuntimeError as error:
         assert "404" in str(error)
+
+
+def test_kpi_tools_registered():
+    import ec_mcp.server as server_module
+
+    mcp = server_module.create_server()
+    tools = [t.name for t in mcp._tool_manager.list_tools()]
+    for expected in (
+        "get_wan_health",
+        "get_mos",
+        "get_brownout_state",
+        "get_tunnel_state",
+        "get_top_talkers",
+        "get_availability",
+        "orchestrator_metrics",
+        "list_appliances",
+    ):
+        assert expected in tools, f"{expected} not registered; got {tools}"

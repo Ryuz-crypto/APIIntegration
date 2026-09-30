@@ -167,10 +167,19 @@ class OrchestratorClient:
             detail = re.sub(r"<[^>]+>", " ", response.text or "")
             detail = " ".join(detail.split())[:300]
         hint = ""
-        if response.status_code == 404:
-            hint = " The endpoint does not exist on this Orchestrator version."
-        elif response.status_code in (400, 500) and "nePk" in response.request.url.params:
-            hint = " The appliance may not exist or may be unreachable from the Orchestrator."
+        if response.status_code == 400:
+            hint = (" HTTP 400 = invalid or missing query parameters: check "
+                    "param names/values (e.g. granularity=minute|hour|day, "
+                    "start_time/end_time as epoch ms) via list_api_operations(search=...) "
+                    "and request_echo.query_used.")
+        elif response.status_code == 404:
+            hint = " HTTP 404 = the endpoint does not exist on this Orchestrator version."
+        elif response.status_code in (500, 502, 503):
+            hint = (" HTTP 5xx = the Orchestrator could not serve the request; "
+                    "if it mentions the appliance, it may not exist or be unreachable "
+                    "(check reachability with list_appliances).")
+        elif response.status_code == 401:
+            hint = " HTTP 401 = authentication failed: check EC_ORCHESTRATOR_API_KEY or credentials."
         return f"Orchestrator returned HTTP {response.status_code} for {action}: {detail!r}.{hint}"
 
     def list_appliances(self, refresh: bool = False) -> list[dict[str, Any]]:
