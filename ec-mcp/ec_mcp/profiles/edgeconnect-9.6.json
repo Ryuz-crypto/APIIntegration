@@ -26,8 +26,9 @@
       "path": "/topology",
       "polling_hint_seconds": 300,
       "notes": [
-        "Topology capability declared by the Orchestrator API."
-      ]
+        "Endpoint removed in Orchestrator 9.x; use orchestrator.allgrnodeget275 (/gms/grNode), orchestrator.getdynamictopologyconfig267 or orchestrator.getappliancesforoverlay312 (/gms/overlays/association) instead."
+      ],
+      "deprecated": true
     },
     "appliance.interfaces": {
       "method": "GET",

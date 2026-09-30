@@ -337,6 +337,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         "path_params": spec.get("path_params", []),
                         "query_params": spec.get("query_params", []),
                     }
+                    if spec.get("deprecated"):
+                        entry["deprecated"] = True
+                        entry["notes"] = spec.get("notes", [])
                     if include_examples:
                         entry["body_example"] = _sanitize_example(spec.get("body_example"))
                     entries[op] = entry
@@ -407,6 +410,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 return operation_not_found_error(version, operation_id)
             spec = engine._profiles[version]["operations"][operation_id]
             missing_required: list[str] = []
+            needs_ne_pk = "nePk" in (spec.get("query_params") or []) or "nePk" in (
+                spec.get("path_params") or []
+            )
+            if needs_ne_pk and not appliance_id and "nePk" not in (
+                json.dumps(_parse_json_object(extra_query_params_json, "extra_query_params_json"))
+                if extra_query_params_json.strip()
+                else ""
+            ):
+                missing_required.append("appliance_id (nePk)")
             if "/stats/" in spec["path"] and not granularity:
                 missing_required.append("granularity")
             if "/timeseries/" in spec["path"]:

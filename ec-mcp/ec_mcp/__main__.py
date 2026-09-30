@@ -44,7 +44,7 @@ def _load_env_file() -> None:
 def main() -> None:
     _load_env_file()
     parser = argparse.ArgumentParser(prog="ec-mcp", description="EdgeConnect SD-WAN MCP server")
-    parser.add_argument("mode", nargs="?", default="stdio", choices=["stdio", "http", "sse"])
+    parser.add_argument("mode", nargs="?", default="stdio", choices=["stdio", "http", "sse", "admin"])
     parser.add_argument("--host", default=os.environ.get("EC_MCP_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("EC_MCP_PORT", "8000")))
     parser.add_argument(
@@ -61,6 +61,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    if args.mode == "admin":
+        from .admin import main as admin_main
+
+        admin_main()
+        return
     server = create_server()
 
     if args.mode == "stdio":
