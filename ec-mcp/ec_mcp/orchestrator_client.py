@@ -47,7 +47,7 @@ class OrchestratorClient:
             if response.status_code != 200:
                 return None
             info = response.json()
-            version = info.get("version") or info.get("softwareVersion")
+            version = info.get("version") or info.get("softwareVersion") or info.get("release")
             if isinstance(version, str):
                 return version
         except (httpx.HTTPError, json.JSONDecodeError):
