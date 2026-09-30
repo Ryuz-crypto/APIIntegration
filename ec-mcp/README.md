@@ -46,10 +46,37 @@ auditoría) pero no los sustituye.
 ```bash
 git clone https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/ec-mcp
-./scripts/install.sh          # instala todo, crea .env con token y verifica
-nano .env                    # pon tu EC_ORCHESTRATOR_URL y EC_ORCHESTRATOR_API_KEY
+./scripts/install.sh          # instala, pregunta credenciales, crea .env y verifica
 ./scripts/update.sh --daemon # arranca en background con el .env
 ```
+
+El instalador es **interactivo**: pregunta (con defaults ya probados) la URL del
+Orchestrator, la API key, las credenciales SSH del appliance (password y enable
+password), el dominio público del túnel y la IP de escucha. Enter acepta el
+default; los passwords no se muestran en pantalla. Al final genera el **token
+MCP** automáticamente y te lo muestra — es el que pegas como Bearer en el
+conector de Mistral/Claude.
+
+```
+$ ./scripts/install.sh
+==> 3/5 Configuración de credenciales
+    (Enter acepta el valor entre corchetes)
+URL del Orchestrator [https://lac-wan-sewan-orchge-useast1.silverpeak.cloud]:
+API key del Orchestrator (X-Auth-Token):
+SSH a appliances (true/false) [true]:
+IP/host del appliance [192.168.1.40]:
+Usuario SSH del appliance [mcp]:
+Password SSH:
+Password de enable (Enter si no hay):
+Dominio(s) públicos del túnel, separados por coma []: mcp-tunel.axisapps.io,172.17.201.141
+IP de escucha (0.0.0.0 para exponer via túnel) [0.0.0.0]:
+    Token MCP generado automáticamente: xxxx
+    (es el que pegas como Bearer en el conector de Mistral)
+```
+
+Para reconfigurar credenciales más tarde: borra `.env` y re-ejecuta
+`./scripts/install.sh`, o edita `.env` a mano. `install.sh` nunca sobrescribe
+un `.env` existente.
 
 `install.sh` es idempotente (re-ejecútalo sin miedo) y nunca sobrescribe un
 `.env` existente. `update.sh` hace `git pull` + reinstalar + arrancar con el
