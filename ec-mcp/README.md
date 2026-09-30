@@ -1,5 +1,9 @@
 # ec-mcp: MCP server for EdgeConnect SD-WAN
 
+**Versión estable: `v1.0.0`** — rama `main` = estable (release). Todo el trabajo
+nuevo se hace en la rama **`develop`** y se fusiona a `main` al cortar cada release.
+
+
 Servidor MCP (Model Context Protocol) que expone un entorno HPE Aruba Networking
 EdgeConnect SD-WAN a asistentes de IA (Claude Desktop, Cursor, Le Chat,
 ChatGPT, Vibe, etc.).
@@ -22,8 +26,10 @@ ChatGPT, Vibe, etc.).
 | Tool | Riesgo | Descripción |
 |---|---|---|
 | `orchestrator_info` | lectura | Detecta versión del Orchestrator y perfil activo |
-| `list_api_operations` | lectura | Lista las ~1550 operaciones API con method, path, params y riesgo |
-| `call_read_api` | lectura | Ejecuta una operación GET del perfil (topología, túneles, eventos, stats...) |
+| `list_api_operations` | lectura | Catálogo de operaciones con filtros `search`/`prefix`/`method`, paginación `page`/`page_size` y `include_examples` (default los omite) |
+| `call_read_api` | lectura | Ejecuta una operación GET del perfil con preflight de params, `fields`/`offset`/`limit`/`max_chars`, `request_echo` y JSON siempre válido (nunca cortado) |
+| `list_appliances` | lectura | Inventario de appliances registrados (nePk, nombre, IP, modelo, versión, estado) — resuelve nePk por nombre/IP/serial |
+| `orchestrator_metrics` | lectura | Métricas de rendimiento por operación: llamadas, latencia media/máxima, KB y cache hits |
 | `list_cli_commands` | lectura | Catálogo de los 1367 comandos ECOS oficiales, con filtro por categoría |
 | `run_show_command` | lectura | Comando `show` whitelisteado vía SSH |
 | `run_cli_command` | según riesgo | Cualquier comando del catálogo ECOS: monitoreo/troubleshooting directo; configuración en dry-run |
@@ -160,6 +166,70 @@ set -a; source .env; set +a
 ```bash
 python -m pytest tests -q        # 19 tests
 ec-mcp                           # arranca en stdio; Ctrl+C para salir
+```
+
+
+## Despliegue de un server nuevo (v1.0.0, de cero a producción)
+
+Guía completa para dejar un Linux fresco sirviendo ec-mcp estable: MCP en el
+puerto 8000 (auto-arranque) + UI de admin en 8080 (gestión de credenciales
+multi-orchestrator).
+
+### 0. Prerrequisitos
+
+```bash
+sudo apt update && sudo apt install -y git python3-venv python3-pip
+```
+
+### 1. Instalar la versión estable (main)
+
+```bash
+git clone https://github.com/Ryuz-crypto/APIIntegration.git
+cd APIIntegration
+git checkout main            # rama estable (release); develop = trabajo en curso
+cd ec-mcp
+./scripts/install.sh         # interactivo: URL, API key, SSH, túnel; genera .env y token MCP
+```
+
+### 2. Servicios systemd (arrancan en el boot)
+
+```bash
+./scripts/install_service.sh          # ec-mcp  -> 0.0.0.0:8000 (MCP)
+
+# Contraseña de la UI (obligatoria: escucha en 0.0.0.0)
+grep -q '^EC_ADMIN_PASSWORD=' .env || echo 'EC_ADMIN_PASSWORD=una-clave-fuerte' >> .env
+./scripts/install_admin_service.sh   # ec-mcp-admin -> 0.0.0.0:8080 (UI de admin)
+```
+
+Verifica:
+
+```bash
+systemctl status ec-mcp ec-mcp-admin
+curl http://127.0.0.1:8000/health
+curl -I http://127.0.0.1:8080/
+```
+
+### 3. Publicar y conectar
+
+- MCP tras tu túnel/proxy con TLS: URL `https://tu-dominio/mcp` + header
+  `Authorization: Bearer $EC_MCP_AUTH_TOKEN` (el token te lo mostró `install.sh`;
+  también está en `.env`). Define `EC_MCP_ALLOWED_HOSTS=dominio,ip` en `.env`.
+- UI de admin: `http://IP-del-server:8080` desde cualquier IP con tu contraseña.
+  Gestiona URLs, API keys y credenciales SSH/enable de **varios orchestrators**
+  y aplica la selección al `.env` con un clic (los secretos nunca se muestran).
+
+### 4. Actualizar a una nueva versión estable
+
+```bash
+./scripts/update.sh --daemon && sudo systemctl restart ec-mcp ec-mcp-admin
+```
+
+`main` solo recibe releases fusionados desde `develop`; para el trabajo diario
+usa `develop`:
+
+```bash
+git checkout develop           # desarrollo
+git checkout main && git tag v1.x.0   # corte de release
 ```
 
 ## Uso por stdio (Claude Desktop, Cursor)
@@ -434,7 +504,7 @@ target, resultado, dry-run/real y detalles. Ejemplo de línea:
 
 ## Estado y validación
 
-- Tests: 19 (perfiles, whitelist, catálogo, importadores OAS/Postman, auth HTTP en vivo).
+- Tests: 49 (perfiles, whitelist, catálogo, caché/métricas, importadores OAS/Postman, auth HTTP en vivo).
 - CI: pytest + smoke test stdio en cada push/PR que toque `ec-mcp/`.
 - Pendiente: validar paths de escritura contra un Orchestrator real en lab
   antes de habilitar `EC_ALLOW_WRITE_TOOLS` en producción.
