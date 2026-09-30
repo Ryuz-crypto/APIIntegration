@@ -14,7 +14,12 @@ def main() -> None:
     parser.add_argument("mode", nargs="?", default="stdio", choices=["stdio", "http", "sse"])
     parser.add_argument("--host", default=os.environ.get("EC_MCP_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("EC_MCP_PORT", "8000")))
-    parser.add_argument("--stateless", action="store_true", default=True)
+    parser.add_argument(
+        "--stateless",
+        action=argparse.BooleanOptionalAction,
+        default=os.environ.get("EC_MCP_STATELESS", "false").lower() == "true",
+        help="Stateless HTTP (no Mcp-Session-Id). Stateful by default for client compatibility.",
+    )
     args = parser.parse_args()
 
     server = create_server()

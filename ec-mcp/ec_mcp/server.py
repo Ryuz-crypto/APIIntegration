@@ -26,7 +26,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     settings = settings or Settings.from_env()
     engine = CompatibilityEngine(load_profiles(settings.profiles_dir))
     audit = AuditLog(settings.audit_log_path)
-    mcp = FastMCP("edgeconnect-sdwan")
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as pkg_version
+
+    try:
+        server_version = pkg_version("ec-mcp")
+    except PackageNotFoundError:
+        server_version = "0.1.0.dev"
+    mcp = FastMCP("edgeconnect-sdwan", version=server_version)
 
     cli_risk_by_command: dict[str, str] = {}
     for entry in catalog_entries():
