@@ -359,6 +359,7 @@ El servidor aplica un modelo de defensa por capas, alineado con la revisión de 
 - **Auditoría**: registra quién (tool), cuándo, qué operación, resultado y dry-run; nunca guarda tokens, contraseñas ni cuerpos completos de peticiones (solo las claves del body).
 - **CI**: ruff, bandit, pip-audit y gitleaks en cada push/PR a `ec-mcp/**`.
 - **Hosts públicos**: al publicar detrás de un reverse proxy, define `EC_MCP_ALLOWED_HOSTS=dominio.com` (sin esquema ni puerto). El SDK MCP activa protección DNS-rebinding que rechaza con 421 cualquier `Host` no declarado; esta variable lo autoriza.
+- **Respuestas JSON**: `EC_MCP_JSON_RESPONSE=true` (default) hace que los POST respondan con cuerpo JSON plano (`application/json`) en lugar de abrir un stream SSE por respuesta. Necesario detrás de proxies/túneles que cortan conexiones keep-alive inactivas: en modo SSE el SDK puede terminar la sesión recién creada (`ClosedResourceError`) y el cliente recibe un initialize 200 con cuerpo vacío. Desactívalo con `false` si tu cliente exige SSE estricto.
 
 ## Auditoría
 

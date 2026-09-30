@@ -157,10 +157,27 @@ def resolve_transport_security(host: str = "127.0.0.1"):
     )
 
 
-def build_http_app(server: FastMCP, token: str, *, stateless: bool = True, host: str = "127.0.0.1"):
-    """Build the authenticated streamable-HTTP ASGI app with /health."""
+def build_http_app(
+    server: FastMCP,
+    token: str,
+    *,
+    stateless: bool = True,
+    host: str = "127.0.0.1",
+    json_response: bool | None = None,
+):
+    """Build the authenticated streamable-HTTP ASGI app with /health.
+
+    ``json_response`` defaults to True: POST replies are plain JSON bodies
+    instead of per-request SSE streams, which avoids the SDK's SSE-writer
+    race (ClosedResourceError terminating freshly created sessions) behind
+    reverse proxies/tunnels that close idle keep-alive connections. Set
+    EC_MCP_JSON_RESPONSE=false to restore SSE responses.
+    """
+    if json_response is None:
+        json_response = os.environ.get("EC_MCP_JSON_RESPONSE", "true").lower() == "true"
     mcp_app = server.streamable_http_app(
         stateless_http=stateless,
+        json_response=json_response,
         transport_security=resolve_transport_security(host),
     )
     return BearerAuthMiddleware(mcp_app, resolve_auth_tokens(primary=token))

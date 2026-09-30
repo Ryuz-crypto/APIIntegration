@@ -20,6 +20,12 @@ def main() -> None:
         default=os.environ.get("EC_MCP_STATELESS", "false").lower() == "true",
         help="Stateless HTTP (no Mcp-Session-Id). Stateful by default for client compatibility.",
     )
+    parser.add_argument(
+        "--json-response",
+        action=argparse.BooleanOptionalAction,
+        default=os.environ.get("EC_MCP_JSON_RESPONSE", "true").lower() == "true",
+        help="Answer POSTs with JSON bodies instead of SSE streams (default: true).",
+    )
     args = parser.parse_args()
 
     server = create_server()
@@ -32,7 +38,9 @@ def main() -> None:
     print(f"ec-mcp {args.mode} transport on http://{args.host}:{args.port} (bearer auth enabled)")
 
     if args.mode == "http":
-        app = build_http_app(server, token, stateless=args.stateless, host=args.host)
+        app = build_http_app(
+            server, token, stateless=args.stateless, host=args.host, json_response=args.json_response
+        )
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     else:
         app = build_sse_app(server, token)
