@@ -19,8 +19,9 @@ def _load_env_file() -> None:
     env_path = os.environ.get("EC_MCP_ENV_FILE")
     if env_path:
         candidates.append(Path(env_path))
-    cwd_env = Path.cwd() / ".env"
-    candidates.append(cwd_env)
+    candidates.append(Path.cwd() / ".env")
+    package_root = Path(__file__).resolve().parent.parent
+    candidates.append(package_root / ".env")
     for candidate in candidates:
         if not candidate.is_file():
             continue

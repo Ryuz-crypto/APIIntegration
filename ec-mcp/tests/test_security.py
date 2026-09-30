@@ -213,8 +213,11 @@ async def test_health_has_no_sensitive_data():
     await middleware(_make_scope(path="/health"), receive, send)
     assert captured["status"] == 200
     payload = json.loads(captured["body"])
-    assert set(payload.keys()) == {"status"}
-    assert payload == {"status": "ok"}
+    assert payload["status"] == "ok"
+    assert payload["service"] == "ec-mcp"
+    assert "token" not in json.dumps(payload).lower()
+    for forbidden in ("EC_ORCHESTRATOR_API_KEY", "PASSWORD", "SECRET"):
+        assert forbidden not in json.dumps(payload)
 
 
 def test_audit_log_never_contains_credentials():

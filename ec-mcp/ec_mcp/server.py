@@ -49,7 +49,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         try:
             shared_client = OrchestratorClient(settings, engine)
             return shared_client
-        except ValueError:
+        except ValueError as error:
+            audit.record(
+                "orchestrator_client",
+                "init",
+                settings.orchestrator_url or "(unset)",
+                f"not configured: {error}",
+            )
             return None
 
     DANGEROUS_OPERATION_PATTERN = re.compile(

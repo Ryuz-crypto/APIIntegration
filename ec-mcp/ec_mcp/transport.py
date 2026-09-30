@@ -84,7 +84,28 @@ class BearerAuthMiddleware:
 
         path = scope.get("path", "")
         if path == "/health":
-            response = JSONResponse({"status": "ok"})
+            import os
+
+            orch_url = os.environ.get("EC_ORCHESTRATOR_URL", "")
+            orch_auth = bool(
+                os.environ.get("EC_ORCHESTRATOR_API_KEY", "")
+                or os.environ.get("EC_ORCHESTRATOR_USER", "")
+            )
+            response = JSONResponse(
+                {
+                    "status": "ok",
+                    "service": "ec-mcp",
+                    "orchestrator_configured": bool(orch_url and orch_auth),
+                    "missing_config": [
+                        kind
+                        for kind, configured in (
+                            ("orchestrator_url", bool(orch_url)),
+                            ("orchestrator_credentials", orch_auth),
+                        )
+                        if not configured
+                    ],
+                }
+            )
             await response(scope, receive, send)
             return
 
