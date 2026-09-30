@@ -70,22 +70,27 @@ else
     SSH_ENABLED="$(prompt_default "SSH a appliances (true/false)" "true")"
     set_env_value EC_SSH_ENABLED "$SSH_ENABLED"
     if [ "$SSH_ENABLED" = "true" ]; then
-      SSH_HOST="$(prompt_default "IP/host del appliance" "192.168.1.40")"
-      set_env_value EC_SSH_HOST "$SSH_HOST"
-      SSH_USER="$(prompt_default "Usuario SSH del appliance" "mcp")"
+      echo "    Credenciales comunes para todos los appliances; los hosts se"
+      echo "    descubren desde el Orchestrator en cada consulta."
+      SSH_USER="$(prompt_default "Usuario SSH (comun para todos los appliances)" "mcp")"
       set_env_value EC_SSH_USER "$SSH_USER"
-      SSH_PASS="$(prompt_secret "Password SSH")"
+      SSH_PASS="$(prompt_secret "Password SSH (comun para todos)")"
       if [ -n "$SSH_PASS" ]; then
         set_env_value EC_SSH_PASSWORD "$SSH_PASS"
       fi
-      SSH_ENABLE="$(prompt_secret "Password de enable (Enter si no hay)")"
+      SSH_ENABLE="$(prompt_secret "Password de enable (comun; Enter si no hay)")"
       if [ -n "$SSH_ENABLE" ]; then
         set_env_value EC_SSH_ENABLE_PASSWORD "$SSH_ENABLE"
+      fi
+      echo "    Autodetectando appliances desde el Orchestrator..."
+      if ! ./scripts/detect_appliances.sh; then
+        echo "    (No se pudo consultar el inventario ahora; no es bloqueante:)"
+        echo "     el servidor resuelve los hosts contra el Orchestrator en cada consulta)"
       fi
     fi
     ALLOWED="$(prompt_default "Dominio(s) públicos del túnel, separados por coma" "")"
     set_env_value EC_MCP_ALLOWED_HOSTS "$ALLOWED"
-    BIND="$(prompt_default "IP de escucha (0.0.0.0 para exponer via túnel)" "0.0.0.0")"
+    BIND="$(prompt_default "IP de escucha (0.0.0.0 = todas, necesario para túnel)" "0.0.0.0")"
     set_env_value EC_MCP_HOST "$BIND"
   else
     echo "    (modo no interactivo: edita .env a mano)"

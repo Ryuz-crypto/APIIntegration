@@ -158,6 +158,19 @@ class OrchestratorClient:
                     "site": item.get("site") or item.get("location") or item.get("siteName"),
                     "state": item.get("state") or item.get("adminState"),
                     "reachability": item.get("reachability") or item.get("neState"),
+                    "lan_ip": item.get("lanIp") or item.get("lanIPAddress") or item.get("dataIp"),
+                    "wan_ips": [
+                        value
+                        for value in (
+                            item.get("wanIp"),
+                            item.get("wanIPAddress"),
+                            item.get("wanIp2"),
+                            item.get("wanIpAddress2"),
+                            item.get("wanInterfaceIp"),
+                            item.get("mgmtAddress"),
+                        )
+                        if value
+                    ],
                 }
             )
         self._appliances_cache = appliances

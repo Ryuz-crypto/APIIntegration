@@ -64,12 +64,15 @@ $ ./scripts/install.sh
 URL del Orchestrator [https://lac-wan-sewan-orchge-useast1.silverpeak.cloud]:
 API key del Orchestrator (X-Auth-Token):
 SSH a appliances (true/false) [true]:
-IP/host del appliance [192.168.1.40]:
-Usuario SSH del appliance [mcp]:
-Password SSH:
-Password de enable (Enter si no hay):
+Usuario SSH (comun para todos los appliances) [mcp]:
+Password SSH (comun para todos):
+Password de enable (comun; Enter si no hay):
+    Autodetectando appliances desde el Orchestrator...
+    Encontrados 2 appliances:
+      1. ECV-CALIMAYA  [0.NE]  192.168.1.40  -> SSH OK (192.168.1.40)
+      2. ECV-BOGOTA    [14.NE] 192.168.2.10  -> SSH inalcanzable desde este servidor
 Dominio(s) públicos del túnel, separados por coma []: mcp-tunel.axisapps.io,172.17.201.141
-IP de escucha (0.0.0.0 para exponer via túnel) [0.0.0.0]:
+IP de escucha (0.0.0.0 = todas, necesario para túnel) [0.0.0.0]:
     Token MCP generado automáticamente: xxxx
     (es el que pegas como Bearer en el conector de Mistral)
 ```
@@ -292,7 +295,8 @@ Ver [`.env.example`](.env.example) con la referencia completa. Resumen:
 | `EC_ORCHESTRATOR_API_KEY` | — | API key (o `EC_ORCHESTRATOR_USER`/`PASSWORD`) |
 | `EC_VERIFY_TLS` | `true` | Verificar certificados TLS |
 | `EC_SSH_ENABLED` | `false` | Habilitar tools SSH |
-| `EC_SSH_HOST/USER/PASSWORD/PORT` | — | Credenciales del appliance |
+| `EC_SSH_HOST/USER/PASSWORD/PORT` | — | Credenciales SSH (comunes para todos los appliances). `EC_SSH_HOST` es opcional: si se omite, el host se descubre desde el Orchestrator (por nePk, nombre, IP o serial) en cada consulta |
+| `EC_SSH_ENABLE_PASSWORD` | — | Password de enable (comun para todos los appliances) |
 | `EC_ALLOW_WRITE_TOOLS` | `false` | Kill switch global de escritura |
 | `EC_MAX_OUTPUT_CHARS` | `12000` | Truncado de respuestas al LLM |
 | `EC_MCP_AUDIT_LOG` | `logs/mcp-audit.jsonl` | Audit log JSONL |
