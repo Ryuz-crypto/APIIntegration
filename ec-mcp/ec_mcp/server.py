@@ -72,6 +72,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         text = json.dumps(payload, ensure_ascii=False, default=str)
         return redact_secrets(sanitize_output(text, max_chars), [])
 
+    def _sanitize_example(value):
+        if isinstance(value, str):
+            return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", value)[:1000]
+        return value
+
     def operation_details(version: str, operation_id: str) -> dict:
         profile = engine._profiles[version]
         operation = profile["operations"][operation_id]
@@ -82,7 +87,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             "risk": operation.get("risk"),
             "path_params": operation.get("path_params", []),
             "query_params": operation.get("query_params", []),
-            "body_example": operation.get("body_example"),
+            "body_example": _sanitize_example(operation.get("body_example")),
         }
 
     def build_params(version: str, operation_id: str, appliance_id: str, group_id: str, interface_name: str, extras: dict) -> tuple[dict, dict]:
@@ -176,14 +181,37 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def list_api_operations(version: str = "") -> str:
-        """List the stable operation IDs available for each supported API version, with method, risk and parameters."""
-        if version and version not in engine._profiles:
-            return f"Unknown version {version}. Available: {engine.versions}"
-        versions = [version] if version else engine.versions
-        payload = {v: {op: operation_details(v, op) for op in sorted(engine._profiles[v]["operations"])} for v in versions}
-        audit.record("list_api_operations", "read", "profiles", "ok")
-        return json_result(payload, settings.max_output_chars * 8)
+    def list_api_operations(version: str = "", prefix: str = "", page: int = 0, page_size: int = 200) -> str:
+        """List the stable API operation IDs with method, risk and parameters, paginated. Use prefix to filter by operation family (e.g. 'appliance.interfaces', 'orchestrator', 'stats') and page/page_size to walk the full catalog (~1500 operations per version). Call with the same filters and page+1 to get the next chunk; has_more_page tells you when to stop."""
+        try:
+            if version and version not in engine._profiles:
+                return f"Unknown version {version}. Available: {engine.versions}"
+            versions = [version] if version else engine.versions
+            page = max(0, int(page))
+            page_size = min(max(1, int(page_size)), 500)
+            payload: dict = {}
+            has_more = False
+            for v in versions:
+                ops = sorted(engine._profiles[v]["operations"])
+                if prefix:
+                    lowered = prefix.lower()
+                    ops = [op for op in ops if op.lower().startswith(lowered)]
+                start = page * page_size
+                chunk = ops[start : start + page_size]
+                has_more = has_more or start + page_size < len(ops)
+                payload[v] = {
+                    "total_operations": len(ops),
+                    "page": page,
+                    "page_size": page_size,
+                    "has_more_pages": start + page_size < len(ops),
+                    "operations": {op: operation_details(v, op) for op in chunk},
+                }
+            result = {"has_more_page": has_more, "versions": payload}
+            audit.record("list_api_operations", "read", "profiles", "ok", details={"prefix": prefix, "page": page})
+            return json_result(result, settings.max_output_chars * 2)
+        except Exception as error:
+            audit.record("list_api_operations", "read", "profiles", f"error: {error}")
+            return f"Error: {error}"
 
     @mcp.tool()
     def list_appliances() -> str:
@@ -244,15 +272,23 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                             "(nePk, name or IP; discover them with list_appliances)."
                         )
                     query_params["nePk"] = resolve_ne_pk(client, appliance_id)
-                if not appliance_id or operation_id == "orchestrator.appliancegetapi70":
+                if operation_id == "orchestrator.appliancegetapi70" or (
+                    not appliance_id and not query_params.get("nePk")
+                ):
                     payload = client.call(version, operation_id, path_params=path_params, **query_params)
                 else:
                     ne_pk = query_params.get("nePk") or resolve_ne_pk(client, appliance_id)
                     query_params.pop("nePk", None)
                     appliance_path = operation.path
                     for key, value in path_params.items():
-                        if key != "appliance_id":
-                            appliance_path = appliance_path.replace("{" + key + "}", value)
+                        appliance_path = appliance_path.replace("{" + key + "}", value)
+                    appliance_path = appliance_path.replace("{appliance_id}", ne_pk)
+                    if re.search(r"\{[^}]+\}", appliance_path):
+                        missing = re.findall(r"\{([^}]+)\}", appliance_path)
+                        raise SecurityError(
+                            f"Operation '{operation_id}' is missing path parameters {missing}; "
+                            "pass them via extra_path_params_json."
+                        )
                     payload = client.appliance_api_get(ne_pk, appliance_path, **query_params)
             else:
                 if appliance_id:

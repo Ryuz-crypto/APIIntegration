@@ -133,3 +133,72 @@ def test_list_api_operations_tool():
     assert text.startswith("{")
     assert '"operation"' in text and '"method"' in text and '"path"' in text
     assert not text.startswith("Error")
+
+
+def test_list_api_operations_paginated():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+    result = asyncio.run(server.call_tool("list_api_operations", {"version": "9.6", "page_size": 50, "page": 0}))
+    payload = jsonlib.loads(result.content[0].text)
+    body = payload["versions"]["9.6"]
+    assert body["page"] == 0
+    assert body["total_operations"] > 500
+    assert len(body["operations"]) == 50
+    assert body["has_more_pages"] is True
+    next_result = asyncio.run(
+        server.call_tool("list_api_operations", {"version": "9.6", "page_size": 50, "page": 1, "prefix": "appliance.interfaces"})
+    )
+    next_body = jsonlib.loads(next_result.content[0].text)["versions"]["9.6"]
+    assert all(op.startswith("appliance.interfaces") for op in next_body["operations"])
+    assert next_body["page"] == 1
+
+
+def test_list_appliances_ne_pk_resolution():
+    import json as jsonlib
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    class FakeClient:
+        def __init__(self):
+            self.last_proxy_call = None
+
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def list_appliances(self):
+            return [
+                {"nePk": "0.NE", "name": "ECV-CALIMAYA", "ip": "192.168.1.40"},
+                {"nePk": "14.NE", "name": "ECV-BOGOTA", "ip": "192.168.2.10"},
+            ]
+
+        def appliance_api_get(self, ne_pk, appliance_path, **query):
+            self.last_proxy_call = {"nePk": ne_pk, "url": appliance_path, **query}
+            return {"ok": True, "interfaces": []}
+
+        def call(self, *args, **kwargs):
+            raise AssertionError("should have been proxied via appliance_api_get")
+
+    from ec_mcp import server as server_module
+
+    fake = FakeClient()
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: fake
+    try:
+        import asyncio
+
+        result = asyncio.run(server.call_tool("call_read_api", {"operation_id": "appliance.interfaces", "appliance_id": "ecv-bogota"}))
+        text = result.content[0].text
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    payload = jsonlib.loads(text)
+    assert payload["ok"] is True
+    assert fake.last_proxy_call["nePk"] == "14.NE"
+    assert fake.last_proxy_call["url"] == "/interfaceState/14.NE"
+    assert "{appliance_id}" not in fake.last_proxy_call["url"]

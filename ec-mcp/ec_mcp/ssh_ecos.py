@@ -32,18 +32,22 @@ class ApplianceSession:
                 self._connection.write(enable_password)
                 self._connection.send_command_timing("", read_timeout=10)
             probe = self._connection.send_command_timing("show version", read_timeout=15)
-            prompt = self._connection.find_prompt() if hasattr(self._connection, "find_prompt") else ""
-            combined = f"{probe or ''}\n{prompt or ''}"
-            if "#" not in combined:
+            probe_text = probe or ""
+            failed = (
+                not probe_text.strip()
+                or re.search(r"(?i)permission denied|not authorized|access denied|bad secrets|invalid password", probe_text)
+            )
+            if failed:
                 raise RuntimeError(
                     "Could not enter privileged (enable) mode on the appliance. Verify "
                     "EC_SSH_ENABLE_PASSWORD and the user's permissions. Last output: "
-                    f"{(probe or '')[-500:]!r}"
+                    f"{probe_text[-500:]!r}"
                 )
         self._max_output_chars = max_output_chars
 
     def run_show(self, command: str) -> str:
         validated = validate_show_command(command)
+        self._connection.send_command_timing("page off", read_timeout=10)
         raw = self._connection.send_command_timing(validated, read_timeout=30)
         return redact_secrets(sanitize_output(raw, self._max_output_chars), [])
 

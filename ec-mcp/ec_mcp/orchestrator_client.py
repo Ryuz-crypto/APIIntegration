@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import httpx
@@ -80,7 +81,10 @@ class OrchestratorClient:
             params={k: v for k, v in query.items() if v is not None},
             json=json_body,
         )
-        response.raise_for_status()
+        if response.status_code >= 400:
+            raise RuntimeError(
+                self._error_message(response, f"{resolved.method} {api_root}{resolved.path}")
+            )
         if not response.content:
             return {"ok": True}
         return response.json()
@@ -89,19 +93,48 @@ class OrchestratorClient:
         profile = getattr(self._engine, "_profiles", {}).get(version, {})
         return profile.get("api_root", "/gms/rest")
 
-    def get_raw(self, path: str, **query: Any) -> dict[str, Any]:
-        response = self._client.request(
-            "GET", f"/gms/rest{path}", headers=self._headers(), params=query or None
-        )
-        response.raise_for_status()
-        if not response.content:
-            return {"ok": True}
-        return response.json()
+    def _error_message(self, response: httpx.Response, action: str) -> str:
+        detail = ""
+        content_type = response.headers.get("content-type", "")
+        if "json" in content_type:
+            try:
+                body = response.json()
+                detail = str(body.get("message") or body.get("error") or body)[:300]
+            except Exception:
+                detail = response.text[:300]
+        else:
+            detail = re.sub(r"<[^>]+>", " ", response.text or "")
+            detail = " ".join(detail.split())[:300]
+        hint = ""
+        if response.status_code == 404:
+            hint = " The endpoint does not exist on this Orchestrator version."
+        elif response.status_code in (400, 500) and "nePk" in response.request.url.params:
+            hint = " The appliance may not exist or may be unreachable from the Orchestrator."
+        return f"Orchestrator returned HTTP {response.status_code} for {action}: {detail!r}.{hint}"
 
     def list_appliances(self) -> list[dict[str, Any]]:
-        data = self.get_raw("/appliance/approved")
+        data: Any = None
+        last_error: Exception | None = None
+        for path in ("/appliance/approved", "/neStatus", "/appliance"):
+            try:
+                data = self.get_raw(path)
+                break
+            except httpx.HTTPError as error:
+                last_error = error
+                if isinstance(error, httpx.HTTPStatusError) and error.response.status_code not in (404, 405):
+                    raise RuntimeError(self._error_message(error.response, f"GET {path}")) from error
+        if data is None:
+            raise RuntimeError(
+                f"Could not fetch the appliance inventory from the Orchestrator: {last_error}"
+            )
         if isinstance(data, dict):
-            data = data.get("appliances") or data.get("data") or data.get("result") or []
+            data = (
+                data.get("appliances")
+                or data.get("data")
+                or data.get("result")
+                or data.get("neStatus")
+                or []
+            )
         appliances = []
         for item in data or []:
             if not isinstance(item, dict):
