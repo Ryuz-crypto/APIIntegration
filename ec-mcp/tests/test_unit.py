@@ -120,3 +120,16 @@ def test_classify_cli_command():
     assert classify("configure terminal") == "write"
     assert classify("show fakecommand123") is None
     assert classify("rm -rf /") is None
+
+
+def test_list_api_operations_tool():
+    import asyncio
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+    result = asyncio.run(server.call_tool("list_api_operations", {}))
+    text = result.content[0].text
+    assert text.startswith("{")
+    assert '"operation"' in text and '"method"' in text and '"path"' in text
+    assert not text.startswith("Error")

@@ -152,7 +152,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         if version and version not in engine._profiles:
             return f"Unknown version {version}. Available: {engine.versions}"
         versions = [version] if version else engine.versions
-        payload = {v: {op: operation_details(v, op) for op in engine.list_operations(v)} for v in versions}
+        payload = {v: {op: operation_details(v, op) for op in sorted(engine._profiles[v]["operations"])} for v in versions}
         audit.record("list_api_operations", "read", "profiles", "ok")
         return json_result(payload, settings.max_output_chars * 8)
 
