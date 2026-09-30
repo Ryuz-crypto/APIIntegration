@@ -31,7 +31,7 @@ class OrchestratorClient:
         self._client.close()
 
     def _headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self._api_key}"}
+        return {"X-Auth-Token": self._api_key}
 
     def _login(self, username: str, password: str) -> str:
         response = self._client.post(
