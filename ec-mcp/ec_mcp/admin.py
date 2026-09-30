@@ -30,6 +30,9 @@ from starlette.routing import Route
 
 SESSIONS: dict[str, float] = {}
 SESSION_TTL = 3600.0
+LOGIN_FAILURES: dict[str, list[float]] = {}
+LOGIN_MAX_FAILURES = 5
+LOGIN_WINDOW_SECONDS = 60.0
 
 PAGE = """<!doctype html>
 <html lang="es"><head><meta charset="utf-8">
@@ -146,13 +149,25 @@ def _password_file() -> Path:
     return Path(os.environ.get("EC_ADMIN_PASSWORD_FILE", Path.cwd() / ".ec-admin-pass"))
 
 
-def _verify_password(candidate: str) -> bool:
+def _loopback_only(host: str) -> bool:
+    return host in ("127.0.0.1", "localhost", "::1")
+
+
+def _has_password_configured() -> bool:
+    if _admin_password():
+        return True
+    return _password_file().is_file()
+
+
+def _verify_password(candidate: str, allow_first_run: bool = True) -> bool:
     expected = _admin_password()
     if expected is None:
         passfile = _password_file()
         if passfile.is_file():
             expected = passfile.read_text(encoding="utf-8").strip()
     if not expected:
+        if not allow_first_run:
+            return False
         # First run with no password configured: any password becomes the password.
         passfile = _password_file()
         digest = hashlib.sha256(candidate.encode()).hexdigest()
@@ -188,7 +203,18 @@ async def login_page(request):
 async def login_post(request):
     body = await request.json()
     password = str(body.get("password") or "")
-    if not password or not _verify_password(password):
+    host = os.environ.get("EC_ADMIN_HOST", "0.0.0.0")
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    failures = [t for t in LOGIN_FAILURES.get(client_ip, []) if now - t < LOGIN_WINDOW_SECONDS]
+    if len(failures) >= LOGIN_MAX_FAILURES:
+        return JSONResponse(
+            {"ok": False, "error": "Demasiados intentos; espera un minuto."},
+            status_code=429,
+        )
+    if not password or not _verify_password(password, allow_first_run=_loopback_only(host)):
+        failures.append(now)
+        LOGIN_FAILURES[client_ip] = failures
         return JSONResponse({"ok": False})
     token = secrets.token_urlsafe(32)
     SESSIONS[token] = time.time()
@@ -371,9 +397,23 @@ def main() -> None:
     from .__main__ import _load_env_file
 
     _load_env_file()
-    host = os.environ.get("EC_ADMIN_HOST", "127.0.0.1")
+    host = os.environ.get("EC_ADMIN_HOST", "0.0.0.0")
     port = int(os.environ.get("EC_ADMIN_PORT", "8080"))
-    print(f"ec-mcp admin UI on http://{host}:{port} (bind local-only by default)")
+    if not _loopback_only(host) and not _has_password_configured():
+        raise SystemExit(
+            "ERROR: la UI de admin escucha en una IP alcanzable desde la red "
+            f"({host}) sin contraseña configurada.\n"
+            "Configura EC_ADMIN_PASSWORD en .env (o entra una vez por "
+            "127.0.0.1 para fijar la contraseña) y vuelve a arrancar.\n"
+            "Alternativa: EC_ADMIN_HOST=127.0.0.1 para acceso solo local."
+        )
+    print(f"ec-mcp admin UI on http://{host}:{port}")
+    if not _loopback_only(host):
+        print(
+            "AVISO: la UI de admin es alcanzable desde la red. Asegurate de "
+            "usar EC_ADMIN_PASSWORD fuerte y, si es posible, restringir el "
+            "acceso por firewall al puerto " + str(port) + "."
+        )
     uvicorn.run(build_admin_app(), host=host, port=port, log_level="warning")
 
 
