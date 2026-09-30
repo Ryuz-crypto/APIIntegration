@@ -43,7 +43,7 @@ class OrchestratorClient:
 
     def detect_version(self) -> str | None:
         try:
-            response = self._client.get("/gms/rest/gmsserver/briefInfo")
+            response = self._client.get("/gms/rest/gmsserver/briefInfo", headers=self._headers())
             if response.status_code != 200:
                 return None
             info = response.json()
