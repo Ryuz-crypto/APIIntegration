@@ -72,7 +72,12 @@ class OrchestratorClient:
         elapsed = time.monotonic() - started
         self._record_metric(path, elapsed, len(response.content), cache_hit=False)
         if response.status_code >= 400:
-            raise RuntimeError(self._error_message(response, f"GET {path}"))
+            message = self._error_message(response, f"GET {path}")
+            if response.status_code == 404:
+                body = (response.text or "").strip()
+                if any(marker in body for marker in ("No application groups configured", "no data", "not configured", "No configured")):
+                    return {"data": None, "reason": "endpoint returned empty result (404 with empty-data semantics)"}
+            raise RuntimeError(message)
         if not response.content:
             return {}
         try:

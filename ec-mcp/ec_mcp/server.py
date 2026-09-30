@@ -271,6 +271,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     raise
         raise last_error or RuntimeError(f"No endpoint available for KPI {kpi}")
 
+    def kpi_alarm_counts(client: OrchestratorClient) -> Any:
+        for path in ("/alarm/count/appliance", "/gms/rest/alarm/count/appliance"):
+            try:
+                return client.get_raw(path)
+            except RuntimeError as error:
+                if "HTTP 404" not in str(error):
+                    raise
+        return {"data": None, "reason": "alarm count endpoint not available on this Orchestrator version"}
+
     def brownout_state(payload: Any) -> list[dict[str, Any]]:
         rows = payload if isinstance(payload, list) else payload.get("tunnels") or payload.get("data") or [] if isinstance(payload, dict) else []
         result = []
@@ -367,12 +376,21 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def list_api_operations(version: str = "", prefix: str = "", search: str = "", method: str = "",
-                             page: int = 0, page_size: int = 200, include_examples: bool = False) -> str:
-        """List the stable API operation IDs with method, path, risk and params, paginated and filterable. Filters: search (substring on operation id AND path), prefix (operation id prefix), method (GET/POST/PUT/DELETE). By default body_example is omitted to keep the payload small; pass include_examples=true to include it. Response is always valid JSON with total_operations, page, has_more_page; call with page+1 for the next chunk."""
+                             page: int = 0, page_size: int = 200, include_examples: bool = False, mode: str = "") -> str:
+        """List the stable API operation IDs, paginated and filterable. Defaults to the ACTIVE profile only (pass version='all' for every profile). Filters: search (substring on operation id AND path), prefix, method (GET/POST/PUT/DELETE). mode='index' returns a compact id -> path map (smallest payload). By default body_example is omitted; include_examples=true adds it. Response is always valid JSON with total_operations, page, has_more_page; call with page+1 for the next chunk."""
         try:
-            if version and version not in engine._profiles:
+            if version and version != "all" and version not in engine._profiles:
                 return f"Unknown version {version}. Available: {engine.versions}"
-            versions = [version] if version else engine.versions
+            if version == "all":
+                versions = list(engine.versions)
+            elif version:
+                versions = [version]
+            else:
+                try:
+                    client = require_client()
+                    versions = [client.resolve_active_profile()] if client else list(engine.versions)
+                except Exception:
+                    versions = list(engine.versions)
             page = max(0, int(page))
             page_size = min(max(1, int(page_size)), 1000)
             payload: dict = {}
@@ -397,6 +415,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 entries = {}
                 for op in chunk:
                     spec = profile_ops[op]
+                    if mode == "index":
+                        entries[op] = spec["path"]
+                        continue
                     entry = {
                         "operation": op,
                         "method": spec["method"],
@@ -589,6 +610,20 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
+    def get_active_alarms(appliance_id: str = "") -> str:
+        """Active alarm counts per appliance from /alarm/count/appliance (the /alarm/gms detail endpoint rejects view/severity filters — known upstream contract). Use it for 'how many alarms are active right now' instead of alarm/gms."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            payload = kpi_alarm_counts(client)
+            audit.record("get_active_alarms", "read", settings.orchestrator_url, "ok")
+            return json_result({"data": payload, "note": "Counts per appliance/severity; the alarm/gms detail endpoint only accepts from+to (epoch seconds) upstream."}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_active_alarms", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
     def call_read_api(
         operation_id: str,
         appliance_id: str = "",
@@ -603,7 +638,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         limit: int = 0,
         max_chars: int = 0,
     ) -> str:
-        """Invoke a read-only Orchestrator/Appliance API operation by stable operation ID. Use list_api_operations(search=...) to find operation IDs, or list_appliances to get the appliances with their nePk. appliance_id accepts nePk, name, IP or serial. For list responses use fields (comma-separated columns), offset/limit and max_chars to page through data; the response is always complete valid JSON with pagination metadata (total_count, next_offset) — never a cut string."""
+        """Invoke a read-only Orchestrator/Appliance API operation by stable operation ID. Use list_api_operations(search=...) to find operation IDs, or list_appliances to get the appliances with their nePk. appliance_id accepts nePk, name, IP, serial, comma-separated list, or 'all' for every registered appliance (uses groupByNE when supported). Param formats: granularity=minute|5minute|hour|day (never numeric); start_time/end_time=epoch seconds (alarm endpoints) or epoch ms depending on endpoint — see the error hints. For list responses use fields (comma-separated columns), offset/limit and max_chars to page through data; the response is always complete valid JSON with pagination metadata (total_count, next_offset) — never a cut string."""
         try:
             client = require_client()
             if client is None:
@@ -612,6 +647,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if operation_id not in engine._profiles[version]["operations"]:
                 return operation_not_found_error(version, operation_id)
             spec = engine._profiles[version]["operations"][operation_id]
+            multi_targets: list[str] = []
+            if appliance_id.strip().lower() == "all":
+                multi_targets = [str(a.get("nePk")) for a in client.list_appliances()]
+                appliance_id = ""
             missing_required: list[str] = []
             needs_ne_pk = "nePk" in (spec.get("query_params") or []) or "nePk" in (
                 spec.get("path_params") or []
@@ -624,18 +663,24 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 missing_required.append("appliance_id (nePk)")
             if "/stats/" in spec["path"] and not granularity:
                 missing_required.append("granularity")
+                granularity_hint = True
             if "/timeseries/" in spec["path"]:
                 if not start_time:
                     missing_required.append("start_time")
                 if not end_time:
                     missing_required.append("end_time")
             if missing_required:
+                hint = "Provide the missing parameters; no upstream call was made."
+                if granularity_hint or "granularity" in missing_required:
+                    hint += " granularity accepts: minute | 5minute | hour | day (NOT numeric seconds like 3600)."
+                if "start_time" in missing_required or "end_time" in missing_required:
+                    hint += " start_time/end_time: epoch (seconds) for most stats endpoints; some accept ISO-8601."
                 return json_result(
                     {
                         "error": "PARAM_REQUIRED",
                         "operation_id": operation_id,
                         "required_params": missing_required,
-                        "hint": "Provide the missing parameters; no upstream call was made.",
+                        "hint": hint,
                     },
                     settings.max_output_chars,
                 )
@@ -694,10 +739,24 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         )
                     payload = client.appliance_api_get(ne_pk, appliance_path, **query_params)
             else:
-                if appliance_id:
+                if multi_targets:
+                    results = []
+                    for target in multi_targets:
+                        per_query = dict(query_params)
+                        per_query["nePk"] = target
+                        if "groupByNE" not in per_query and "nePk" in (spec.get("query_params") or []):
+                            per_query.setdefault("groupByNE", "true")
+                        try:
+                            results.append({"nePk": target, "data": client.call(version, operation_id, path_params=path_params, **per_query)})
+                        except Exception as per_error:
+                            results.append({"nePk": target, "error": str(per_error)[:200]})
+                    payload = results
+                elif appliance_id:
                     query_params.setdefault("nePk", resolve_ne_pk(client, appliance_id))
                     path_params.setdefault("nePk", query_params["nePk"])
-                payload = client.call(version, operation_id, path_params=path_params, **query_params)
+                    payload = client.call(version, operation_id, path_params=path_params, **query_params)
+                else:
+                    payload = client.call(version, operation_id, path_params=path_params, **query_params)
             field_list = [f.strip() for f in fields.split(",") if f.strip()] if fields else []
             if field_list or offset or limit:
                 paginated, _ = paginate_data(payload, max(0, offset), limit or None, field_list)

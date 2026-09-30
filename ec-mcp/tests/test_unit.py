@@ -364,3 +364,41 @@ def test_kpi_tools_registered():
         "list_appliances",
     ):
         assert expected in tools, f"{expected} not registered; got {tools}"
+
+
+def test_catalog_index_mode_and_default_version():
+    import ec_mcp.server as server_module
+
+    mcp = server_module.create_server()
+    tools = {t.name: t for t in mcp._tool_manager.list_tools()}
+    assert "get_active_alarms" in tools
+    schema = tools["list_api_operations"].parameters
+    assert "mode" in schema.get("properties", {})
+
+
+def test_empty_404_semantics():
+    from ec_mcp.orchestrator_client import OrchestratorClient
+
+    class FakeResponse:
+        status_code = 404
+        content = b"No application groups configured"
+        text = "No application groups configured"
+        headers: ClassVar[dict] = {"content-type": "text/plain"}
+
+        class request:
+            url = type("U", (), {"params": {}})()
+
+    class FakeHttpx:
+        def get(self, path, headers=None, params=None):
+            return FakeResponse()
+
+    client = OrchestratorClient.__new__(OrchestratorClient)
+    client._client = FakeHttpx()
+    client._api_key = "k"
+    client._response_cache = {}
+    client._cache_ttl = 30.0
+    client._cache_max_entries = 128
+    client._metrics = {}
+    result = client.get_raw("/applicationGroups")
+    assert result.get("data") is None
+    assert "empty" in result.get("reason", "")
