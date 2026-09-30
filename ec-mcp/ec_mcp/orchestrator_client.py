@@ -194,13 +194,26 @@ class OrchestratorClient:
         last_error: Exception | None = None
         for path in ("/appliance/approved", "/neStatus", "/appliance"):
             try:
-                data = self.get_raw(path)
-                break
+                candidate = self.get_raw(path)
             except RuntimeError as error:
                 last_error = error
                 message = str(error)
                 if "HTTP 404" not in message and "HTTP 405" not in message:
                     raise
+                continue
+            items = candidate
+            if isinstance(candidate, dict):
+                items = (
+                    candidate.get("appliances")
+                    or candidate.get("data")
+                    or candidate.get("result")
+                    or candidate.get("neStatus")
+                    or []
+                )
+            if isinstance(items, list) and items:
+                data = candidate
+                break
+            last_error = RuntimeError(f"GET {path}: empty inventory response")
         if data is None:
             raise RuntimeError(
                 f"Could not fetch the appliance inventory from the Orchestrator: {last_error}"

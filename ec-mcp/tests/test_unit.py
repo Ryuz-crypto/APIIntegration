@@ -411,3 +411,77 @@ def test_new_kpi_tools_registered():
     tools = [t.name for t in mcp._tool_manager.list_tools()]
     for expected in ("get_ha_status", "get_firmware_compliance", "get_ztp_status", "get_active_alarms"):
         assert expected in tools, f"{expected} missing; got {tools}"
+
+
+def test_param_required_no_unboundlocal_crash():
+    """ERR-18 regression: granularity without appliance_id must return PARAM_REQUIRED, not UnboundLocalError."""
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp import server as server_module
+
+    class FakeClient:
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def list_appliances(self, refresh=False):
+            return []
+
+    fake = FakeClient()
+    original = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: fake
+    try:
+        mcp = server_module.create_server()
+        result = asyncio.run(mcp.call_tool("call_read_api", {"operation_id": "orchestrator.stats_aggregate_tunnel663", "granularity": "hour"}))
+        text = result.content[0].text
+    finally:
+        server_module.OrchestratorClient = original
+    data = jsonlib.loads(text)
+    assert data["error"] == "PARAM_REQUIRED"
+    assert any("appliance_id" in p for p in data["required_params"])
+    assert "hint" in data
+
+
+def test_catalog_pagination_offset_continuity():
+    """ERR-19 regression: page metadata must reflect what budget allows; offset param continues without skips."""
+    import asyncio
+    import json as jsonlib
+
+    import ec_mcp.server as server_module
+
+    mcp = server_module.create_server()
+
+    async def run(args):
+        return await mcp.call_tool("list_api_operations", args)
+
+    result = asyncio.run(run({"version": "9.6", "page_size": 300, "mode": "index"}))
+    text = result.content[0].text
+    data = jsonlib.loads(text)
+    body = data["versions"]["9.6"]
+    assert body["returned"] == len(body["operations"])
+    assert body["has_more_page"] == (body["offset"] + body["returned"] < body["total_operations"])
+    if body.get("page_size_adjusted"):
+        assert body["next_offset"] == body["offset"] + body["returned"]
+
+
+def test_list_appliances_fallback_on_empty(monkeypatch):
+    """ERR-17 regression: an empty /appliance/approved must fall through to /neStatus, not return []."""
+    from ec_mcp.orchestrator_client import OrchestratorClient
+
+    calls = []
+
+    def fake_get_raw(self, path, **query):
+        calls.append(path)
+        if path == "/appliance/approved":
+            return {"data": None, "reason": "empty result"}
+        if path == "/neStatus":
+            return [{"nePk": "0.NE", "hostname": "ECV-CALIMAYA", "ipAddress": "10.255.0.14"}]
+        raise RuntimeError(f"GET {path}: unexpected")
+
+    monkeypatch.setattr(OrchestratorClient, "get_raw", fake_get_raw)
+    client = OrchestratorClient.__new__(OrchestratorClient)
+    client._appliances_cache = None
+    appliances = client.list_appliances(refresh=True)
+    assert calls == ["/appliance/approved", "/neStatus"]
+    assert len(appliances) == 1
+    assert appliances[0]["nePk"] == "0.NE"

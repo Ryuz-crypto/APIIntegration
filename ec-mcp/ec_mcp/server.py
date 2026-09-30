@@ -396,8 +396,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def list_api_operations(version: str = "", prefix: str = "", search: str = "", method: str = "",
-                             page: int = 0, page_size: int = 200, include_examples: bool = False, mode: str = "") -> str:
-        """List the stable API operation IDs, paginated and filterable. Defaults to the ACTIVE profile only (pass version='all' for every profile). Filters: search (substring on operation id AND path), prefix, method (GET/POST/PUT/DELETE). mode='index' returns a compact id -> path map (smallest payload). By default body_example is omitted; include_examples=true adds it. Response is always valid JSON with total_operations, page, has_more_page; call with page+1 for the next chunk."""
+                             page: int = 0, page_size: int = 200, include_examples: bool = False, mode: str = "", offset: int = -1) -> str:
+        """List the stable API operation IDs, paginated and filterable. Defaults to the ACTIVE profile only (pass version='all' for every profile). Filters: search (substring on operation id AND path), prefix, method (GET/POST/PUT/DELETE). mode='index' returns a compact id -> path map (smallest payload). By default body_example is omitted; include_examples=true adds it. Pagination: page*page_size by default; if the transport budget shrinks the page you get page_size_adjusted + next_offset — continue with offset=next_offset (NOT page+1, which would skip entries). Response is always valid JSON."""
         try:
             if version and version != "all" and version not in engine._profiles:
                 return f"Unknown version {version}. Available: {engine.versions}"
@@ -429,7 +429,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     if method and spec["method"].upper() != method.upper():
                         continue
                     ops.append(op_id)
-                start = page * page_size
+                start = max(0, int(offset)) if offset is not None and int(offset) >= 0 else page * page_size
                 chunk = ops[start : start + page_size]
                 has_more = has_more or start + page_size < len(ops)
                 entries = {}
@@ -452,14 +452,29 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     if include_examples:
                         entry["body_example"] = _sanitize_example(spec.get("body_example"))
                     entries[op] = entry
-                payload[v] = {
+                probe = json.dumps({"versions": {v: {"operations": entries}}}, ensure_ascii=False, default=str)
+                budget = settings.max_output_chars * 2 - 1024
+                page_size_adjusted = False
+                if len(probe) > budget and entries:
+                    per_entry = max(1.0, len(probe) / len(entries))
+                    effective = max(1, int(budget / per_entry))
+                    entries = {k: entries[k] for k in list(entries)[:effective]}
+                    page_size_adjusted = True
+                    has_more = has_more or start + len(entries) < len(ops)
+                body = {
                     "total_operations": len(ops),
                     "page": page,
                     "page_size": page_size,
-                    "total_pages": (len(ops) + page_size - 1) // page_size,
-                    "has_more_page": start + page_size < len(ops),
+                    "offset": start,
+                    "returned": len(entries),
+                    "has_more_page": start + len(entries) < len(ops),
                     "operations": entries,
                 }
+                if page_size_adjusted:
+                    body["page_size_adjusted"] = len(entries)
+                    body["next_offset"] = start + len(entries)
+                    body["hint"] = "Transport budget shrunk this page; continue with offset=next_offset (do NOT use page+1)."
+                payload[v] = body
             result = {"has_more_page": has_more, "versions": payload}
             result_text, truncated = closed_json_result(result, settings.max_output_chars * 2)
             if truncated:
@@ -727,6 +742,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 multi_targets = [str(a.get("nePk")) for a in client.list_appliances()]
                 appliance_id = ""
             missing_required: list[str] = []
+            granularity_hint = False
             needs_ne_pk = "nePk" in (spec.get("query_params") or []) or "nePk" in (
                 spec.get("path_params") or []
             )
