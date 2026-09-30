@@ -25,8 +25,21 @@ class ApplianceSession:
             port=port,
         )
         if enable_password:
-            self._connection.send_command_timing("enable", read_timeout=10)
-            self._connection.send_command_timing(enable_password, read_timeout=10)
+            enable_result = self._connection.send_command_timing("enable", read_timeout=10)
+            if re.search(r"(?i)password", enable_result or ""):
+                self._connection.send_command_timing(enable_password, read_timeout=10)
+            else:
+                self._connection.write(enable_password)
+                self._connection.send_command_timing("", read_timeout=10)
+            probe = self._connection.send_command_timing("show version", read_timeout=15)
+            prompt = self._connection.find_prompt() if hasattr(self._connection, "find_prompt") else ""
+            combined = f"{probe or ''}\n{prompt or ''}"
+            if "#" not in combined:
+                raise RuntimeError(
+                    "Could not enter privileged (enable) mode on the appliance. Verify "
+                    "EC_SSH_ENABLE_PASSWORD and the user's permissions. Last output: "
+                    f"{(probe or '')[-500:]!r}"
+                )
         self._max_output_chars = max_output_chars
 
     def run_show(self, command: str) -> str:

@@ -106,6 +106,35 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 query_params[name] = str(value)
         return path_params, query_params
 
+    def normalize_ne_pk(value: str) -> str:
+        candidate = value.strip()
+        if not candidate:
+            return ""
+        if re.fullmatch(r"\d+\.NE", candidate, re.IGNORECASE):
+            return candidate.upper()
+        match = re.fullmatch(r"(\d+)(?:\.NE)?", candidate)
+        if match:
+            return f"{match.group(1)}.NE"
+        return ""
+
+    def resolve_ne_pk(client: OrchestratorClient, appliance_id: str) -> str:
+        candidate = appliance_id.strip()
+        direct = normalize_ne_pk(candidate)
+        if direct:
+            return direct
+        for appliance in client.list_appliances():
+            if candidate.lower() in (
+                str(appliance.get("name") or "").lower(),
+                str(appliance.get("ip") or "").lower(),
+                str(appliance.get("nePk") or "").lower(),
+                str(appliance.get("serial_number") or "").lower(),
+            ):
+                return str(appliance.get("nePk"))
+        raise SecurityError(
+            f"Could not resolve '{appliance_id}' to a known appliance nePk. "
+            "Use list_appliances to discover the registered appliances."
+        )
+
     def _parse_json_object(raw: str, name: str) -> dict:
         if not raw.strip():
             return {}
@@ -157,6 +186,20 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         return json_result(payload, settings.max_output_chars * 8)
 
     @mcp.tool()
+    def list_appliances() -> str:
+        """List every appliance registered in the EdgeConnect Orchestrator (nePk, name, IP, model, software version, state). Use this first to discover the nePk/device names needed for per-appliance API calls and SSH commands."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            appliances = client.list_appliances()
+            audit.record("list_appliances", "read", settings.orchestrator_url, "ok", details={"count": len(appliances)})
+            return json_result({"count": len(appliances), "appliances": appliances}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("list_appliances", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
     def call_read_api(
         operation_id: str,
         appliance_id: str = "",
@@ -167,7 +210,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         extra_path_params_json: str = "",
         extra_query_params_json: str = "",
     ) -> str:
-        """Invoke a read-only Orchestrator/Appliance API operation by stable operation ID. Use list_api_operations to discover the ~1500 available operations (topology, tunnels, interfaces, events, stats, BGP, VRF, overlays...). Path/query params required by each operation are listed there."""
+        """Invoke a read-only Orchestrator/Appliance API operation by stable operation ID. Use list_api_operations to discover the ~1500 available operations, or list_appliances to get the appliances with their nePk. appliance_id accepts a nePk (e.g. 1.NE), a device name, an IP or a serial number; per-appliance operations (flows, tunnels, interfaces, stats...) are proxied through the Orchestrator so no direct appliance connectivity is needed."""
         try:
             client = require_client()
             if client is None:
@@ -190,7 +233,32 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     **_parse_json_object(extra_query_params_json, "extra_query_params_json"),
                 },
             )
-            payload = client.call(version, operation_id, path_params=path_params, **query_params)
+            if version and operation_id.startswith("appliance."):
+                profile = engine._profiles[version]
+                profile_ops = profile["operations"][operation_id]
+                needs_ne = "nePk" in (profile_ops.get("query_params") or []) or "nePk" in (profile_ops.get("path_params") or [])
+                if needs_ne and not query_params.get("nePk"):
+                    if not appliance_id:
+                        raise SecurityError(
+                            f"Operation '{operation_id}' is appliance-scoped: pass appliance_id "
+                            "(nePk, name or IP; discover them with list_appliances)."
+                        )
+                    query_params["nePk"] = resolve_ne_pk(client, appliance_id)
+                if not appliance_id or operation_id == "orchestrator.appliancegetapi70":
+                    payload = client.call(version, operation_id, path_params=path_params, **query_params)
+                else:
+                    ne_pk = query_params.get("nePk") or resolve_ne_pk(client, appliance_id)
+                    query_params.pop("nePk", None)
+                    appliance_path = operation.path
+                    for key, value in path_params.items():
+                        if key != "appliance_id":
+                            appliance_path = appliance_path.replace("{" + key + "}", value)
+                    payload = client.appliance_api_get(ne_pk, appliance_path, **query_params)
+            else:
+                if appliance_id:
+                    query_params.setdefault("nePk", resolve_ne_pk(client, appliance_id))
+                    path_params.setdefault("nePk", query_params["nePk"])
+                payload = client.call(version, operation_id, path_params=path_params, **query_params)
             audit.record("call_read_api", operation_id, settings.orchestrator_url, "ok")
             return json_result(payload, settings.max_output_chars)
         except Exception as error:

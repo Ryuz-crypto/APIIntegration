@@ -88,3 +88,40 @@ class OrchestratorClient:
     def _profile_api_root(self, version: str) -> str:
         profile = getattr(self._engine, "_profiles", {}).get(version, {})
         return profile.get("api_root", "/gms/rest")
+
+    def get_raw(self, path: str, **query: Any) -> dict[str, Any]:
+        response = self._client.request(
+            "GET", f"/gms/rest{path}", headers=self._headers(), params=query or None
+        )
+        response.raise_for_status()
+        if not response.content:
+            return {"ok": True}
+        return response.json()
+
+    def list_appliances(self) -> list[dict[str, Any]]:
+        data = self.get_raw("/appliance/approved")
+        if isinstance(data, dict):
+            data = data.get("appliances") or data.get("data") or data.get("result") or []
+        appliances = []
+        for item in data or []:
+            if not isinstance(item, dict):
+                continue
+            appliances.append(
+                {
+                    "nePk": item.get("nePk") or item.get("nePK") or item.get("id"),
+                    "name": item.get("name") or item.get("hostname") or item.get("dnsName"),
+                    "model": item.get("model") or item.get("modelNumber"),
+                    "serial_number": item.get("serialNumber") or item.get("serial"),
+                    "software_version": item.get("softwareVersion") or item.get("currentSoftwareVersion"),
+                    "ip": item.get("ipAddress") or item.get("managementIp") or item.get("ip"),
+                    "site": item.get("site") or item.get("location") or item.get("siteName"),
+                    "state": item.get("state") or item.get("adminState"),
+                    "reachability": item.get("reachability") or item.get("neState"),
+                }
+            )
+        return appliances
+
+    def appliance_api_get(self, ne_pk: str, appliance_path: str, **query: Any) -> dict[str, Any]:
+        if not appliance_path.startswith("/"):
+            appliance_path = "/" + appliance_path
+        return self.get_raw("/appliance/rest", nePk=ne_pk, url=appliance_path, **query)
