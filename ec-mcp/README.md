@@ -41,7 +41,27 @@ auditoría) pero no los sustituye.
 
 ## Instalación
 
-### Linux recién instalado: de cero a funcionar en 4 pasos
+### De cero a funcionar en 2 comandos (Ubuntu/Debian)
+
+```bash
+git clone https://github.com/Ryuz-crypto/APIIntegration.git
+cd APIIntegration/ec-mcp
+./scripts/install.sh          # instala todo, crea .env con token y verifica
+nano .env                    # pon tu EC_ORCHESTRATOR_URL y EC_ORCHESTRATOR_API_KEY
+./scripts/update.sh --daemon # arranca en background con el .env
+```
+
+`install.sh` es idempotente (re-ejecútalo sin miedo) y nunca sobrescribe un
+`.env` existente. `update.sh` hace `git pull` + reinstalar + arrancar con el
+`.env` ya configurado — es el único comando que necesitas para actualizar el
+servidor:
+
+```bash
+./scripts/update.sh --daemon             # actualiza y arranca en background
+tail -f /tmp/ec-mcp.log                  # ver el log
+```
+
+Detalles de los pasos manuales equivalentes:
 
 **Paso 0 — Prerrequisitos (una sola vez):**
 
