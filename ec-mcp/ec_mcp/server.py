@@ -244,32 +244,52 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 resolved.append(resolve_ne_pk(client, part))
         return resolved
 
-    KPI_ENDPOINTS: dict[str, dict[str, str]] = {
-        "availability": {"path": "/stats/aggregate/availability/appliance", "fallback": "/availability/appliance"},
-        "mos": {"path": "/stats/aggregate/mos", "fallback": ""},
-        "latency": {"path": "/stats/aggregate/tunnel", "fallback": "/latency"},
-        "top_talkers": {"path": "/stats/aggregate/topTalkers", "fallback": ""},
-        "tunnel_state": {"path": "/tunnelsConfigAndState", "fallback": "/stats/aggregate/availability/tunnel", "appliance_level": True},
-        "brownout": {"path": "/tunnelsConfigAndState", "fallback": "", "appliance_level": True},
+    KPI_ENDPOINTS: dict[str, dict[str, Any]] = {
+        "availability": {"paths": ["/stats/aggregate/availability/appliance", "/availability/appliance"]},
+        "availability_tunnel": {"paths": ["/stats/aggregate/availability/tunnel"]},
+        "mos": {"paths": ["/stats/aggregate/mos"]},
+        "latency": {"paths": ["/stats/aggregate/tunnel", "/latency"]},
+        "top_talkers": {"paths": ["/stats/aggregate/topTalkers", "/stats/aggregate/topTalkers/split"]},
+        "tunnel_state": {"paths": ["/tunnelsConfigAndState"], "appliance_level": True},
+        "brownout": {"paths": ["/tunnelsConfigAndState"], "appliance_level": True},
+        "ha_status": {"paths": ["/appliance/haPeerMeta", "/haGroups", "/vrrp"]},
+        "firmware": {"paths": ["/appliancesSoftwareVersions", "/systemInfo"]},
+        "ztp": {"paths": ["/spPortal/ztp", "/appliance/discovered"]},
+        "reachability": {"paths": ["/reachability/appliance"]},
     }
+
+    KPI_NO_ENDPOINT = (
+        "per-application consumption/performance/QoE/Business-Intent/SLA violations "
+        "(official KPI matrix rows 45-49) have no API endpoint yet; they are flagged "
+        "as 'further development' by the vendor documentation."
+    )
 
     def kpi_get(client: OrchestratorClient, kpi: str, ne_pk: str = "", granularity: str = "", start_time: str = "", end_time: str = "") -> Any:
         spec = KPI_ENDPOINTS[kpi]
         query = {k: v for k, v in {"nePk": ne_pk, "granularity": granularity, "startTime": start_time, "endTime": end_time}.items() if v}
-        paths = [spec["path"], spec.get("fallback", "")]
         last_error: Exception | None = None
-        for path in paths:
-            if not path:
-                continue
+        results: list[Any] = []
+        for path in spec["paths"]:
             try:
                 if spec.get("appliance_level") and ne_pk:
-                    return client.appliance_api_get(ne_pk, path, **{k: v for k, v in query.items() if k != "nePk"})
-                return client.get_raw(path, **query)
+                    results.append(client.appliance_api_get(ne_pk, path, **{k: v for k, v in query.items() if k != "nePk"}))
+                else:
+                    results.append(client.get_raw(path, **query))
             except RuntimeError as error:
                 last_error = error
-                if "HTTP 404" not in str(error):
+                if "HTTP 404" not in str(error) and "HTTP 400" not in str(error):
                     raise
+        if results:
+            return results if len(results) > 1 else results[0]
         raise last_error or RuntimeError(f"No endpoint available for KPI {kpi}")
+
+    def reachability_map(client: OrchestratorClient) -> dict[str, str]:
+        try:
+            data = kpi_get(client, "reachability")
+            rows = data if isinstance(data, list) else (data or {}).get("data") or []
+            return {str(r.get("nePk") or r.get("ne")): str(r.get("reachability") or r.get("state") or "") for r in rows if isinstance(r, dict)}
+        except Exception:
+            return {}
 
     def kpi_alarm_counts(client: OrchestratorClient) -> Any:
         for path in ("/alarm/count/appliance", "/gms/rest/alarm/count/appliance"):
@@ -517,7 +537,19 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 mos = kpi_get(client, "mos", "", granularity, start_time, end_time)
             except Exception:
                 mos = None
-            payload = {"appliances": rows, "mos": mos, "granularity": granularity}
+            reach = reachability_map(client)
+            for row in rows:
+                if "error" in row and reach:
+                    state = reach.get(row.get("nePk"), "")
+                    if state and state.lower() not in ("", "ok", "reachable", "up"):
+                        row["reachability"] = state
+                        row["hint"] = "Orchestrator reports degraded reachability for this appliance; the error may be reachability, not the endpoint."
+            payload = {
+                "appliances": rows,
+                "mos": mos,
+                "granularity": granularity,
+                "kpi_without_endpoint": KPI_NO_ENDPOINT,
+            }
             field_list = [f.strip() for f in fields.split(",") if f.strip()]
             if field_list:
                 payload, _ = paginate_data(payload, 0, None, field_list)
@@ -621,6 +653,49 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return json_result({"data": payload, "note": "Counts per appliance/severity; the alarm/gms detail endpoint only accepts from+to (epoch seconds) upstream."}, settings.max_output_chars)
         except Exception as error:
             audit.record("get_active_alarms", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_ha_status(appliance_id: str = "") -> str:
+        """High-availability status: HA peer metadata, HA groups and VRRP, from /appliance/haPeerMeta + /haGroups + /vrrp (all attempted, missing ones reported per source)."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
+            payload = kpi_get(client, "ha_status", ne_pk)
+            audit.record("get_ha_status", "read", settings.orchestrator_url, "ok")
+            return json_result({"data": payload}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_ha_status", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_firmware_compliance() -> str:
+        """Firmware compliance per appliance: active/fallback software partitions from /appliancesSoftwareVersions, to spot mixed versions across the fleet."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            payload = kpi_get(client, "firmware")
+            audit.record("get_firmware_compliance", "read", settings.orchestrator_url, "ok")
+            return json_result({"data": payload}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_firmware_compliance", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_ztp_status() -> str:
+        """Zero-Touch Provisioning status: pending/discovered appliances from /spPortal/ztp + /appliance/discovered."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            payload = kpi_get(client, "ztp")
+            audit.record("get_ztp_status", "read", settings.orchestrator_url, "ok")
+            return json_result({"data": payload}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_ztp_status", "read", settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()

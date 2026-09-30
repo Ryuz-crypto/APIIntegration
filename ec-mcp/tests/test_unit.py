@@ -402,3 +402,12 @@ def test_empty_404_semantics():
     result = client.get_raw("/applicationGroups")
     assert result.get("data") is None
     assert "empty" in result.get("reason", "")
+
+
+def test_new_kpi_tools_registered():
+    import ec_mcp.server as server_module
+
+    mcp = server_module.create_server()
+    tools = [t.name for t in mcp._tool_manager.list_tools()]
+    for expected in ("get_ha_status", "get_firmware_compliance", "get_ztp_status", "get_active_alarms"):
+        assert expected in tools, f"{expected} missing; got {tools}"
