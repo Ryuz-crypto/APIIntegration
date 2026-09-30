@@ -13,7 +13,8 @@ FORBIDDEN_CHARS = re.compile(r"[;&`]|\|\||&&|\$\(")
 
 
 class ApplianceSession:
-    def __init__(self, host: str, username: str, password: str, port: int = 22, max_output_chars: int = 12000):
+    def __init__(self, host: str, username: str, password: str, port: int = 22, max_output_chars: int = 12000,
+                 enable_password: str = ""):
         if ConnectHandler is None:
             raise RuntimeError("netmiko is not installed; SSH tools are unavailable")
         self._connection = ConnectHandler(
@@ -23,6 +24,9 @@ class ApplianceSession:
             password=password,
             port=port,
         )
+        if enable_password:
+            self._connection.send_command_timing("enable", read_timeout=10)
+            self._connection.send_command_timing(enable_password, read_timeout=10)
         self._max_output_chars = max_output_chars
 
     def run_show(self, command: str) -> str:
@@ -63,6 +67,7 @@ class ApplianceSshPool:
                 password=self._settings.ssh_password,
                 port=self._settings.ssh_port,
                 max_output_chars=self._settings.max_output_chars,
+                enable_password=self._settings.ssh_enable_password,
             )
         return self._sessions[target]
 

@@ -17,6 +17,7 @@ class Settings:
     ssh_host: str = ""
     ssh_username: str = ""
     ssh_password: str = ""
+    ssh_enable_password: str = ""
     ssh_port: int = 22
 
     allow_write_tools: bool = False
@@ -42,6 +43,7 @@ class Settings:
             ssh_host=os.environ.get("EC_SSH_HOST", ""),
             ssh_username=os.environ.get("EC_SSH_USER", ""),
             ssh_password=os.environ.get("EC_SSH_PASSWORD", ""),
+            ssh_enable_password=os.environ.get("EC_SSH_ENABLE_PASSWORD", ""),
             ssh_port=int(os.environ.get("EC_SSH_PORT", "22")),
             allow_write_tools=os.environ.get("EC_ALLOW_WRITE_TOOLS", "false").lower() == "true",
             allow_dangerous_writes=os.environ.get("EC_ALLOW_DANGEROUS_WRITES", "false").lower() == "true",
