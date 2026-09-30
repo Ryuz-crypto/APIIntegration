@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 
@@ -262,3 +263,17 @@ async def test_well_known_probes_do_not_trigger_rate_limit():
     scope = _make_scope(headers=[(b"authorization", f"Bearer {LONG_TOKEN}".encode())])
     await middleware(scope, _receive(), _send_status(statuses))
     assert downstream.called
+
+
+def test_transport_security_allows_public_host():
+    os.environ["EC_MCP_ALLOWED_HOSTS"] = "mcp.example.com"
+    try:
+        from ec_mcp.transport import resolve_transport_security
+
+        ts = resolve_transport_security()
+        assert "mcp.example.com" in ts.allowed_hosts
+        assert "mcp.example.com:*" in ts.allowed_hosts
+        assert ts.enable_dns_rebinding_protection is True
+        assert "https://mcp.example.com:*" in ts.allowed_origins
+    finally:
+        del os.environ["EC_MCP_ALLOWED_HOSTS"]

@@ -122,9 +122,47 @@ class BearerAuthMiddleware:
         await self.app(scope, receive, send)
 
 
-def build_http_app(server: FastMCP, token: str, *, stateless: bool = True):
+def resolve_transport_security(host: str = "127.0.0.1"):
+    """Build TransportSecuritySettings that allow the public hostname(s).
+
+    The MCP SDK enables DNS-rebinding protection when the server binds to
+    localhost: every POST must then carry a Host header matching
+    127.0.0.1/localhost, and any request that arrives through a reverse
+    proxy with a public Host is rejected with 421 Misdirected Request.
+    Deployments behind a proxy must declare their public hostnames via
+    EC_MCP_ALLOWED_HOSTS (comma-separated), e.g. "mcp.example.com:10001".
+    """
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    extra = [
+        h.strip() for h in os.environ.get("EC_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()
+    ]
+    allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+    for entry in extra:
+        base, _, port = entry.rpartition(":")
+        if port.isdigit():
+            allowed_hosts.append(entry)
+        else:
+            allowed_hosts.append(entry)
+            allowed_hosts.append(f"{entry}:*")
+    allowed_origins = ["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"]
+    for entry in extra:
+        base = entry[:-2] if entry.endswith(":*") else entry
+        allowed_origins.append(f"https://{base}:*")
+        allowed_origins.append(f"http://{base}:*")
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=allowed_origins,
+    )
+
+
+def build_http_app(server: FastMCP, token: str, *, stateless: bool = True, host: str = "127.0.0.1"):
     """Build the authenticated streamable-HTTP ASGI app with /health."""
-    mcp_app = server.streamable_http_app(stateless_http=stateless)
+    mcp_app = server.streamable_http_app(
+        stateless_http=stateless,
+        transport_security=resolve_transport_security(host),
+    )
     return BearerAuthMiddleware(mcp_app, resolve_auth_tokens(primary=token))
 
 

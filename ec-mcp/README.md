@@ -358,6 +358,7 @@ El servidor aplica un modelo de defensa por capas, alineado con la revisión de 
 - **Redacción de secretos**: las salidas y la auditoría redactan passwords, community strings SNMP y claves (`***REDACTED***`).
 - **Auditoría**: registra quién (tool), cuándo, qué operación, resultado y dry-run; nunca guarda tokens, contraseñas ni cuerpos completos de peticiones (solo las claves del body).
 - **CI**: ruff, bandit, pip-audit y gitleaks en cada push/PR a `ec-mcp/**`.
+- **Hosts públicos**: al publicar detrás de un reverse proxy, define `EC_MCP_ALLOWED_HOSTS=dominio.com` (sin esquema ni puerto). El SDK MCP activa protección DNS-rebinding que rechaza con 421 cualquier `Host` no declarado; esta variable lo autoriza.
 
 ## Auditoría
 

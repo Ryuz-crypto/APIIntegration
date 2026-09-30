@@ -27,7 +27,7 @@ def main() -> None:
     print(f"ec-mcp {args.mode} transport on http://{args.host}:{args.port} (bearer auth enabled)")
 
     if args.mode == "http":
-        app = build_http_app(server, token, stateless=args.stateless)
+        app = build_http_app(server, token, stateless=args.stateless, host=args.host)
         uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     else:
         app = build_sse_app(server, token)
