@@ -16,6 +16,8 @@ class OrchestratorClient:
             raise ValueError("EC_ORCHESTRATOR_URL is not configured")
         self._settings = settings
         self._engine = engine
+        self._cached_profile: str | None = None
+        self._appliances_cache: list[dict[str, Any]] | None = None
         self._client = client or httpx.Client(
             base_url=settings.orchestrator_url,
             verify=settings.verify_tls,
@@ -56,12 +58,16 @@ class OrchestratorClient:
         return None
 
     def resolve_active_profile(self) -> str:
+        cached = getattr(self, "_cached_profile", None)
+        if cached:
+            return cached
         detected = self.detect_version()
         matched = self._engine.match_version(detected)
         if matched is None:
             raise CompatibilityError(
                 f"Orchestrator version {detected!r} does not match any loaded profile {self._engine.versions}"
             )
+        self._cached_profile = matched
         return matched
 
     def call(
@@ -112,7 +118,9 @@ class OrchestratorClient:
             hint = " The appliance may not exist or may be unreachable from the Orchestrator."
         return f"Orchestrator returned HTTP {response.status_code} for {action}: {detail!r}.{hint}"
 
-    def list_appliances(self) -> list[dict[str, Any]]:
+    def list_appliances(self, refresh: bool = False) -> list[dict[str, Any]]:
+        if self._appliances_cache is not None and not refresh:
+            return self._appliances_cache
         data: Any = None
         last_error: Exception | None = None
         for path in ("/appliance/approved", "/neStatus", "/appliance"):
@@ -152,6 +160,7 @@ class OrchestratorClient:
                     "reachability": item.get("reachability") or item.get("neState"),
                 }
             )
+        self._appliances_cache = appliances
         return appliances
 
     def appliance_api_get(self, ne_pk: str, appliance_path: str, **query: Any) -> dict[str, Any]:

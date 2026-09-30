@@ -39,9 +39,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     for entry in catalog_entries():
         cli_risk_by_command[entry["command"]] = entry["risk"]
 
+    shared_client: OrchestratorClient | None = None
+
     def require_client() -> OrchestratorClient | None:
+        nonlocal shared_client
+        if shared_client is not None:
+            return shared_client
         try:
-            return OrchestratorClient(settings, engine)
+            shared_client = OrchestratorClient(settings, engine)
+            return shared_client
         except ValueError:
             return None
 
@@ -220,7 +226,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
-            appliances = client.list_appliances()
+            appliances = client.list_appliances(refresh=True)
             audit.record("list_appliances", "read", settings.orchestrator_url, "ok", details={"count": len(appliances)})
             return json_result({"count": len(appliances), "appliances": appliances}, settings.max_output_chars)
         except Exception as error:
