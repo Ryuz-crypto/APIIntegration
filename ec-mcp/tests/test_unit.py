@@ -124,14 +124,16 @@ def test_classify_cli_command():
 
 def test_list_api_operations_tool():
     import asyncio
+    import json as jsonlib
 
     from ec_mcp.server import create_server
-
     server = create_server()
-    result = asyncio.run(server.call_tool("list_api_operations", {}))
+    result = asyncio.run(server.call_tool("list_api_operations", {"version": "9.6", "page_size": 20}))
     text = result.content[0].text
-    assert text.startswith("{")
+    payload = jsonlib.loads(text)
     assert '"operation"' in text and '"method"' in text and '"path"' in text
+    assert payload["truncated"] is False
+    assert "body_example" not in text
     assert not text.startswith("Error")
 
 
@@ -148,13 +150,13 @@ def test_list_api_operations_paginated():
     assert body["page"] == 0
     assert body["total_operations"] > 500
     assert len(body["operations"]) == 50
-    assert body["has_more_pages"] is True
+    assert body["has_more_page"] is True
     next_result = asyncio.run(
-        server.call_tool("list_api_operations", {"version": "9.6", "page_size": 50, "page": 1, "prefix": "appliance.interfaces"})
+        server.call_tool("list_api_operations", {"version": "9.6", "page_size": 50, "page": 0, "search": "licensed"})
     )
     next_body = jsonlib.loads(next_result.content[0].text)["versions"]["9.6"]
-    assert all(op.startswith("appliance.interfaces") for op in next_body["operations"])
-    assert next_body["page"] == 1
+    assert "retrieves_portal_licensed_appliances" in next_body["operations"]
+    assert next_body["page"] == 0
 
 
 def test_list_appliances_ne_pk_resolution():
@@ -198,7 +200,68 @@ def test_list_appliances_ne_pk_resolution():
         server_module.OrchestratorClient = original_create
 
     payload = jsonlib.loads(text)
-    assert payload["ok"] is True
     assert fake.last_proxy_call["nePk"] == "14.NE"
     assert fake.last_proxy_call["url"] == "/interfaceState/14.NE"
     assert "{appliance_id}" not in fake.last_proxy_call["url"]
+    assert payload["truncated"] is False
+    assert payload["request_echo"]["operation_id"] == "appliance.interfaces"
+    assert payload["data"]["ok"] is True
+
+
+def test_call_read_api_operation_not_found_suggestions():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    class FakeClient:
+        def resolve_active_profile(self):
+            return "9.6"
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: FakeClient()
+    try:
+        result = asyncio.run(server.call_tool("call_read_api", {"operation_id": "get_all_appliances"}))
+        text = result.content[0].text
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    payload = jsonlib.loads(text)
+    assert payload["error"] == "OPERATION_NOT_FOUND"
+    assert isinstance(payload["suggestions"], list) and payload["suggestions"]
+
+
+def test_call_read_api_param_required_preflight():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    class FakeClient:
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def call(self, *a, **k):
+            raise AssertionError("preflight should have prevented the upstream call")
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: FakeClient()
+    try:
+        result = asyncio.run(
+            server.call_tool("call_read_api", {"operation_id": "appliance.applianceaggregate608094"})
+        )
+        text = result.content[0].text
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    payload = jsonlib.loads(text)
+    assert payload["error"] == "PARAM_REQUIRED"
+    assert "granularity" in payload["required_params"]
