@@ -88,6 +88,17 @@ class BearerAuthMiddleware:
             await response(scope, receive, send)
             return
 
+        # MCP clients probe OAuth discovery endpoints on 401; these probes
+        # are unauthenticated by protocol design and must not count toward
+        # the brute-force rate limit, nor should they return 405/404 noise.
+        if path.startswith("/.well-known/"):
+            response = JSONResponse(
+                {"error": "this server uses static bearer tokens, not OAuth"},
+                status_code=401,
+            )
+            await response(scope, receive, send)
+            return
+
         ip = self._client_ip(scope)
         if self._is_rate_limited(ip):
             response = JSONResponse({"error": "too many failed attempts"}, status_code=429)

@@ -233,3 +233,32 @@ def test_audit_log_never_contains_credentials():
     for leak in ("Bearer", "password", "token", "secret"):
         assert leak not in text.lower()
     assert entry["dry_run"] is False
+
+
+@pytest.mark.asyncio
+async def test_well_known_probes_do_not_trigger_rate_limit():
+    downstream = _Capture()
+
+    async def app(scope, receive, send):
+        downstream.called = True
+
+    middleware = BearerAuthMiddleware(app, [LONG_TOKEN])
+    statuses: list = []
+    for _ in range(12):
+        await middleware(
+            _make_scope(path="/.well-known/oauth-protected-resource"),
+            _receive(),
+            _send_status(statuses),
+        )
+    assert statuses == [401] * 12
+
+    # after 12 unauthenticated well-known probes, a real request is NOT rate limited
+    statuses.clear()
+    await middleware(_make_scope(), _receive(), _send_status(statuses))
+    assert statuses == [401]
+
+    # and a valid token still works immediately
+    statuses.clear()
+    scope = _make_scope(headers=[(b"authorization", f"Bearer {LONG_TOKEN}".encode())])
+    await middleware(scope, _receive(), _send_status(statuses))
+    assert downstream.called
