@@ -411,3 +411,163 @@ def test_new_kpi_tools_registered():
     tools = [t.name for t in mcp._tool_manager.list_tools()]
     for expected in ("get_ha_status", "get_firmware_compliance", "get_ztp_status", "get_active_alarms"):
         assert expected in tools, f"{expected} missing; got {tools}"
+
+
+def test_list_appliances_parses_data_envelope():
+    from ec_mcp.orchestrator_client import OrchestratorClient
+
+    inventory = {
+        "data": [
+            {"nePk": "1.NE", "hostName": "EC1-CLOUD", "model": "EC-V", "site": "Site1",
+             "ip": "172.17.201.114", "softwareVersion": "9.7.1.0_109666", "state": 1},
+            {"nePk": "0.NE", "hostName": "CALIMAYA", "model": "EC-V", "site": "Site2",
+             "ip": "172.17.201.115", "softwareVersion": "9.7.1.0_109666", "state": 1},
+        ]
+    }
+    client = OrchestratorClient.__new__(OrchestratorClient)
+    appliances = client._parse_appliance_inventory(inventory)
+    assert len(appliances) == 2
+    first = appliances[0]
+    assert first["nePk"] == "1.NE"
+    assert first["name"] == "EC1-CLOUD"
+    assert first["ip"] == "172.17.201.114"
+    assert first["software_version"] == "9.7.1.0_109666"
+
+
+def test_list_appliances_falls_through_on_empty_first_source():
+    from ec_mcp.orchestrator_client import OrchestratorClient
+
+    class FakeResponse:
+        status_code = 200
+        content = b"{}"
+
+        def json(self):
+            return self._payload
+
+    class FakeHttpx:
+        def __init__(self):
+            self.calls = []
+
+        def get(self, path, headers=None, params=None):
+            self.calls.append(path)
+            response = FakeResponse()
+            if path == "/appliance/approved":
+                response._payload = {"data": []}
+            else:
+                response._payload = {"data": [{"nePk": "1.NE", "hostName": "EC1-CLOUD"}]}
+            return response
+
+    client = OrchestratorClient.__new__(OrchestratorClient)
+    client._client = FakeHttpx()
+    client._api_key = "k"
+    client._response_cache = {}
+    client._cache_ttl = 30.0
+    client._cache_max_entries = 128
+    client._metrics = {}
+    client._appliances_cache = None
+    appliances = client.list_appliances()
+    assert [a["nePk"] for a in appliances] == ["1.NE"]
+
+
+def test_operation_alias_resolves_prefix_mismatch():
+    import asyncio
+    import json as jsonlib
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    class FakeClient:
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def appliance_api_get(self, ne_pk, appliance_path, **query):
+            return {"tunnels": []}
+
+    from ec_mcp import server as server_module
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: FakeClient()
+    try:
+        result = asyncio.run(server.call_tool(
+            "call_read_api",
+            {"operation_id": "orchestrator.tunnelsget764619", "appliance_id": "1.NE"},
+        ))
+        text = result.content[0].text
+    finally:
+        server_module.OrchestratorClient = original_create
+    payload = jsonlib.loads(text)
+    assert payload["request_echo"]["operation_id"] == "appliance.tunnelsget764619"
+    assert payload["request_echo"]["requested_operation_id"] == "orchestrator.tunnelsget764619"
+    assert payload["request_echo"]["resolved_path"] == "/tunnels"
+
+
+def test_kpi_helpers_support_all_fanout():
+    import asyncio
+    import json as jsonlib
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    class FakeClient:
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def list_appliances(self, refresh=False):
+            return [
+                {"nePk": "1.NE", "name": "EC1-CLOUD", "ip": "172.17.201.114"},
+                {"nePk": "0.NE", "name": "CALIMAYA", "ip": "172.17.201.115"},
+            ]
+
+        def get_raw(self, path, **query):
+            return {"data": {"nePk": query.get("nePk"), "critical": 1, "warning": 3}}
+
+        def appliance_api_get(self, ne_pk, appliance_path, **query):
+            return {"tunnels": []}
+
+    from ec_mcp import server as server_module
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: FakeClient()
+    try:
+        alarms = asyncio.run(server.call_tool("get_active_alarms", {"appliance_id": "all"}))
+        alarm_payload = jsonlib.loads(alarms.content[0].text)
+        tunnels = asyncio.run(server.call_tool("get_tunnel_state", {"appliance_id": "all"}))
+        tunnel_payload = jsonlib.loads(tunnels.content[0].text)
+    finally:
+        server_module.OrchestratorClient = original_create
+    assert len(alarm_payload["appliances"]) == 2
+    assert {row["nePk"] for row in alarm_payload["appliances"]} == {"1.NE", "0.NE"}
+    assert len(tunnel_payload["appliances"]) == 2
+
+
+def test_call_read_api_dynamic_path_param_resolution():
+    import asyncio
+    import json as jsonlib
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    class FakeClient:
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def appliance_api_get(self, ne_pk, appliance_path, **query):
+            self.last_call = {"nePk": ne_pk, "path": appliance_path}
+            return {"tunnel": {"id": "t1"}}
+
+    from ec_mcp import server as server_module
+    fake = FakeClient()
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: fake
+    try:
+        result = asyncio.run(server.call_tool(
+            "call_read_api",
+            {"operation_id": "get_a_specific_tunnel_by_id_name", "appliance_id": "1.NE"},
+        ))
+        text = result.content[0].text
+    finally:
+        server_module.OrchestratorClient = original_create
+    payload = jsonlib.loads(text)
+    assert "SKIPPED_NO_ENTITY" not in text or payload.get("status") == "SKIPPED_NO_ENTITY"
+    if payload.get("status") != "SKIPPED_NO_ENTITY":
+        assert fake.last_call["nePk"] == "1.NE"
+        assert ":id" not in fake.last_call["path"]
+        assert "{id}" not in fake.last_call["path"]

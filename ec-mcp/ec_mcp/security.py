@@ -106,7 +106,7 @@ ALLOWED_SHOW_PATTERNS = [
 SHELL_METACHARS = re.compile(r"[;&`|<>$\\]|\$\(|\|\||&&")
 CONTROL_OR_NON_ASCII = re.compile(r"[\x00-\x1f\x7f]|[^\x00-\x7f]")
 SECRET_PATTERNS = [
-    re.compile(r"(?i)(\b(?:password|passwd|md5password|secret|passphrase|psk)\s*[:=]\s*)\S+"),
+    re.compile(r"(?i)(\b(?:password|passwd|md5password|secret|passphrase|psk|userName)\b[\"']?\s*[:=]\s*[\"']?)[^\"',\s]+"),
     re.compile(r"(?i)(\bcommunity(?:\s+string)?\s+)(?!string\b)\S+"),
 ]
 

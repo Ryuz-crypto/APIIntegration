@@ -235,7 +235,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         )
 
     def resolve_ne_pks(client: OrchestratorClient, appliance_ids: str) -> list[str]:
-        if not appliance_ids.strip():
+        lowered = appliance_ids.strip().lower()
+        if lowered == "all" or not appliance_ids.strip():
             return [str(a.get("nePk")) for a in client.list_appliances()]
         resolved = []
         for part in appliance_ids.split(","):
@@ -243,6 +244,100 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if part:
                 resolved.append(resolve_ne_pk(client, part))
         return resolved
+
+    ENTITY_SOURCES: dict[str, dict[str, Any]] = {
+        "tunnel_id": {"op": "appliance.gettunnellist913815", "keys": ["tunnelId", "id", "name", "tunnelName"]},
+        "nat_map": {"op": "appliance.branchnatmapsget185634", "keys": ["mapName", "name"]},
+        "zone": {"op": "appliance.getallzones257534", "keys": ["zoneId", "id", "name"]},
+        "interface": {"op": "appliance.interfacesget425181", "keys": ["interfaceName", "ifName", "name", "id"]},
+        "acl": {"op": "appliance.acl21605", "keys": ["aclName", "name"]},
+        "cert": {"op": "appliance.getcustomcerts774862", "keys": ["certName", "name", "label"]},
+    }
+
+    PARAM_ENTITY: dict[str, str] = {
+        "id": "tunnel_id",
+        "name": "tunnel_id",
+        "tunnelId": "tunnel_id",
+        "tunnelName": "tunnel_id",
+        "mapName": "nat_map",
+        "zoneId": "zone",
+        "interfaceName": "interface",
+        "ifName": "interface",
+        "aclName": "acl",
+        "certName": "cert",
+        "label": "cert",
+    }
+
+    ENTITY_CACHE: dict[tuple[str, str, str], tuple[float, list[str]]] = {}
+    ENTITY_CACHE_TTL = 300.0
+
+    def entity_values(client: OrchestratorClient, ne_pk: str, entity: str) -> list[str]:
+        cache_key = (ne_pk, entity, "")
+        now = time.monotonic()
+        cached = ENTITY_CACHE.get(cache_key)
+        if cached is not None and now - cached[0] < ENTITY_CACHE_TTL:
+            return cached[1]
+        spec = ENTITY_SOURCES[entity]
+        rows: Any = client.appliance_api_get(ne_pk, engine.resolve(client.resolve_active_profile(), spec["op"]).path)
+        if isinstance(rows, dict):
+            rows = rows.get("data") or rows.get("tunnels") or rows.get("maps") or rows.get("zones") or rows.get("interfaces") or rows.get("acls") or rows.get("certs") or []
+        values = []
+        for item in rows or []:
+            if not isinstance(item, dict):
+                continue
+            for key in spec["keys"]:
+                if item.get(key) is not None:
+                    values.append(str(item[key]))
+                    break
+        ENTITY_CACHE[cache_key] = (time.monotonic(), values)
+        return values
+
+    def resolve_path_param(client: OrchestratorClient, ne_pk: str, param: str) -> str | None:
+        entity = PARAM_ENTITY.get(param)
+        if entity is None:
+            return None
+        values = entity_values(client, ne_pk, entity)
+        return values[0] if values else None
+
+    def apply_dynamic_path_params(
+        client: OrchestratorClient,
+        ne_pk: str,
+        appliance_path: str,
+        operation_id: str,
+    ) -> tuple[str, list[str], dict | None]:
+        """Fill {param}/:param placeholders with real entity values discovered via
+        chained list operations. Returns (rendered_path, missing_params, skip_payload);
+        skip_payload is non-None when the required entity is not configured (SKIPPED_NO_ENTITY)."""
+        path_only = appliance_path.split("?", 1)[0]
+        placeholders = list(dict.fromkeys(
+            re.findall(r"\{([^}]+)\}", path_only)
+            + re.findall(r"(?<![\w]):([A-Za-z_][\w]*)", path_only)
+        ))
+        missing: list[str] = []
+        for param in placeholders:
+            entity = PARAM_ENTITY.get(param)
+            if entity is None:
+                missing.append(param)
+                continue
+            values = entity_values(client, ne_pk, entity)
+            if not values:
+                skip = {
+                    "status": "SKIPPED_NO_ENTITY",
+                    "operation_id": operation_id,
+                    "entity": entity,
+                    "param": param,
+                    "nePk": ne_pk,
+                    "reason": (
+                        f"No {entity} instances are configured on appliance {ne_pk}; "
+                        "the operation is valid but has nothing to return."
+                    ),
+                    "hint": "This is not an API error: the required entity is not configured on the appliance.",
+                }
+                return appliance_path, [], skip
+            value = values[0]
+            appliance_path = appliance_path.replace(":" + param, value)
+            appliance_path = appliance_path.replace("{" + param + "}", value)
+        return appliance_path, missing, None
 
     KPI_ENDPOINTS: dict[str, dict[str, Any]] = {
         "availability": {"paths": ["/stats/aggregate/availability/appliance", "/availability/appliance"]},
@@ -381,8 +476,26 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 scored.append((-score, len(op), op))
         return [op for _, _, op in sorted(scored)[:limit]]
 
+    def resolve_operation_alias(version: str, operation_id: str) -> str | None:
+        operations = engine._profiles[version]["operations"]
+        if operation_id in operations:
+            return None
+        for prefix in ("orchestrator.", "appliance."):
+            if operation_id.startswith(prefix):
+                suffix = operation_id[len(prefix):]
+                candidates = [op for op in operations if op.endswith(suffix) and op != operation_id]
+                unique = {c.rsplit(".", 1)[1] if "." in c else c: c for c in candidates}
+                if len(set(unique.values())) == 1:
+                    return next(iter(unique.values()))
+                if len(candidates) == 1:
+                    return candidates[0]
+        return None
+
     def operation_not_found_error(version: str, operation_id: str) -> str:
         suggestions = suggest_operations(version, operation_id)
+        alias = resolve_operation_alias(version, operation_id)
+        if alias:
+            suggestions = [alias] + [s for s in suggestions if s != alias][:4]
         return json_result(
             {
                 "error": "OPERATION_NOT_FOUND",
@@ -566,6 +679,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            if appliance_id.strip().lower() == "all":
+                results = []
+                for ne_pk in resolve_ne_pks(client, appliance_id):
+                    try:
+                        results.append({"nePk": ne_pk, "data": kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)})
+                    except Exception as per_error:
+                        results.append({"nePk": ne_pk, "error": str(per_error)[:200]})
+                audit.record("get_mos", "read", "all", "ok", details={"appliances": len(results)})
+                return json_result({"appliances": results, "note": "MOS values may be scaled x100 (440 = 4.40)"}, settings.max_output_chars)
             ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
             payload = kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
             audit.record("get_mos", "read", settings.orchestrator_url, "ok")
@@ -583,10 +705,19 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if not appliance_id:
                 return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"], "hint": "Pass one appliance (nePk, name or IP); use list_appliances to discover them."}, settings.max_output_chars)
-            ne_pk = resolve_ne_pk(client, appliance_id)
-            payload = kpi_get(client, "tunnel_state", ne_pk)
-            audit.record("get_tunnel_state", "read", ne_pk, "ok")
-            return json_result({"nePk": ne_pk, "data": payload}, settings.max_output_chars)
+            targets = resolve_ne_pks(client, appliance_id) if appliance_id.strip().lower() == "all" else [resolve_ne_pk(client, appliance_id)]
+            if len(targets) == 1:
+                payload = kpi_get(client, "tunnel_state", targets[0])
+                audit.record("get_tunnel_state", "read", targets[0], "ok")
+                return json_result({"nePk": targets[0], "data": payload}, settings.max_output_chars)
+            results = []
+            for ne_pk in targets:
+                try:
+                    results.append({"nePk": ne_pk, "data": kpi_get(client, "tunnel_state", ne_pk)})
+                except Exception as per_error:
+                    results.append({"nePk": ne_pk, "error": str(per_error)[:200]})
+            audit.record("get_tunnel_state", "read", "all", "ok", details={"appliances": len(results)})
+            return json_result({"appliances": results}, settings.max_output_chars)
         except Exception as error:
             audit.record("get_tunnel_state", "read", appliance_id, f"error: {error}")
             return f"Error: {error}"
@@ -600,11 +731,22 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if not appliance_id:
                 return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"], "hint": "Pass one appliance (nePk, name or IP)."}, settings.max_output_chars)
-            ne_pk = resolve_ne_pk(client, appliance_id)
-            payload = kpi_get(client, "brownout", ne_pk)
-            tunnels = brownout_state(payload)
-            audit.record("get_brownout_state", "read", ne_pk, "ok", details={"tunnels": len(tunnels)})
-            return json_result({"nePk": ne_pk, "tunnels": tunnels}, settings.max_output_chars)
+            targets = resolve_ne_pks(client, appliance_id) if appliance_id.strip().lower() == "all" else [resolve_ne_pk(client, appliance_id)]
+            if len(targets) == 1:
+                ne_pk = targets[0]
+                payload = kpi_get(client, "brownout", ne_pk)
+                tunnels = brownout_state(payload)
+                audit.record("get_brownout_state", "read", ne_pk, "ok", details={"tunnels": len(tunnels)})
+                return json_result({"nePk": ne_pk, "tunnels": tunnels}, settings.max_output_chars)
+            results = []
+            for ne_pk in targets:
+                try:
+                    tunnels = brownout_state(kpi_get(client, "brownout", ne_pk))
+                    results.append({"nePk": ne_pk, "tunnels": tunnels})
+                except Exception as per_error:
+                    results.append({"nePk": ne_pk, "error": str(per_error)[:200]})
+            audit.record("get_brownout_state", "read", "all", "ok", details={"appliances": len(results)})
+            return json_result({"appliances": results}, settings.max_output_chars)
         except Exception as error:
             audit.record("get_brownout_state", "read", appliance_id, f"error: {error}")
             return f"Error: {error}"
@@ -616,6 +758,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            if appliance_id.strip().lower() == "all":
+                results = []
+                for ne_pk in resolve_ne_pks(client, appliance_id):
+                    try:
+                        results.append({"nePk": ne_pk, "data": kpi_get(client, "availability", ne_pk, granularity, start_time, end_time)})
+                    except Exception as per_error:
+                        results.append({"nePk": ne_pk, "error": str(per_error)[:200]})
+                audit.record("get_availability", "read", "all", "ok", details={"appliances": len(results)})
+                return json_result({"appliances": results, "granularity": granularity}, settings.max_output_chars)
             ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
             payload = kpi_get(client, "availability", ne_pk, granularity, start_time, end_time)
             audit.record("get_availability", "read", settings.orchestrator_url, "ok")
@@ -631,6 +782,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            if appliance_id.strip().lower() == "all":
+                results = []
+                for ne_pk in resolve_ne_pks(client, appliance_id):
+                    try:
+                        data = kpi_get(client, "top_talkers", ne_pk, granularity, start_time, end_time)
+                        if isinstance(data, list) and limit:
+                            data = data[: max(0, limit)]
+                        results.append({"nePk": ne_pk, "data": data})
+                    except Exception as per_error:
+                        results.append({"nePk": ne_pk, "error": str(per_error)[:200]})
+                audit.record("get_top_talkers", "read", "all", "ok", details={"appliances": len(results)})
+                return json_result({"appliances": results, "granularity": granularity}, settings.max_output_chars)
             ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
             payload = kpi_get(client, "top_talkers", ne_pk, granularity, start_time, end_time)
             if isinstance(payload, list) and limit:
@@ -648,9 +811,19 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            alarm_hint = "Counts per appliance/severity; the alarm/gms detail endpoint only accepts from+to (epoch seconds) upstream."
+            if appliance_id.strip().lower() == "all":
+                results = []
+                for ne_pk in resolve_ne_pks(client, appliance_id):
+                    try:
+                        results.append({"nePk": ne_pk, "data": client.get_raw("/alarm/count/appliance", nePk=ne_pk)})
+                    except Exception as per_error:
+                        results.append({"nePk": ne_pk, "error": str(per_error)[:200]})
+                audit.record("get_active_alarms", "read", "all", "ok", details={"appliances": len(results)})
+                return json_result({"appliances": results, "note": alarm_hint}, settings.max_output_chars)
             payload = kpi_alarm_counts(client)
             audit.record("get_active_alarms", "read", settings.orchestrator_url, "ok")
-            return json_result({"data": payload, "note": "Counts per appliance/severity; the alarm/gms detail endpoint only accepts from+to (epoch seconds) upstream."}, settings.max_output_chars)
+            return json_result({"data": payload, "note": alarm_hint}, settings.max_output_chars)
         except Exception as error:
             audit.record("get_active_alarms", "read", settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
@@ -662,6 +835,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            if appliance_id.strip().lower() == "all":
+                results = []
+                for ne_pk in resolve_ne_pks(client, appliance_id):
+                    try:
+                        results.append({"nePk": ne_pk, "data": kpi_get(client, "ha_status", ne_pk)})
+                    except Exception as per_error:
+                        results.append({"nePk": ne_pk, "error": str(per_error)[:200]})
+                audit.record("get_ha_status", "read", "all", "ok", details={"appliances": len(results)})
+                return json_result({"appliances": results}, settings.max_output_chars)
             ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
             payload = kpi_get(client, "ha_status", ne_pk)
             audit.record("get_ha_status", "read", settings.orchestrator_url, "ok")
@@ -719,8 +901,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
+            alias_note = ""
             if operation_id not in engine._profiles[version]["operations"]:
-                return operation_not_found_error(version, operation_id)
+                alias = resolve_operation_alias(version, operation_id)
+                if alias is None:
+                    return operation_not_found_error(version, operation_id)
+                alias_note = operation_id
+                operation_id = alias
             spec = engine._profiles[version]["operations"][operation_id]
             multi_targets: list[str] = []
             if appliance_id.strip().lower() == "all":
@@ -801,14 +988,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     for key, value in path_params.items():
                         appliance_path = appliance_path.replace("{" + key + "}", value)
                     appliance_path = appliance_path.replace("{appliance_id}", ne_pk)
-                    if re.search(r"\{[^}]+\}", appliance_path):
-                        missing = re.findall(r"\{([^}]+)\}", appliance_path)
+                    appliance_path, missing, skip = apply_dynamic_path_params(client, ne_pk, appliance_path, operation_id)
+                    if skip is not None:
+                        return json_result(skip, settings.max_output_chars)
+                    if missing:
                         return json_result(
                             {
                                 "error": "PARAM_REQUIRED",
                                 "operation_id": operation_id,
                                 "required_params": missing,
-                                "hint": "Pass the missing path parameters via extra_path_params_json.",
+                                "hint": "Pass the missing path parameters via extra_path_params_json, or run the matching list operation to discover valid values.",
                             },
                             settings.max_output_chars,
                         )
@@ -826,6 +1015,37 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         except Exception as per_error:
                             results.append({"nePk": target, "error": str(per_error)[:200]})
                     payload = results
+                elif re.search(r"\{|(?<![\w]):[A-Za-z_]", operation.path):
+                    if not appliance_id and not path_params:
+                        return json_result(
+                            {
+                                "error": "PARAM_REQUIRED",
+                                "operation_id": operation_id,
+                                "required_params": ["appliance_id"],
+                                "hint": "Appliance-scoped operation with dynamic path parameters; pass appliance_id (nePk, name or IP; use list_appliances to discover them).",
+                            },
+                            settings.max_output_chars,
+                        )
+                    ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
+                    appliance_path = operation.path
+                    for key, value in path_params.items():
+                        appliance_path = appliance_path.replace("{" + key + "}", value)
+                    if not ne_pk and re.search(r"\{appliance_id\}|:appliance_id", appliance_path):
+                        ne_pk = str(path_params.get("appliance_id") or path_params.get("nePk") or "")
+                    appliance_path, missing, skip = apply_dynamic_path_params(client, ne_pk, appliance_path, operation_id)
+                    if skip is not None:
+                        return json_result(skip, settings.max_output_chars)
+                    if missing:
+                        return json_result(
+                            {
+                                "error": "PARAM_REQUIRED",
+                                "operation_id": operation_id,
+                                "required_params": missing,
+                                "hint": "Pass the missing path parameters via extra_path_params_json, or run the matching list operation to discover valid values.",
+                            },
+                            settings.max_output_chars,
+                        )
+                    payload = client.appliance_api_get(ne_pk, appliance_path, **query_params)
                 elif appliance_id:
                     query_params.setdefault("nePk", resolve_ne_pk(client, appliance_id))
                     path_params.setdefault("nePk", query_params["nePk"])
@@ -843,6 +1063,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     "operation_id": operation_id,
                     "resolved_path": operation.path,
                     "query_used": {k: str(v) for k, v in query_params.items()},
+                    **({"requested_operation_id": alias_note} if alias_note else {}),
                 },
             }
             result_text, truncated = closed_json_result(wrapper, budget)
