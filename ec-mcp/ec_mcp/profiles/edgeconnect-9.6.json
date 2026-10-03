@@ -4018,8 +4018,8 @@
     "Get the first matching preconfiguration, matching by serial then tag"
    ],
    "body_example": {
-    "placeholderProperty1": "",
-    "placeholderProperty2": ""
+    "serialNum": "00-1B-BC-46-2C-04",
+    "tag": ""
    },
    "tags": [
     "appliancePreconfig"
