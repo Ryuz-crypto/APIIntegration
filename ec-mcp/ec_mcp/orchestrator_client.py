@@ -146,6 +146,7 @@ class OrchestratorClient:
         api_root = self._profile_api_root(version)
         if resolved.path.startswith("/gms/"):
             api_root = ""
+        alt_api_root = self._profile_api_root(version) if not api_root else ""
         label = f"{operation_id}"
         operation = self._engine._profiles[version]["operations"][operation_id]
         declared_query = set(operation.get("query_params") or [])
@@ -162,6 +163,18 @@ class OrchestratorClient:
             params=allowed_query,
             json=json_body,
         )
+        if response.status_code == 404 and alt_api_root:
+            retry_path = f"{alt_api_root}{resolved.path}"
+            retry = self._client.request(
+                resolved.method,
+                retry_path,
+                headers=self._headers(),
+                params=allowed_query,
+                json=json_body,
+            )
+            if retry.status_code < 400:
+                response = retry
+                full_path = retry_path
         self._record_metric(label, time.monotonic() - started, len(response.content), cache_hit=False)
         if response.status_code >= 400:
             raise RuntimeError(

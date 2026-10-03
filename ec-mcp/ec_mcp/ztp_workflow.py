@@ -217,8 +217,14 @@ def verify_referenced_objects(
     parsed: dict[str, Any],
     template_groups_payload: Any,
     overlays_payload: Any,
-) -> None:
-    """Fail preparation when referenced template groups or overlays do not exist."""
+) -> list[str]:
+    """Fail preparation when referenced objects are provably absent.
+
+    Returns warnings for checks that could not be performed (e.g. the overlay
+    listing endpoint returns no rows on some Orchestrator versions; the
+    Orchestrator itself re-validates overlay names on preconfig apply).
+    """
+    warnings: list[str] = []
     template_names = parsed.get("template_groups", [])
     if template_names:
         available = {str(row.get("name", "")).strip() for row in extract_template_groups(template_groups_payload)}
@@ -239,9 +245,16 @@ def verify_referenced_objects(
             for row in overlay_rows
         }
         available.discard("")
-        missing = [name for name in overlay_names if name not in available]
-        if missing:
-            raise ValueError(f"Business Intent Overlays referenced by the preconfig were not found: {missing}")
+        if not available:
+            warnings.append(
+                "Overlay listing returned no rows; could not verify overlay names "
+                f"{overlay_names} locally (the Orchestrator re-validates them on apply)."
+            )
+        else:
+            missing = [name for name in overlay_names if name not in available]
+            if missing:
+                raise ValueError(f"Business Intent Overlays referenced by the preconfig were not found: {missing}")
+    return warnings
 
 
 @dataclass
@@ -262,6 +275,7 @@ class ZtpPlan:
     approve_result: Any = None
     deny_available: bool = False
     health_check: dict[str, Any] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
 
     def public(self, include_details: bool = True) -> dict[str, Any]:
         result = {
@@ -277,6 +291,8 @@ class ZtpPlan:
             "expires_at_epoch": int(self.expires_at),
             "deny_available": self.deny_available,
         }
+        if self.warnings:
+            result["warnings"] = self.warnings
         if include_details:
             result["preconfig_yaml"] = self.preconfig_yaml
         if self.validate_result is not None:
@@ -340,6 +356,7 @@ class ZtpPlanStore:
                         approve_result=payload.get("approve_result"),
                         deny_available=payload.get("deny_available", False),
                         health_check=payload.get("health_check", {}),
+                        warnings=payload.get("warnings", []),
                     )
                     self._plans[plan.plan_id] = plan
             except (OSError, json.JSONDecodeError, KeyError):
@@ -401,7 +418,7 @@ def prepare_ztp_plan(
 ) -> ZtpPlan:
     """Validate the preconfig YAML and its references, then build an immutable plan."""
     parsed = validate_preconfig_yaml(preconfig_yaml_text)
-    verify_referenced_objects(parsed, template_groups_payload, overlays_payload)
+    warnings = verify_referenced_objects(parsed, template_groups_payload, overlays_payload)
     plan_id = secrets.token_hex(6)
     info = discovered_row.get("applianceInfo") or {}
     preconfig_name = f"Codex-ZTP-{plan_id}"
@@ -415,4 +432,5 @@ def prepare_ztp_plan(
         preconfig_yaml=preconfig_yaml_text,
         confirmation=f"ADOPTAR {plan_id} {appliance_uuid} {preconfig_name}",
         expires_at=time.time() + ttl_seconds,
+        warnings=warnings,
     )

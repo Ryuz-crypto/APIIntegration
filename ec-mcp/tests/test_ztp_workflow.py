@@ -286,9 +286,16 @@ def test_prepare_ztp_plan_verifies_template_groups():
         prepare_ztp_plan(DISCOVERED_ROW, PRECONFIG_YAML, {"data": [{"name": "Other"}]}, OVERLAYS)
 
 
-def test_prepare_ztp_plan_verifies_overlays():
+def test_prepare_ztp_plan_rejects_unknown_overlays_when_listing_available():
+    partial = {"data": [{"name": "RealTime"}, {"name": "CriticalApps"}]}
     with pytest.raises(ValueError, match=r"Overlays .* not found"):
-        prepare_ztp_plan(DISCOVERED_ROW, PRECONFIG_YAML, TEMPLATE_GROUPS, {"data": [{"name": "RealTime"}]})
+        prepare_ztp_plan(DISCOVERED_ROW, PRECONFIG_YAML, TEMPLATE_GROUPS, partial)
+
+
+def test_prepare_ztp_plan_warns_when_overlay_listing_empty():
+    plan = prepare_ztp_plan(DISCOVERED_ROW, PRECONFIG_YAML, TEMPLATE_GROUPS, {"data": []})
+    assert plan.warnings and "could not verify overlay names" in plan.warnings[0]
+    assert plan.confirmation.startswith("ADOPTAR ")
 
 
 def test_prepare_ztp_plan_builds_confirmation():
