@@ -1,7 +1,7 @@
 # APIIntegration — EdgeConnect SD-WAN Platform
 
 [![DashboardAPI-EC](https://img.shields.io/badge/DashboardAPI--EC-1.5.1%20stable-2fbf9b)](DashboardAPI-EC/README.md)
-[![ec-mcp](https://img.shields.io/badge/ec--mcp-2.0.0--beta.1%20MCP%20server-7B61FF)](ec-mcp/README.md)
+[![ec-mcp](https://img.shields.io/badge/ec--mcp-3.0.0b3%20MCP%20server-7B61FF)](ec-mcp/README.md)
 [![DashboardAPI-EC CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 [![ec-mcp CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
@@ -11,38 +11,109 @@ Plataforma para descubrir, consultar, visualizar y **conversar** con entornos **
 | Componente | Qué hace | Documentación |
 | --- | --- | --- |
 | **DashboardAPI-EC** | Plataforma web: detecta la versión del Orchestrator, identifica capacidades y ensambla un dashboard con datos reales. Paquete `.deb` para Ubuntu, Python 3.12+. | [DashboardAPI-EC/README.md](DashboardAPI-EC/README.md) |
-| **ec-mcp** | Servidor MCP (Model Context Protocol) para asistentes de IA (Claude Desktop, Le Chat, Cursor, ChatGPT): consulta la API REST del Orchestrator, ejecuta comandos `show ...` ECOS por SSH y aplica cambios con dry-run, whitelist y audit log. | [ec-mcp/README.md](ec-mcp/README.md) |
+| **ec-mcp** | Servidor MCP (Model Context Protocol) para asistentes de IA (Claude Desktop, Le Chat, Cursor, ChatGPT): consulta la API REST del Orchestrator, ejecuta comandos `show ...` mediante la API del Orchestrator o SSH opcional, y aplica cambios con dry-run, whitelist y audit log. | [ec-mcp/README.md](ec-mcp/README.md) |
 
-## ec-mcp — tu SD-WAN conversacional
+## ec-mcp 3.0 — MCP y panel de administración web
 
-- **~2000–2250 operaciones API únicas** por versión (9.3–9.6, con fallback 9.7→9.6), fusionadas desde las especificaciones oficiales OpenAPI y las colecciones Postman oficiales de HPE Aruba Networking (`ec-mcp/api-collections/`).
-- **1367 comandos CLI ECOS** catalogados: monitoreo, troubleshooting, alarmas, administración y configuración, con ejecución basada en riesgo.
-- **Seguridad por diseño**: `show ...` con whitelist oficial, dry-run por defecto en cambios, `confirm=true` explícito, kill switch `EC_ALLOW_WRITE_TOOLS` y audit log JSONL de cada operación (evidencia ISO 27001 / CIS).
-- Los permisos efectivos son los del usuario autenticado contra el Orchestrator.
-- **Transportes**: stdio, HTTP streamable y SSE con autenticación Bearer y endpoint público `/health`.
-- Publicación segura detrás de tu plataforma **ZTNA** con HTTPS (ejemplo nginx en puerto 10001): ver la [guía en ec-mcp/README.md](ec-mcp/README.md), que incluye la conexión desde **ChatGPT connectors y Vibe**.
-- **Credenciales**: API key o usuario/contraseña del Orchestrator, y opcionalmente SSH (usuario/contraseña) a los appliances — documentado en [ec-mcp/README.md](ec-mcp/README.md#credenciales-edgeconnect-qué-necesitas-y-cuándo).
+Versión estable en `main`: **3.0.0b3**. Esta versión incorpora configuración web, updater desde GitHub y ejecución de comandos `show` mediante la API del Orchestrator. La referencia exhaustiva está en [ec-mcp/README.md](ec-mcp/README.md) y la plantilla completa en [ec-mcp/.env.example](ec-mcp/.env.example).
 
-### Instalación rápida de ec-mcp (Linux recién instalado)
+> **Regla principal:** `ec-mcp/.env` es la única fuente de configuración. No dupliques las credenciales del Orchestrator en el JSON del cliente MCP ni declares `EC_ADMIN_PORT` o `EC_ADMIN_PASSWORD` directamente en systemd. Cada variable debe aparecer una sola vez en `.env`.
+
+### Instalación limpia en Linux
+
+Requiere Ubuntu/Debian con Python 3.12 o superior:
 
 ```bash
-# Paso 0: prerrequisitos (una vez)
-sudo apt update && sudo apt install -y git python3-venv python3-pip
+sudo apt update
+sudo apt install -y git python3 python3-venv python3-pip curl
 
-# Paso 1: descargar el proyecto
 git clone https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/ec-mcp
+./scripts/install.sh --non-interactive
 
-# Paso 2: instalar el servidor
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-
-# Paso 3: credenciales reales
-export EC_ORCHESTRATOR_URL="https://TU-ORCHESTRATOR-REAL"
-export EC_ORCHESTRATOR_API_KEY="TU-API-KEY-REAL"
+cp -n .env.example .env
+nano .env
 ```
 
-**Paso 4 — conectar tu asistente de IA:** no ejecutas `ec-mcp` a mano; Claude Desktop lo lanza por ti. Añade a `claude_desktop_config.json` (Settings → Developer → Edit Config):
+Configura como mínimo estos valores. No dejes espacios alrededor de `=` ni repitas claves:
+
+```dotenv
+# Orchestrator: usa API key o usuario/contraseña.
+EC_ORCHESTRATOR_URL=https://TU-ORCHESTRATOR-REAL
+EC_ORCHESTRATOR_API_KEY=TU-API-KEY-REAL
+EC_ORCHESTRATOR_USER=
+EC_ORCHESTRATOR_PASSWORD=
+EC_VERIFY_TLS=true
+
+# SSH permanece deshabilitado si sólo usarás el API del Orchestrator.
+EC_SSH_ENABLED=false
+EC_SSH_USERNAME=
+EC_SSH_PASSWORD=
+EC_SSH_PRIVATE_KEY=
+EC_SSH_PORT=22
+EC_SSH_STRICT_HOST_KEY=true
+EC_SSH_KNOWN_HOSTS=
+
+# Escrituras deshabilitadas hasta habilitarlas expresamente.
+EC_ALLOW_WRITE_TOOLS=false
+EC_ALLOW_DANGEROUS_WRITES=false
+EC_WRITE_DRY_RUN_DEFAULT=true
+EC_WRITE_AUDIT_LOG=/var/log/ec-mcp/write-audit.jsonl
+
+# Transporte MCP remoto. Genera un token aleatorio para producción.
+EC_MCP_AUTH_TOKEN=CAMBIA-ESTE-TOKEN
+EC_MCP_HOST=0.0.0.0
+EC_MCP_PORT=8000
+EC_MCP_ALLOWED_HOSTS=mcp.example.com
+EC_MCP_JSON_RESPONSE=true
+EC_MCP_STATELESS=false
+
+# Panel web administrativo.
+EC_ADMIN_HOST=0.0.0.0
+EC_ADMIN_PORT=9090
+EC_ADMIN_PASSWORD=CAMBIA-ESTA-CONTRASENA
+EC_ADMIN_LOGIN_MAX_FAILURES=5
+EC_ADMIN_LOGIN_WINDOW_SECONDS=60
+
+# Updater web. Para repositorios privados, configura usuario y token.
+EC_UPDATE_ALLOW_WEB=true
+EC_UPDATE_REPOSITORY=Ryuz-crypto/APIIntegration
+EC_UPDATE_BRANCH=main
+EC_UPDATE_GITHUB_USER=
+EC_UPDATE_GITHUB_TOKEN=
+EC_UPDATE_STATE_DIR=/var/lib/ec-mcp-update
+EC_UPDATE_SERVICE_NAME=ec-mcp.service
+EC_UPDATE_ADMIN_SERVICE_NAME=ec-mcp-admin.service
+```
+
+Genera secretos largos, por ejemplo:
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+La plantilla contiene variables adicionales de timeouts, caché, API, SSH y updater. Revisa [ec-mcp/.env.example](ec-mcp/.env.example) antes de arrancar.
+
+### Instalar los servicios
+
+```bash
+cd ~/APIIntegration/ec-mcp
+./scripts/install_service.sh
+./scripts/install_admin_service.sh --port 9090
+
+sudo systemctl daemon-reload
+sudo systemctl restart ec-mcp ec-mcp-admin
+systemctl --no-pager status ec-mcp ec-mcp-admin
+sudo ss -lntp | grep -E ':(8000|9090)\b'
+curl -fsS http://127.0.0.1:8000/health
+curl -I http://127.0.0.1:9090/login
+```
+
+Desde **3.0.0b3**, `install_admin_service.sh` conserva el puerto definido en `.env`; `--port` lo actualiza explícitamente. El panel queda en `http://IP-DEL-SERVIDOR:9090`.
+
+### Configuración del cliente MCP local (stdio)
+
+El cliente sólo necesita la ruta al archivo `.env`. Sustituye `TU-USUARIO` por el usuario Linux real:
 
 ```json
 {
@@ -50,23 +121,57 @@ export EC_ORCHESTRATOR_API_KEY="TU-API-KEY-REAL"
     "ec-mcp": {
       "command": "/home/TU-USUARIO/APIIntegration/ec-mcp/.venv/bin/ec-mcp",
       "env": {
-        "EC_ORCHESTRATOR_URL": "https://TU-ORCHESTRATOR-REAL",
-        "EC_ORCHESTRATOR_API_KEY": "TU-API-KEY-REAL"
+        "EC_MCP_ENV_FILE": "/home/TU-USUARIO/APIIntegration/ec-mcp/.env"
       }
     }
   }
 }
 ```
 
-Reinicia Claude Desktop y pregunta: *"¿qué appliances tengo?"* o *"ejecuta show system"*.
+No coloques `EC_ORCHESTRATOR_API_KEY`, contraseñas ni tokens directamente en este JSON.
 
-| Quieres... | Haces... |
-| --- | --- |
-| Probar que el servidor arranca | `ec-mcp` en la terminal (Ctrl+C para salir) |
-| Usarlo desde Claude/Cursor/Le Chat | El JSON del Paso 4 — nada más |
-| Exponerlo remoto por ZTNA | `ec-mcp http` + nginx (puerto 10001, ejemplo incluido) + token `EC_MCP_AUTH_TOKEN` (producción) |
+Para un conector remoto usa `https://TU-HOST/mcp` y el Bearer token definido en `EC_MCP_AUTH_TOKEN`. La publicación TLS/ZTNA/nginx está explicada en [ec-mcp/README.md](ec-mcp/README.md).
 
-Guía completa, HTTP/SSE, systemd y nginx: [ec-mcp/README.md](ec-mcp/README.md).
+### Upgrade por terminal
+
+```bash
+cd ~/APIIntegration
+git status --short
+git pull --ff-only origin main
+
+cd ec-mcp
+./scripts/install.sh --non-interactive
+./scripts/install_service.sh
+./scripts/install_admin_service.sh
+
+sudo systemctl daemon-reload
+sudo systemctl restart ec-mcp ec-mcp-admin
+./.venv/bin/python -c "import ec_mcp; print(ec_mcp.__version__)"
+git rev-parse HEAD
+```
+
+Si `git status --short` muestra cambios locales, respáldalos antes del `pull`; no los descartes automáticamente.
+
+### Validación y errores comunes
+
+Comprueba claves duplicadas sin mostrar los secretos:
+
+```bash
+cd ~/APIIntegration/ec-mcp
+cut -d= -f1 .env | sed 's/^export //' | grep '^EC_' | sort | uniq -d
+grep -nE '^(EC_ADMIN_HOST|EC_ADMIN_PORT|EC_ADMIN_LOGIN_MAX_FAILURES|EC_ADMIN_LOGIN_WINDOW_SECONDS)=' .env
+sudo systemctl cat ec-mcp-admin
+sudo systemctl show ec-mcp-admin -p Environment -p WorkingDirectory --no-pager
+```
+
+- Si el primer comando imprime una clave, elimínala hasta dejar una sola definición.
+- Si systemd muestra `Environment=EC_ADMIN_PORT=8080`, esa variable prevalece sobre `.env). Reinstala el servicio con el script de 3.0.0b3 o elimina el override.
+- Si el puerto correcto abre pero rechaza la contraseña, busca varias líneas `EC_ADMIN_PASSWORD=`; conserva exactamente una y reinicia `ec-mcp-admin`.
+- Después de demasiados intentos, espera el valor de `EC_ADMIN_LOGIN_WINDOW_SECONDS` o reinicia el servicio una vez corregida la contraseña.
+- `run_show_api(command="show arp", appliance_id="0.NE")` usa el API del Orchestrator. No requiere habilitar SSH ni usar `run_show_command`.
+
+Guía completa de variables, seguridad, updater, HTTP/SSE, systemd y nginx: [ec-mcp/README.md](ec-mcp/README.md).
+
 ---
 
 ## DashboardAPI-EC
