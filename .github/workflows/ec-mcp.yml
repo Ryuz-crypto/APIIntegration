@@ -23,7 +23,8 @@ jobs:
       - name: Install package
         run: pip install -e . pytest pytest-asyncio
       - name: Verify beta package identity
-        run: python -c "from ec_mcp import __version__; assert __version__ == \"2.0.0b1\""\n      - name: Lint (ruff)
+        run: python -c "from ec_mcp import __version__; assert __version__ == \"2.0.0b1\""
+      - name: Lint (ruff)
         run: |
           pip install ruff
           ruff check ec_mcp tests
