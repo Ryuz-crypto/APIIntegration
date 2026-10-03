@@ -660,3 +660,106 @@ def test_redact_secrets_covers_json_credentials():
     assert "topsecret" not in text
     assert "admin" not in text
     assert "***REDACTED***" in text
+
+
+def test_qa_acceptance_six_tests_against_simulated_97_orchestrator():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    NE_PKS = ["1.NE", "0.NE", "2.NE", "3.NE", "14.NE", "4.NE"]
+    ALARM_COUNTS = {"1.NE": 7, "0.NE": 4, "2.NE": 6, "3.NE": 7, "14.NE": 7, "4.NE": 2}
+    INVENTORY = [
+        {
+            "nePk": ne,
+            "hostName": f"EC-{ne}",
+            "model": "ECV",
+            "site": "site",
+            "ipAddress": f"10.0.0.{i}",
+            "softwareVersion": "9.7.1",
+            "state": 1,
+            "password": "example-not-a-real-password-token",
+            "userName": "admin",
+        }
+        for i, ne in enumerate(NE_PKS)
+    ]
+
+    class Fake97Orchestrator:
+        def __init__(self):
+            self.alarm_queries = []
+
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def list_appliances(self, refresh=False):
+            return [
+                {"nePk": a["nePk"], "name": a["hostName"], "ip": a["ipAddress"]}
+                for a in INVENTORY
+            ]
+
+        def call(self, version, operation_id, path_params=None, **query):
+            self.last_call = {"operation_id": operation_id, "query": dict(query)}
+            if operation_id == "orchestrator.inventory.summary":
+                return {"data": INVENTORY, "request_echo": {}, "truncated": False}
+            return {"data": []}
+
+        def get_raw(self, path, **query):
+            if path == "/appliance":
+                return {"data": INVENTORY, "request_echo": {}, "truncated": False}
+            if path in ("/alarm/count/appliance", "/gms/rest/alarm/count/appliance"):
+                ne_pk = query.get("nePk")
+                if ne_pk and ne_pk not in ALARM_COUNTS:
+                    return {"data": []}
+                count = ALARM_COUNTS.get(ne_pk, 0)
+                return {"data": [{"nePk": ne_pk, "critical": 1, "warning": min(2, count - 1), "major": max(0, count - 3), "minor": 0}]}
+            if path.startswith("/stats/"):
+                return {"data": []}
+            return {"data": []}
+
+        def appliance_api_get(self, ne_pk, appliance_path, **query):
+            return {"data": []}
+
+    fake = Fake97Orchestrator()
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: fake
+    try:
+        async def run(tool, args):
+            result = await server.call_tool(tool, args)
+            return jsonlib.loads(result.content[0].text)
+
+        qa1 = asyncio.run(run("list_appliances", {}))
+        qa2 = asyncio.run(run("get_active_alarms", {"appliance_id": "all"}))
+        qa3 = asyncio.run(run("get_wan_health", {"appliance_id": "all"}))
+        qa4 = asyncio.run(run("call_read_api", {"operation_id": "get_role_options"}))
+        qa5 = asyncio.run(run("call_read_api", {"operation_id": "get_hostname"}))
+        qa6 = asyncio.run(run("call_read_api", {"operation_id": "orchestrator.inventory.summary"}))
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    assert qa1["count"] == 6, qa1
+    assert {a["nePk"] for a in qa1["appliances"]} == set(NE_PKS)
+
+    aggregated = qa2["data"]
+    assert aggregated["total_alarms"] == 33, aggregated
+    assert len(aggregated["per_appliance"]) == 6
+    assert {row["nePk"] for row in aggregated["per_appliance"]} == set(NE_PKS)
+
+    assert len(qa3["appliances"]) == 6
+    assert {row["nePk"] for row in qa3["appliances"]} == set(NE_PKS)
+
+    assert qa4["truncated"] is False
+    assert "nePk" not in qa4["request_echo"]["query_used"]
+
+    assert qa5["truncated"] is False
+    assert "granularity" not in qa5["request_echo"]["query_used"]
+
+    qa6_text = jsonlib.dumps(qa6)
+    assert "example-not-a-real-password-token" not in qa6_text
+    assert '"admin"' not in qa6_text
+    assert "***REDACTED***" in qa6_text

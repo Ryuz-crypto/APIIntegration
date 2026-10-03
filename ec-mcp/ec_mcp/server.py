@@ -218,6 +218,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     def resolve_ne_pk(client: OrchestratorClient, appliance_id: str) -> str:
         candidate = appliance_id.strip()
+        if candidate.lower() == "all":
+            candidates = [str(a.get("nePk")) for a in client.list_appliances() if a.get("nePk")]
+            if not candidates:
+                raise SecurityError(
+                    "No appliances registered in the Orchestrator inventory; "
+                    "cannot expand 'all'."
+                )
+            return candidates[0]
         direct = normalize_ne_pk(candidate)
         if direct:
             return direct
