@@ -1415,3 +1415,118 @@ def test_large_helper_response_is_closed_valid_json():
 
     payload = jsonlib.loads(result.content[0].text)
     assert payload["truncated"] is True
+
+
+def test_api_search_understands_business_intent_overlay_synonyms():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+    result = asyncio.run(
+        server.call_tool(
+            "list_api_operations",
+            {"version": "9.6", "search": "business intent", "mode": "index", "page_size": 20},
+        )
+    )
+    operations = jsonlib.loads(result.content[0].text)["versions"]["9.6"]["operations"]
+    assert "orchestrator.addnewoverlay315" in operations
+    assert all("overlay" in operation.lower() or "overlay" in path.lower() for operation, path in operations.items())
+
+
+def test_ztp_tool_exposes_pagination_controls():
+    import ec_mcp.server as server_module
+
+    tools = {tool.name: tool for tool in server_module.create_server()._tool_manager.list_tools()}
+    properties = tools["get_ztp_status"].parameters["properties"]
+    assert {"offset", "limit", "fields"} <= set(properties)
+
+
+def test_wan_health_field_aliases_preserve_raw_latency_kpis():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.config import Settings
+    from ec_mcp.server import create_server
+
+    class FakeClient:
+        def list_appliances(self):
+            return [{"nePk": "0.NE", "name": "ECV-TEST"}]
+
+        def get_raw(self, path, **query):
+            if path == "/stats/aggregate/tunnel":
+                return {
+                    "data": {
+                        "tunnel_1": {
+                            "0.NE": {
+                                "TUNNEL": "tunnel_1",
+                                "MAX_LATENCY_MAX": 12,
+                                "MAX_JITTER": 3,
+                                "MAX_PRE_PCT_LOSS": 1,
+                            }
+                        }
+                    }
+                }
+            if path == "/stats/aggregate/mos":
+                return {"data": []}
+            if path == "/reachability/appliance":
+                return []
+            raise AssertionError(path)
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *args, **kwargs: FakeClient()
+    try:
+        result = asyncio.run(
+            create_server(Settings(orchestrator_url="https://orch.example")).call_tool(
+                "get_wan_health",
+                {"appliance_id": "0.NE", "fields": "tunnel,latency,jitter,loss"},
+            )
+        )
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    text = result.content[0].text
+    payload = jsonlib.loads(text)
+    assert "MAX_LATENCY_MAX" in text
+    assert "MAX_JITTER" in text
+    assert "MAX_PRE_PCT_LOSS" in text
+    assert payload["appliances"][0]["stats"]["tunnel_1"]["0.NE"]["TUNNEL"] == "tunnel_1"
+
+
+def test_confirmed_empty_overlay_write_is_rejected_before_upstream_call():
+    import asyncio
+
+    from ec_mcp.config import Settings
+    from ec_mcp.server import create_server
+
+    class FakeClient:
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def call(self, *args, **kwargs):
+            raise AssertionError("empty confirmed write must not reach Orchestrator")
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *args, **kwargs: FakeClient()
+    try:
+        result = asyncio.run(
+            create_server(
+                Settings(orchestrator_url="https://orch.example", allow_write_tools=True)
+            ).call_tool(
+                "apply_change",
+                {
+                    "operation_id": "orchestrator.addnewoverlay315",
+                    "body_json": "{}",
+                    "confirm": True,
+                },
+            )
+        )
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    assert "Refusing a confirmed write with an empty JSON body" in result.content[0].text
