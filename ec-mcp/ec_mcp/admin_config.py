@@ -59,6 +59,8 @@ SETTINGS = (
     Setting("EC_ADMIN_HOST", "Panel web", "IP de escucha del panel", default="127.0.0.1"),
     Setting("EC_ADMIN_PORT", "Panel web", "Puerto del panel", "integer", "8080", minimum=1, maximum=65535),
     Setting("EC_ADMIN_PASSWORD", "Panel web", "Password del administrador", "password", secret=True),
+    Setting("EC_ADMIN_LOGIN_MAX_FAILURES", "Panel web", "Intentos fallidos antes del bloqueo", "integer", "5", minimum=1, maximum=100),
+    Setting("EC_ADMIN_LOGIN_WINDOW_SECONDS", "Panel web", "Ventana de bloqueo (segundos)", "number", "60", minimum=1, maximum=3600),
     Setting("EC_ADMIN_PASSWORD_FILE", "Panel web", "Archivo de password"),
     Setting("EC_ADMIN_STORE", "Panel web", "Archivo de orquestadores"),
     Setting("EC_UPDATE_ALLOW_WEB", "Actualizaciones", "Permitir actualizaciones web", "boolean", "true"),
