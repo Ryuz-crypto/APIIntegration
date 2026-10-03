@@ -1010,7 +1010,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             needs_ne_pk = "nePk" in (spec.get("query_params") or []) or "nePk" in (
                 spec.get("path_params") or []
             )
-            if needs_ne_pk and not appliance_id and "nePk" not in (
+            if needs_ne_pk and not multi_targets and not appliance_id and "nePk" not in (
                 json.dumps(_parse_json_object(extra_query_params_json, "extra_query_params_json"))
                 if extra_query_params_json.strip()
                 else ""
