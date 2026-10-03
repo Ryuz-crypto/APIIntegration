@@ -41,7 +41,7 @@ async function login(){
 }
 async function logout(){await api('/logout',{});AUTHED=false;renderLogin()}
 function renderShell(){
- q('#app').innerHTML='<header><div class="brand"><h1>ec-mcp control plane</h1><p>Configuración, operación y actualizaciones sin SSH</p></div><span class="badge">3.0.0b1 · BASE ZTP</span></header>'+
+ q('#app').innerHTML='<header><div class="brand"><h1>ec-mcp control plane</h1><p>Configuración, operación y actualizaciones sin SSH</p></div><span class="badge">__EC_MCP_VERSION__</span></header>'+
  '<nav><button id="tab-orch" onclick="showTab(\'orch\')">Orquestadores</button><button id="tab-config" onclick="showTab(\'config\')">Variables</button><button id="tab-update" onclick="showTab(\'update\')">Actualizaciones</button><button id="tab-ztp" onclick="showTab(\'ztp\')">ZTP</button><button class="secondary" onclick="logout()">Salir</button></nav>'+
  '<div id="notice"></div><section id="workspace"></section>';
  showTab('config');

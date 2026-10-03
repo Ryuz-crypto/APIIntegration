@@ -108,6 +108,16 @@ def test_admin_v3_routes_and_ztp_roadmap_exist():
     assert "Confirmar y planchar" in PAGE
 
 
+def test_admin_page_badge_reflects_installed_version():
+    from ec_mcp import __version__, admin
+
+    rendered = admin._render_page()
+    assert __version__ in rendered
+    assert "__EC_MCP_VERSION__" not in rendered
+    assert "BASE ZTP" not in rendered
+    assert "3.0.0b1" not in rendered
+
+
 def test_admin_login_lockout_accepts_correct_password_and_resets_counter(monkeypatch):
     from starlette.testclient import TestClient
 

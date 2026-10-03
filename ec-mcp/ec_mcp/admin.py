@@ -29,8 +29,15 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Route
 
+from . import __version__
 from .admin_config import public_config, update_env
-from .admin_page import PAGE
+from .admin_page import PAGE as _PAGE_TEMPLATE
+
+
+def _render_page() -> str:
+    return _PAGE_TEMPLATE.replace(
+        "__EC_MCP_VERSION__", __version__
+    )
 from .web_update import check as check_update
 from .web_update import queue_restart, queue_update
 from .web_update import status as update_status
@@ -126,11 +133,11 @@ def _check_session(request) -> bool:
 async def home(request):
     if not _check_session(request):
         return RedirectResponse("/login", status_code=303)
-    return HTMLResponseMin(PAGE)
+    return HTMLResponseMin(_render_page())
 
 
 async def login_page(request):
-    return HTMLResponseMin(PAGE)
+    return HTMLResponseMin(_render_page())
 
 
 async def login_post(request):
