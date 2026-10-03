@@ -1965,7 +1965,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             placeholder_example = isinstance(example, dict) and any(
                 str(key).lower().startswith("placeholderproperty") for key in example
             )
-            if confirm and operation.method in ("POST", "PUT", "PATCH") and not body:
+            spec = engine._profiles[version]["operations"][operation_id]
+            query_only_write = bool(spec.get("query_params")) and not spec.get("body_example")
+            if (
+                confirm
+                and operation.method in ("POST", "PUT", "PATCH")
+                and not body
+                and not query_only_write
+            ):
                 raise SecurityError(
                     "Refusing a confirmed write with an empty JSON body. "
                     "Discover the required schema or copy a known-good object before applying."
