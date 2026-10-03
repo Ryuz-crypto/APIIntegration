@@ -106,3 +106,44 @@ def test_admin_v3_routes_and_ztp_roadmap_exist():
     assert "Discover" in PAGE
     assert "Seleccionar template" in PAGE
     assert "Confirmar y planchar" in PAGE
+
+
+def test_admin_login_lockout_accepts_correct_password_and_resets_counter(monkeypatch):
+    from starlette.testclient import TestClient
+
+    from ec_mcp import admin
+
+    admin.LOGIN_FAILURES.clear()
+    monkeypatch.setattr(admin, "LOGIN_MAX_FAILURES", 2)
+    monkeypatch.setattr(admin, "LOGIN_WINDOW_SECONDS", 60.0)
+    monkeypatch.setattr(admin, "_verify_password", lambda candidate, allow_first_run=True: candidate == "correct")
+
+    client = TestClient(admin.build_admin_app())
+    first = client.post("/login", json={"password": "wrong"})
+    second = client.post("/login", json={"password": "wrong"})
+    blocked = client.post("/login", json={"password": "wrong"})
+
+    assert first.status_code == 200
+    assert first.json()["remaining_attempts"] == 1
+    assert second.status_code == 200
+    assert second.json()["remaining_attempts"] == 0
+    assert blocked.status_code == 429
+    assert blocked.headers["Retry-After"]
+    assert blocked.json()["retry_after_seconds"] <= 60
+
+    recovered = client.post("/login", json={"password": "correct"})
+    assert recovered.status_code == 200
+    assert recovered.json()["ok"] is True
+    assert admin.LOGIN_FAILURES == {}
+
+    after_success = client.post("/login", json={"password": "wrong"})
+    assert after_success.status_code == 200
+    assert after_success.json()["remaining_attempts"] == 1
+    admin.LOGIN_FAILURES.clear()
+
+
+def test_admin_throttle_settings_are_available_in_web_config(tmp_path: Path):
+    result = admin_config.public_config(tmp_path / ".env")
+    by_key = {item["key"]: item for item in result["fields"]}
+    assert by_key["EC_ADMIN_LOGIN_MAX_FAILURES"]["default"] == "5"
+    assert by_key["EC_ADMIN_LOGIN_WINDOW_SECONDS"]["default"] == "60"
