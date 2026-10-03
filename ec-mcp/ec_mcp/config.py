@@ -19,6 +19,7 @@ class Settings:
     ssh_password: str = ""
     ssh_enable_password: str = ""
     ssh_port: int = 22
+    ssh_auth_method: str = "auto"
 
     allow_write_tools: bool = False
     allow_dangerous_writes: bool = False
@@ -46,6 +47,7 @@ class Settings:
             ssh_password=os.environ.get("EC_SSH_PASSWORD", ""),
             ssh_enable_password=os.environ.get("EC_SSH_ENABLE_PASSWORD", ""),
             ssh_port=int(os.environ.get("EC_SSH_PORT", "22")),
+            ssh_auth_method=os.environ.get("EC_SSH_AUTH_METHOD", "auto").strip().lower(),
             allow_write_tools=os.environ.get("EC_ALLOW_WRITE_TOOLS", "false").lower() == "true",
             allow_dangerous_writes=os.environ.get("EC_ALLOW_DANGEROUS_WRITES", "false").lower() == "true",
             max_writes_per_minute=int(os.environ.get("EC_MAX_WRITES_PER_MINUTE", "10")),
