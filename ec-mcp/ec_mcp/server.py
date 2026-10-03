@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -35,13 +36,15 @@ from .ztp_workflow import (
     ZTP_APPROVE_OPERATION,
     ZTP_DENY_OPERATION,
     ZTP_DISCOVERED_READ,
-    ZTP_PRECONFIG_OPERATION,
-    ZTP_VALIDATE_OPERATION,
+    ZTP_PRECONFIG_APPLY,
+    ZTP_PRECONFIG_CREATE,
+    ZTP_PRECONFIG_DELETE,
+    ZTP_PRECONFIG_VALIDATE,
     ZtpPlanStore,
     extract_discovered,
+    extract_preconfig_id,
     prepare_ztp_plan,
     select_discovered,
-    select_template_group,
 )
 
 
@@ -1656,10 +1659,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     @mcp.tool()
     def prepare_ztp_adoption(
         appliance_uuid: str,
-        template_group: str,
-        parameters_json: str = "",
+        preconfig_yaml: str,
     ) -> str:
-        """Prepare a transactional ZTP adoption: select the exact discovered appliance UUID, read the template group, derive the parameter schema and return a plan plus confirmation phrase. Never writes."""
+        """Prepare a transactional ZTP adoption: select the exact discovered appliance UUID, validate the preconfiguration template YAML, verify referenced template groups and overlays exist, and return a plan plus confirmation phrase. Never writes."""
         try:
             client = require_client()
             if client is None:
@@ -1667,12 +1669,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             version = client.resolve_active_profile()
             row = select_discovered(_read_discovered(client, version), appliance_uuid)
             groups_payload = client.call(version, TEMPLATE_GROUPS_READ)
-            group = select_template_group(groups_payload, template_group)
-            plan = prepare_ztp_plan(row, group, template_group, parameters_json)
+            overlays_payload = _read_overlays(client, version)
+            plan = prepare_ztp_plan(row, preconfig_yaml, groups_payload, overlays_payload)
             ztp_plans.put(plan)
             audit.record(
                 "prepare_ztp_adoption",
-                ZTP_VALIDATE_OPERATION,
+                ZTP_DISCOVERED_READ,
                 settings.orchestrator_url,
                 "prepared",
                 dry_run=True,
@@ -1682,7 +1684,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 {
                     "dry_run": True,
                     "plan": plan.public(),
-                    "next_step": "Review schema, parameters and confirmation phrase, then call apply_ztp_plan with confirm=true.",
+                    "next_step": "Review preconfig_yaml and confirmation phrase, then call apply_ztp_plan with confirm=true.",
                 },
                 settings.max_output_chars,
             )
@@ -1720,24 +1722,39 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 )
             if confirmation != plan.confirmation:
                 raise SecurityError("Confirmation phrase does not match this plan")
-            require_writes(ZTP_VALIDATE_OPERATION)
+            require_writes(ZTP_PRECONFIG_VALIDATE)
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
             discovered_before = _read_discovered(client, version)
             select_discovered(discovered_before, plan.appliance_uuid)
+            preconfig_body = {
+                "name": plan.preconfig_name,
+                "configData": base64.b64encode(plan.preconfig_yaml.encode("utf-8")).decode("ascii"),
+                "autoApply": False,
+            }
             plan.validate_result = client.call(
                 version,
-                ZTP_VALIDATE_OPERATION,
-                discoveredApplianceId=plan.appliance_uuid,
+                ZTP_PRECONFIG_VALIDATE,
+                json_body=preconfig_body,
             )
-            require_writes(ZTP_PRECONFIG_OPERATION)
+            require_writes(ZTP_PRECONFIG_CREATE)
+            created = client.call(
+                version,
+                ZTP_PRECONFIG_CREATE,
+                json_body=preconfig_body,
+            )
+            created_id = extract_preconfig_id(created)
+            if not created_id:
+                raise ValueError(f"Orchestrator did not return a preconfig id after creation: {created!r}")
+            plan.created_preconfig_id = created_id
+            require_writes(ZTP_PRECONFIG_APPLY)
             plan.preconfig_result = client.call(
                 version,
-                ZTP_PRECONFIG_OPERATION,
+                ZTP_PRECONFIG_APPLY,
                 discoveredId=plan.appliance_uuid,
-                preconfigId=plan.template_group,
+                preconfigId=created_id,
             )
             require_writes(ZTP_APPROVE_OPERATION)
             plan.approve_result = client.call(
@@ -1861,6 +1878,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 ZTP_DENY_OPERATION,
                 id=plan.appliance_uuid,
             )
+            delete_result = None
+            if plan.created_preconfig_id:
+                delete_result = client.call(
+                    version,
+                    ZTP_PRECONFIG_DELETE,
+                    preconfigId=plan.created_preconfig_id,
+                )
             rows = [
                 row
                 for row in extract_discovered(_read_discovered(client, version))
@@ -1881,6 +1905,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 {
                     "rolled_back": denied,
                     "verified_denied": denied,
+                    "preconfig_deleted": bool(plan.created_preconfig_id),
+                    "delete_result": delete_result,
                     "result": result,
                     "plan": plan.public(include_details=False),
                 },

@@ -526,13 +526,15 @@ overlay que no haya sido creado por el mismo plan.
 
 ## Flujo transaccional de adopción ZTP
 
-La versión `3.0.0b6` extiende el patrón transaccional a la adopción de
-equipos descubiertos por ZTP, sin depender del esquema placeholder del
-OpenAPI (el objeto real del template group es la base del esquema):
+La versión `3.0.0b7` extiende el patrón transaccional a la adopción de
+equipos descubiertos por ZTP, siguiendo el modelo real de preconfiguración
+del Orchestrator: la preconfiguración es un documento YAML con nombre
+propio que se crea vía `createpreconfiguration247_1` y se aplica al equipo
+descubierto con `discoveredId` + `preconfigId` real:
 
 ```text
 list_discovered_appliances()
-prepare_ztp_adoption(appliance_uuid="...", template_group="...", parameters_json="...")
+prepare_ztp_adoption(appliance_uuid="...", preconfig_yaml="...")
 preview_ztp_plan(plan_id="...")
 apply_ztp_plan(plan_id="...", confirmation="ADOPTAR ...", confirm=true)
 verify_ztp_plan(plan_id="...")
@@ -543,15 +545,23 @@ El flujo:
 
 1. lista equipos descubiertos pendientes (no aprobados ni denegados);
 2. exige el UUID exacto del equipo (formato validado, sin ambigüedad);
-3. lee el template group real y deriva el esquema de parámetros explícito;
-4. valida que los parámetros requeridos (isSelected) tengan valor;
-5. genera una confirmación ligada a plan + UUID + template group;
-6. valida el despliegue, aplica preconfiguración y aprueba, en orden;
-7. vuelve a leer el inventario para verificar que quedó aprobado;
-8. ofrece rollback (deny) solo para el UUID adoptado por el propio plan.
+3. valida el YAML de preconfiguración contra las reglas documentadas
+   (secciones requeridas `applianceInfo`/`deploymentInfo` con `group`,
+   `networkRole`, `location`, `contact`; lan exige `ipAddressMask`; wan
+   exige `nextHop` + anchos de banda + `firewallMode`; lat/long en par o
+   vacíos; `deploymentMode` solo `inline-router`);
+4. verifica que los template groups y overlays referenciados existan;
+5. genera una confirmación ligada a plan + UUID + nombre de preconfig
+   desechable (`Codex-ZTP-<plan>`);
+6. en apply: valida el preconfig (`250`), lo crea (`247_1`, body con
+   `name` + `configData` base64 + `autoApply=false`), lo aplica al
+   discovered (`255` con `discoveredId` + `preconfigId` real), aprueba
+   (`54`) y verifica approved;
+7. registra el `preconfigId` creado para limpieza en rollback;
+8. rollback: deny (`55`) + delete del preconfig creado por el plan (`251`).
 
 Los planes pueden persistirse a disco con `EC_ZTP_STATE_DIR` para sobrevivir
-a reinicios del MCP. El rollback (deny) requiere además
+a reinicios del MCP. El rollback (deny + delete) requiere además
 `EC_ALLOW_DANGEROUS_WRITES=true`. No se permite adoptar un equipo ya
 aprobado ni enviar cuerpos vacíos.
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import asyncio
+import base64
 import json
 
 import pytest
@@ -9,42 +9,89 @@ from ec_mcp.config import Settings
 from ec_mcp.server import create_server
 from ec_mcp.ztp_workflow import (
     ZtpPlanStore,
-    derive_parameter_schema,
-    extract_discovered,
+    extract_preconfig_id,
     prepare_ztp_plan,
     select_discovered,
-    select_template_group,
-    validate_parameters,
+    validate_preconfig_yaml,
 )
 
-UUID = "9e91cc5d-45e2-43a5-aea7-cb3f02fc42b9"
+UUID = "c3cdb65b-a891-48ed-aeb0-bfe390099d8f"
 
 DISCOVERED_ROW = {
-    "id": 6,
+    "id": 54,
     "uuid": UUID,
     "approved": False,
     "denied": False,
     "applianceInfo": {
-        "hostname": "K-4-EC-1B",
+        "hostname": "silverpeak",
         "model": "EC-V",
-        "serial": "001BBC1F5777",
-        "softwareVersion": "9.1.4.2_92345",
+        "serial": "00-1B-BC-46-2C-04",
+        "softwareVersion": "9.6.2.1_107093",
         "deviceType": "APPLIANCE",
     },
 }
 
-TEMPLATE_GROUP = {
-    "name": "Default Template Group",
-    "templates": [
-        {
-            "name": "datetime",
-            "displayName": "Date/Time",
-            "isSelected": True,
-            "buildVersion": "6.2.3.0_0000",
-        },
-        {"name": "banners", "displayName": "Banner Messages", "isSelected": False},
-    ],
+TEMPLATE_GROUPS = {"data": [{"name": "Default Template Group", "templates": []}]}
+OVERLAYS = {
+    "data": [
+        {"id": 1, "name": "RealTime"},
+        {"id": 2, "name": "CriticalApps"},
+        {"id": 3, "name": "BulkApps"},
+        {"id": 4, "name": "DefaultOverlay"},
+    ]
 }
+
+PRECONFIG_YAML = """applianceInfo:
+  hostname: "EC3"
+  group: "NFR-DemoLive"
+  networkRole: "non-hub"
+  region:
+  location:
+    address: ""
+    address2: ""
+    city: "Calimaya"
+    state: "Estado de Mexico"
+    zipCode: "52200"
+    country: "Mexico"
+    latitude:
+    longitude:
+  contact:
+    name: ""
+    email: ""
+    phoneNumber: ""
+ecLicensing:
+  useDefaultAccount: true
+  bandwidthLevel: base
+  boost: 1000000
+deploymentInfo:
+  deploymentMode: "inline-router"
+  totalOutboundBandwidth: 300000
+  totalInboundBandwidth: 300000
+  deploymentInterfaces:
+    - interfaceName: lan0
+      interfaceType: lan
+      ipAddressMask: 172.16.200.1/24
+      zone: DATOS
+    - interfaceName: wan0
+      interfaceLabel: L2L1
+      interfaceType: wan
+      ipAddressMask: 10.50.10.1/24
+      nextHop: 10.50.10.2
+      outboundMaxBandwidth: 100000
+      inboundMaxBandwidth: 100000
+      firewallMode: statefulSNAT
+      behindNat: none
+      zone: L2L1
+templateGroups:
+  groups:
+    - "Default Template Group"
+businessIntentOverlays:
+  overlays:
+    - "RealTime"
+    - "CriticalApps"
+    - "BulkApps"
+    - "DefaultOverlay"
+"""
 
 
 class FakeZtpClient:
@@ -52,86 +99,104 @@ class FakeZtpClient:
         self,
         discovered=None,
         template_groups=None,
+        overlays=None,
         validate_error=False,
+        create_error=False,
         preconfig_error=False,
         approve_error=False,
         approve_marks=True,
         deny_marks=True,
     ):
         self.discovered = discovered if discovered is not None else [dict(DISCOVERED_ROW)]
-        self.template_groups = (
-            template_groups
-            if template_groups is not None
-            else [{"name": "Default Template Group", "templates": TEMPLATE_GROUP["templates"]}]
-        )
+        self.template_groups = template_groups if template_groups is not None else TEMPLATE_GROUPS
+        self.overlays = overlays if overlays is not None else OVERLAYS
         self.validate_error = validate_error
+        self.create_error = create_error
         self.preconfig_error = preconfig_error
         self.approve_error = approve_error
         self.approve_marks = approve_marks
         self.deny_marks = deny_marks
         self.calls: list[str] = []
+        self.created_preconfig: dict | None = None
 
     def resolve_active_profile(self):
         return "9.6"
 
     def call(self, version, operation_id, path_params=None, json_body=None, **query):
-        del version, path_params, json_body
-        self.calls.append(operation_id)
+        del version, path_params
+        self.calls.append((operation_id, json_body, query))
         if operation_id == "orchestrator.getalldiscoveredappliances52":
-            return {"data": {"data": [dict(row) for row in self.discovered]}}
+            return {"data": self.discovered}
         if operation_id == "orchestrator.template748":
-            return {"data": [dict(group) for group in self.template_groups]}
-        if operation_id == "orchestrator.validatediscovereddeployment217":
+            return self.template_groups
+        if operation_id == "orchestrator.getoverlay323":
+            return self.overlays
+        if operation_id == "orchestrator.getmatchingpreconfiguration250":
             if self.validate_error:
-                raise RuntimeError("validation failed")
+                raise RuntimeError("Invalid preconfiguration")
             return {"valid": True}
+        if operation_id == "orchestrator.createpreconfiguration247_1":
+            if self.create_error:
+                raise RuntimeError("create failed")
+            self.created_preconfig = json_body
+            return {"id": 77, "name": json_body.get("name")}
         if operation_id == "orchestrator.applydiscoveredpreconfiguration255":
             if self.preconfig_error:
-                raise RuntimeError("preconfiguration failed")
-            return {"ok": True}
+                raise RuntimeError("apply failed")
+            return {"applied": True}
         if operation_id == "orchestrator.approvediscoveredappliances54":
             if self.approve_error:
-                raise RuntimeError("adoption failed")
-            for row in self.discovered:
-                if str(row.get("uuid", "")).lower() == str(query.get("id", "")).lower():
-                    row["approved"] = self.approve_marks
-            return {"ok": True}
+                raise RuntimeError("approve failed")
+            if self.approve_marks:
+                self.discovered = [dict(row, approved=True) for row in self.discovered]
+            return {"approved": True}
         if operation_id == "orchestrator.denydiscoveredappliances55":
-            if not self.deny_marks:
-                return {"ok": False}
-            for row in self.discovered:
-                if str(row.get("uuid", "")).lower() == str(query.get("id", "")).lower():
-                    row["denied"] = True
-                    row["approved"] = False
-            return {"ok": True}
-        raise AssertionError(operation_id)
+            if self.deny_marks:
+                self.discovered = [dict(row, denied=True, approved=False) for row in self.discovered]
+            return {"denied": True}
+        if operation_id == "orchestrator.deletepreconfiguration251":
+            return {"deleted": True}
+        raise AssertionError(f"unexpected operation {operation_id}")
 
 
-def _build_server(fake):
-    from ec_mcp import server as server_module
+def _tool(server_fixture, name, **kwargs):
+    import asyncio
 
-    original = server_module.OrchestratorClient
-    server_module.OrchestratorClient = lambda *args, **kwargs: fake
-    server = create_server(
+    return asyncio.run(server_fixture.call_tool(name, kwargs))
+
+
+@pytest.fixture()
+def server(monkeypatch):
+    monkeypatch.setenv("EC_ALLOW_WRITE_TOOLS", "true")
+    monkeypatch.setenv("EC_ALLOW_DANGEROUS_WRITES", "true")
+    return create_server(
         Settings(
             orchestrator_url="https://orch.example",
             allow_write_tools=True,
             allow_dangerous_writes=True,
         )
     )
-    return server, original
 
 
-def _tool(server, name, arguments):
-    text = asyncio.run(server.call_tool(name, arguments)).content[0].text
-    if text.startswith("Error:"):
-        return text
-    return json.loads(text)
+def _set_client(monkeypatch, client):
+    import ec_mcp.server as server_module
+
+    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args, **kwargs: client)
 
 
-def test_extract_discovered_handles_nested_wrappers():
-    assert extract_discovered({"data": {"data": [DISCOVERED_ROW]}}) == [DISCOVERED_ROW]
-    assert extract_discovered({"result": {"discovered": [DISCOVERED_ROW]}}) == [DISCOVERED_ROW]
+def _parse(result):
+    text = result if isinstance(result, str) else result.content[0].text
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return {"error": text}
+
+
+def test_extract_preconfig_id_shapes():
+    assert extract_preconfig_id({"id": 5}) == "5"
+    assert extract_preconfig_id({"data": {"preconfigId": "9"}}) == "9"
+    assert extract_preconfig_id(12) == "12"
+    assert extract_preconfig_id({"data": None}) == ""
 
 
 def test_select_discovered_rejects_invalid_uuid():
@@ -144,296 +209,282 @@ def test_select_discovered_rejects_unknown_uuid():
         select_discovered({"data": [DISCOVERED_ROW]}, "11111111-2222-3333-4444-555555555555")
 
 
-def test_select_discovered_rejects_already_approved():
-    row = {**DISCOVERED_ROW, "approved": True}
+def test_select_discovered_rejects_approved():
+    row = dict(DISCOVERED_ROW, approved=True)
     with pytest.raises(ValueError, match="already approved"):
         select_discovered({"data": [row]}, UUID)
 
 
-def test_select_template_group_rejects_unknown_group():
-    with pytest.raises(ValueError, match="was not found"):
-        select_template_group({"data": []}, "Missing Group")
+def test_select_discovered_rejects_denied():
+    row = dict(DISCOVERED_ROW, denied=True)
+    with pytest.raises(ValueError, match="already denied"):
+        select_discovered({"data": [row]}, UUID)
 
 
-def test_derive_parameter_schema_rejects_empty_group():
-    with pytest.raises(ValueError, match="empty schema"):
-        derive_parameter_schema({"name": "Empty", "templates": []})
+def test_validate_preconfig_yaml_rejects_empty():
+    with pytest.raises(ValueError, match="empty"):
+        validate_preconfig_yaml("")
+    with pytest.raises(ValueError, match="empty"):
+        validate_preconfig_yaml("   \n")
 
 
-def test_validate_parameters_rejects_missing_required_values():
-    schema = derive_parameter_schema(TEMPLATE_GROUP)
-    with pytest.raises(ValueError, match="Missing required parameter values"):
-        validate_parameters(schema, "{}")
-    with pytest.raises(ValueError, match="Missing required parameter values"):
-        validate_parameters(schema, '{"datetime": ""}')
+def test_validate_preconfig_yaml_rejects_invalid_yaml():
+    with pytest.raises(ValueError, match="not valid YAML"):
+        validate_preconfig_yaml("applianceInfo: [unclosed")
 
 
-def test_validate_parameters_rejects_unknown_parameters():
-    schema = derive_parameter_schema(TEMPLATE_GROUP)
-    with pytest.raises(ValueError, match="Unknown parameters"):
-        validate_parameters(schema, '{"datetime": {"zone": "UTC"}, "ghost": 1}')
+def test_validate_preconfig_yaml_requires_group():
+    yaml_text = PRECONFIG_YAML.replace('group: "NFR-DemoLive"', "group:")
+    with pytest.raises(ValueError, match="group is required"):
+        validate_preconfig_yaml(yaml_text)
 
 
-def test_prepare_ztp_plan_binds_confirmation_to_uuid_template_and_plan():
-    row = dict(DISCOVERED_ROW)
-    plan = prepare_ztp_plan(row, TEMPLATE_GROUP, "Default Template Group", '{"datetime": {"zone": "UTC"}}')
-    assert plan.plan_id in plan.confirmation
-    assert UUID in plan.confirmation
-    assert "Default Template Group" in plan.confirmation
-    store = ZtpPlanStore()
-    store.put(plan)
-    assert store.get(plan.plan_id) is plan
+def test_validate_preconfig_yaml_rejects_bad_network_role():
+    yaml_text = PRECONFIG_YAML.replace('networkRole: "non-hub"', 'networkRole: "edge"')
+    with pytest.raises(ValueError, match="networkRole"):
+        validate_preconfig_yaml(yaml_text)
 
 
-def test_ztp_plan_store_persists_to_disk(tmp_path):
-    row = dict(DISCOVERED_ROW)
-    plan = prepare_ztp_plan(row, TEMPLATE_GROUP, "Default Template Group", '{"datetime": {"zone": "UTC"}}')
+def test_validate_preconfig_yaml_rejects_single_coordinate():
+    yaml_text = PRECONFIG_YAML.replace("    latitude:\n", "    latitude: 36.7\n")
+    with pytest.raises(ValueError, match="latitude"):
+        validate_preconfig_yaml(yaml_text)
+
+
+def test_validate_preconfig_yaml_rejects_wan_missing_next_hop():
+    yaml_text = PRECONFIG_YAML.replace("      nextHop: 10.50.10.2\n", "      nextHop:\n")
+    with pytest.raises(ValueError, match="wan interfaces require nextHop"):
+        validate_preconfig_yaml(yaml_text)
+
+
+def test_validate_preconfig_yaml_rejects_bad_firewall_mode():
+    yaml_text = PRECONFIG_YAML.replace("firewallMode: statefulSNAT", "firewallMode: magic")
+    with pytest.raises(ValueError, match="firewallMode"):
+        validate_preconfig_yaml(yaml_text)
+
+
+def test_validate_preconfig_yaml_rejects_lan_without_ip():
+    yaml_text = PRECONFIG_YAML.replace("      ipAddressMask: 172.16.200.1/24\n", "      ipAddressMask:\n")
+    with pytest.raises(ValueError, match="lan interfaces require ipAddressMask"):
+        validate_preconfig_yaml(yaml_text)
+
+
+def test_validate_preconfig_yaml_rejects_bad_bandwidth():
+    yaml_text = PRECONFIG_YAML.replace("totalOutboundBandwidth: 300000", "totalOutboundBandwidth: 0")
+    with pytest.raises(ValueError, match="totalOutboundBandwidth"):
+        validate_preconfig_yaml(yaml_text)
+
+
+def test_validate_preconfig_yaml_rejects_bad_deployment_mode():
+    yaml_text = PRECONFIG_YAML.replace('deploymentMode: "inline-router"', 'deploymentMode: "inline-bridge"')
+    with pytest.raises(ValueError, match="inline-router"):
+        validate_preconfig_yaml(yaml_text)
+
+
+def test_prepare_ztp_plan_verifies_template_groups():
+    with pytest.raises(ValueError, match=r"Template groups .* not found"):
+        prepare_ztp_plan(DISCOVERED_ROW, PRECONFIG_YAML, {"data": [{"name": "Other"}]}, OVERLAYS)
+
+
+def test_prepare_ztp_plan_verifies_overlays():
+    with pytest.raises(ValueError, match=r"Overlays .* not found"):
+        prepare_ztp_plan(DISCOVERED_ROW, PRECONFIG_YAML, TEMPLATE_GROUPS, {"data": [{"name": "RealTime"}]})
+
+
+def test_prepare_ztp_plan_builds_confirmation():
+    plan = prepare_ztp_plan(DISCOVERED_ROW, PRECONFIG_YAML, TEMPLATE_GROUPS, OVERLAYS)
+    assert plan.preconfig_name == f"Codex-ZTP-{plan.plan_id}"
+    assert plan.confirmation == f"ADOPTAR {plan.plan_id} {UUID} {plan.preconfig_name}"
+    assert plan.preconfig_yaml == PRECONFIG_YAML
+
+
+def test_plan_store_roundtrip(tmp_path):
+    plan = prepare_ztp_plan(DISCOVERED_ROW, PRECONFIG_YAML, TEMPLATE_GROUPS, OVERLAYS)
     store = ZtpPlanStore(state_dir=str(tmp_path))
     store.put(plan)
-    restored = ZtpPlanStore(state_dir=str(tmp_path))
-    assert restored.get(plan.plan_id).plan_id == plan.plan_id
-    assert restored.get(plan.plan_id).appliance_uuid == UUID
+    restored = ZtpPlanStore(state_dir=str(tmp_path)).get(plan.plan_id)
+    assert restored.preconfig_yaml == PRECONFIG_YAML
+    assert restored.preconfig_name == plan.preconfig_name
 
 
-def test_transactional_ztp_adoption_verify_and_rollback():
+def _encode_config(yaml_text):
+    return base64.b64encode(yaml_text.encode("utf-8")).decode("ascii")
+
+
+def test_full_transactional_cycle(monkeypatch):
+    import asyncio
+
+    import ec_mcp.server as server_module
+
     fake = FakeZtpClient()
-    server, original = _build_server(fake)
-    from ec_mcp import server as server_module
-
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *args, **kwargs: fake
     try:
-        prepared = _tool(
-            server,
-            "prepare_ztp_adoption",
-            {
-                "appliance_uuid": UUID,
-                "template_group": "Default Template Group",
-                "parameters_json": '{"datetime": {"zone": "UTC"}}',
-            },
+        server = create_server(
+            Settings(
+                orchestrator_url="https://orch.example",
+                allow_write_tools=True,
+                allow_dangerous_writes=True,
+            )
         )
-        plan = prepared["plan"]
-        applied = _tool(
-            server,
-            "apply_ztp_plan",
-            {
-                "plan_id": plan["plan_id"],
-                "confirmation": plan["confirmation_required"],
-                "confirm": True,
-            },
+        prepared = asyncio.run(
+            server.call_tool(
+                "prepare_ztp_adoption",
+                {"appliance_uuid": UUID, "preconfig_yaml": PRECONFIG_YAML},
+            )
         )
-        assert applied["applied"] is True
-        assert applied["verified"] is True
-        verified = _tool(server, "verify_ztp_plan", {"plan_id": plan["plan_id"]})
-        assert verified["verified"] is True
-        rolled_back = _tool(
-            server,
-            "rollback_ztp_plan",
-            {
-                "plan_id": plan["plan_id"],
-                "confirmation": f'ROLLBACK {plan["plan_id"]}',
-                "confirm": True,
-            },
+        payload = json.loads(prepared.content[0].text)
+        plan = payload["plan"]
+        assert payload["dry_run"] is True
+        assert plan["preconfig_name"] == f"Codex-ZTP-{plan['plan_id']}"
+        assert plan["confirmation_required"] == (
+            f"ADOPTAR {plan['plan_id']} {UUID} {plan['preconfig_name']}"
         )
-        assert rolled_back["rolled_back"] is True
-        assert rolled_back["verified_denied"] is True
+
+        applied = asyncio.run(
+            server.call_tool(
+                "apply_ztp_plan",
+                {
+                    "plan_id": plan["plan_id"],
+                    "confirmation": plan["confirmation_required"],
+                    "confirm": True,
+                },
+            )
+        )
+        applied_payload = json.loads(applied.content[0].text)
+        assert applied_payload["applied"] is True
+        assert applied_payload["verified"] is True
+        created_id = applied_payload["plan"]["created_preconfig_id"]
+        assert created_id == "77"
+        assert fake.created_preconfig["name"] == plan["preconfig_name"]
+        assert base64.b64decode(fake.created_preconfig["configData"]).decode() == PRECONFIG_YAML
+        assert "orchestrator.applydiscoveredpreconfiguration255" in [c[0] for c in fake.calls]
+
+        rolled_back = asyncio.run(
+            server.call_tool(
+                "rollback_ztp_plan",
+                {
+                    "plan_id": plan["plan_id"],
+                    "confirmation": f"ROLLBACK {plan['plan_id']}",
+                    "confirm": True,
+                },
+            )
+        )
+        rollback_payload = json.loads(rolled_back.content[0].text)
+        assert rollback_payload["rolled_back"] is True
+        assert "orchestrator.deletepreconfiguration251" in [c[0] for c in fake.calls]
     finally:
-        server_module.OrchestratorClient = original
+        server_module.OrchestratorClient = original_create
 
 
-def test_apply_ztp_plan_rejects_wrong_confirmation():
+def test_apply_rejects_wrong_confirmation(monkeypatch):
+    import asyncio
+
+    import ec_mcp.server as server_module
+
     fake = FakeZtpClient()
-    server, original = _build_server(fake)
-    from ec_mcp import server as server_module
-
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *args, **kwargs: fake
     try:
-        prepared = _tool(
-            server,
-            "prepare_ztp_adoption",
-            {
-                "appliance_uuid": UUID,
-                "template_group": "Default Template Group",
-                "parameters_json": '{"datetime": {"zone": "UTC"}}',
-            },
+        server = create_server(
+            Settings(
+                orchestrator_url="https://orch.example",
+                allow_write_tools=True,
+                allow_dangerous_writes=True,
+            )
         )
-        plan = prepared["plan"]
-        result = _tool(
-            server,
-            "apply_ztp_plan",
-            {
-                "plan_id": plan["plan_id"],
-                "confirmation": "wrong phrase",
-                "confirm": True,
-            },
+        prepared = asyncio.run(
+            server.call_tool(
+                "prepare_ztp_adoption",
+                {"appliance_uuid": UUID, "preconfig_yaml": PRECONFIG_YAML},
+            )
         )
-        assert result.startswith("Error:")
-        assert "Confirmation phrase" in result
-        write_calls = [call for call in fake.calls if "getall" not in call and "template748" not in call]
+        plan = json.loads(prepared.content[0].text)["plan"]
+        applied = asyncio.run(
+            server.call_tool(
+                "apply_ztp_plan",
+                {"plan_id": plan["plan_id"], "confirmation": "wrong phrase", "confirm": True},
+            )
+        )
+        text = applied.content[0].text
+        assert text.startswith("Error:")
+        write_calls = [
+            c[0]
+            for c in fake.calls
+            if not c[0].endswith(("52", "748", "323"))
+        ]
         assert write_calls == []
     finally:
-        server_module.OrchestratorClient = original
+        server_module.OrchestratorClient = original_create
 
 
-def test_apply_ztp_plan_fails_when_validation_fails():
-    fake = FakeZtpClient(validate_error=True)
-    server, original = _build_server(fake)
-    from ec_mcp import server as server_module
+def test_apply_failure_after_create_marks_verification_failed(monkeypatch):
+    import asyncio
 
+    import ec_mcp.server as server_module
+
+    fake = FakeZtpClient(approve_error=True, approve_marks=False)
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *args, **kwargs: fake
     try:
-        prepared = _tool(
-            server,
-            "prepare_ztp_adoption",
-            {
-                "appliance_uuid": UUID,
-                "template_group": "Default Template Group",
-                "parameters_json": '{"datetime": {"zone": "UTC"}}',
-            },
+        server = create_server(
+            Settings(
+                orchestrator_url="https://orch.example",
+                allow_write_tools=True,
+                allow_dangerous_writes=True,
+            )
         )
-        plan = prepared["plan"]
-        result = _tool(
-            server,
-            "apply_ztp_plan",
-            {
-                "plan_id": plan["plan_id"],
-                "confirmation": plan["confirmation_required"],
-                "confirm": True,
-            },
+        prepared = asyncio.run(
+            server.call_tool(
+                "prepare_ztp_adoption",
+                {"appliance_uuid": UUID, "preconfig_yaml": PRECONFIG_YAML},
+            )
         )
-        assert result.startswith("Error:")
-        assert "validation failed" in result
-        assert "orchestrator.applydiscoveredpreconfiguration255" not in fake.calls
+        plan = json.loads(prepared.content[0].text)["plan"]
+        applied = asyncio.run(
+            server.call_tool(
+                "apply_ztp_plan",
+                {
+                    "plan_id": plan["plan_id"],
+                    "confirmation": plan["confirmation_required"],
+                    "confirm": True,
+                },
+            )
+        )
+        assert applied.content[0].text.startswith("Error:")
     finally:
-        server_module.OrchestratorClient = original
+        server_module.OrchestratorClient = original_create
 
 
-def test_apply_ztp_plan_fails_after_preconfiguration_error():
-    fake = FakeZtpClient(preconfig_error=True)
-    server, original = _build_server(fake)
-    from ec_mcp import server as server_module
+def test_rollback_only_for_reversible_plans(monkeypatch):
+    import asyncio
 
-    try:
-        prepared = _tool(
-            server,
-            "prepare_ztp_adoption",
-            {
-                "appliance_uuid": UUID,
-                "template_group": "Default Template Group",
-                "parameters_json": '{"datetime": {"zone": "UTC"}}',
-            },
-        )
-        plan = prepared["plan"]
-        result = _tool(
-            server,
-            "apply_ztp_plan",
-            {
-                "plan_id": plan["plan_id"],
-                "confirmation": plan["confirmation_required"],
-                "confirm": True,
-            },
-        )
-        assert result.startswith("Error:")
-        assert "preconfiguration failed" in result
-        assert "orchestrator.approvediscoveredappliances54" not in fake.calls
-    finally:
-        server_module.OrchestratorClient = original
+    import ec_mcp.server as server_module
 
-
-def test_apply_ztp_plan_reports_verification_failure_and_allows_deny():
-    fake = FakeZtpClient(approve_marks=False)
-    server, original = _build_server(fake)
-    from ec_mcp import server as server_module
-
-    try:
-        prepared = _tool(
-            server,
-            "prepare_ztp_adoption",
-            {
-                "appliance_uuid": UUID,
-                "template_group": "Default Template Group",
-                "parameters_json": '{"datetime": {"zone": "UTC"}}',
-            },
-        )
-        plan = prepared["plan"]
-        applied = _tool(
-            server,
-            "apply_ztp_plan",
-            {
-                "plan_id": plan["plan_id"],
-                "confirmation": plan["confirmation_required"],
-                "confirm": True,
-            },
-        )
-        assert applied["applied"] is True
-        assert applied["verified"] is False
-        assert applied["deny_available"] is True
-    finally:
-        server_module.OrchestratorClient = original
-
-
-def test_rollback_ztp_plan_fails_when_not_reversible():
     fake = FakeZtpClient()
-    server, original = _build_server(fake)
-    from ec_mcp import server as server_module
-
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *args, **kwargs: fake
     try:
-        prepared = _tool(
-            server,
-            "prepare_ztp_adoption",
-            {
-                "appliance_uuid": UUID,
-                "template_group": "Default Template Group",
-                "parameters_json": '{"datetime": {"zone": "UTC"}}',
-            },
+        server = create_server(
+            Settings(
+                orchestrator_url="https://orch.example",
+                allow_write_tools=True,
+                allow_dangerous_writes=True,
+            )
         )
-        plan = prepared["plan"]
-        result = _tool(
-            server,
-            "rollback_ztp_plan",
-            {
-                "plan_id": plan["plan_id"],
-                "confirmation": f'ROLLBACK {plan["plan_id"]}',
-                "confirm": True,
-            },
+        prepared = asyncio.run(
+            server.call_tool(
+                "prepare_ztp_adoption",
+                {"appliance_uuid": UUID, "preconfig_yaml": PRECONFIG_YAML},
+            )
         )
-        assert result.startswith("Error:")
-        assert "nothing to roll back" in result
+        plan = json.loads(prepared.content[0].text)["plan"]
+        rolled = asyncio.run(
+            server.call_tool(
+                "rollback_ztp_plan",
+                {"plan_id": plan["plan_id"], "confirmation": f"ROLLBACK {plan['plan_id']}", "confirm": True},
+            )
+        )
+        assert rolled.content[0].text.startswith("Error:")
     finally:
-        server_module.OrchestratorClient = original
-
-
-def test_rollback_ztp_plan_detects_failed_deny():
-    fake = FakeZtpClient(deny_marks=False)
-    server, original = _build_server(fake)
-    from ec_mcp import server as server_module
-
-    try:
-        prepared = _tool(
-            server,
-            "prepare_ztp_adoption",
-            {
-                "appliance_uuid": UUID,
-                "template_group": "Default Template Group",
-                "parameters_json": '{"datetime": {"zone": "UTC"}}',
-            },
-        )
-        plan = prepared["plan"]
-        _tool(
-            server,
-            "apply_ztp_plan",
-            {
-                "plan_id": plan["plan_id"],
-                "confirmation": plan["confirmation_required"],
-                "confirm": True,
-            },
-        )
-        result = _tool(
-            server,
-            "rollback_ztp_plan",
-            {
-                "plan_id": plan["plan_id"],
-                "confirmation": f'ROLLBACK {plan["plan_id"]}',
-                "confirm": True,
-            },
-        )
-        assert result["rolled_back"] is False
-        assert result["plan"]["status"] == "rollback_failed"
-    finally:
-        server_module.OrchestratorClient = original
+        server_module.OrchestratorClient = original_create

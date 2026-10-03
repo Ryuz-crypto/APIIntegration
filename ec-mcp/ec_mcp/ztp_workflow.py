@@ -1,4 +1,11 @@
-"""Transactional ZTP adoption helpers for discovered EdgeConnect appliances."""
+"""Transactional ZTP adoption helpers for discovered EdgeConnect appliances.
+
+The adoption is modeled after the real Orchestrator preconfiguration flow:
+a preconfiguration is a named YAML document created via
+``orchestrator.createpreconfiguration247_1`` and applied to a discovered
+appliance via ``orchestrator.applydiscoveredpreconfiguration255`` using
+``discoveredId`` + the real ``preconfigId`` returned at creation time.
+"""
 
 from __future__ import annotations
 
@@ -10,14 +17,26 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 ZTP_DISCOVERED_READ = "orchestrator.getalldiscoveredappliances52"
 ZTP_VALIDATE_OPERATION = "orchestrator.validatediscovereddeployment217"
-ZTP_PRECONFIG_OPERATION = "orchestrator.applydiscoveredpreconfiguration255"
+ZTP_PRECONFIGS_READ = "orchestrator.getpreconfigurations246"
+ZTP_PRECONFIG_CREATE = "orchestrator.createpreconfiguration247_1"
+ZTP_PRECONFIG_VALIDATE = "orchestrator.getmatchingpreconfiguration250"
+ZTP_PRECONFIG_APPLY = "orchestrator.applydiscoveredpreconfiguration255"
+ZTP_PRECONFIG_STATUS = "orchestrator.getpreconfigurationapplystatus254"
+ZTP_PRECONFIG_DELETE = "orchestrator.deletepreconfiguration251"
 ZTP_APPROVE_OPERATION = "orchestrator.approvediscoveredappliances54"
 ZTP_DENY_OPERATION = "orchestrator.denydiscoveredappliances55"
 TEMPLATE_GROUPS_READ = "orchestrator.template748"
+
+NETWORK_ROLES = {"non-hub", "hub", "nrhub"}
+FIREWALL_MODES = {"All", "stateful", "statefulSNAT", "harden"}
+INTERFACE_NAME_RE = re.compile(r"^(wan|lan|tlan|twan|twlan|blan|bwan)\d+(\.\d+)?$")
+BANDWIDTH_MAX = 100_000_000
 
 
 def extract_discovered(payload: Any) -> list[dict[str, Any]]:
@@ -73,63 +92,156 @@ def extract_template_groups(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
-def select_template_group(payload: Any, group_name: str) -> dict[str, Any]:
-    normalized = group_name.strip().casefold()
-    matches = [row for row in extract_template_groups(payload) if str(row.get("name", "")).casefold() == normalized]
-    if not matches:
-        raise ValueError(f"Template group {group_name!r} was not found")
-    if len(matches) > 1:
-        raise ValueError(f"Template group {group_name!r} is ambiguous")
-    return matches[0]
+def _string_list(value: Any, section: str) -> list[str]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{section} must be a non-empty list")
+    names: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"{section} entries must be non-empty strings")
+        names.append(item.strip())
+    return names
 
 
-def derive_parameter_schema(template_group: dict[str, Any]) -> list[dict[str, Any]]:
-    """Derive an explicit parameter schema from a real template group object.
-
-    The Orchestrator OpenAPI catalog contains placeholders for templates, so the
-    real group object is the schema base: every template marked isSelected (or
-    isselected) participates in adoption and requires values.
-    """
-    schema: list[dict[str, Any]] = []
-    for template in template_group.get("templates", []):
-        if not isinstance(template, dict):
-            continue
-        name = str(template.get("name") or "")
-        if not name:
-            continue
-        selected = template.get("isSelected", template.get("isselected", False))
-        schema.append(
-            {
-                "name": name,
-                "display_name": str(template.get("displayName") or name),
-                "selected": bool(selected),
-                "build_version": str(template.get("buildVersion") or ""),
-                "required": bool(selected),
-            }
-        )
-    if not schema:
-        raise ValueError("Template group has no templates; refuse empty schema")
-    return schema
+def _require_section(preconfig: dict[str, Any], key: str) -> dict[str, Any]:
+    section = preconfig.get(key)
+    if not isinstance(section, dict):
+        raise ValueError(f"preconfig_yaml is missing required section {key!r}")
+    return section
 
 
-def validate_parameters(schema: list[dict[str, Any]], parameters_json: str) -> dict[str, Any]:
+def _bandwidth(value: Any, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{label} must be an integer")
+    if not 1 <= value <= BANDWIDTH_MAX:
+        raise ValueError(f"{label} must be between 1 and {BANDWIDTH_MAX}")
+    return value
+
+
+def _check_location(location: dict[str, Any]) -> None:
+    latitude = location.get("latitude")
+    longitude = location.get("longitude")
+    lat_set = latitude not in (None, "")
+    lon_set = longitude not in (None, "")
+    if lat_set != lon_set:
+        raise ValueError("location.latitude and location.longitude must both be specified or both be empty")
+    for name, value in (("latitude", latitude), ("longitude", longitude)):
+        if value not in (None, "") and not isinstance(value, (int, float)):
+            raise ValueError(f"location.{name} must be a number in decimal degrees")
+
+
+def _check_interface(entry: Any, index: int) -> None:
+    if not isinstance(entry, dict):
+        raise ValueError(f"deploymentInterfaces[{index}] must be an object")
+    label = f"deploymentInterfaces[{index}]"
+    name = entry.get("interfaceName")
+    if not isinstance(name, str) or not INTERFACE_NAME_RE.fullmatch(name):
+        raise ValueError(f"{label}.interfaceName {name!r} is not a valid interface name")
+    side = entry.get("interfaceType")
+    if side not in {"lan", "wan"}:
+        raise ValueError(f"{label}.interfaceType must be 'lan' or 'wan'")
+    addressing = entry.get("addressingMode") or ""
+    if addressing and addressing not in {"static", "dhcpv4", "dhcpv6", "slaac"}:
+        raise ValueError(f"{label}.addressingMode {addressing!r} is invalid")
+    if addressing in {"dhcpv4", "dhcpv6", "slaac"} and side == "wan":
+        for field_name in ("ipAddressMask", "nextHop"):
+            if str(entry.get(field_name) or "").strip():
+                raise ValueError(f"{label}: {field_name} must be empty when addressingMode is {addressing}")
+    if side == "lan" and not addressing:
+        if not str(entry.get("ipAddressMask") or "").strip():
+            raise ValueError(f"{label}: lan interfaces require ipAddressMask")
+    if side == "wan":
+        if not addressing:
+            for field_name in ("nextHop", "inboundMaxBandwidth", "outboundMaxBandwidth", "firewallMode"):
+                if entry.get(field_name) in (None, ""):
+                    raise ValueError(f"{label}: wan interfaces require {field_name}")
+        if entry.get("firewallMode") not in (None, "") and entry.get("firewallMode") not in FIREWALL_MODES:
+            raise ValueError(f"{label}.firewallMode {entry.get('firewallMode')!r} is invalid")
+        for field_name in ("inboundMaxBandwidth", "outboundMaxBandwidth"):
+            value = entry.get(field_name)
+            if value in (None, ""):
+                continue
+            if isinstance(value, bool) or not isinstance(value, int) or not 0 < value < BANDWIDTH_MAX:
+                raise ValueError(f"{label}.{field_name} must be an integer in ]0, {BANDWIDTH_MAX}[")
+
+
+def validate_preconfig_yaml(yaml_text: str) -> dict[str, Any]:
+    """Parse and validate a preconfiguration template YAML against the documented rules."""
+    if not yaml_text or not yaml_text.strip():
+        raise ValueError("preconfig_yaml is empty; refusing to send an empty preconfiguration")
     try:
-        parameters = json.loads(parameters_json) if parameters_json.strip() else {}
-    except json.JSONDecodeError as error:
-        raise ValueError(f"parameters_json is invalid: {error}") from error
-    if not isinstance(parameters, dict):
-        raise ValueError("parameters_json must be a JSON object")
-    missing = [
-        entry["name"]
-        for entry in schema
-        if entry["required"] and not str(parameters.get(entry["name"], "")).strip()
-    ]
-    if missing:
-        raise ValueError(f"Missing required parameter values: {sorted(missing)}")
-    unknown = sorted(set(parameters) - {entry["name"] for entry in schema})
-    if unknown:
-        raise ValueError(f"Unknown parameters not present in the template schema: {unknown}")
-    return parameters
+        preconfig = yaml.safe_load(yaml_text)
+    except yaml.YAMLError as error:
+        raise ValueError(f"preconfig_yaml is not valid YAML: {error}") from error
+    if not isinstance(preconfig, dict):
+        raise ValueError("preconfig_yaml must be a YAML mapping at the top level")
+
+    appliance_info = _require_section(preconfig, "applianceInfo")
+    group = str(appliance_info.get("group") or "").strip()
+    if not group:
+        raise ValueError("applianceInfo.group is required and cannot be empty")
+    hostname = str(appliance_info.get("hostname") or "").strip()
+    if len(hostname) > 60:
+        raise ValueError("applianceInfo.hostname must be at most 60 characters")
+    role = appliance_info.get("networkRole")
+    if role not in NETWORK_ROLES:
+        raise ValueError(f"applianceInfo.networkRole must be one of {sorted(NETWORK_ROLES)}")
+    _check_location(_require_section(appliance_info, "location"))
+    _require_section(appliance_info, "contact")
+
+    deployment = _require_section(preconfig, "deploymentInfo")
+    _bandwidth(deployment.get("totalOutboundBandwidth"), "deploymentInfo.totalOutboundBandwidth")
+    _bandwidth(deployment.get("totalInboundBandwidth"), "deploymentInfo.totalInboundBandwidth")
+    mode = deployment.get("deploymentMode") or "inline-router"
+    if mode != "inline-router":
+        raise ValueError("deploymentInfo.deploymentMode: 'inline-router' is the only valid value")
+    interfaces = deployment.get("deploymentInterfaces")
+    if not isinstance(interfaces, list) or not interfaces:
+        raise ValueError("deploymentInfo.deploymentInterfaces must be a non-empty list")
+    for index, entry in enumerate(interfaces):
+        _check_interface(entry, index)
+
+    template_names: list[str] = []
+    if "templateGroups" in preconfig:
+        template_names = _string_list(_require_section(preconfig, "templateGroups").get("groups"), "templateGroups.groups")
+    overlay_names: list[str] = []
+    if "businessIntentOverlays" in preconfig:
+        overlay_names = _string_list(
+            _require_section(preconfig, "businessIntentOverlays").get("overlays"),
+            "businessIntentOverlays.overlays",
+        )
+    return {"preconfig": preconfig, "template_groups": template_names, "overlays": overlay_names}
+
+
+def verify_referenced_objects(
+    parsed: dict[str, Any],
+    template_groups_payload: Any,
+    overlays_payload: Any,
+) -> None:
+    """Fail preparation when referenced template groups or overlays do not exist."""
+    template_names = parsed.get("template_groups", [])
+    if template_names:
+        available = {str(row.get("name", "")).strip() for row in extract_template_groups(template_groups_payload)}
+        missing = [name for name in template_names if name not in available]
+        if missing:
+            raise ValueError(f"Template groups referenced by the preconfig were not found: {missing}")
+
+    overlay_names = parsed.get("overlays", [])
+    if overlay_names:
+        if isinstance(overlays_payload, list):
+            overlay_rows = [row for row in overlays_payload if isinstance(row, dict)]
+        elif isinstance(overlays_payload, dict):
+            overlay_rows = [row for row in overlays_payload.get("data", []) if isinstance(row, dict)]
+        else:
+            overlay_rows = []
+        available = {
+            str(row.get("name", row.get("overlayName", ""))).strip()
+            for row in overlay_rows
+        }
+        available.discard("")
+        missing = [name for name in overlay_names if name not in available]
+        if missing:
+            raise ValueError(f"Business Intent Overlays referenced by the preconfig were not found: {missing}")
 
 
 @dataclass
@@ -138,17 +250,16 @@ class ZtpPlan:
     appliance_uuid: str
     appliance_hostname: str
     appliance_serial: str
-    template_group: str
-    schema: list[dict[str, Any]]
-    parameters: dict[str, Any]
+    preconfig_name: str
+    preconfig_yaml: str
     confirmation: str
     created_at: float = field(default_factory=time.time)
     expires_at: float = field(default_factory=lambda: time.time() + 900)
     status: str = "prepared"
     validate_result: Any = None
+    created_preconfig_id: str = ""
     preconfig_result: Any = None
     approve_result: Any = None
-    adopted_ne_pk: str = ""
     deny_available: bool = False
     health_check: dict[str, Any] = field(default_factory=dict)
 
@@ -161,26 +272,42 @@ class ZtpPlan:
                 "hostname": self.appliance_hostname,
                 "serial": self.appliance_serial,
             },
-            "template_group": self.template_group,
+            "preconfig_name": self.preconfig_name,
             "confirmation_required": self.confirmation,
             "expires_at_epoch": int(self.expires_at),
             "deny_available": self.deny_available,
         }
         if include_details:
-            result["schema"] = self.schema
-            result["parameters"] = self.parameters
+            result["preconfig_yaml"] = self.preconfig_yaml
         if self.validate_result is not None:
             result["validate_result"] = self.validate_result
+        if self.created_preconfig_id:
+            result["created_preconfig_id"] = self.created_preconfig_id
         if self.preconfig_result is not None:
             result["preconfig_result"] = self.preconfig_result
         if self.approve_result is not None:
             result["approve_result"] = self.approve_result
-        if self.adopted_ne_pk:
-            result["adopted_ne_pk"] = self.adopted_ne_pk
+        if self.deny_available:
             result["rollback_confirmation"] = f"ROLLBACK {self.plan_id}"
         if self.health_check:
             result["health_check"] = self.health_check
         return result
+
+
+def extract_preconfig_id(payload: Any) -> str:
+    """Extract the created preconfiguration ID from common response shapes."""
+    candidates: list[Any] = [payload]
+    if isinstance(payload, dict):
+        candidates.extend(payload.get(key) for key in ("data", "result", "preconfiguration"))
+    for candidate in candidates:
+        if isinstance(candidate, dict):
+            for key in ("id", "preconfigId", "preconfigurationId"):
+                value = candidate.get(key)
+                if value not in (None, "", 0):
+                    return str(value)
+        if isinstance(candidate, (str, int)) and str(candidate).strip():
+            return str(candidate)
+    return ""
 
 
 class ZtpPlanStore:
@@ -201,17 +328,16 @@ class ZtpPlanStore:
                         appliance_uuid=payload["appliance_uuid"],
                         appliance_hostname=payload["appliance_hostname"],
                         appliance_serial=payload["appliance_serial"],
-                        template_group=payload["template_group"],
-                        schema=payload["schema"],
-                        parameters=payload["parameters"],
+                        preconfig_name=payload["preconfig_name"],
+                        preconfig_yaml=payload["preconfig_yaml"],
                         confirmation=payload["confirmation"],
                         created_at=payload["created_at"],
                         expires_at=payload["expires_at"],
                         status=payload["status"],
                         validate_result=payload.get("validate_result"),
+                        created_preconfig_id=payload.get("created_preconfig_id", ""),
                         preconfig_result=payload.get("preconfig_result"),
                         approve_result=payload.get("approve_result"),
-                        adopted_ne_pk=payload.get("adopted_ne_pk", ""),
                         deny_available=payload.get("deny_available", False),
                         health_check=payload.get("health_check", {}),
                     )
@@ -268,26 +394,25 @@ class ZtpPlanStore:
 
 def prepare_ztp_plan(
     discovered_row: dict[str, Any],
-    template_group: dict[str, Any],
-    group_name: str,
-    parameters_json: str,
+    preconfig_yaml_text: str,
+    template_groups_payload: Any,
+    overlays_payload: Any,
     ttl_seconds: int = 900,
 ) -> ZtpPlan:
-    info = discovered_row.get("applianceInfo") or {}
-    schema = derive_parameter_schema(template_group)
-    parameters = validate_parameters(schema, parameters_json)
+    """Validate the preconfig YAML and its references, then build an immutable plan."""
+    parsed = validate_preconfig_yaml(preconfig_yaml_text)
+    verify_referenced_objects(parsed, template_groups_payload, overlays_payload)
     plan_id = secrets.token_hex(6)
-    hostname = str(info.get("hostname") or "")
-    serial = str(info.get("serial") or "")
-    confirmation = f"ADOPTAR {plan_id} {discovered_row.get('uuid', '')} {group_name}"
+    info = discovered_row.get("applianceInfo") or {}
+    preconfig_name = f"Codex-ZTP-{plan_id}"
+    appliance_uuid = str(discovered_row.get("uuid", ""))
     return ZtpPlan(
         plan_id=plan_id,
-        appliance_uuid=str(discovered_row.get("uuid", "")),
-        appliance_hostname=hostname,
-        appliance_serial=serial,
-        template_group=group_name,
-        schema=schema,
-        parameters=parameters,
-        confirmation=confirmation,
+        appliance_uuid=appliance_uuid,
+        appliance_hostname=str(info.get("hostname") or ""),
+        appliance_serial=str(info.get("serial") or ""),
+        preconfig_name=preconfig_name,
+        preconfig_yaml=preconfig_yaml_text,
+        confirmation=f"ADOPTAR {plan_id} {appliance_uuid} {preconfig_name}",
         expires_at=time.time() + ttl_seconds,
     )

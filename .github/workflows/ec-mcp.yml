@@ -23,7 +23,7 @@ jobs:
       - name: Install package
         run: pip install -e . pytest pytest-asyncio
       - name: Verify stable package identity
-        run: python -c "from ec_mcp import __version__; assert __version__ == \"3.0.0b6\""
+        run: python -c "from ec_mcp import __version__; assert __version__ == \"3.0.0b7\""
       - name: Lint (ruff)
         run: |
           pip install ruff
