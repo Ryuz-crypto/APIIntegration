@@ -20,7 +20,7 @@ from .cli_catalog import (
 from .compat import CompatibilityEngine, load_profiles
 from .config import Settings
 from .orchestrator_client import OrchestratorClient
-from .security import SecurityError, redact_secrets, redact_sensitive_values, sanitize_output
+from .security import SecurityError, redact_secrets, redact_sensitive_values
 from .ssh_ecos import ApplianceSshPool
 
 
