@@ -414,15 +414,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         return {"per_appliance": per_appliance, "total_alarms": total, "by_severity": total_by_severity}
 
     TUNNEL_KPI_KEYS = (
-        "tunnelname", "tunnel", "tunnelid", "overlayid", "nepk", "source", "destination",
-        "alias", "hostname",
-        "mos", "min_mos", "max_mos", "avg_mos", "mos_score",
-        "min_mos_prefec", "avg_mos_prefec", "max_mos_prefec",
-        "jitter", "avg_jitter", "max_jitter", "avg_tx_jitter", "max_tx_jitter",
-        "loss", "losspercent", "max_pre_pct_loss", "max_post_pct_loss",
-        "max_pre_pct_loss_max", "max_post_pct_loss_max",
-        "latency", "avg_tx_latency", "min_latency_min", "max_latency_max", "min_latency_min_from_peak",
-        "rtt", "packetslost",
+        "tunnelname", "tunnel", "tunnelid", "overlayid", "nepk",
+        "mos", "min_mos", "max_mos", "avg_mos",
+        "max_jitter", "avg_tx_jitter", "max_pre_pct_loss", "max_post_pct_loss",
+        "avg_tx_latency", "min_latency_min", "max_latency_max",
     )
 
     def project_tunnel_kpis(node: Any) -> Any:
@@ -777,14 +772,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     try:
                         rows.append({
                             "nePk": ne_pk,
-                            "data": kpi_get(client, "mos", ne_pk, granularity, start_time, end_time),
+                            "data": project_wan_health_stats(
+                                kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
+                            ),
                         })
                     except Exception as error:
                         rows.append({"nePk": ne_pk, "error": str(error)[:200]})
                 payload = {"appliances": rows, "total_count": len(rows)}
             else:
                 ne_pk = resolve_ne_pk(client, appliance_id)
-                payload = kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
+                payload = project_wan_health_stats(
+                    kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
+                )
             audit.record("get_mos", "read", settings.orchestrator_url, "ok")
             return json_result({"data": payload, "note": "MOS values may be scaled x100 (440 = 4.40)"}, settings.max_output_chars)
         except Exception as error:
