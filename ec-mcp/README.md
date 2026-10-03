@@ -1,515 +1,422 @@
-# ec-mcp: MCP server for EdgeConnect SD-WAN
+# ec-mcp — EdgeConnect SD-WAN MCP server
 
-**Versión beta: `v2.0.0-beta.2`** — rama `main` contiene la beta desplegable. Los cambios posteriores deben conservar la compatibilidad del contrato MCP y actualizar QA-FULL.md.
+**Versión estable: 2.0.0**  
+La rama `main` y la etiqueta `v2.0.0` representan la versión estable.
 
+`ec-mcp` conecta asistentes compatibles con Model Context Protocol (MCP) con
+HPE Aruba Networking EdgeConnect SD-WAN. Puede consultar el Orchestrator y los
+appliances mediante sus APIs oficiales y, de forma opcional, ejecutar el
+catálogo ECOS por SSH.
 
-Servidor MCP (Model Context Protocol) que expone un entorno HPE Aruba Networking
-EdgeConnect SD-WAN a asistentes de IA (Claude Desktop, Cursor, Le Chat,
-ChatGPT, Vibe, etc.).
+## Qué incluye
 
-- **Orchestrator + Appliance (REST)**: ~1550 operaciones por versión (9.3–9.6)
-  generadas desde los **OpenAPI oficiales** de HPE Aruba (Orchestrator REST
-  APIs, 695 paths; Silver Peak Unity ECOS REST APIs, 388 paths).
-- **Appliances (SSH)**: **1367 comandos ECOS** del CLI Reference oficial,
-  clasificados por riesgo (monitoreo, troubleshooting, alarmas,
-  administración, configuración, negación).
-- **Seguridad**: dry-run por defecto en toda operación de escritura, whitelist
-  de comandos, kill switch global, salida truncada, y audit log JSONL de cada
-  operación (evidencia ISO 27001 / CIS).
-- **Transportes**: stdio (Claude Desktop/Cursor) y HTTP streamable / SSE con
-  **bearer token obligatorio** y `/health` público, pensado para publicarse
-  detrás de TLS o una plataforma ZTNA.
+- Compatibilidad con perfiles API de Orchestrator 9.3–9.6; versiones 9.7 usan
+  automáticamente el perfil compatible 9.6.
+- Inventario, alarmas, salud WAN, MOS, túneles, HA, brownouts, ZTP, firmware,
+  top talkers y métricas del Orchestrator.
+- `run_show_api`: ejecuta comandos `show` de solo lectura mediante el API del
+  appliance a través del Orchestrator. No requiere SSH.
+- `run_show_command` y `run_cli_command`: acceso ECOS opcional por SSH.
+- Escrituras desactivadas por defecto, dry-run, confirmación explícita, límite
+  de frecuencia y segundo candado para operaciones peligrosas.
+- Transporte stdio, HTTP streamable y SSE con bearer token.
+- Registro de auditoría JSONL y redacción de secretos.
+- Panel administrativo opcional para gestionar varios Orchestrators.
 
 ## Herramientas MCP
 
-| Tool | Riesgo | Descripción |
-|---|---|---|
-| `orchestrator_info` | lectura | Detecta versión del Orchestrator y perfil activo |
-| `list_api_operations` | lectura | Catálogo de operaciones con filtros `search`/`prefix`/`method`, paginación `page`/`page_size` y `include_examples` (default los omite) |
-| `call_read_api` | lectura | Ejecuta una operación GET del perfil con preflight de params, `fields`/`offset`/`limit`/`max_chars`, `request_echo` y JSON siempre válido (nunca cortado) |
-| `list_appliances` | lectura | Inventario de appliances registrados (nePk, nombre, IP, modelo, versión, estado) — resuelve nePk por nombre/IP/serial |
-| `orchestrator_metrics` | lectura | Métricas de rendimiento por operación: llamadas, latencia media/máxima, KB y cache hits |
-| `list_cli_commands` | lectura | Catálogo de los 1367 comandos ECOS oficiales, con filtro por categoría |
-| `run_show_command` | lectura | Comando `show` whitelisteado vía SSH |
-| `run_cli_command` | según riesgo | Cualquier comando del catálogo ECOS: monitoreo/troubleshooting directo; configuración en dry-run |
-| `apply_change` | escritura | Operación API de cambio; dry-run por defecto, requiere `confirm=true` + `EC_ALLOW_WRITE_TOOLS=true` |
+| Grupo | Herramientas |
+|---|---|
+| Descubrimiento | `orchestrator_info`, `list_appliances`, `list_api_operations`, `orchestrator_metrics` |
+| Estado operativo | `get_wan_health`, `get_mos`, `get_tunnel_state`, `get_brownout_state`, `get_availability`, `get_top_talkers`, `get_active_alarms`, `get_ha_status`, `get_firmware_compliance`, `get_ztp_status` |
+| API genérica | `call_read_api`, `apply_change` |
+| CLI | `list_cli_commands`, `run_show_api`, `run_show_command`, `run_cli_command` |
 
-Los permisos efectivos son siempre los del usuario autenticado contra el
-Orchestrator/appliance; el MCP añade sus capas de control (dry-run, whitelist,
-auditoría) pero no los sustituye.
+`run_show_api` usa el Orchestrator como transporte:
+
+```text
+run_show_api(command="show arp", appliance_id="0.NE")
+```
+
+Una respuesta correcta incluye `"transport": "orchestrator"`. Este flujo no
+usa SSH. `appliance_id` acepta nePk, nombre, IP o serial del appliance.
 
 ## Requisitos
 
-- Python 3.12+
-- Acceso al Orchestrator (API key o usuario/contraseña)
-- Para SSH: credenciales de appliance habilitadas
+- Linux recomendado: Ubuntu/Debian.
+- Python 3.12 o superior.
+- Git.
+- Acceso HTTPS al Orchestrator.
+- API key, o usuario y contraseña del Orchestrator.
+- SSH solo si se usarán `run_show_command` o `run_cli_command`.
 
-## Instalación
+## Instalación recomendada
 
-### De cero a funcionar en 2 comandos (Ubuntu/Debian)
-
-```bash
-git clone https://github.com/Ryuz-crypto/APIIntegration.git
-cd APIIntegration/ec-mcp
-./scripts/install.sh          # instala, pregunta credenciales, crea .env y verifica
-./scripts/update.sh --daemon # arranca en background con el .env
-```
-
-El instalador es **interactivo**: pregunta (con defaults ya probados) la URL del
-Orchestrator, la API key, las credenciales SSH del appliance (password y enable
-password), el dominio público del túnel y la IP de escucha. Enter acepta el
-default; los passwords no se muestran en pantalla. Al final genera el **token
-MCP** automáticamente y te lo muestra — es el que pegas como Bearer en el
-conector de Mistral/Claude.
-
-```
-$ ./scripts/install.sh
-==> 3/5 Configuración de credenciales
-    (Enter acepta el valor entre corchetes)
-URL del Orchestrator [https://lac-wan-sewan-orchge-useast1.silverpeak.cloud]:
-API key del Orchestrator (X-Auth-Token):
-SSH a appliances (true/false) [true]:
-Usuario SSH (comun para todos los appliances) [mcp]:
-Password SSH (comun para todos):
-Password de enable (comun; Enter si no hay):
-    Autodetectando appliances desde el Orchestrator...
-    Encontrados 2 appliances:
-      1. ECV-CALIMAYA  [0.NE]  192.168.1.40  -> SSH OK (192.168.1.40)
-      2. ECV-BOGOTA    [14.NE] 192.168.2.10  -> SSH inalcanzable desde este servidor
-Dominio(s) públicos del túnel, separados por coma []: mcp-tunel.axisapps.io,172.17.201.141
-IP de escucha (0.0.0.0 = todas, necesario para túnel) [0.0.0.0]:
-    Token MCP generado automáticamente: xxxx
-    (es el que pegas como Bearer en el conector de Mistral)
-```
-
-Para reconfigurar credenciales más tarde: borra `.env` y re-ejecuta
-`./scripts/install.sh`, o edita `.env` a mano. `install.sh` nunca sobrescribe
-un `.env` existente.
-
-`install.sh` es idempotente (re-ejecútalo sin miedo) y nunca sobrescribe un
-`.env` existente. `update.sh` hace `git pull` + reinstalar + arrancar con el
-`.env` ya configurado — es el único comando que necesitas para actualizar el
-servidor:
-
-```bash
-./scripts/update.sh --daemon             # actualiza y arranca en background
-tail -f /tmp/ec-mcp.log                  # ver el log
-```
-
-Detalles de los pasos manuales equivalentes:
-
-**Paso 0 — Prerrequisitos (una sola vez):**
-
-```bash
-sudo apt update
-sudo apt install -y git python3-venv python3-pip
-```
-
-**Paso 1 — Descargar el proyecto:**
-
-```bash
-git clone https://github.com/Ryuz-crypto/APIIntegration.git
-cd APIIntegration/ec-mcp
-```
-
-**Paso 2 — Instalar el servidor:**
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-```
-
-**Paso 3 — Credenciales reales (los `export` viven solo en esta sesión):**
-
-```bash
-export EC_ORCHESTRATOR_URL="https://TU-ORCHESTRATOR-REAL"
-export EC_ORCHESTRATOR_API_KEY="TU-API-KEY-REAL"
-```
-
-`EC_MCP_AUTH_TOKEN` solo se necesita en el modo HTTP remoto (ver "Uso por HTTP/SSE"); para stdio sáltalo.
-
-**Paso 4 — Conectar tu asistente de IA:** no ejecutas `ec-mcp` a mano; el cliente IA lo lanza por ti. Solo dile dónde vive el servidor. En **Claude Desktop** (Settings → Developer → Edit Config, `claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "ec-mcp": {
-      "command": "/home/TU-USUARIO/APIIntegration/ec-mcp/.venv/bin/ec-mcp",
-      "env": {
-        "EC_ORCHESTRATOR_URL": "https://TU-ORCHESTRATOR-REAL",
-        "EC_ORCHESTRATOR_API_KEY": "TU-API-KEY-REAL"
-      }
-    }
-  }
-}
-```
-
-Reinicia Claude Desktop y aparecerá "ec-mcp" con sus 7 herramientas. Prueba preguntando: *"¿qué appliances tengo?"*, *"muéstrame los túneles"*, *"ejecuta show system"*.
-
-| Quieres... | Haces... |
-| --- | --- |
-| Probar que el servidor arranca | `ec-mcp` en la terminal (Ctrl+C para salir) |
-| Usarlo desde Claude/Cursor/Le Chat | El JSON del Paso 4 — nada más |
-| Exponerlo remoto por ZTNA | `ec-mcp http` + nginx + token (producción) |
-
-### Instalación alternativa con `.env`
-
-```bash
-cp .env.example .env       # revisa EC_ORCHESTRATOR_URL y credenciales
-set -a; source .env; set +a
-```
-
-### Verificación rápida
-
-```bash
-python -m pytest tests -q        # 19 tests
-ec-mcp                           # arranca en stdio; Ctrl+C para salir
-```
-
-
-## Despliegue de un server nuevo (v2.0.0-beta.2, de cero a producción)
-
-Guía completa para dejar un Linux fresco sirviendo ec-mcp estable: MCP en el
-puerto 8000 (auto-arranque) + UI de admin en 8080 (gestión de credenciales
-multi-orchestrator).
-
-### 0. Prerrequisitos
-
-```bash
-sudo apt update && sudo apt install -y git python3-venv python3-pip
-```
-
-### 1. Instalar la versión estable (main)
+### 1. Clonar la versión estable
 
 ```bash
 git clone https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration
-git checkout main            # rama estable (release); develop = trabajo en curso
+git checkout v2.0.0
 cd ec-mcp
-./scripts/install.sh         # interactivo: URL, API key, SSH, túnel; genera .env y token MCP
 ```
 
-### 2. Servicios systemd (arrancan en el boot)
+Para seguir automáticamente futuras versiones estables de `main`, omite el
+`git checkout v2.0.0`.
+
+### 2. Ejecutar el instalador
 
 ```bash
-./scripts/install_service.sh          # ec-mcp  -> 0.0.0.0:8000 (MCP)
-
-# Contraseña de la UI (obligatoria: escucha en 0.0.0.0)
-grep -q '^EC_ADMIN_PASSWORD=' .env || echo 'EC_ADMIN_PASSWORD=una-clave-fuerte' >> .env
-./scripts/install_admin_service.sh   # ec-mcp-admin -> 0.0.0.0:8080 (UI de admin)
+./scripts/install.sh
 ```
 
-Verifica:
+El instalador crea `.venv`, instala el paquete, solicita la configuración y
+genera `.env`. Es idempotente y no reemplaza un `.env` existente.
+
+### 3. Instalar el servicio MCP
 
 ```bash
-systemctl status ec-mcp ec-mcp-admin
+./scripts/install_service.sh
+sudo systemctl enable --now ec-mcp
+systemctl status ec-mcp
 curl http://127.0.0.1:8000/health
-curl -I http://127.0.0.1:8080/
 ```
 
-### 3. Publicar y conectar
-
-- MCP tras tu túnel/proxy con TLS: URL `https://tu-dominio/mcp` + header
-  `Authorization: Bearer $EC_MCP_AUTH_TOKEN` (el token te lo mostró `install.sh`;
-  también está en `.env`). Define `EC_MCP_ALLOWED_HOSTS=dominio,ip` en `.env`.
-- UI de admin: `http://IP-del-server:8080` desde cualquier IP con tu contraseña.
-  Gestiona URLs, API keys y credenciales SSH/enable de **varios orchestrators**
-  y aplica la selección al `.env` con un clic (los secretos nunca se muestran).
-
-### 4. Actualizar a una nueva versión estable
+Para instalar también el panel administrativo:
 
 ```bash
-./scripts/update.sh --daemon && sudo systemctl restart ec-mcp ec-mcp-admin
+./scripts/install_admin_service.sh
+sudo systemctl enable --now ec-mcp-admin
+systemctl status ec-mcp-admin
 ```
 
-`main` solo recibe releases fusionados desde `develop`; para el trabajo diario
-usa `develop`:
+Define una contraseña fuerte en `.env` antes de exponer el panel:
+
+```dotenv
+EC_ADMIN_PASSWORD=example
+```
+
+## Instalación manual
 
 ```bash
-git checkout develop           # desarrollo
-git checkout main && git tag v1.x.0   # corte de release
+sudo apt update
+sudo apt install -y git python3-venv python3-pip
+
+git clone https://github.com/Ryuz-crypto/APIIntegration.git
+cd APIIntegration/ec-mcp
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e .
+
+cp .env.example .env
+chmod 600 .env
 ```
 
-## Uso por stdio (Claude Desktop, Cursor)
+Edita `.env` y configura, como mínimo:
 
-**Claude Desktop** — `claude_desktop_config.json`:
+```dotenv
+EC_ORCHESTRATOR_URL=https://orchestrator.example.com
+EC_ORCHESTRATOR_API_KEY=  # pega aquí la API key
+EC_VERIFY_TLS=true
+```
+
+Nunca subas `.env` al repositorio.
+
+## Autenticación del Orchestrator
+
+Elige uno de estos métodos:
+
+### API key — recomendado
+
+```dotenv
+EC_ORCHESTRATOR_URL=https://orchestrator.example.com
+EC_ORCHESTRATOR_API_KEY=TU-API-KEY
+```
+
+### Usuario y contraseña
+
+```dotenv
+EC_ORCHESTRATOR_URL=https://orchestrator.example.com
+EC_ORCHESTRATOR_USER=usuario
+EC_ORCHESTRATOR_PASSWORD=contraseña
+```
+
+Si se configuran ambos métodos, se usa la API key. Para cuentas con OTP/2FA,
+usa una API key; un OTP de un solo uso no sirve para automatización.
+
+## Modos de ejecución
+
+### stdio
+
+Para clientes locales como Claude Desktop o Cursor:
+
+```bash
+ec-mcp
+```
+
+Ejemplo de configuración:
 
 ```json
 {
   "mcpServers": {
     "edgeconnect": {
-      "command": "/ruta/a/ec-mcp/.venv/bin/ec-mcp",
+      "command": "/ruta/APIIntegration/ec-mcp/.venv/bin/ec-mcp",
       "env": {
-        "EC_ORCHESTRATOR_URL": "https://orchestrator.example.com",
-        "EC_ORCHESTRATOR_API_KEY": "..."
+        "EC_MCP_ENV_FILE": "/ruta/APIIntegration/ec-mcp/.env"
       }
     }
   }
 }
 ```
 
-**Cursor** — `.cursor/mcp.json`: mismo JSON.
-
-Arranca **read-only** por defecto. Para habilitar operaciones de escritura:
-`EC_ALLOW_WRITE_TOOLS=true` (y aun así, cada cambio requiere `confirm=true`).
-
-## Uso por HTTP/SSE (clientes remotos: ChatGPT, Le Chat, agentes)
+### HTTP streamable
 
 ```bash
-# 1. Genera el token (obligatorio; sin él el servidor se niega a arrancar)
-export EC_MCP_AUTH_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-
-# 2. Arranca en streamable-HTTP (bind local; se publica vía proxy/ZTNA)
 ec-mcp http --host 127.0.0.1 --port 8000
+```
 
-# 3. Verifica
+Requiere `EC_MCP_AUTH_TOKEN` de al menos 32 bytes aleatorios:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Cliente remoto:
+
+```text
+URL: https://mcp.example.com/mcp
+Authorization: Bearer <EC_MCP_AUTH_TOKEN>
+```
+
+`/health` es público para probes. `/mcp` requiere bearer token.
+
+### SSE heredado
+
+```bash
+ec-mcp sse --host 127.0.0.1 --port 8000
+```
+
+### Panel administrativo
+
+```bash
+ec-mcp admin
+```
+
+El panel usa `EC_ADMIN_HOST`, `EC_ADMIN_PORT` y
+`EC_ADMIN_PASSWORD`. Los archivos de almacenamiento deben ser escribibles
+por el usuario del servicio y protegidos con permisos restrictivos.
+
+## Archivo de configuración y precedencia
+
+Al iniciar, el servidor busca variables en este orden:
+
+1. Variables ya definidas en el proceso o en systemd.
+2. Archivo indicado por `EC_MCP_ENV_FILE`.
+3. `.env` del directorio de trabajo.
+4. `.env` junto a la instalación del paquete.
+
+Una variable ya presente en el proceso no es reemplazada por el archivo.
+
+## Referencia completa de variables
+
+### Orchestrator
+
+| Variable | Predeterminado | Requerida | Uso |
+|---|---:|---|---|
+| `EC_ORCHESTRATOR_URL` | vacío | Sí | URL base HTTPS del Orchestrator, sin `/` final. |
+| `EC_ORCHESTRATOR_API_KEY` | vacío | Una opción | Token enviado como `X-Auth-Token`; método recomendado. |
+| `EC_ORCHESTRATOR_USER` | vacío | Una opción | Usuario para login cuando no se usa API key. |
+| `EC_ORCHESTRATOR_PASSWORD` | vacío | Con usuario | Contraseña del usuario del Orchestrator. |
+| `EC_VERIFY_TLS` | `true` | No | Verifica el certificado TLS. Usa `false` únicamente en un laboratorio controlado. |
+
+### SSH opcional a appliances
+
+| Variable | Predeterminado | Uso |
+|---|---:|---|
+| `EC_SSH_ENABLED` | `false` | Habilita las herramientas SSH. No afecta `run_show_api`. |
+| `EC_SSH_HOST` | vacío | Host predeterminado. Si está vacío, se intenta resolver desde el inventario del Orchestrator. |
+| `EC_SSH_USER` | vacío | Usuario SSH común. |
+| `EC_SSH_PASSWORD` | vacío | Contraseña SSH. |
+| `EC_SSH_ENABLE_PASSWORD` | vacío | Contraseña de modo enable, si el appliance la solicita. |
+| `EC_SSH_PORT` | `22` | Puerto SSH. |
+| `EC_SSH_AUTH_METHOD` | `auto` | `auto`, `password` o `keyboard-interactive`. |
+
+### Seguridad, límites y auditoría
+
+| Variable | Predeterminado | Uso |
+|---|---:|---|
+| `EC_ALLOW_WRITE_TOOLS` | `false` | Kill switch para escrituras. Aun en `true`, los cambios requieren `confirm=true`. |
+| `EC_ALLOW_DANGEROUS_WRITES` | `false` | Segundo candado para reboot, delete, wipe, factory, shutdown y operaciones equivalentes. |
+| `EC_MAX_WRITES_PER_MINUTE` | `10` | Límite de operaciones de escritura por minuto. |
+| `EC_MAX_OUTPUT_CHARS` | `12000` | Tamaño máximo de respuesta antes del envoltorio de truncado seguro. |
+| `EC_API_CACHE_TTL` | `30` | Duración de caché API en segundos; admite decimales. |
+| `EC_MCP_AUDIT_LOG` | `logs/mcp-audit.jsonl` | Ruta del registro de auditoría JSONL. |
+| `EC_MCP_PROFILES_DIR` | perfiles incluidos | Directorio alternativo de perfiles de compatibilidad. |
+
+### Transporte y proceso
+
+| Variable | Predeterminado | Uso |
+|---|---:|---|
+| `EC_MCP_ENV_FILE` | búsqueda automática | Ruta explícita al archivo `.env`. |
+| `EC_MCP_AUTH_TOKEN` | vacío | Bearer token obligatorio para HTTP/SSE; mínimo 32 bytes aleatorios. |
+| `EC_MCP_HOST` | `127.0.0.1` | Dirección de escucha HTTP/SSE. |
+| `EC_MCP_PORT` | `8000` | Puerto HTTP/SSE. |
+| `EC_MCP_ALLOWED_HOSTS` | vacío | Hosts públicos separados por coma para protección contra DNS rebinding; incluye puerto si el cliente lo envía. |
+| `EC_MCP_JSON_RESPONSE` | `true` | Responde POST con JSON plano; usa `false` para SSE estricto. |
+| `EC_MCP_STATELESS` | `false` | Elimina `Mcp-Session-Id` cuando está en `true`. |
+| `EC_MCP_BUILD_COMMIT` | HEAD local | Identidad de commit para wheels/containers sin directorio `.git`. |
+
+### Panel administrativo
+
+| Variable | Predeterminado | Uso |
+|---|---:|---|
+| `EC_ADMIN_HOST` | `0.0.0.0` | Dirección de escucha del panel. Usa `127.0.0.1` si no debe aceptar conexiones remotas. |
+| `EC_ADMIN_PORT` | `8080` | Puerto del panel. |
+| `EC_ADMIN_PASSWORD` | vacío | Contraseña del panel. Es obligatoria si se expone fuera de loopback. |
+| `EC_ADMIN_PASSWORD_FILE` | `.ec-admin-pass` | Archivo alternativo para almacenar la contraseña del primer inicio. |
+| `EC_ADMIN_STORE` | `.ec-admin.json` | Almacén de configuraciones de Orchestrators. |
+
+## Ejemplo completo de `.env`
+
+```dotenv
+EC_ORCHESTRATOR_URL=https://orchestrator.example.com
+EC_ORCHESTRATOR_API_KEY=example
+EC_ORCHESTRATOR_USER=
+EC_ORCHESTRATOR_PASSWORD=example
+EC_VERIFY_TLS=true
+
+EC_SSH_ENABLED=false
+EC_SSH_HOST=
+EC_SSH_USER=
+EC_SSH_PASSWORD=
+EC_SSH_ENABLE_PASSWORD=
+EC_SSH_PORT=22
+EC_SSH_AUTH_METHOD=auto
+
+EC_ALLOW_WRITE_TOOLS=false
+EC_ALLOW_DANGEROUS_WRITES=false
+EC_MAX_WRITES_PER_MINUTE=10
+EC_MAX_OUTPUT_CHARS=12000
+EC_API_CACHE_TTL=30
+EC_MCP_AUDIT_LOG=logs/mcp-audit.jsonl
+EC_MCP_PROFILES_DIR=
+
+EC_MCP_ENV_FILE=
+EC_MCP_AUTH_TOKEN=example
+EC_MCP_HOST=127.0.0.1
+EC_MCP_PORT=8000
+EC_MCP_ALLOWED_HOSTS=
+EC_MCP_JSON_RESPONSE=true
+EC_MCP_STATELESS=false
+EC_MCP_BUILD_COMMIT=
+
+EC_ADMIN_HOST=127.0.0.1
+EC_ADMIN_PORT=8080
+EC_ADMIN_PASSWORD=  # define una contraseña fuerte
+EC_ADMIN_PASSWORD_FILE=
+EC_ADMIN_STORE=
+```
+
+No dejes `EC_MCP_PROFILES_DIR`, `EC_ADMIN_PASSWORD_FILE` o
+`EC_ADMIN_STORE` definidos con valores vacíos si quieres usar sus rutas
+predeterminadas; elimina esas líneas del archivo.
+
+## Escrituras y confirmación
+
+El servidor inicia en modo de solo lectura:
+
+```dotenv
+EC_ALLOW_WRITE_TOOLS=false
+EC_ALLOW_DANGEROUS_WRITES=false
+```
+
+Para una escritura normal:
+
+1. Define `EC_ALLOW_WRITE_TOOLS=true`.
+2. La primera llamada sin confirmación devuelve el dry-run.
+3. Revisa método, ruta y cuerpo.
+4. Repite la llamada con `confirm=true`.
+
+Las operaciones peligrosas también requieren
+`EC_ALLOW_DANGEROUS_WRITES=true`. No habilites estos interruptores para una
+cuenta del Orchestrator con privilegios que no necesitas.
+
+## Validación
+
+```bash
+source .venv/bin/activate
+python -m pytest tests -q
+ec-mcp --help
+```
+
+Con el servicio activo:
+
+```bash
 curl http://127.0.0.1:8000/health
-# {"status":"ok","service":"ec-mcp"}
-
-curl -X POST http://127.0.0.1:8000/mcp \
-  -H "Authorization: Bearer $EC_MCP_AUTH_TOKEN" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}'
-# → 200 con serverInfo: edgeconnect-sdwan
+journalctl -u ec-mcp -f
 ```
 
-También disponible: `ec-mcp sse` (SSE legacy) y `ec-mcp` (stdio).
+Desde un cliente MCP:
 
-### Autenticación
-
-- Cada petición a `/mcp` exige `Authorization: Bearer <EC_MCP_AUTH_TOKEN>`;
-  sin token o inválido responde `401` antes de crear cualquier sesión MCP
-  (comparación en tiempo constante).
-- `/health` es público: para probes de balanceadores y plataformas ZTNA.
-- El servidor **se niega a arrancar** en modo `http`/`sse` sin token.
-
-### Publicación detrás de TLS / plataforma ZTNA
-
-El MCP nunca debe exponerse directamente a internet. Publica el bind local a
-través de tu reverse proxy con TLS o de tu plataforma ZTNA:
-
-```
-ec-mcp (127.0.0.1:8000, bearer) ⇄ Nginx/ZTNA (TLS, puerto 10001) ⇄ https://mcp.tu-dominio:10001/mcp
+```text
+orchestrator_info()
+list_appliances()
+run_show_api(command="show arp", appliance_id="0.NE")
 ```
 
-Ejemplo de Nginx en [`packaging/nginx/ec-mcp.conf`](packaging/nginx/ec-mcp.conf)
-(streaming habilitado, timeouts largos, `/health` público). Requisitos del proxy:
+La última llamada debe devolver `applied: true`,
+`transport: orchestrator` y la tabla ARP/NDP del appliance.
 
-- `proxy_buffering off` — las respuestas SSE/chunked no deben buferizarse.
-- Timeouts generosos (las sesiones MCP viven minutos).
-- **Mantén el bearer token** aunque el ZTNA autentique al usuario: doble capa.
+## Actualización
 
-Configuración del cliente remoto (ChatGPT connectors, Le Chat, Vibe, otro agente):
-
-```
-URL:     https://mcp.tu-dominio:10001/mcp
-Headers: Authorization: Bearer <EC_MCP_AUTH_TOKEN>
-```
-
-### Conexión desde ChatGPT (connectors) y Vibe
-
-**ChatGPT**: Settings → Connectors → Advanced/Create → "Add new MCP server":
-- URL: `https://mcp.tu-dominio:10001/mcp`
-- Authentication: Bearer token → pega `EC_MCP_AUTH_TOKEN`
-- Guarda, abre el chat, activa el connector "ec-mcp" en el selector de herramientas y prueba: *"lista las operaciones API disponibles"*.
-
-**Vibe / otros clientes con MCP remoto**: misma URL y el header
-`Authorization: Bearer <EC_MCP_AUTH_TOKEN>`. Tras conectar verás las 7 herramientas
-(`orchestrator_info`, `list_api_operations`, `call_read_api`, `list_cli_commands`,
-`run_show_command`, `run_cli_command`, `apply_change`).
-
-Verifica la publicación antes de conectar el cliente (health check público):
+Para una instalación que sigue `main`:
 
 ```bash
-curl https://mcp.tu-dominio:10001/health
+cd APIIntegration/ec-mcp
+./scripts/update.sh --daemon
+sudo systemctl restart ec-mcp
 ```
 
-Respuesta esperada: `{"status":"ok","service":"ec-mcp"}`
+Verifica el despliegue con `orchestrator_info`; debe mostrar
+`package_version: 2.0.0` y el commit desplegado.
 
-## Instalación como servicio (Ubuntu + systemd)
+## Solución de problemas
+
+| Síntoma | Revisión |
+|---|---|
+| `Orchestrator is not configured` | Define `EC_ORCHESTRATOR_URL` y una API key o usuario/contraseña. |
+| HTTP 401 del Orchestrator | Revisa la API key o credenciales. |
+| HTTP 401 en `/mcp` | Revisa el header Bearer y `EC_MCP_AUTH_TOKEN`. |
+| HTTP 421 detrás de proxy | Añade el host público exacto a `EC_MCP_ALLOWED_HOSTS`. |
+| Error TLS | Instala la CA correcta. Usa `EC_VERIFY_TLS=false` solo para diagnóstico en laboratorio. |
+| Herramientas SSH deshabilitadas | Define `EC_SSH_ENABLED=true` y las credenciales SSH. |
+| `run_show_api` falla | Confirma el nePk con `list_appliances` y la conectividad del appliance desde el Orchestrator. |
+| systemd no toma cambios | Ejecuta `sudo systemctl daemon-reload && sudo systemctl restart ec-mcp`. |
+
+## Seguridad operativa
+
+- Usa una API key de solo lectura para observabilidad.
+- Protege `.env` con permisos `600`.
+- No publiques el puerto 8000 directamente en Internet; usa TLS mediante
+  reverse proxy o ZTNA.
+- Mantén el bearer token aunque la capa ZTNA autentique al usuario.
+- Revisa `EC_MCP_AUDIT_LOG` y rota el archivo según tu política.
+- El MCP añade controles, pero los permisos efectivos siguen siendo los de la
+  cuenta configurada en el Orchestrator o appliance.
+
+Ejemplos de Nginx y systemd están en [`packaging/`](packaging/).
+
+## Desarrollo y QA
 
 ```bash
-# 1. Usuario y código
-sudo useradd --system --home /opt/ec-mcp --shell /usr/sbin/nologin ecmcp
-sudo mkdir -p /opt/ec-mcp && sudo chown -R ecmcp:ecmcp /opt/ec-mcp
-sudo -u ecmcp git clone https://github.com/Ryuz-crypto/APIIntegration.git /tmp/repo
-sudo -u ecmcp cp -r /tmp/repo/ec-mcp/* /opt/ec-mcp/
-cd /opt/ec-mcp && sudo -u ecmcp python3 -m venv .venv
-sudo -u ecmcp .venv/bin/pip install -e .
-
-# 2. Configuración (root-only)
-sudo mkdir -p /etc/ec-mcp /var/lib/ec-mcp && sudo chown ecmcp:ecmcp /var/lib/ec-mcp
-sudo cp .env.example /etc/ec-mcp/env
-sudo $EDITOR /etc/ec-mcp/env        # EC_ORCHESTRATOR_*, EC_MCP_AUTH_TOKEN, EC_MCP_AUDIT_LOG=/var/lib/ec-mcp/mcp-audit.jsonl
-sudo chmod 600 /etc/ec-mcp/env && sudo chown root:ecmcp /etc/ec-mcp/env
-
-# 3. Servicio
-sudo cp packaging/systemd/ec-mcp.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now ec-mcp
-systemctl status ec-mcp && curl http://127.0.0.1:8000/health
+python -m pytest tests -q
+ruff check ec_mcp tests
+bandit -r ec_mcp -q
 ```
 
-El servicio corre con endurecimiento systemd (`NoNewPrivileges`,
-`ProtectSystem=strict`, `ProtectHome`) y solo escucha en `127.0.0.1`.
-
-## Configuración (variables de entorno)
-
-Ver [`.env.example`](.env.example) con la referencia completa. Resumen:
-
-| Variable | Default | Descripción |
-|---|---|---|
-| `EC_ORCHESTRATOR_URL` | — | URL del Orchestrator (obligatoria) |
-| `EC_ORCHESTRATOR_API_KEY` | — | API key (o `EC_ORCHESTRATOR_USER`/`PASSWORD`) |
-| `EC_VERIFY_TLS` | `true` | Verificar certificados TLS |
-| `EC_SSH_ENABLED` | `false` | Habilitar tools SSH |
-| `EC_SSH_HOST/USER/PASSWORD/PORT` | — | Credenciales SSH (comunes para todos los appliances). `EC_SSH_HOST` es opcional: si se omite, el host se descubre desde el Orchestrator (por nePk, nombre, IP o serial) en cada consulta |
-| `EC_SSH_AUTH_METHOD` | `auto` | Método SSH: `auto`, `password` o `keyboard-interactive`. `auto` intenta contraseña y después negociación interactiva |
-| `EC_SSH_ENABLE_PASSWORD` | — | Password de enable (comun para todos los appliances) |
-| `EC_ALLOW_WRITE_TOOLS` | `false` | Kill switch global de escritura |
-| `EC_MAX_OUTPUT_CHARS` | `12000` | Truncado de respuestas al LLM |
-| `EC_MCP_AUDIT_LOG` | `logs/mcp-audit.jsonl` | Audit log JSONL |
-| `EC_MCP_AUTH_TOKEN` | — | Bearer token (obligatorio en http/sse) |
-| `EC_MCP_HOST/PORT` | `127.0.0.1:8000` | Bind del transporte HTTP |
-
-## Credenciales EdgeConnect: qué necesitas y cuándo
-
-La IA no "adivina" credenciales: usa las que tú configuras en el entorno (`.env`,
-systemd o bloque `env` del cliente IA). Con ellas ya tiene acceso; lo que puede
-hacer depende de los permisos de esa cuenta contra el Orchestrator/appliance.
-
-| Acceso | Variables | Cuándo se usa |
-| --- | --- | --- |
-| Orchestrator con **API key** | `EC_ORCHESTRATOR_URL` + `EC_ORCHESTRATOR_API_KEY` | Preferido: OaaS y on-premises con token de larga vida |
-| Orchestrator con **usuario/contraseña** | `EC_ORCHESTRATOR_URL` + `EC_ORCHESTRATOR_USER` + `EC_ORCHESTRATOR_PASSWORD` | Cuando no hay API key; el MCP hace login y mantiene la sesión |
-| **Appliances por SSH** (CLI ECOS) | `EC_SSH_ENABLED=true` + `EC_SSH_HOST`/`EC_SSH_USER`/`EC_SSH_PASSWORD` (+ `EC_SSH_PORT`) | Para `run_show_command`/`run_cli_command`; opcional, solo si quieres CLI en vivo |
-
-Notas:
-
-- Puedes configurar ambos métodos del Orchestrator; el MCP prefiere la API key.
-- Para SSH, `run_cli_command`/`run_show_command` aceptan un parámetro `host`
-  para dirigirte a un appliance concreto sin cambiar la configuración.
-- Si el appliance solo anuncia `keyboard-interactive`, define `EC_SSH_AUTH_METHOD=keyboard-interactive`; la credencial de `EC_SSH_PASSWORD` se responde de forma no interactiva a los prompts SSH.
-- Si tu usuario de Orchestrator usa OTP, usa una API key para el Orchestrator
-  (el OTP de un solo uso no sirve para sesiones automatizadas) y
-  usuario/contraseña para SSH a los appliances.
-- Recomendación: API key de **solo lectura** para empezar; amplía permisos de
-  escritura solo cuando confíes en el flujo dry-run → confirm.
-
-## Perfiles generados desde los OAS oficiales
-
-Los perfiles incluidos (`9.3`–`9.6`, ~1550 operaciones cada uno) se generaron
-a partir de las definiciones OpenAPI **oficiales** publicadas por HPE Aruba en
-su developer hub (ReadMe):
-
-- **Orchestrator REST APIs** (695 paths)
-- **Silver Peak Unity ECOS REST APIs** (388 paths, appliance level)
-
-Descarga de los OAS (registries de ReadMe):
-
-```bash
-python - <<'EOF'
-import urllib.request
-for name, uuid in [("orchestrator", "s7ggtll0fec04"), ("ecos-appliance", "aspw2wm6k1xidx")]:
-    urllib.request.urlretrieve(f"https://dash.readme.com/api/v1/api-registry/{uuid}", f"{name}.json")
-EOF
-
-# Regenerar / ampliar perfiles
-python -m ec_mcp.import_oas orchestrator.json --version 9.6 --prefix orchestrator --merge-into 9.6
-python -m ec_mcp.import_oas ecos-appliance.json --version 9.6 --prefix appliance --merge-into 9.6
-```
-
-Cada operación incluye method, path, path/query params, ejemplo de body
-derivado del schema y clasificación de riesgo `read`/`write`. Al publicar HPE
-un OAS nuevo, basta reimportar con `--merge-into`.
-
-### Colecciones Postman oficiales
-
-Las colecciones oficiales del workspace de HPE Aruba ya están incluidas en
-[`api-collections/`](api-collections/) (9.3–9.6) y fusionadas en los perfiles:
-cada versión expone ~2000–2250 operaciones únicas (OAS + Postman deduplicadas
-por método y ruta). Para reimportar o importar otra colección:
-
-```bash
-python -m ec_mcp.import_postman EdgeConnect-Orchestrator.postman_collection.json --version 9.7 --merge-into 9.6
-```
-
-## Catálogo CLI ECOS (1367 comandos)
-
-Extraído del **CLI Reference oficial** de HPE Aruba EdgeConnect SD-WAN:
-
-| Categoría | Comandos | Ejecución |
-|---|---|---|
-| Monitoring (`show ...`) | 249 en whitelist | Directa (read) |
-| Troubleshooting (`ping`, `tcpdump`, `mtr`...) | 8 | Directa (diagnostic) |
-| Alarm (`logging ...`) | 5 | Dry-run + confirm |
-| Administration (`aaa ...`, `image ...`, `configuration ...`) | 106 | Dry-run + confirm |
-| Configuration (`interface ...`, `bgp ...`, `ospf ...`, `nat-map ...`...) | ~240 | Dry-run + confirm |
-| Negation (`no ...`) | 135 | Dry-run + confirm |
-
-```
-run_cli_command("show interfaces tunnel 1/2")          → ejecuta directo
-run_cli_command("ping 10.0.0.1")                       → ejecuta directo
-run_cli_command("interface shutdown 1")                → dry-run
-run_cli_command("interface shutdown 1", confirm=true)  → ejecuta (requiere EC_ALLOW_WRITE_TOOLS)
-```
-
-### Flujo de autorización para cambios
-
-Cada cambio (CLI o API) pasa por dos candados y una confirmación:
-
-1. **Kill switch**: `EC_ALLOW_WRITE_TOOLS=true` en el entorno; si está apagado, el MCP nunca ejecuta escrituras.
-2. **Dry-run por defecto**: el primer intento devuelve exactamente qué ejecutaría (`would_execute` / método+path+body), sin tocar el equipo.
-3. **El "aceptar"**: el asistente reenvía la misma llamada con `confirm=true` y el cambio se ejecuta, quedando registrado en el audit log.
-
-Para el asistente es tan simple como: pide el cambio → ve el dry-run → pregunta al usuario → reenvía con `confirm=true`.
-
-Comandos fuera del catálogo se rechazan; metacaracteres de shell (`;`, `` ` ``,
-`&&`, `$()`) bloqueados; todo queda en el audit log.
-
-## Seguridad y hardening
-
-El servidor aplica un modelo de defensa por capas, alineado con la revisión de seguridad:
-
-- **Token de acceso (transporte HTTP/SSE)**: mínimo 32 bytes aleatorios (`secrets.token_urlsafe(32)`); el servidor rechaza arrancar con tokens débiles. Soporta **dos tokens vigentes** (primario + `EC_MCP_AUTH_TOKEN`) para rotar sin corte de servicio.
-- **Fuerza bruta**: máximo 5 intentos de autenticación fallidos por IP por minuto; al superarlo, responde `429` durante la ventana.
-- **Rutas sin autenticación**: solo `/health`, que devuelve exclusivamente `{"status":"ok"}` sin versión, hosts ni configuración.
-- **Comandos CLI**: la allowlist de `show` es una expresión regular **anclada** (`^...$`) que solo admite argumentos alfanuméricos seguros; se rechazan `;`, `|`, `&`, backticks, `$(...)`, saltos de línea, caracteres de control y Unicode.
-- **Permisos de escritura granulares**: `EC_ALLOW_WRITE_TOOLS=true` habilita escrituras normales; las operaciones peligrosas (reboot, suspend traffic, delete, wipe, factory, ...) exigen además `EC_ALLOW_DANGEROUS_WRITES=true`. Límite configurable de escrituras por minuto (`EC_MAX_WRITES_PER_MINUTE`).
-- **Redacción de secretos**: las salidas y la auditoría redactan passwords, community strings SNMP y claves (`***REDACTED***`).
-- **Auditoría**: registra quién (tool), cuándo, qué operación, resultado y dry-run; nunca guarda tokens, contraseñas ni cuerpos completos de peticiones (solo las claves del body).
-- **CI**: ruff, bandit, pip-audit y gitleaks en cada push/PR a `ec-mcp/**`.
-- **Hosts públicos**: al publicar detrás de un reverse proxy, define `EC_MCP_ALLOWED_HOSTS=dominio.com` (sin esquema ni puerto). El SDK MCP activa protección DNS-rebinding que rechaza con 421 cualquier `Host` no declarado; esta variable lo autoriza.
-- **Respuestas JSON**: `EC_MCP_JSON_RESPONSE=true` (default) hace que los POST respondan con cuerpo JSON plano (`application/json`) en lugar de abrir un stream SSE por respuesta. Necesario detrás de proxies/túneles que cortan conexiones keep-alive inactivas: en modo SSE el SDK puede terminar la sesión recién creada (`ClosedResourceError`) y el cliente recibe un initialize 200 con cuerpo vacío. Desactívalo con `false` si tu cliente exige SSE estricto.
-
-## Auditoría
-
-Cada invocación de tool registra en el JSONL: timestamp UTC, tool, acción,
-target, resultado, dry-run/real y detalles. Ejemplo de línea:
-
-```json
-{"timestamp":"2026-09-29T05:10:01+00:00","tool":"apply_change","action":"appliance.suspend_traffic","target":"/appliance/suspend/3.NE","result":"dry-run","dry_run":true,"details":{"confirmed":false}}
-```
-
-## Flujo de trabajo típico
-
-```
-1. orchestrator_info          → detecta versión y perfil
-2. list_api_operations        → el asistente descubre las operaciones y params
-3. call_read_api("orchestrator.topology")
-4. run_cli_command("show interfaces tunnel 1/2")
-5. apply_change(..., confirm=false)   → dry-run: muestra el cambio exacto
-6. apply_change(..., confirm=true)    → lo ejecuta (si el usuario tiene permiso)
-```
-
-## Estado y validación
-
-- Tests: 49 (perfiles, whitelist, catálogo, caché/métricas, importadores OAS/Postman, auth HTTP en vivo).
-- CI: pytest + smoke test stdio en cada push/PR que toque `ec-mcp/`.
-- Pendiente: validar paths de escritura contra un Orchestrator real en lab
-  antes de habilitar `EC_ALLOW_WRITE_TOOLS` en producción.
+CI ejecuta pruebas, smoke test MCP, Ruff, Bandit, pip-audit y gitleaks.
 
 ## Licencia
 
-Igual que el repositorio contenedor ([LICENSE](../LICENSE)).
+Consulta [`LICENSE`](../LICENSE).
