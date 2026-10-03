@@ -1,7 +1,7 @@
 # Protocolo completo de Q&A — EdgeConnect MCP (`edgeconnect_mcp_6244`)
 
 **Audiencia**: QA con acceso al conector MCP (sin acceso al repositorio).
-**Build esperada**: rev. 10 — `orchestrator_info().build.git_commit == 2a5508a` (ver T0).
+**Build esperada**: ec-mcp `2.0.0b1` — `orchestrator_info().build.package_version == 2.0.0b1` y `build.git_commit` presente y distinto de `unknown` (ver T0).
 **Orquestador de referencia**: HPE Aruba EdgeConnect 9.7.2.40591 · perfil 9.6 · 6 appliances (`1.NE, 0.NE, 2.NE, 3.NE, 14.NE, 4.NE`).
 
 **Reglas transversales**:
@@ -19,8 +19,8 @@
 ```json
 orchestrator_info({})
 ```
-**PASS**: `build.git_commit` == commit esperado de la revisión. `build.package_version` presente.
-**FAIL conocido**: `git_commit: "unknown"` → despliegue no es desde checkout git (wheel/sit-packages): reportar, es hallazgo de despliegue.
+**PASS**: `build.package_version == 2.0.0b1`; `build.git_commit` está presente, no es `unknown` y corresponde al commit desplegado.
+**FAIL conocido**: `git_commit` ausente o `unknown` → el despliegue no es verificable; reportarlo como hallazgo de despliegue.
 **Si falla**: detener. Reparar despliegue antes de continuar.
 
 ### T0.2 — Versión y perfil del orquestador
