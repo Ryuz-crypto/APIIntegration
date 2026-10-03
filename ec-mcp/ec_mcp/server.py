@@ -463,24 +463,43 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return {**payload, "data": projected_rows}
         return projected_rows
 
+    WAN_FIELD_ALIASES = {
+        "appliance": {"nepk", "ne"},
+        "tunnel": {"tunnel", "tunnelname", "tunnelid"},
+        "latency": {"latency", "avg_latency", "max_latency_max", "min_latency_min"},
+        "jitter": {"jitter", "avg_jitter", "max_jitter"},
+        "loss": {"loss", "pre_pct_loss", "post_pct_loss", "max_pre_pct_loss", "max_post_pct_loss"},
+        "mos": {"mos", "min_mos"},
+        "overlay": {"overlay", "overlayid", "overlay_id"},
+    }
+
     def _project_fields(node: Any, field_list: list[str]) -> Any:
-        """Apply a client-requested field projection at the tunnel/KPI level."""
+        """Project friendly KPI names onto the raw field names returned by Orchestrator."""
         if isinstance(node, list):
             return [_project_fields(item, field_list) for item in node]
         if not isinstance(node, dict):
             return node
-        lowered = {str(k).lower(): k for k in node}
-        kept = {}
-        for f in field_list:
-            key = lowered.get(f.strip().lower())
-            if key is not None:
-                kept[key] = _project_fields(node[key], field_list)
+        wanted = set()
+        for field in field_list:
+            normalized = field.strip().lower()
+            wanted.update(WAN_FIELD_ALIASES.get(normalized, {normalized}))
+        kept = {
+            key: _project_fields(value, field_list)
+            for key, value in node.items()
+            if str(key).lower() in wanted
+        }
+        nested = {
+            key: _project_fields(value, field_list)
+            for key, value in node.items()
+            if isinstance(value, (dict, list))
+        }
+        nested = {key: value for key, value in nested.items() if value not in ({}, [])}
         if kept:
-            return kept
-        nested = {k: _project_fields(v, field_list) for k, v in node.items() if isinstance(v, (dict, list))}
-        if any(nested.values()):
+            return {**nested, **kept}
+        if nested:
             return nested
-        return {k: v for k, v in node.items() if str(k).lower() in ("tunnelname", "tunnel", "tunnelid")} or node
+        identifiers = {"tunnelname", "tunnel", "tunnelid", "nepk", "ne", "overlayid"}
+        return {key: value for key, value in node.items() if str(key).lower() in identifiers}
 
     def brownout_state(payload: Any) -> list[dict[str, Any]]:
         rows = payload if isinstance(payload, list) else payload.get("tunnels") or payload.get("data") or [] if isinstance(payload, dict) else []
@@ -600,18 +619,35 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             has_more = False
             for v in versions:
                 profile_ops = engine._profiles[v]["operations"]
-                ops = []
-                lowered_search = search.lower()
+                ranked_ops: list[tuple[int, str]] = []
+                lowered_search = search.strip().lower()
                 lowered_prefix = prefix.lower()
+                search_terms = set(re.findall(r"[a-z0-9]+", lowered_search))
+                semantic_aliases = {
+                    "business": {"overlay"},
+                    "intent": {"overlay"},
+                    "bio": {"overlay"},
+                    "ztp": {"spportal", "discovered", "preconfiguration"},
+                    "discover": {"discovered"},
+                    "latency": {"tunnel", "health"},
+                    "loss": {"tunnel", "health"},
+                    "jitter": {"tunnel", "health"},
+                }
+                expanded_terms = set(search_terms)
+                for term in search_terms:
+                    expanded_terms.update(semantic_aliases.get(term, set()))
                 for op_id in sorted(profile_ops):
                     spec = profile_ops[op_id]
                     if lowered_prefix and not op_id.lower().startswith(lowered_prefix):
                         continue
-                    if lowered_search and lowered_search not in op_id.lower() and lowered_search not in spec["path"].lower():
+                    haystack = f'{op_id} {spec["path"]}'.lower()
+                    score = sum(1 for term in expanded_terms if term in haystack)
+                    if lowered_search and lowered_search not in haystack and score == 0:
                         continue
                     if method and spec["method"].upper() != method.upper():
                         continue
-                    ops.append(op_id)
+                    ranked_ops.append((-score, op_id))
+                ops = [op_id for _, op_id in sorted(ranked_ops)]
                 start = page * page_size
                 chunk = ops[start : start + page_size]
                 has_more = has_more or start + page_size < len(ops)
@@ -939,8 +975,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_ztp_status() -> str:
-        """Zero-Touch Provisioning status with bounded, credential-free discovery rows."""
+    def get_ztp_status(offset: int = 0, limit: int = 20, fields: str = "") -> str:
+        """Zero-Touch Provisioning status with paginated, credential-free discovery rows."""
         try:
             client = require_client()
             if client is None:
@@ -965,12 +1001,25 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                                 if key in info
                             }
                         discovered.append(row)
+            total = len(discovered)
+            offset = max(0, int(offset))
+            limit = min(max(1, int(limit)), 200)
+            field_list = [field.strip() for field in fields.split(",") if field.strip()]
+            page = discovered[offset : offset + limit]
+            if field_list:
+                page = [
+                    {key: item.get(key) for key in field_list if key in item}
+                    for item in page
+                ]
             result = {
                 "manual_provisioning": manual,
-                "discovered_count": len(discovered),
-                "discovered": discovered,
+                "discovered_count": total,
+                "discovered": page,
+                "offset": offset,
+                "returned": len(page),
+                "next_offset": offset + len(page) if offset + len(page) < total else None,
             }
-            audit.record("get_ztp_status", "read", settings.orchestrator_url, "ok", details={"discovered": len(discovered)})
+            audit.record("get_ztp_status", "read", settings.orchestrator_url, "ok", details={"discovered": total})
             return json_result({"data": result}, settings.max_output_chars)
         except Exception as error:
             audit.record("get_ztp_status", "read", settings.orchestrator_url, f"error: {error}")
@@ -1315,6 +1364,20 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 if not isinstance(parsed, dict):
                     raise SecurityError("body_json must be a JSON object")
                 body = parsed
+            example = operation_details(version, operation_id).get("body_example")
+            placeholder_example = isinstance(example, dict) and any(
+                str(key).lower().startswith("placeholderproperty") for key in example
+            )
+            if confirm and operation.method in ("POST", "PUT", "PATCH") and not body:
+                raise SecurityError(
+                    "Refusing a confirmed write with an empty JSON body. "
+                    "Discover the required schema or copy a known-good object before applying."
+                )
+            if confirm and placeholder_example:
+                raise SecurityError(
+                    "Refusing a confirmed write because the catalog only has placeholder fields "
+                    "for this endpoint. Capture a valid schema or known-good object first."
+                )
             audit_entry = {
                 **operation_details(version, operation_id),
                 "resolved_path": operation.path,
