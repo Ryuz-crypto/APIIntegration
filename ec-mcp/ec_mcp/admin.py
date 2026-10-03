@@ -22,6 +22,7 @@ import json
 import os
 import secrets
 import time
+from math import ceil
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -37,8 +38,18 @@ from .web_update import status as update_status
 SESSIONS: dict[str, float] = {}
 SESSION_TTL = 3600.0
 LOGIN_FAILURES: dict[str, list[float]] = {}
-LOGIN_MAX_FAILURES = 5
-LOGIN_WINDOW_SECONDS = 60.0
+
+
+def _positive_number(name: str, default: float) -> float:
+    try:
+        value = float(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+LOGIN_MAX_FAILURES = int(_positive_number("EC_ADMIN_LOGIN_MAX_FAILURES", 5))
+LOGIN_WINDOW_SECONDS = _positive_number("EC_ADMIN_LOGIN_WINDOW_SECONDS", 60.0)
 
 
 def _store_path() -> Path:
@@ -129,15 +140,32 @@ async def login_post(request):
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
     failures = [t for t in LOGIN_FAILURES.get(client_ip, []) if now - t < LOGIN_WINDOW_SECONDS]
-    if len(failures) >= LOGIN_MAX_FAILURES:
+    valid = bool(password) and _verify_password(password, allow_first_run=_loopback_only(host))
+    if valid:
+        LOGIN_FAILURES.pop(client_ip, None)
+    elif len(failures) >= LOGIN_MAX_FAILURES:
+        retry_after = max(1, ceil(LOGIN_WINDOW_SECONDS - (now - min(failures))))
         return JSONResponse(
-            {"ok": False, "error": "Demasiados intentos; espera un minuto."},
+            {
+                "ok": False,
+                "error": f"Demasiados intentos. Reintenta en {retry_after} segundos.",
+                "retry_after_seconds": retry_after,
+            },
             status_code=429,
+            headers={"Retry-After": str(retry_after)},
         )
-    if not password or not _verify_password(password, allow_first_run=_loopback_only(host)):
+    else:
         failures.append(now)
         LOGIN_FAILURES[client_ip] = failures
-        return JSONResponse({"ok": False})
+        remaining = max(0, LOGIN_MAX_FAILURES - len(failures))
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": f"Contraseña incorrecta. Intentos restantes: {remaining}.",
+                "remaining_attempts": remaining,
+            },
+            status_code=401,
+        )
     token = secrets.token_urlsafe(32)
     SESSIONS[token] = time.time()
     response = JSONResponse({"ok": True})
