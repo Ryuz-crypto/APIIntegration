@@ -29,6 +29,7 @@ from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Route
 
 from .admin_config import public_config, update_env
+from .admin_page import PAGE
 from .web_update import check as check_update
 from .web_update import queue_restart, queue_update
 from .web_update import status as update_status
@@ -38,8 +39,6 @@ SESSION_TTL = 3600.0
 LOGIN_FAILURES: dict[str, list[float]] = {}
 LOGIN_MAX_FAILURES = 5
 LOGIN_WINDOW_SECONDS = 60.0
-
-from .admin_page import PAGE
 
 
 def _store_path() -> Path:
