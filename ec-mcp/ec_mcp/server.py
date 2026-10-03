@@ -20,6 +20,13 @@ from .cli_catalog import (
 from .compat import CompatibilityEngine, load_profiles
 from .config import Settings
 from .orchestrator_client import OrchestratorClient
+from .overlay_workflow import (
+    OverlayPlanStore,
+    extract_created_overlay_id,
+    extract_overlays,
+    prepare_overlay_plan,
+    select_overlay,
+)
 from .security import SecurityError, redact_secrets, redact_sensitive_values
 from .ssh_ecos import ApplianceSshPool
 
@@ -42,6 +49,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         cli_risk_by_command[entry["command"]] = entry["risk"]
 
     shared_client: OrchestratorClient | None = None
+    overlay_plans = OverlayPlanStore()
 
     def require_client() -> OrchestratorClient | None:
         nonlocal shared_client
@@ -623,6 +631,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 lowered_search = search.strip().lower()
                 lowered_prefix = prefix.lower()
                 search_terms = set(re.findall(r"[a-z0-9]+", lowered_search))
+                search_terms.difference_update(
+                    {"orchestrator", "appliance", "operation", "api", "get", "post", "put", "delete"}
+                )
                 semantic_aliases = {
                     "business": {"overlay"},
                     "intent": {"overlay"},
@@ -1327,6 +1338,265 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
         finally:
             pool.close_all()
+
+    OVERLAY_GET_OPERATION = "orchestrator.getoverlay323"
+    OVERLAY_CREATE_OPERATION = "orchestrator.addnewoverlay315"
+    OVERLAY_DELETE_OPERATION = "orchestrator.deleteexistingoverlay322"
+
+    def _read_overlays(client: OrchestratorClient, version: str) -> Any:
+        return client.call(version, OVERLAY_GET_OPERATION)
+
+    @mcp.tool()
+    def list_overlay_sources(limit: int = 20) -> str:
+        """List existing Business Intent Overlays that can be used as safe clone sources."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            limit = min(max(1, int(limit)), 100)
+            rows = extract_overlays(_read_overlays(client, version))
+            summaries = [
+                {
+                    "id": row.get("id") or row.get("overlayId"),
+                    "name": row.get("name"),
+                    "topology_type": (row.get("topology") or {}).get("topologyType")
+                    if isinstance(row.get("topology"), dict)
+                    else None,
+                    "hubs": (row.get("topology") or {}).get("hubs", [])
+                    if isinstance(row.get("topology"), dict)
+                    else [],
+                }
+                for row in rows[:limit]
+            ]
+            return json_result(
+                {"overlays": summaries, "total_count": len(rows), "returned": len(summaries)},
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record("list_overlay_sources", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def prepare_overlay_clone(
+        source_overlay: str,
+        target_name: str,
+        overrides_json: str = "",
+    ) -> str:
+        """Read and sanitize an existing BIO, validate a parameterized clone, and return a diff plus exact confirmation phrase. This tool never writes."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            payload = _read_overlays(client, version)
+            source = select_overlay(payload, source_overlay)
+            existing_names = {
+                str(row.get("name", "")).casefold() for row in extract_overlays(payload)
+            }
+            if target_name.casefold() in existing_names:
+                raise SecurityError(f"An overlay named {target_name!r} already exists")
+            plan = prepare_overlay_plan(source, target_name, overrides_json)
+            overlay_plans.put(plan)
+            audit.record(
+                "prepare_overlay_clone",
+                "preview",
+                settings.orchestrator_url,
+                "ok",
+                dry_run=True,
+                details={"plan_id": plan.plan_id, "source": plan.source_name, "target": target_name},
+            )
+            return json_result(
+                {
+                    "dry_run": True,
+                    "plan": plan.public(),
+                    "next_step": "Review the candidate and diff, then call apply_overlay_plan with confirm=true and the exact confirmation phrase.",
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record("prepare_overlay_clone", "preview", settings.orchestrator_url, f"error: {error}", dry_run=True)
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def preview_overlay_plan(plan_id: str) -> str:
+        """Return the immutable candidate, diff, status and confirmation phrase for a prepared overlay plan."""
+        try:
+            return json_result({"plan": overlay_plans.get(plan_id).public()}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def apply_overlay_plan(
+        plan_id: str,
+        confirmation: str = "",
+        confirm: bool = False,
+    ) -> str:
+        """Apply a prepared BIO clone, then read it back for a health check. Requires confirm=true and the plan-specific phrase."""
+        try:
+            plan = overlay_plans.get(plan_id)
+            if plan.status != "prepared":
+                raise SecurityError(f"Plan status is {plan.status!r}; only prepared plans can be applied")
+            if not confirm:
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "plan": plan.public(),
+                        "hint": "Set confirm=true and pass confirmation_required exactly.",
+                    },
+                    settings.max_output_chars,
+                )
+            if confirmation != plan.confirmation:
+                raise SecurityError("Confirmation phrase does not match this plan")
+            require_writes(OVERLAY_CREATE_OPERATION)
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            before = _read_overlays(client, version)
+            if any(
+                str(row.get("name", "")).casefold() == plan.target_name.casefold()
+                for row in extract_overlays(before)
+            ):
+                raise SecurityError(f"An overlay named {plan.target_name!r} already exists")
+            result = client.call(
+                version,
+                OVERLAY_CREATE_OPERATION,
+                json_body=plan.candidate,
+            )
+            after = _read_overlays(client, version)
+            plan.created_overlay_id = extract_created_overlay_id(result, after, plan.target_name)
+            plan.apply_result = result
+            if not plan.created_overlay_id:
+                plan.status = "verification_failed"
+                rollback = {"attempted": False, "reason": "Created overlay ID could not be determined safely"}
+                result_payload = {
+                    "applied": True,
+                    "verified": False,
+                    "plan": plan.public(include_candidate=False),
+                    "rollback": rollback,
+                }
+            else:
+                plan.status = "applied"
+                result_payload = {
+                    "applied": True,
+                    "verified": True,
+                    "health_check": {
+                        "overlay_id": plan.created_overlay_id,
+                        "name": plan.target_name,
+                        "present_after_create": True,
+                    },
+                    "plan": plan.public(include_candidate=False),
+                }
+            audit.record(
+                "apply_overlay_plan",
+                OVERLAY_CREATE_OPERATION,
+                settings.orchestrator_url,
+                plan.status,
+                dry_run=False,
+                details={"plan_id": plan.plan_id, "overlay_id": plan.created_overlay_id},
+            )
+            return json_result(result_payload, settings.max_output_chars)
+        except Exception as error:
+            audit.record("apply_overlay_plan", OVERLAY_CREATE_OPERATION, settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def verify_overlay_plan(plan_id: str) -> str:
+        """Read the Orchestrator and verify that the planned overlay exists with the expected name."""
+        try:
+            plan = overlay_plans.get(plan_id)
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            rows = extract_overlays(_read_overlays(client, client.resolve_active_profile()))
+            match = next(
+                (
+                    row
+                    for row in rows
+                    if str(row.get("name", "")).casefold() == plan.target_name.casefold()
+                ),
+                None,
+            )
+            if match:
+                plan.created_overlay_id = str(match.get("id") or match.get("overlayId") or "")
+                if plan.status == "verification_failed":
+                    plan.status = "applied"
+            return json_result(
+                {
+                    "verified": match is not None,
+                    "overlay": {
+                        "id": (match or {}).get("id") or (match or {}).get("overlayId"),
+                        "name": (match or {}).get("name"),
+                    }
+                    if match
+                    else None,
+                    "plan": plan.public(include_candidate=False),
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def rollback_overlay_plan(
+        plan_id: str,
+        confirmation: str = "",
+        confirm: bool = False,
+    ) -> str:
+        """Delete an overlay created by this transaction. Requires dangerous writes and ROLLBACK <plan_id>."""
+        try:
+            plan = overlay_plans.get(plan_id)
+            expected = f"ROLLBACK {plan.plan_id}"
+            if not confirm:
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_delete_overlay_id": plan.created_overlay_id,
+                        "confirmation_required": expected,
+                    },
+                    settings.max_output_chars,
+                )
+            if confirmation != expected:
+                raise SecurityError("Rollback confirmation phrase does not match this plan")
+            if not plan.created_overlay_id:
+                raise SecurityError("No verified created overlay ID is available for rollback")
+            require_writes(OVERLAY_DELETE_OPERATION)
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            result = client.call(
+                version,
+                OVERLAY_DELETE_OPERATION,
+                overlayId=plan.created_overlay_id,
+            )
+            rows = extract_overlays(_read_overlays(client, version))
+            still_present = any(
+                str(row.get("id") or row.get("overlayId") or "") == plan.created_overlay_id
+                for row in rows
+            )
+            plan.status = "rollback_failed" if still_present else "rolled_back"
+            audit.record(
+                "rollback_overlay_plan",
+                OVERLAY_DELETE_OPERATION,
+                settings.orchestrator_url,
+                plan.status,
+                dry_run=False,
+                details={"plan_id": plan.plan_id, "overlay_id": plan.created_overlay_id},
+            )
+            return json_result(
+                {
+                    "rolled_back": not still_present,
+                    "verified_absent": not still_present,
+                    "result": result,
+                    "plan": plan.public(include_candidate=False),
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record("rollback_overlay_plan", OVERLAY_DELETE_OPERATION, settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
 
     @mcp.tool()
     def apply_change(

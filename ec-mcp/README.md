@@ -1,7 +1,7 @@
 # ec-mcp — EdgeConnect SD-WAN MCP server
 
-**Versión 3.0 base: 3.0.0b3**  
-Esta entrega inicia la línea 3.0. La base 2.0.0 fue la versión estable anterior; 3.0.0b3 incorpora el control plane web y prepara el flujo ZTP.
+**Versión 3.0 base: 3.0.0b5**  
+Esta entrega inicia la línea 3.0. La base 2.0.0 fue la versión estable anterior; 3.0.0b5 incorpora el primer flujo transaccional de configuración para Business Intent Overlays.
 
 `ec-mcp` conecta asistentes compatibles con Model Context Protocol (MCP) con
 HPE Aruba Networking EdgeConnect SD-WAN. Puede consultar el Orchestrator y los
@@ -492,6 +492,37 @@ anterior y conserva el diagnóstico sanitizado en
 
 No se guarda el token en la solicitud, la URL Git no contiene credenciales y
 los secretos se redactan de los mensajes públicos.
+
+## Flujo transaccional de Business Intent Overlays
+
+La versión `3.0.0b5` permite crear un BIO a partir de un overlay válido ya
+existente, sin depender del esquema placeholder del OpenAPI:
+
+```text
+list_overlay_sources()
+prepare_overlay_clone(source_overlay="RealTime", target_name="NuevaSucursal")
+preview_overlay_plan(plan_id="...")
+apply_overlay_plan(plan_id="...", confirmation="CREAR OVERLAY ...", confirm=true)
+verify_overlay_plan(plan_id="...")
+rollback_overlay_plan(plan_id="...", confirmation="ROLLBACK ...", confirm=true)
+```
+
+El flujo:
+
+1. lee el objeto fuente desde el Orchestrator;
+2. elimina IDs y metadatos administrados por el servidor;
+3. aplica `overrides_json` mediante deep merge;
+4. exige nombre nuevo, topología y reglas de match válidas;
+5. presenta candidato y diff sin escribir;
+6. genera una confirmación única con vencimiento;
+7. crea exactamente una vez;
+8. vuelve a leer el inventario para verificar nombre e ID;
+9. conserva únicamente el ID verificado para un posible rollback.
+
+Los planes viven en memoria durante 15 minutos. Reiniciar el MCP invalida planes
+no aplicados. El rollback requiere además `EC_ALLOW_DANGEROUS_WRITES=true`,
+porque elimina configuración. No se permite usar este flujo para borrar un
+overlay que no haya sido creado por el mismo plan.
 
 ## Objetivo ZTP de la línea 3.0
 
