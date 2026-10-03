@@ -1,7 +1,7 @@
 # ec-mcp — EdgeConnect SD-WAN MCP server
 
 **Versión estable: 2.0.0**  
-La rama `main` y la etiqueta `v2.0.0` representan la versión estable.
+La rama `main` contiene la versión estable 2.0.0.
 
 `ec-mcp` conecta asistentes compatibles con Model Context Protocol (MCP) con
 HPE Aruba Networking EdgeConnect SD-WAN. Puede consultar el Orchestrator y los
@@ -57,12 +57,12 @@ usa SSH. `appliance_id` acepta nePk, nombre, IP o serial del appliance.
 ```bash
 git clone https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration
-git checkout v2.0.0
+git checkout main
 cd ec-mcp
 ```
 
-Para seguir automáticamente futuras versiones estables de `main`, omite el
-`git checkout v2.0.0`.
+El checkout de `main` permite recibir futuras actualizaciones estables mediante
+`./scripts/update.sh --daemon`.
 
 ### 2. Ejecutar el instalador
 
