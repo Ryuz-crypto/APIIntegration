@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROOT_README = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 EC_README = (REPO_ROOT / "ec-mcp" / "README.md").read_text(encoding="utf-8")
