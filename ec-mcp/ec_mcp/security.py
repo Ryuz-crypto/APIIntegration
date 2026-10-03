@@ -108,6 +108,7 @@ CONTROL_OR_NON_ASCII = re.compile(r"[\x00-\x1f\x7f]|[^\x00-\x7f]")
 SECRET_PATTERNS = [
     re.compile(r"(?i)(\b(?:password|passwd|md5password|secret|passphrase|psk)\s*[:=]\s*)\S+"),
     re.compile(r"(?i)(\bcommunity(?:\s+string)?\s+)(?!string\b)\S+"),
+    re.compile(r"(?i)([\"'](?:password|passwd|md5Password|secret|passphrase|psk|userName)[\"']\s*:\s*[\"'])[^\"']*(?=[\"'])"),
 ]
 
 DENIED_PATTERNS = [

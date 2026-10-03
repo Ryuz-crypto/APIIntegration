@@ -235,7 +235,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         )
 
     def resolve_ne_pks(client: OrchestratorClient, appliance_ids: str) -> list[str]:
-        if not appliance_ids.strip():
+        if not appliance_ids.strip() or appliance_ids.strip().lower() == "all":
             return [str(a.get("nePk")) for a in client.list_appliances()]
         resolved = []
         for part in appliance_ids.split(","):
@@ -291,14 +291,43 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except Exception:
             return {}
 
-    def kpi_alarm_counts(client: OrchestratorClient) -> Any:
+    def kpi_alarm_counts(client: OrchestratorClient, ne_pk: str = "") -> Any:
         for path in ("/alarm/count/appliance", "/gms/rest/alarm/count/appliance"):
             try:
-                return client.get_raw(path)
+                return client.get_raw(path, **({"nePk": ne_pk} if ne_pk else {}))
             except RuntimeError as error:
                 if "HTTP 404" not in str(error):
                     raise
         return {"data": None, "reason": "alarm count endpoint not available on this Orchestrator version"}
+
+    def kpi_alarm_counts_aggregate(client: OrchestratorClient, targets: list[str]) -> dict[str, Any]:
+        per_appliance: list[dict[str, Any]] = []
+        total_by_severity: dict[str, int] = {}
+        total = 0
+        for ne_pk in targets:
+            entry: dict[str, Any] = {"nePk": ne_pk}
+            try:
+                payload = kpi_alarm_counts(client, ne_pk)
+                counts = payload if isinstance(payload, list) else (payload or {}).get("data") or []
+                if isinstance(counts, dict):
+                    counts = [counts]
+                appliance_total = 0
+                for row in counts:
+                    if not isinstance(row, dict):
+                        continue
+                    row_total = 0
+                    for key, value in row.items():
+                        lowered = key.lower()
+                        if lowered in ("critical", "warning", "major", "minor", "info", "cleared") and isinstance(value, (int, float)):
+                            total_by_severity[lowered] = total_by_severity.get(lowered, 0) + int(value)
+                            row_total += int(value)
+                    appliance_total += row_total or int(row.get("total") or row.get("count") or 0)
+                entry["total"] = appliance_total
+                total += appliance_total
+            except Exception as error:
+                entry["error"] = str(error)[:200]
+            per_appliance.append(entry)
+        return {"per_appliance": per_appliance, "total_alarms": total, "by_severity": total_by_severity}
 
     def brownout_state(payload: Any) -> list[dict[str, Any]]:
         rows = payload if isinstance(payload, list) else payload.get("tunnels") or payload.get("data") or [] if isinstance(payload, dict) else []
@@ -643,12 +672,17 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def get_active_alarms(appliance_id: str = "") -> str:
-        """Active alarm counts per appliance from /alarm/count/appliance (the /alarm/gms detail endpoint rejects view/severity filters — known upstream contract). Use it for 'how many alarms are active right now' instead of alarm/gms."""
+        """Active alarm counts per appliance from /alarm/count/appliance (the /alarm/gms detail endpoint rejects view/severity filters — known upstream contract). appliance_id accepts 'all' (or empty) for every appliance, or a single nePk/name/IP; with 'all' the counts are aggregated per appliance and by severity. Use it for 'how many alarms are active right now' instead of alarm/gms."""
         try:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
-            payload = kpi_alarm_counts(client)
+            if appliance_id.strip().lower() == "all":
+                targets = resolve_ne_pks(client, "all")
+                payload = kpi_alarm_counts_aggregate(client, targets)
+            else:
+                ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
+                payload = kpi_alarm_counts(client, ne_pk)
             audit.record("get_active_alarms", "read", settings.orchestrator_url, "ok")
             return json_result({"data": payload, "note": "Counts per appliance/severity; the alarm/gms detail endpoint only accepts from+to (epoch seconds) upstream."}, settings.max_output_chars)
         except Exception as error:
@@ -727,6 +761,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 multi_targets = [str(a.get("nePk")) for a in client.list_appliances()]
                 appliance_id = ""
             missing_required: list[str] = []
+            granularity_hint = False
             needs_ne_pk = "nePk" in (spec.get("query_params") or []) or "nePk" in (
                 spec.get("path_params") or []
             )
@@ -736,13 +771,19 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 else ""
             ):
                 missing_required.append("appliance_id (nePk)")
-            if "/stats/" in spec["path"] and not granularity:
+            declared_query = spec.get("query_params") or []
+            if (
+                "/stats/" in spec["path"]
+                and "/stats/infrastructure/" not in spec["path"]
+                and "granularity" in declared_query
+                and not granularity
+            ):
                 missing_required.append("granularity")
                 granularity_hint = True
             if "/timeseries/" in spec["path"]:
-                if not start_time:
+                if not start_time and "startTime" in declared_query:
                     missing_required.append("start_time")
-                if not end_time:
+                if not end_time and "endTime" in declared_query:
                     missing_required.append("end_time")
             if missing_required:
                 hint = "Provide the missing parameters; no upstream call was made."
@@ -814,19 +855,21 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         )
                     payload = client.appliance_api_get(ne_pk, appliance_path, **query_params)
             else:
+                declares_ne_pk = "nePk" in (spec.get("query_params") or []) or "nePk" in (spec.get("path_params") or [])
                 if multi_targets:
                     results = []
                     for target in multi_targets:
                         per_query = dict(query_params)
-                        per_query["nePk"] = target
-                        if "groupByNE" not in per_query and "nePk" in (spec.get("query_params") or []):
-                            per_query.setdefault("groupByNE", "true")
+                        if declares_ne_pk:
+                            per_query["nePk"] = target
+                            if "groupByNE" in (spec.get("query_params") or []):
+                                per_query.setdefault("groupByNE", "true")
                         try:
                             results.append({"nePk": target, "data": client.call(version, operation_id, path_params=path_params, **per_query)})
                         except Exception as per_error:
                             results.append({"nePk": target, "error": str(per_error)[:200]})
                     payload = results
-                elif appliance_id:
+                elif appliance_id and declares_ne_pk:
                     query_params.setdefault("nePk", resolve_ne_pk(client, appliance_id))
                     path_params.setdefault("nePk", query_params["nePk"])
                     payload = client.call(version, operation_id, path_params=path_params, **query_params)

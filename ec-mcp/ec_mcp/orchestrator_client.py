@@ -192,10 +192,24 @@ class OrchestratorClient:
             return self._appliances_cache
         data: Any = None
         last_error: Exception | None = None
-        for path in ("/appliance/approved", "/neStatus", "/appliance"):
+        for path in ("/appliance", "/appliance/approved", "/neStatus"):
             try:
                 data = self.get_raw(path)
-                break
+                if isinstance(data, dict):
+                    candidates = (
+                        data.get("appliances")
+                        or data.get("data")
+                        or data.get("result")
+                        or data.get("neStatus")
+                        or []
+                    )
+                else:
+                    candidates = data
+                if isinstance(candidates, list) and candidates:
+                    data = candidates
+                    break
+                last_error = RuntimeError(f"GET {path}: empty inventory response")
+                data = None
             except RuntimeError as error:
                 last_error = error
                 message = str(error)
@@ -220,7 +234,7 @@ class OrchestratorClient:
             appliances.append(
                 {
                     "nePk": item.get("nePk") or item.get("nePK") or item.get("id"),
-                    "name": item.get("name") or item.get("hostname") or item.get("dnsName"),
+                    "name": item.get("name") or item.get("hostname") or item.get("hostName") or item.get("dnsName"),
                     "model": item.get("model") or item.get("modelNumber"),
                     "serial_number": item.get("serialNumber") or item.get("serial"),
                     "software_version": item.get("softwareVersion") or item.get("currentSoftwareVersion"),
