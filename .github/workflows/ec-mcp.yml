@@ -23,15 +23,15 @@ jobs:
       - name: Install package
         run: pip install -e . pytest pytest-asyncio
       - name: Verify stable package identity
-        run: python -c "from ec_mcp import __version__; assert __version__ == \"2.0.0\""
+        run: python -c "from ec_mcp import __version__; assert __version__ == \"3.0.0b1\""
       - name: Lint (ruff)
         run: |
           pip install ruff
-          ruff check ec_mcp tests
+          ruff check ec_mcp tests scripts/apply-web-update.py
       - name: Security lint (bandit)
         run: |
           pip install bandit
-          bandit -r ec_mcp -q
+          bandit -r ec_mcp scripts/apply-web-update.py -q
       - name: Run tests
         run: python -m pytest tests -q
       - name: Smoke test MCP stdio

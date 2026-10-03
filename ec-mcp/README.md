@@ -1,7 +1,7 @@
 # ec-mcp — EdgeConnect SD-WAN MCP server
 
-**Versión estable: 2.0.0**  
-La rama `main` contiene la versión estable 2.0.0.
+**Versión 3.0 base: 3.0.0b1**  
+Esta entrega inicia la línea 3.0. La base 2.0.0 fue la versión estable anterior; 3.0.0b1 incorpora el control plane web y prepara el flujo ZTP.
 
 `ec-mcp` conecta asistentes compatibles con Model Context Protocol (MCP) con
 HPE Aruba Networking EdgeConnect SD-WAN. Puede consultar el Orchestrator y los
@@ -21,7 +21,9 @@ catálogo ECOS por SSH.
   de frecuencia y segundo candado para operaciones peligrosas.
 - Transporte stdio, HTTP streamable y SSE con bearer token.
 - Registro de auditoría JSONL y redacción de secretos.
-- Panel administrativo opcional para gestionar varios Orchestrators.
+- Panel administrativo 3.0 para gestionar Orchestrators, editar todas las variables permitidas y aplicar cambios sin entrar por SSH.
+- Updater web con detección de GitHub público o privado, commit exacto, pruebas, respaldo y rollback.
+- Roadmap ZTP visible y bloqueado: `discover → template → adoptar → preview/diff → confirmar y aplicar`.
 
 ## Herramientas MCP
 
@@ -82,13 +84,17 @@ systemctl status ec-mcp
 curl http://127.0.0.1:8000/health
 ```
 
-Para instalar también el panel administrativo:
+Para instalar el panel administrativo y el updater web:
 
 ```bash
 ./scripts/install_admin_service.sh
-sudo systemctl enable --now ec-mcp-admin
 systemctl status ec-mcp-admin
+systemctl status ec-mcp-update.timer
 ```
+
+El instalador habilita ambos servicios. A partir de ese momento la configuración
+y las actualizaciones se administran en `http://<servidor>:8080`; no es
+necesario entrar por SSH para cambiar el `.env` o aplicar una publicación.
 
 Define una contraseña fuerte en `.env` antes de exponer el panel:
 
@@ -197,15 +203,21 @@ Authorization: Bearer <EC_MCP_AUTH_TOKEN>
 ec-mcp sse --host 127.0.0.1 --port 8000
 ```
 
-### Panel administrativo
+### Panel administrativo 3.0
 
 ```bash
 ec-mcp admin
 ```
 
 El panel usa `EC_ADMIN_HOST`, `EC_ADMIN_PORT` y
-`EC_ADMIN_PASSWORD`. Los archivos de almacenamiento deben ser escribibles
-por el usuario del servicio y protegidos con permisos restrictivos.
+`EC_ADMIN_PASSWORD`. La pestaña **Variables** presenta la lista blanca
+completa de parámetros de Orchestrator, SSH opcional, seguridad, transporte,
+panel y updater. Los secretos se guardan con permisos `600`, se muestran sólo
+como “configurado” y un campo secreto vacío conserva el valor existente.
+
+**Guardar variables** actualiza `.env` de forma atómica. **Guardar y reiniciar
+servicios** crea una solicitud que procesa el worker privilegiado; el proceso
+web nunca ejecuta Git, pip ni systemctl directamente.
 
 ## Archivo de configuración y precedencia
 
@@ -277,6 +289,20 @@ Una variable ya presente en el proceso no es reemplazada por el archivo.
 | `EC_ADMIN_PASSWORD_FILE` | `.ec-admin-pass` | Archivo alternativo para almacenar la contraseña del primer inicio. |
 | `EC_ADMIN_STORE` | `.ec-admin.json` | Almacén de configuraciones de Orchestrators. |
 
+### Actualizaciones web
+
+| Variable | Predeterminado | Uso |
+|---|---:|---|
+| `EC_UPDATE_ALLOW_WEB` | `true` | Habilita detección, actualización y reinicio desde el panel. |
+| `EC_UPDATE_REPOSITORY` | `Ryuz-crypto/APIIntegration` | Repositorio en formato `owner/repository`. |
+| `EC_UPDATE_BRANCH` | `main` | Rama que contiene las publicaciones autorizadas. |
+| `EC_UPDATE_GITHUB_USER` | vacío | Usuario de GitHub para un repositorio privado. |
+| `EC_UPDATE_GITHUB_TOKEN` | vacío | Token fine-grained con lectura de Contents. Es secreto y nunca vuelve al navegador. |
+| `EC_UPDATE_PROJECT_DIR` | instalación actual | Directorio de `ec-mcp`; el instalador lo completa. |
+| `EC_UPDATE_STATE_DIR` | `/var/lib/ec-mcp-update` | Solicitudes, estado y respaldos del updater. |
+| `EC_UPDATE_SERVICE_NAME` | `ec-mcp.service` | Servicio MCP que se reinicia después de validar. |
+| `EC_UPDATE_ADMIN_SERVICE_NAME` | `ec-mcp-admin.service` | Servicio del panel administrativo. |
+
 ## Ejemplo completo de `.env`
 
 ```dotenv
@@ -316,6 +342,16 @@ EC_ADMIN_PORT=8080
 EC_ADMIN_PASSWORD=  # define una contraseña fuerte
 EC_ADMIN_PASSWORD_FILE=
 EC_ADMIN_STORE=
+
+EC_UPDATE_ALLOW_WEB=true
+EC_UPDATE_REPOSITORY=Ryuz-crypto/APIIntegration
+EC_UPDATE_BRANCH=main
+EC_UPDATE_GITHUB_USER=
+EC_UPDATE_GITHUB_TOKEN=
+EC_UPDATE_PROJECT_DIR=
+EC_UPDATE_STATE_DIR=/var/lib/ec-mcp-update
+EC_UPDATE_SERVICE_NAME=ec-mcp.service
+EC_UPDATE_ADMIN_SERVICE_NAME=ec-mcp-admin.service
 ```
 
 No dejes `EC_MCP_PROFILES_DIR`, `EC_ADMIN_PASSWORD_FILE` o
@@ -368,18 +404,37 @@ run_show_api(command="show arp", appliance_id="0.NE")
 La última llamada debe devolver `applied: true`,
 `transport: orchestrator` y la tabla ARP/NDP del appliance.
 
-## Actualización
+## Actualización desde la web
 
-Para una instalación que sigue `main`:
+1. Abre **Actualizaciones** y pulsa **Detectar GitHub**.
+2. Si el repositorio es privado, guarda antes `EC_UPDATE_GITHUB_USER` y
+   `EC_UPDATE_GITHUB_TOKEN` en **Variables → Actualizaciones**.
+3. Revisa el commit remoto y escribe la confirmación exacta
+   `ACTUALIZAR <sha-corto>`.
+4. Pulsa **Aplicar actualización**. El panel mostrará
+   `pending`, `running`, `success` o `error`.
 
-```bash
-cd APIIntegration/ec-mcp
-./scripts/update.sh --daemon
-sudo systemctl restart ec-mcp
+El worker vuelve a consultar y fija el commit, acepta sólo avance rápido,
+respalda `.env`, reinstala el paquete, ejecuta todas las pruebas y reinicia
+los servicios. Si la instalación o las pruebas fallan, restaura el commit
+anterior y conserva el diagnóstico sanitizado en
+`/var/lib/ec-mcp-update/status.json`.
+
+No se guarda el token en la solicitud, la URL Git no contiene credenciales y
+los secretos se redactan de los mensajes públicos.
+
+## Objetivo ZTP de la línea 3.0
+
+La pestaña **ZTP** documenta el flujo que construiremos sobre esta base:
+
+```text
+discover → seleccionar template → validar parámetros → adoptar
+         → preview/diff → confirmar → aplicar → health check/rollback
 ```
 
-Verifica el despliegue con `orchestrator_info`; debe mostrar
-`package_version: 2.0.0` y el commit desplegado.
+En `3.0.0b1` esas acciones están intencionalmente bloqueadas: esta entrega
+implementa la administración y el canal seguro de actualización, no activa aún
+la adopción ni el planchado de configuración.
 
 ## Solución de problemas
 

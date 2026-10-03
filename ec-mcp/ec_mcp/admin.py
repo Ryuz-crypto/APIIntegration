@@ -28,95 +28,17 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Route
 
+from .admin_config import public_config, update_env
+from .admin_page import PAGE
+from .web_update import check as check_update
+from .web_update import queue_restart, queue_update
+from .web_update import status as update_status
+
 SESSIONS: dict[str, float] = {}
 SESSION_TTL = 3600.0
 LOGIN_FAILURES: dict[str, list[float]] = {}
 LOGIN_MAX_FAILURES = 5
 LOGIN_WINDOW_SECONDS = 60.0
-
-PAGE = """<!doctype html>
-<html lang="es"><head><meta charset="utf-8">
-<title>ec-mcp admin</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
- body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;display:flex;justify-content:center;padding:40px 16px}
- .card{background:#1e293b;border-radius:12px;padding:28px;max-width:760px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.4)}
- h1{font-size:1.3rem;margin:0 0 4px} h2{font-size:1rem;margin:24px 0 8px;color:#94a3b8}
- input,select{width:100%;padding:9px 11px;margin:4px 0 12px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;box-sizing:border-box}
- button{padding:10px 16px;border-radius:8px;border:0;background:#2563eb;color:#fff;font-weight:600;cursor:pointer}
- button.sec{background:#475569} button:disabled{opacity:.5}
- .msg{margin:10px 0;padding:10px 12px;border-radius:8px;font-size:.9rem}
- .ok{background:#052e16;border:1px solid #166534} .err{background:#3f1d1d;border:1px solid #7f1d1d}
- .orch{border:1px solid #334155;border-radius:10px;padding:14px;margin:10px 0}
- .row{display:flex;gap:10px} .row>div{flex:1}
- table{width:100%;border-collapse:collapse;font-size:.9rem}
- td,th{padding:6px 8px;border-bottom:1px solid #334155;text-align:left}
- .tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:.75rem;background:#334155}
- .active{background:#166534}
-</style></head><body><div class="card" id="app">Cargando...</div>
-<script>
-let AUTHED=false;
-const $=q=>document.querySelector(q);
-async function api(path,body){const r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});
- if(r.redirected&&r.url.includes('/login')){AUTHED=false;render();return null;} return r.json();}
-function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function render(){
- const app=$('#app');
- if(!AUTHED){app.innerHTML=`<h1>ec-mcp admin</h1><h2>Contraseña de administrador</h2>
-  <input type="password" id="pw" placeholder="EC_ADMIN_PASSWORD" onkeydown="if(event.key==='Enter')login()">
-  <button onclick="login()">Entrar</button><div id="msg"></div>`;return;}
- app.innerHTML=`<h1>ec-mcp admin</h1><span class="tag">multiorquestador</span>
- <h2>Orquestadores</h2><div id="list"></div>
- <h2>Agregar / actualizar orquestador</h2>
- <div class="row"><div><label>Nombre</label><input id="n_name" placeholder="lab-useast1"></div>
- <div><label>URL</label><input id="n_url" placeholder="https://orchestrator.example.com"></div></div>
- <div class="row"><div><label>API key (X-Auth-Token)</label><input id="n_key" type="password"></div>
- <div><label>Usuario (alternativo)</label><input id="n_user"></div></div>
- <div class="row"><div><label>Password usuario</label><input id="n_pass" type="password"></div>
- <div><label>Verificar TLS</label><select id="n_tls"><option>true</option><option>false</option></select></div></div>
- <h2>SSH común (appliance)</h2>
- <div class="row"><div><label>Usuario SSH</label><input id="n_sshuser"></div>
- <div><label>Password SSH</label><input id="n_sshpass" type="password"></div></div>
- <div class="row"><div><label>Password enable</label><input id="n_enable" type="password"></div>
- <div><label>Host por defecto (opcional)</label><input id="n_sshhost"></div></div>
- <button onclick="save()">Guardar orquestador</button>
- <h2>Acción</h2>
- <button onclick="apply()">Escribir en .env y activar</button>
- <button class="sec" onclick="logout()">Salir</button>
- <div id="msg"></div>`;
- refresh();
-}
-async function login(){const r=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('#pw').value})});
- const j=await r.json(); if(j.ok){AUTHED=true;render();}else{$('#msg').innerHTML='<div class="msg err">Contraseña incorrecta</div>';}}
-async function logout(){await api('/logout');AUTHED=false;render();}
-async function refresh(){const s=await api('/api/state'); if(!s)return;
- $('#list').innerHTML=s.orchestrators.map(o=>`<div class="orch">
-  <b>${esc(o.name)}</b> ${o.active?'<span class="tag active">activo</span>':''}<br>
-  <small>${esc(o.url)}</small>
-  <button class="sec" style="float:right;margin-left:8px" onclick="del('${esc(o.name)}')">Eliminar</button>
-  <button class="sec" style="float:right" onclick="edit('${esc(o.name)}')">Editar</button></div>`).join('')||'<small>Ninguno registrado</small>';}
-function edit(name){const s=stateCache[name]; if(!s)return;
- $('#n_name').value=name; $('#n_url').value=s.url||''; $('#n_tls').value=String(s.verify_tls??true);
- $('#n_sshuser').value=s.ssh_user||''; $('#n_sshhost').value=s.ssh_host||'';}
-let stateCache={};
-const _refresh=refresh;
-refresh=async()=>{const s=await api('/api/state'); if(!s)return; stateCache={};
- s.orchestrators.forEach(o=>stateCache[o.name]=o); _refresh.__patched||null;
- $('#list').innerHTML=(s.orchestrators.map(o=>`<div class="orch">
-  <b>${esc(o.name)}</b> ${o.active?'<span class="tag active">activo</span>':''}<br>
-  <small>${esc(o.url)}</small>
-  <button class="sec" style="float:right;margin-left:8px" onclick="del('${esc(o.name)}')">Eliminar</button>
-  <button class="sec" style="float:right" onclick="edit('${esc(o.name)}')">Editar</button></div>`).join(''))||'<small>Ninguno registrado</small>';};
-async function save(){const body={name:$('#n_name').value.trim(),url:$('#n_url').value.trim(),
- api_key:$('#n_key').value,username:$('#n_user').value,password:$('#n_pass').value,
- verify_tls:$('#n_tls').value==='true',ssh_user:$('#n_sshuser').value,ssh_password:$('#n_sshpass').value,
- ssh_enable_password:$('#n_enable').value,ssh_host:$('#n_sshhost').value};
- const j=await api('/api/orchestrators',body); msg(j);}
-async function del(name){if(!confirm('Eliminar '+name+'?'))return; const j=await api('/api/orchestrators/delete',{name}); msg(j); refresh();}
-async function apply(){const name=$('#n_name').value.trim()||undefined; const j=await api('/api/apply',{name}); msg(j);}
-function msg(j){$('#msg').innerHTML=j?(j.ok?'<div class="msg ok">'+esc(j.message)+'</div>':'<div class="msg err">'+esc(j.error||j.message)+'</div>'):'';}
-render();
-</script></body></html>"""
 
 
 def _store_path() -> Path:
@@ -363,10 +285,68 @@ async def api_apply(request):
             "ok": True,
             "message": (
                 f"Orquestador '{name}' escrito en {env_path}. Reinicia el servicio para "
-                "que las tools vean el cambio: sudo systemctl restart ec-mcp"
+                "que el cambio quede persistente. Usa 'Guardar y reiniciar servicios' desde Variables para aplicarlo"
             ),
         }
     )
+
+
+async def api_config(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse(public_config())
+
+
+async def api_save_config(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+        path = update_env(body.get("values") or {}, body.get("clear_secrets") or [])
+    except (OSError, TypeError, ValueError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    return JSONResponse(
+        {
+            "ok": True,
+            "message": f"Variables guardadas de forma atómica en {path}. Reinicia los servicios para aplicarlas.",
+            "restart_required": True,
+        }
+    )
+
+
+async def api_update_check(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        return JSONResponse(check_update())
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+
+async def api_update_status(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse(update_status())
+
+
+async def api_update_apply(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+        result = queue_update(str(body.get("remote_sha") or ""), str(body.get("confirmation") or ""))
+    except (OSError, TypeError, ValueError) as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    return JSONResponse(result)
+
+
+async def api_restart(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        return JSONResponse(queue_restart())
+    except (OSError, ValueError) as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
 
 
 from starlette.responses import Response
@@ -387,6 +367,12 @@ def build_admin_app() -> Starlette:
             Route("/api/orchestrators", api_save_orchestrator, methods=["POST"]),
             Route("/api/orchestrators/delete", api_delete_orchestrator, methods=["POST"]),
             Route("/api/apply", api_apply, methods=["POST"]),
+            Route("/api/config", api_config, methods=["GET"]),
+            Route("/api/config", api_save_config, methods=["POST"]),
+            Route("/api/update/check", api_update_check, methods=["POST"]),
+            Route("/api/update/status", api_update_status, methods=["GET"]),
+            Route("/api/update/apply", api_update_apply, methods=["POST"]),
+            Route("/api/restart", api_restart, methods=["POST"]),
         ]
     )
 
