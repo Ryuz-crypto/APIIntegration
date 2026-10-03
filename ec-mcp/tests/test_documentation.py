@@ -1,5 +1,7 @@
 """Regression tests for the public ec-mcp 3.0 installation documentation."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 
