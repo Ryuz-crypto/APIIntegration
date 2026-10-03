@@ -1291,7 +1291,24 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if not confirm:
                 audit.record("apply_change", operation_id, operation.path, "dry-run", dry_run=True, details=audit_public_entry)
                 return json_result({"dry_run": True, "would_execute": audit_entry}, settings.max_output_chars)
-            payload = client.call(version, operation_id, path_params=path_params, json_body=body, **query_params)
+            if operation_id.startswith("appliance."):
+                ne_pk = resolve_ne_pk(client, appliance_id)
+                payload = client.appliance_api_call(
+                    version,
+                    ne_pk,
+                    operation_id,
+                    path_params=path_params,
+                    json_body=body,
+                    **query_params,
+                )
+            else:
+                payload = client.call(
+                    version,
+                    operation_id,
+                    path_params=path_params,
+                    json_body=body,
+                    **query_params,
+                )
             audit.record("apply_change", operation_id, operation.path, "ok", dry_run=False, details=audit_public_entry)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
         except json.JSONDecodeError as error:

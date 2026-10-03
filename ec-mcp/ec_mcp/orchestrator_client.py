@@ -284,3 +284,41 @@ class OrchestratorClient:
         if not appliance_path.startswith("/"):
             appliance_path = "/" + appliance_path
         return self.get_raw("/appliance/rest", nePk=ne_pk, url=appliance_path, **query)
+
+    def appliance_api_call(
+        self,
+        version: str,
+        ne_pk: str,
+        operation_id: str,
+        path_params: dict[str, str] | None = None,
+        json_body: dict[str, Any] | None = None,
+        **query: Any,
+    ) -> dict[str, Any]:
+        """Call an appliance-scoped API through the Orchestrator appliance proxy."""
+        resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params)
+        appliance_path = resolved.path if resolved.path.startswith("/") else f"/{resolved.path}"
+        operation = self._engine._profiles[version]["operations"][operation_id]
+        declared_query = set(operation.get("query_params") or [])
+        allowed_query = {
+            key: value
+            for key, value in query.items()
+            if value is not None and key in declared_query
+        }
+        params = {"nePk": ne_pk, "url": appliance_path, **allowed_query}
+        full_path = self._full_path("/appliance/rest")
+        started = time.monotonic()
+        response = self._client.request(
+            resolved.method,
+            full_path,
+            headers=self._headers(),
+            params=params,
+            json=json_body,
+        )
+        self._record_metric(operation_id, time.monotonic() - started, len(response.content), cache_hit=False)
+        if response.status_code >= 400:
+            raise RuntimeError(
+                self._error_message(response, f"{resolved.method} {full_path}?nePk={ne_pk}&url={appliance_path}")
+            )
+        if not response.content:
+            return {"ok": True}
+        return response.json()
