@@ -41,8 +41,8 @@ def _validate_source(repository: str, branch: str) -> None:
 
 def _current_commit(project_dir: str) -> str:
     try:
-        result = subprocess.run(  # nosec B603
-            ["git", "-C", project_dir, "rev-parse", "HEAD"],
+        result = subprocess.run(  # noqa: S603  # nosec B603
+            ["/usr/bin/git", "-C", project_dir, "rev-parse", "HEAD"],
             check=True,
             capture_output=True,
             text=True,
