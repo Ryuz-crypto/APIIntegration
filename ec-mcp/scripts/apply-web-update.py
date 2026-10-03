@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import pwd
 import re
 import shutil
 import stat
@@ -54,6 +55,15 @@ def run(command: list[str], *, cwd: Path | None = None, env: dict[str, str] | No
     return result.stdout.strip()
 
 
+def run_user(command: list[str], owner: str, *, cwd: Path | None = None, env: dict[str, str] | None = None, timeout: int = 900) -> str:
+    return run(
+        ["/usr/sbin/runuser", "-u", owner, "--preserve-environment", "--", *command],
+        cwd=cwd,
+        env=env,
+        timeout=timeout,
+    )
+
+
 def write_status(state: Path, payload: dict) -> None:
     state.mkdir(mode=0o750, parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(prefix=".status.", dir=state)
@@ -96,7 +106,7 @@ def read_request(state: Path) -> dict | None:
         os.close(directory)
 
 
-def git_environment(settings: dict[str, str], state: Path) -> tuple[dict[str, str], Path | None]:
+def git_environment(settings: dict[str, str], state: Path, uid: int, gid: int) -> tuple[dict[str, str], Path | None]:
     environment = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     token = settings.get("EC_UPDATE_GITHUB_TOKEN", "")
     if not token:
@@ -107,6 +117,7 @@ def git_environment(settings: dict[str, str], state: Path) -> tuple[dict[str, st
         encoding="utf-8",
     )
     helper.chmod(0o700)
+    os.chown(helper, uid, gid)
     environment.update(
         {
             "GIT_ASKPASS": str(helper),
@@ -172,32 +183,34 @@ def install_update(request: dict, settings: dict[str, str], state: Path) -> tupl
     project = Path(settings.get("EC_UPDATE_PROJECT_DIR") or Path.cwd()).resolve()
     if not (project / "pyproject.toml").is_file():
         raise ValueError("EC_UPDATE_PROJECT_DIR no contiene pyproject.toml.")
-    root = Path(run(["/usr/bin/git", "-C", str(project), "rev-parse", "--show-toplevel"], timeout=20)).resolve()
-    previous = run(["/usr/bin/git", "-C", str(root), "rev-parse", "HEAD"], timeout=20).lower()
-    dirty = run(["/usr/bin/git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"], timeout=20)
+    project_stat = project.stat()
+    owner = pwd.getpwuid(project_stat.st_uid).pw_name
+    root = Path(run_user(["/usr/bin/git", "-C", str(project), "rev-parse", "--show-toplevel"], owner, timeout=20)).resolve()
+    previous = run_user(["/usr/bin/git", "-C", str(root), "rev-parse", "HEAD"], owner, timeout=20).lower()
+    dirty = run_user(["/usr/bin/git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"], owner, timeout=20)
     if dirty:
         raise RuntimeError("El checkout tiene cambios rastreados; se cancela para no sobrescribirlos.")
     saved = backup(state, project, previous)
-    environment, helper = git_environment(settings, state)
+    environment, helper = git_environment(settings, state, project_stat.st_uid, project_stat.st_gid)
     changed = False
     try:
         url = f"https://github.com/{repository}.git"
-        run(["/usr/bin/git", "-C", str(root), "fetch", "--no-tags", url, branch], env=environment, timeout=180)
-        fetched = run(["/usr/bin/git", "-C", str(root), "rev-parse", "FETCH_HEAD"], timeout=20).lower()
+        run_user(["/usr/bin/git", "-C", str(root), "fetch", "--no-tags", url, branch], owner, env=environment, timeout=180)
+        fetched = run_user(["/usr/bin/git", "-C", str(root), "rev-parse", "FETCH_HEAD"], owner, timeout=20).lower()
         if fetched != expected:
             raise RuntimeError("GitHub cambió desde la validación; la actualización fue cancelada.")
-        run(["/usr/bin/git", "-C", str(root), "merge-base", "--is-ancestor", previous, fetched], timeout=20)
-        run(["/usr/bin/git", "-C", str(root), "merge", "--ff-only", fetched], timeout=90)
+        run_user(["/usr/bin/git", "-C", str(root), "merge-base", "--is-ancestor", previous, fetched], owner, timeout=20)
+        run_user(["/usr/bin/git", "-C", str(root), "merge", "--ff-only", fetched], owner, timeout=90)
         changed = fetched != previous
         python = project / ".venv" / "bin" / "python"
         if not python.is_file():
             raise RuntimeError("No existe .venv/bin/python; ejecuta el instalador de ec-mcp.")
-        run([str(python), "-m", "pip", "install", "-e", str(project)], timeout=600)
-        run([str(python), "-m", "pytest", "tests", "-q"], cwd=project, timeout=900)
+        run_user([str(python), "-m", "pip", "install", "-e", str(project)], owner, timeout=600)
+        run_user([str(python), "-m", "pytest", "tests", "-q"], owner, cwd=project, timeout=900)
         restart_services(settings)
     except Exception:
         if changed:
-            run(["/usr/bin/git", "-C", str(root), "reset", "--hard", previous], timeout=90)  # nosec B607
+            run_user(["/usr/bin/git", "-C", str(root), "reset", "--hard", previous], owner, timeout=90)  # nosec B607
             python = project / ".venv" / "bin" / "python"
             if python.is_file():
                 run([str(python), "-m", "pip", "install", "-e", str(project)], timeout=600)
