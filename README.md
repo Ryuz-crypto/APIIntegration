@@ -1,7 +1,7 @@
 # APIIntegration — EdgeConnect SD-WAN Platform
 
 [![DashboardAPI-EC](https://img.shields.io/badge/DashboardAPI--EC-1.5.1%20stable-2fbf9b)](DashboardAPI-EC/README.md)
-[![ec-mcp](https://img.shields.io/badge/ec--mcp-3.0.0b3%20MCP%20server-7B61FF)](ec-mcp/README.md)
+[![ec-mcp](https://img.shields.io/badge/ec--mcp-3.0.0b5%20MCP%20server-7B61FF)](ec-mcp/README.md)
 [![DashboardAPI-EC CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 [![ec-mcp CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
@@ -15,7 +15,7 @@ Plataforma para descubrir, consultar, visualizar y **conversar** con entornos **
 
 ## ec-mcp 3.0 — MCP y panel de administración web
 
-Versión estable en `main`: **3.0.0b3**. Esta versión incorpora configuración web, updater desde GitHub y ejecución de comandos `show` mediante la API del Orchestrator. La referencia exhaustiva está en [ec-mcp/README.md](ec-mcp/README.md) y la plantilla completa en [ec-mcp/.env.example](ec-mcp/.env.example).
+Versión estable en `main`: **3.0.0b5**. Esta versión incorpora configuración web, updater desde GitHub y ejecución de comandos `show` mediante la API del Orchestrator. La referencia exhaustiva está en [ec-mcp/README.md](ec-mcp/README.md) y la plantilla completa en [ec-mcp/.env.example](ec-mcp/.env.example).
 
 > **Regla principal:** `ec-mcp/.env` es la única fuente de configuración. No dupliques las credenciales del Orchestrator en el JSON del cliente MCP ni declares `EC_ADMIN_PORT` o `EC_ADMIN_PASSWORD` directamente en systemd. Cada variable debe aparecer una sola vez en `.env`.
 
@@ -165,7 +165,7 @@ sudo systemctl show ec-mcp-admin -p Environment -p WorkingDirectory --no-pager
 ```
 
 - Si el primer comando imprime una clave, elimínala hasta dejar una sola definición.
-- Si systemd muestra `Environment=EC_ADMIN_PORT=8080`, esa variable prevalece sobre `.env). Reinstala el servicio con el script de 3.0.0b3 o elimina el override.
+- Si systemd muestra `Environment=EC_ADMIN_PORT=8080`, esa variable prevalece sobre `.env`. Reinstala el servicio con el script de 3.0.0b3 o elimina el override.
 - Si el puerto correcto abre pero rechaza la contraseña, busca varias líneas `EC_ADMIN_PASSWORD=`; conserva exactamente una y reinicia `ec-mcp-admin`.
 - Después de demasiados intentos, espera el valor de `EC_ADMIN_LOGIN_WINDOW_SECONDS` o reinicia el servicio una vez corregida la contraseña.
 - `run_show_api(command="show arp", appliance_id="0.NE")` usa el API del Orchestrator. No requiere habilitar SSH ni usar `run_show_command`.
