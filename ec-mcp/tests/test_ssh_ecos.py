@@ -27,7 +27,7 @@ def test_keyboard_interactive_connection_uses_paramiko(monkeypatch):
             self.channel = FakeChannel()
 
         def start_client(self, timeout):
-            assert timeout == 15
+            assert timeout == 30
 
         def auth_interactive(self, username, handler):
             self.__class__.last_auth = (username, handler("", "", [("Password:", False)]))
@@ -72,3 +72,7 @@ def test_invalid_ssh_auth_method_is_rejected():
         raise AssertionError("expected invalid auth method to be rejected")
     except ValueError as error:
         assert "EC_SSH_AUTH_METHOD" in str(error)
+
+def test_keyboard_interactive_handler_accepts_confirmation_prompt():
+    handler = ssh_ecos._keyboard_interactive_handler("secret")
+    assert handler("title", "instructions", [("Accept certificate? (yes/no)", False)]) == ["yes"]
