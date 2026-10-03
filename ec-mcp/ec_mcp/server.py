@@ -636,6 +636,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 expanded_terms = set(search_terms)
                 for term in search_terms:
                     expanded_terms.update(semantic_aliases.get(term, set()))
+                if "business intent" in lowered_search or lowered_search == "bio":
+                    expanded_terms = {"overlay"}
                 for op_id in sorted(profile_ops):
                     spec = profile_ops[op_id]
                     if lowered_prefix and not op_id.lower().startswith(lowered_prefix):
