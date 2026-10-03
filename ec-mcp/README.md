@@ -1,7 +1,7 @@
 # ec-mcp — EdgeConnect SD-WAN MCP server
 
-**Versión 3.0 base: 3.0.0b2**  
-Esta entrega inicia la línea 3.0. La base 2.0.0 fue la versión estable anterior; 3.0.0b2 incorpora el control plane web y prepara el flujo ZTP.
+**Versión 3.0 base: 3.0.0b3**  
+Esta entrega inicia la línea 3.0. La base 2.0.0 fue la versión estable anterior; 3.0.0b3 incorpora el control plane web y prepara el flujo ZTP.
 
 `ec-mcp` conecta asistentes compatibles con Model Context Protocol (MCP) con
 HPE Aruba Networking EdgeConnect SD-WAN. Puede consultar el Orchestrator y los
@@ -91,6 +91,8 @@ Para instalar el panel administrativo y el updater web:
 systemctl status ec-mcp-admin
 systemctl status ec-mcp-update.timer
 ```
+
+El puerto sigue esta prioridad: `--port`, variable exportada en el proceso, valor `EC_ADMIN_PORT` de `.env` y finalmente `8080`. Reinstalar el servicio conserva el puerto guardado en `.env`.
 
 El instalador habilita ambos servicios. A partir de ese momento la configuración
 y las actualizaciones se administran en `http://<servidor>:8080`; no es
@@ -434,7 +436,7 @@ discover → seleccionar template → validar parámetros → adoptar
          → preview/diff → confirmar → aplicar → health check/rollback
 ```
 
-En `3.0.0b2` esas acciones están intencionalmente bloqueadas: esta entrega
+En `3.0.0b3` esas acciones están intencionalmente bloqueadas: esta entrega
 implementa la administración y el canal seguro de actualización, no activa aún
 la adopción ni el planchado de configuración.
 
@@ -449,8 +451,9 @@ la adopción ni el planchado de configuración.
 | Error TLS | Instala la CA correcta. Usa `EC_VERIFY_TLS=false` solo para diagnóstico en laboratorio. |
 | Herramientas SSH deshabilitadas | Define `EC_SSH_ENABLED=true` y las credenciales SSH. |
 | `run_show_api` falla | Confirma el nePk con `list_appliances` y la conectividad del appliance desde el Orchestrator. |
-| Panel muestra `Demasiados intentos` | Espera el tiempo mostrado o inicia sesión con la contraseña correcta; desde 3.0.0b2 un login válido limpia inmediatamente el bloqueo. |
+| Panel muestra `Demasiados intentos` | Espera el tiempo mostrado o inicia sesión con la contraseña correcta; desde 3.0.0b3 un login válido limpia inmediatamente el bloqueo. |
 | systemd no toma cambios | Ejecuta `sudo systemctl daemon-reload && sudo systemctl restart ec-mcp`. |
+| `EC_ADMIN_PORT` vuelve a `8080` | Actualiza a 3.0.0b3. El instalador anterior podía sobrescribir el puerto de `.env`; vuelve a guardar el puerto y reinstala `install_admin_service.sh`. |
 
 ## Seguridad operativa
 
