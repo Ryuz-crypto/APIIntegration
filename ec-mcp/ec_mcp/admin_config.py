@@ -155,7 +155,6 @@ def update_env(values: dict[str, object], clear_secrets: list[str] | None = None
     unknown = (set(values) | clear) - set(BY_KEY)
     if unknown:
         raise ValueError("Variables no permitidas: " + ", ".join(sorted(unknown)))
-    current = read_env(target)
     wanted: dict[str, str] = {}
     for key, raw in values.items():
         setting = BY_KEY[key]
