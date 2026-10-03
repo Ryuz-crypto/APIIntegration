@@ -213,7 +213,7 @@ def install_update(request: dict, settings: dict[str, str], state: Path) -> tupl
             run_user(["/usr/bin/git", "-C", str(root), "reset", "--hard", previous], owner, timeout=90)  # nosec B607
             python = project / ".venv" / "bin" / "python"
             if python.is_file():
-                run([str(python), "-m", "pip", "install", "-e", str(project)], timeout=600)
+                run_user([str(python), "-m", "pip", "install", "-e", str(project)], owner, timeout=600)
             restart_services(settings)
         raise
     finally:
