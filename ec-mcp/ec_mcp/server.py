@@ -83,8 +83,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         write_timestamps.append(now)
 
     def json_result(payload, max_chars: int) -> str:
-        text = json.dumps(redact_sensitive_values(payload), ensure_ascii=False, default=str)
-        return redact_secrets(sanitize_output(text, max_chars), [])
+        # Reuse the closed serializer so every helper response remains valid JSON.
+        return closed_json_result(payload, max_chars)[0]
 
     def closed_json_result(payload: dict, max_chars: int) -> tuple[str, bool]:
         """Serialize to JSON that is ALWAYS valid: never returns a cut string.
