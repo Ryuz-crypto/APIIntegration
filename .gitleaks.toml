@@ -6,3 +6,4 @@ useDefault = true
 [allowlist]
 description = "Example env files use non-secret placeholders and boolean flags"
 paths = ['''\.env\.example$''']
+commits = ['0a4135f035c00b955654731ed7f31e2ac2bfba75']
