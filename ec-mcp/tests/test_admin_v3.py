@@ -147,3 +147,11 @@ def test_admin_throttle_settings_are_available_in_web_config(tmp_path: Path):
     by_key = {item["key"]: item for item in result["fields"]}
     assert by_key["EC_ADMIN_LOGIN_MAX_FAILURES"]["default"] == "5"
     assert by_key["EC_ADMIN_LOGIN_WINDOW_SECONDS"]["default"] == "60"
+
+
+def test_admin_installer_preserves_port_from_dotenv():
+    script = (Path(__file__).parent.parent / "scripts" / "install_admin_service.sh").read_text(encoding="utf-8")
+    assert "ENV_PORT=\"$(grep '^EC_ADMIN_PORT=' .env" in script
+    assert 'PORT="${CLI_PORT:-${EC_ADMIN_PORT:-${ENV_PORT:-8080}}}"' in script
+    assert 'PORT="${EC_ADMIN_PORT:-8080}"' not in script
+    assert script.index('ENV_PORT="$(grep') < script.index('set_env_value EC_ADMIN_PORT "$PORT"')

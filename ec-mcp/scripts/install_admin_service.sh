@@ -1,18 +1,30 @@
 #!/usr/bin/env bash
 # Instala la UI de admin de ec-mcp (ec-mcp admin) como servicio systemd.
 # Requiere EC_ADMIN_PASSWORD en .env (obligatorio porque escucha en 0.0.0.0).
-# Uso:  ./scripts/install_admin_service.sh [--port 8080]
+# Uso:  ./scripts/install_admin_service.sh [--port PUERTO]
+# Prioridad: --port > EC_ADMIN_PORT del proceso > EC_ADMIN_PORT de .env > 8080.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PORT="${EC_ADMIN_PORT:-8080}"
+CLI_PORT=""
 if [ "${1:-}" = "--port" ]; then
-  PORT="${2:-8080}"
+  if [ -z "${2:-}" ]; then
+    echo "ERROR: --port requiere un número de puerto." >&2
+    exit 1
+  fi
+  CLI_PORT="$2"
 fi
 
 if [ ! -f .env ]; then
   echo "ERROR: no existe .env en $(pwd). Ejecuta primero ./scripts/install.sh" >&2
+  exit 1
+fi
+
+ENV_PORT="$(grep '^EC_ADMIN_PORT=' .env | tail -1 | cut -d= -f2-)"
+PORT="${CLI_PORT:-${EC_ADMIN_PORT:-${ENV_PORT:-8080}}}"
+if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+  echo "ERROR: EC_ADMIN_PORT debe ser un número entre 1 y 65535." >&2
   exit 1
 fi
 
