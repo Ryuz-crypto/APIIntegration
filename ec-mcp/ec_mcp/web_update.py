@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
+import subprocess  # nosec B404
 import tempfile
 import urllib.error
 import urllib.request
@@ -54,7 +54,7 @@ def _current_commit(project_dir: str) -> str:
     return value if _SHA.fullmatch(value) else ""
 
 
-def _github_commit(repository: str, branch: str, token: str = "", opener=None) -> dict:
+def _github_commit(repository: str, branch: str, token: str | None = None, opener=None) -> dict:
     _validate_source(repository, branch)
     url = f"https://api.github.com/repos/{repository}/commits/{branch}"
     headers = {"Accept": "application/vnd.github+json", "User-Agent": "ec-mcp-updater/3"}
