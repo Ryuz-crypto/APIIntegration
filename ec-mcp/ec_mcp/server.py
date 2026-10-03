@@ -431,18 +431,49 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             lowered = str(key).lower()
             if lowered in TUNNEL_KPI_KEYS or any(token in lowered for token in ("mos", "jitter", "loss", "latency", "rtt")):
                 projected[str(key)] = project_tunnel_kpis(value) if isinstance(value, (dict, list)) else value
+            elif isinstance(value, dict):
+                nested = project_tunnel_kpis(value)
+                if nested:
+                    projected[str(key)] = nested
         if not projected:
             return {k: v for k, v in list(node.items())[:3]}
         return projected
 
     def project_wan_health_stats(payload: Any) -> Any:
+        """Project stats aggregates: accepts list rows or dict-of-tunnels shapes.
+
+        Handles GET /stats/aggregate/* responses that arrive as {"data": [rows]}
+        or as {"data": {"<tunnelName>": {"<nePk>": {<kpi>...}}}} (tunnel-keyed
+        dict per orchestrator version), always returning KPI-only structures.
+        """
         if not isinstance(payload, (dict, list)):
             return payload
+        if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+            return {k: project_tunnel_kpis(v) for k, v in payload["data"].items()}
         rows = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), list) else payload
         projected_rows = project_tunnel_kpis(rows)
         if isinstance(payload, dict) and payload.get("data") is projected_rows:
             return {**payload, "data": projected_rows}
         return projected_rows
+
+    def _project_fields(node: Any, field_list: list[str]) -> Any:
+        """Apply a client-requested field projection at the tunnel/KPI level."""
+        if isinstance(node, list):
+            return [_project_fields(item, field_list) for item in node]
+        if not isinstance(node, dict):
+            return node
+        lowered = {str(k).lower(): k for k in node}
+        kept = {}
+        for f in field_list:
+            key = lowered.get(f.strip().lower())
+            if key is not None:
+                kept[key] = _project_fields(node[key], field_list)
+        if kept:
+            return kept
+        nested = {k: _project_fields(v, field_list) for k, v in node.items() if isinstance(v, (dict, list))}
+        if any(nested.values()):
+            return nested
+        return {k: v for k, v in node.items() if str(k).lower() in ("tunnelname", "tunnel", "tunnelid")} or node
 
     def brownout_state(payload: Any) -> list[dict[str, Any]]:
         rows = payload if isinstance(payload, list) else payload.get("tunnels") or payload.get("data") or [] if isinstance(payload, dict) else []
@@ -696,7 +727,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             }
             field_list = [f.strip() for f in fields.split(",") if f.strip()]
             if field_list:
-                payload, _ = paginate_data(payload, 0, None, field_list)
+                payload["appliances"] = [
+                    {"nePk": row.get("nePk"), "stats": _project_fields(row.get("stats"), field_list), **({k: v for k, v in row.items() if k in ("error", "reachability", "hint")})}
+                    for row in payload["appliances"]
+                ]
             audit.record("get_wan_health", "read", settings.orchestrator_url, "ok", details={"appliances": len(targets)})
             return json_result(payload, settings.max_output_chars)
         except Exception as error:
@@ -887,6 +921,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             ):
                 missing_required.append("appliance_id (nePk)")
             declared_query = spec.get("query_params") or []
+            used_appliance_proxy = False
             if (
                 "/stats/" in spec["path"]
                 and "/stats/infrastructure/" not in spec["path"]
@@ -1014,8 +1049,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     if "Invalid nePk" in error_text or ("HTTP 400" in error_text and "nePk" in error_text):
                         try:
                             payload = _call_via_appliance_proxy()
-                        except Exception:
-                            raise error from error
+                            used_appliance_proxy = True
+                        except Exception as proxy_error:
+                            raise RuntimeError(
+                                f"{error} | appliance-scoped fallback via /appliance/rest also failed: {proxy_error}"
+                            ) from error
                     else:
                         raise
                 if payload is None:
@@ -1029,8 +1067,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 "data": payload,
                 "request_echo": {
                     "operation_id": operation_id,
-                    "resolved_path": operation.path,
+                    "resolved_path": "/appliance/rest" if used_appliance_proxy else operation.path,
                     "query_used": {k: str(v) for k, v in query_params.items()},
+                    **({"via_appliance_proxy": True} if used_appliance_proxy else {}),
                 },
             }
             result_text, truncated = closed_json_result(wrapper, budget)

@@ -1183,3 +1183,144 @@ def test_wan_health_projects_tunnel_kpis_only():
     row = payload["appliances"][0]["stats"][0]
     assert "tunnelName" in row and "MOS" in row and "MIN_MOS" in row and "AVG_TX_JITTER" in row and "AVG_TX_LATENCY" in row, row
     assert "SUM_OHEAD_WTX_PKTS" not in row and "MAX_COMP_L2W" not in row, row
+
+
+def test_wan_health_fields_projection_keeps_tunnel_kpis():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    RAW_TUNNEL = {
+        "tunnelName": "bondedTunnel_13",
+        "MOS": 440,
+        "MIN_MOS": 420,
+        "MAX_JITTER": 3.2,
+        "MAX_PRE_PCT_LOSS": 0.5,
+        "MIN_LATENCY_MIN": 12.5,
+        "SUM_OHEAD_WTX_PKTS": 123456,
+        "MAX_COMP_L2W": 88,
+    }
+
+    class Fake97Orchestrator:
+        _api_root = "/gms/rest"
+
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def list_appliances(self, refresh=False):
+            return [{"nePk": "1.NE", "name": "EC1", "ip": "10.0.0.1"}]
+
+        def get_raw(self, path, **query):
+            if "/stats/" in path:
+                return {"data": [dict(RAW_TUNNEL)]}
+            return {"data": []}
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: Fake97Orchestrator()
+    try:
+        result = asyncio.run(
+            server.call_tool(
+                "get_wan_health",
+                {"appliance_id": "1.NE", "fields": "mos,min_mos,MAX_JITTER,MAX_PRE_PCT_LOSS,MIN_LATENCY_MIN"},
+            )
+        )
+        payload = jsonlib.loads(result.content[0].text)
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    row = payload["appliances"][0]
+    assert row["nePk"] == "1.NE", payload
+    kpis = row["stats"][0]
+    assert kpis == {"MOS": 440, "MIN_MOS": 420, "MAX_JITTER": 3.2, "MAX_PRE_PCT_LOSS": 0.5, "MIN_LATENCY_MIN": 12.5}, kpis
+
+
+def test_wan_health_tunnel_keyed_dict_shape():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    class Fake97Orchestrator:
+        _api_root = "/gms/rest"
+
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def list_appliances(self, refresh=False):
+            return [{"nePk": "1.NE", "name": "EC1", "ip": "10.0.0.1"}]
+
+        def get_raw(self, path, **query):
+            if "/stats/aggregate/tunnel" in path:
+                return {
+                    "data": {
+                        "bondedTunnel_13": {
+                            "1.NE": {
+                                "MOS": 440,
+                                "MIN_MOS": 420,
+                                "MAX_JITTER": 3.2,
+                                "SUM_OHEAD_WTX_PKTS": 999999,
+                                "MAX_COMP_L2W": 88,
+                            }
+                        }
+                    }
+                }
+            return {"data": []}
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: Fake97Orchestrator()
+    try:
+        result = asyncio.run(server.call_tool("get_wan_health", {"appliance_id": "all"}))
+        payload = jsonlib.loads(result.content[0].text)
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    stats = payload["appliances"][0]["stats"]
+    tunnel = stats["bondedTunnel_13"]["1.NE"]
+    assert tunnel == {"MOS": 440, "MIN_MOS": 420, "MAX_JITTER": 3.2}, tunnel
+
+
+def test_call_read_api_proxy_failure_reports_both_errors():
+    import asyncio
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    class Fake97Orchestrator:
+        _api_root = "/gms/rest"
+
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def list_appliances(self, refresh=False):
+            return [{"nePk": "1.NE", "name": "EC1", "ip": "10.0.0.1"}]
+
+        def call(self, version, operation_id, path_params=None, **query):
+            raise RuntimeError("HTTP 400 for GET /gms/rest/userProfile/options: 'Invalid nePk'")
+
+        def appliance_api_get(self, ne_pk, appliance_path, **query):
+            raise RuntimeError("HTTP 404 for GET /gms/rest/appliance/rest: not found")
+
+        def get_raw(self, path, **query):
+            return {"data": []}
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: Fake97Orchestrator()
+    try:
+        result = asyncio.run(server.call_tool("call_read_api", {"operation_id": "get_role_options"}))
+        text = result.content[0].text
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    assert "Invalid nePk" in text and "also failed" in text
