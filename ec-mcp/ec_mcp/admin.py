@@ -164,7 +164,6 @@ async def login_post(request):
                 "error": f"Contraseña incorrecta. Intentos restantes: {remaining}.",
                 "remaining_attempts": remaining,
             },
-            status_code=401,
         )
     token = secrets.token_urlsafe(32)
     SESSIONS[token] = time.time()
