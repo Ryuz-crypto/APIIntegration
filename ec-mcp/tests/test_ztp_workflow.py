@@ -156,7 +156,28 @@ class FakeZtpClient:
             return {"denied": True}
         if operation_id == "orchestrator.deletepreconfiguration251":
             return {"deleted": True}
+        if operation_id == "orchestrator.getpreconfigurationapplystatus254":
+            return {
+                "data": {
+                    "result": [
+                        {"name": "Add Appliance", "completionStatus": True, "taskStatus": 2, "nePk": "15.NE"},
+                        {"name": "Rebooting Appliance", "completionStatus": True, "taskStatus": 2, "nePk": "15.NE"},
+                    ]
+                }
+            }
         raise AssertionError(f"unexpected operation {operation_id}")
+
+    def list_appliances(self):
+        if "applydiscoveredpreconfiguration255" in [c[0] for c in self.calls]:
+            return [
+                {
+                    "nePk": "15.NE",
+                    "name": "EC3",
+                    "serial_number": "00-1B-BC-46-2C-04",
+                    "state": 1,
+                }
+            ]
+        return []
 
 
 def _tool(server_fixture, name, **kwargs):
@@ -301,7 +322,7 @@ def test_prepare_ztp_plan_warns_when_overlay_listing_empty():
 def test_prepare_ztp_plan_builds_confirmation():
     plan = prepare_ztp_plan(DISCOVERED_ROW, PRECONFIG_YAML, TEMPLATE_GROUPS, OVERLAYS)
     assert plan.preconfig_name == f"Codex-ZTP-{plan.plan_id}"
-    assert plan.confirmation == f"ADOPTAR {plan.plan_id} {UUID} {plan.preconfig_name}"
+    assert plan.confirmation == f"ADOPTAR {plan.plan_id} 54 {plan.preconfig_name}"
     assert plan.preconfig_yaml == PRECONFIG_YAML
 
 
@@ -337,7 +358,7 @@ def test_full_transactional_cycle(monkeypatch):
         prepared = asyncio.run(
             server.call_tool(
                 "prepare_ztp_adoption",
-                {"appliance_uuid": UUID, "preconfig_yaml": PRECONFIG_YAML},
+                {"appliance_selector": "001BBC462C04", "preconfig_yaml": PRECONFIG_YAML},
             )
         )
         payload = json.loads(prepared.content[0].text)
@@ -345,7 +366,7 @@ def test_full_transactional_cycle(monkeypatch):
         assert payload["dry_run"] is True
         assert plan["preconfig_name"] == f"Codex-ZTP-{plan['plan_id']}"
         assert plan["confirmation_required"] == (
-            f"ADOPTAR {plan['plan_id']} {UUID} {plan['preconfig_name']}"
+            f"ADOPTAR {plan['plan_id']} 54 {plan['preconfig_name']}"
         )
 
         applied = asyncio.run(
@@ -360,9 +381,11 @@ def test_full_transactional_cycle(monkeypatch):
         )
         applied_payload = json.loads(applied.content[0].text)
         assert applied_payload["applied"] is True
-        assert applied_payload["verified"] is True
+        assert applied_payload["verification"] == "async"
         created_id = applied_payload["plan"]["created_preconfig_id"]
         assert created_id == "77"
+        apply_call = next(c for c in fake.calls if c[0] == "orchestrator.applydiscoveredpreconfiguration255")
+        assert apply_call[2].get("discoveredId") == "54"
         assert fake.created_preconfig["name"] == plan["preconfig_name"]
         assert base64.b64decode(fake.created_preconfig["configData"]).decode() == PRECONFIG_YAML
         assert "orchestrator.applydiscoveredpreconfiguration255" in [c[0] for c in fake.calls]
@@ -403,7 +426,7 @@ def test_apply_rejects_wrong_confirmation(monkeypatch):
         prepared = asyncio.run(
             server.call_tool(
                 "prepare_ztp_adoption",
-                {"appliance_uuid": UUID, "preconfig_yaml": PRECONFIG_YAML},
+                {"appliance_selector": "001BBC462C04", "preconfig_yaml": PRECONFIG_YAML},
             )
         )
         plan = json.loads(prepared.content[0].text)["plan"]
@@ -430,7 +453,7 @@ def test_apply_failure_after_create_marks_verification_failed(monkeypatch):
 
     import ec_mcp.server as server_module
 
-    fake = FakeZtpClient(approve_error=True, approve_marks=False)
+    fake = FakeZtpClient(preconfig_error=True)
     original_create = server_module.OrchestratorClient
     server_module.OrchestratorClient = lambda *args, **kwargs: fake
     try:
@@ -444,7 +467,7 @@ def test_apply_failure_after_create_marks_verification_failed(monkeypatch):
         prepared = asyncio.run(
             server.call_tool(
                 "prepare_ztp_adoption",
-                {"appliance_uuid": UUID, "preconfig_yaml": PRECONFIG_YAML},
+                {"appliance_selector": "001BBC462C04", "preconfig_yaml": PRECONFIG_YAML},
             )
         )
         plan = json.loads(prepared.content[0].text)["plan"]
@@ -482,7 +505,7 @@ def test_rollback_only_for_reversible_plans(monkeypatch):
         prepared = asyncio.run(
             server.call_tool(
                 "prepare_ztp_adoption",
-                {"appliance_uuid": UUID, "preconfig_yaml": PRECONFIG_YAML},
+                {"appliance_selector": "001BBC462C04", "preconfig_yaml": PRECONFIG_YAML},
             )
         )
         plan = json.loads(prepared.content[0].text)["plan"]
@@ -493,5 +516,148 @@ def test_rollback_only_for_reversible_plans(monkeypatch):
             )
         )
         assert rolled.content[0].text.startswith("Error:")
+    finally:
+        server_module.OrchestratorClient = original_create
+
+
+def test_select_discovered_by_serial_undashed():
+    row = select_discovered({"data": [DISCOVERED_ROW]}, "001BBC462C04")
+    assert row["uuid"] == UUID
+
+
+def test_select_discovered_by_serial_dashed():
+    row = select_discovered({"data": [DISCOVERED_ROW]}, "00-1B-BC-46-2C-04")
+    assert row["uuid"] == UUID
+
+
+def test_select_discovered_rejects_unknown_serial():
+    with pytest.raises(ValueError, match="was not found"):
+        select_discovered({"data": [DISCOVERED_ROW]}, "001BBC999999")
+
+
+def test_normalize_serial_handles_both_forms():
+    from ec_mcp.ztp_workflow import normalize_serial
+
+    assert normalize_serial("001BBC462C04") == normalize_serial("00-1B-BC-46-2C-04")
+    assert normalize_serial("001bbc462c04") == "001BBC462C04"
+
+
+def test_prepare_ztp_plan_carries_discovered_row_id():
+    plan = prepare_ztp_plan(DISCOVERED_ROW, PRECONFIG_YAML, TEMPLATE_GROUPS, OVERLAYS)
+    assert plan.discovered_row_id == "54"
+    assert plan.confirmation.endswith(plan.preconfig_name)
+    assert " 54 " in plan.confirmation
+
+
+def test_render_bulk_yaml_substitutes_placeholders():
+    from ec_mcp.ztp_workflow import render_bulk_yaml
+
+    base = PRECONFIG_YAML.replace('hostname: "EC3"', 'hostname: "{{hostname}}"')
+    rendered = render_bulk_yaml(base, "EC10", "Calimaya")
+    assert 'hostname: "EC10"' in rendered
+    assert "{{" not in rendered
+
+
+def test_render_bulk_yaml_requires_hostname():
+    from ec_mcp.ztp_workflow import render_bulk_yaml
+
+    with pytest.raises(ValueError, match="hostname"):
+        render_bulk_yaml("hostname: {{hostname}}", "", "")
+
+
+def test_full_bulk_cycle(monkeypatch):
+    import asyncio
+
+    import ec_mcp.server as server_module
+
+    second_row = dict(
+        DISCOVERED_ROW,
+        id=55,
+        uuid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        applianceInfo=dict(
+            DISCOVERED_ROW["applianceInfo"], serial="00-1B-BC-46-2C-05"
+        ),
+    )
+    fake = FakeZtpClient(discovered=[dict(DISCOVERED_ROW), second_row])
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *args, **kwargs: fake
+    try:
+        server = create_server(
+            Settings(
+                orchestrator_url="https://orch.example",
+                allow_write_tools=True,
+                allow_dangerous_writes=True,
+            )
+        )
+        base = PRECONFIG_YAML.replace('hostname: "EC3"', 'hostname: "{{hostname}}"')
+        prepared = asyncio.run(
+            server.call_tool(
+                "prepare_bulk_ztp_adoption",
+                {
+                    "appliance_selectors": "001BBC462C04, 001BBC462C05",
+                    "base_preconfig_yaml": base,
+                    "hostnames": "EC10,EC11",
+                },
+            )
+        )
+        payload = json.loads(prepared.content[0].text)
+        assert payload["dry_run"] is True
+        bulk = payload["bulk"]
+        assert bulk["appliance_count"] == 2
+        assert len(payload["plans"]) == 2
+        assert payload["plans"][0]["appliance"]["discovered_row_id"] == "54"
+        assert payload["plans"][1]["appliance"]["discovered_row_id"] == "55"
+
+        applied = asyncio.run(
+            server.call_tool(
+                "apply_bulk_ztp_plan",
+                {
+                    "bulk_id": bulk["bulk_id"],
+                    "confirmation": bulk["confirmation_required"],
+                    "confirm": True,
+                },
+            )
+        )
+        applied_payload = json.loads(applied.content[0].text)
+        assert applied_payload["applied"] == 2
+        assert applied_payload["total"] == 2
+        assert all(r["applied"] for r in applied_payload["results"])
+        apply_calls = [c for c in fake.calls if c[0] == "orchestrator.applydiscoveredpreconfiguration255"]
+        assert [c[2].get("discoveredId") for c in apply_calls] == ["54", "55"]
+        configs = [base64.b64decode(c[1]["configData"]).decode() for c in fake.calls
+                   if c[0] == "orchestrator.createpreconfiguration247_1"]
+        assert 'hostname: "EC10"' in configs[0]
+        assert 'hostname: "EC11"' in configs[1]
+    finally:
+        server_module.OrchestratorClient = original_create
+
+
+def test_bulk_prepare_rejects_mismatched_hostnames(monkeypatch):
+    import asyncio
+
+    import ec_mcp.server as server_module
+
+    fake = FakeZtpClient()
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *args, **kwargs: fake
+    try:
+        server = create_server(
+            Settings(
+                orchestrator_url="https://orch.example",
+                allow_write_tools=True,
+                allow_dangerous_writes=True,
+            )
+        )
+        prepared = asyncio.run(
+            server.call_tool(
+                "prepare_bulk_ztp_adoption",
+                {
+                    "appliance_selectors": "001BBC462C04",
+                    "base_preconfig_yaml": PRECONFIG_YAML,
+                    "hostnames": "EC10,EC11",
+                },
+            )
+        )
+        assert prepared.content[0].text.startswith("Error:")
     finally:
         server_module.OrchestratorClient = original_create

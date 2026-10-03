@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import re
+import secrets
 import time
 from collections import deque
 from typing import Any
@@ -30,6 +31,28 @@ from .overlay_workflow import (
     select_overlay,
 )
 from .security import SecurityError, redact_secrets, redact_sensitive_values
+from .security_workflow import (
+    BFD_SESSIONS_READ,
+    BGP_NEIGHBOR_READ,
+    BONDED_TUNNELS_STATE_READ,
+    DDOS_PROTECTION_PROFILE_READ,
+    DDOS_THRESHOLD_STATUS_READ,
+    DEPLOYMENT_CONFIG_READ,
+    IDS_IPS_EVENTS_READ,
+    IDS_IPS_STATE_READ,
+    SECURITY_MAPS_READ,
+    SSE_PROVIDERS,
+    THIRD_PARTY_TUNNELS_STATE_READ,
+    TUNNELS_CONFIG_AND_STATE_READ,
+    ZONE_LIST_READ,
+    extract_rows,
+    extract_sse_status,
+    summarize_bgp_neighbors,
+    summarize_ddos,
+    summarize_ids_state,
+    summarize_tunnels,
+    summarize_zone_matrix,
+)
 from .ssh_ecos import ApplianceSshPool
 from .ztp_workflow import (
     TEMPLATE_GROUPS_READ,
@@ -39,13 +62,18 @@ from .ztp_workflow import (
     ZTP_PRECONFIG_APPLY,
     ZTP_PRECONFIG_CREATE,
     ZTP_PRECONFIG_DELETE,
+    ZTP_PRECONFIG_STATUS,
     ZTP_PRECONFIG_VALIDATE,
     ZTP_PRECONFIGS_READ,
+    ZtpBulkPlan,
+    ZtpPlan,
     ZtpPlanStore,
     extract_discovered,
     extract_preconfig_id,
     find_preconfig_id_by_name,
+    normalize_serial,
     prepare_ztp_plan,
+    render_bulk_yaml,
     select_discovered,
 )
 
@@ -70,6 +98,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     shared_client: OrchestratorClient | None = None
     overlay_plans = OverlayPlanStore()
     ztp_plans = ZtpPlanStore(state_dir=os.environ.get("EC_ZTP_STATE_DIR", ""))
+    ztp_bulk_plans: dict[str, ZtpBulkPlan] = {}
 
     def require_client() -> OrchestratorClient | None:
         nonlocal shared_client
@@ -1621,6 +1650,59 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     def _read_discovered(client: OrchestratorClient, version: str) -> Any:
         return client.call(version, ZTP_DISCOVERED_READ)
 
+    def _extract_status_tasks(payload: Any) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        if isinstance(payload, list):
+            rows = [item for item in payload if isinstance(item, dict)]
+        elif isinstance(payload, dict):
+            for key in ("data", "result"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    rows = [item for item in value if isinstance(item, dict)]
+                    break
+                if isinstance(value, dict):
+                    inner = value.get("result")
+                    if isinstance(inner, list):
+                        rows = [item for item in inner if isinstance(item, dict)]
+                        break
+        return rows
+
+    @mcp.tool()
+    def get_ztp_apply_status(preconfig_id: str) -> str:
+        """Read the asynchronous preconfig apply task chain status (operation 254) for a ZTP adoption: per-task completion (Add Appliance, Appliance Info, Zones, license, deployment, Reboot, templates, overlays)."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            payload = client.call(
+                client.resolve_active_profile(),
+                ZTP_PRECONFIG_STATUS,
+                preconfigId=preconfig_id,
+            )
+            tasks = _extract_status_tasks(payload)
+            pending = [t.get("name") for t in tasks if not t.get("completionStatus")]
+            return json_result(
+                {
+                    "preconfig_id": preconfig_id,
+                    "total_tasks": len(tasks),
+                    "completed_tasks": len(tasks) - len(pending),
+                    "all_completed": bool(tasks) and not pending,
+                    "pending_tasks": pending,
+                    "tasks": [
+                        {
+                            "name": t.get("name"),
+                            "completionStatus": t.get("completionStatus"),
+                            "taskStatus": t.get("taskStatus"),
+                            "nePk": t.get("nePk"),
+                        }
+                        for t in tasks
+                    ],
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            return f"Error: {error}"
+
     @mcp.tool()
     def list_discovered_appliances(limit: int = 20, offset: int = 0) -> str:
         """List discovered (ZTP) appliances that are not yet approved, with UUID, serial, model and software version."""
@@ -1660,16 +1742,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def prepare_ztp_adoption(
-        appliance_uuid: str,
+        appliance_selector: str,
         preconfig_yaml: str,
     ) -> str:
-        """Prepare a transactional ZTP adoption: select the exact discovered appliance UUID, validate the preconfiguration template YAML, verify referenced template groups and overlays exist, and return a plan plus confirmation phrase. Never writes."""
+        """Prepare a transactional ZTP adoption. ``appliance_selector`` accepts a serial number (preferred, dashed or undashed, e.g. 001BBC462C04 or 00-1B-BC-46-2C-04) or a discovered UUID. Validates the preconfiguration template YAML, verifies referenced template groups and overlays exist, and returns a plan plus confirmation phrase. Never writes."""
         try:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
-            row = select_discovered(_read_discovered(client, version), appliance_uuid)
+            row = select_discovered(_read_discovered(client, version), appliance_selector)
             groups_payload = client.call(version, TEMPLATE_GROUPS_READ)
             overlays_payload = _read_overlays(client, version)
             plan = prepare_ztp_plan(row, preconfig_yaml, groups_payload, overlays_payload)
@@ -1757,66 +1839,42 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 raise ValueError(f"Orchestrator did not return a preconfig id after creation: {created!r}")
             plan.created_preconfig_id = created_id
             require_writes(ZTP_PRECONFIG_APPLY)
+            apply_query: dict[str, Any] = {"preconfigId": created_id}
+            if plan.discovered_row_id:
+                apply_query["discoveredId"] = plan.discovered_row_id
+            else:
+                apply_query["discoveredId"] = plan.appliance_uuid
             plan.preconfig_result = client.call(
                 version,
                 ZTP_PRECONFIG_APPLY,
-                discoveredId=plan.appliance_uuid,
-                preconfigId=created_id,
+                **apply_query,
             )
-            require_writes(ZTP_APPROVE_OPERATION)
-            plan.approve_result = client.call(
-                version,
-                ZTP_APPROVE_OPERATION,
-                id=plan.appliance_uuid,
-            )
-            discovered_after = _read_discovered(client, version)
-            rows = [
-                row
-                for row in extract_discovered(discovered_after)
-                if str(row.get("uuid", "")).lower() == plan.appliance_uuid.lower()
-            ]
-            approved = bool(rows and rows[0].get("approved"))
             plan.deny_available = True
-            ztp_plans.put(plan)
-            if not approved:
-                plan.status = "verification_failed"
-                ztp_plans.put(plan)
-                audit.record(
-                    "apply_ztp_plan",
-                    ZTP_APPROVE_OPERATION,
-                    settings.orchestrator_url,
-                    "verification_failed",
-                    dry_run=False,
-                    details={"plan_id": plan.plan_id, "uuid": plan.appliance_uuid},
-                )
-                return json_result(
-                    {
-                        "applied": True,
-                        "verified": False,
-                        "deny_available": True,
-                        "plan": plan.public(include_details=False),
-                        "hint": "Appliance not marked approved after adoption; call rollback_ztp_plan to deny it.",
-                    },
-                    settings.max_output_chars,
-                )
             plan.status = "applied"
             ztp_plans.put(plan)
             audit.record(
                 "apply_ztp_plan",
-                ZTP_APPROVE_OPERATION,
+                ZTP_PRECONFIG_APPLY,
                 settings.orchestrator_url,
                 "applied",
                 dry_run=False,
-                details={"plan_id": plan.plan_id, "uuid": plan.appliance_uuid},
+                details={
+                    "plan_id": plan.plan_id,
+                    "uuid": plan.appliance_uuid,
+                    "discovered_row_id": plan.discovered_row_id,
+                },
             )
             return json_result(
                 {
                     "applied": True,
-                    "verified": True,
-                    "health_check": {
-                        "uuid": plan.appliance_uuid,
-                        "approved_after_adopt": True,
-                    },
+                    "verified": False,
+                    "verification": "async",
+                    "hint": (
+                        "The preconfig apply is asynchronous and triggers the full task chain "
+                        "(add, appliance info, deployment, reboot, templates, overlays). "
+                        "Poll get_ztp_apply_status with the preconfig id, then verify_ztp_plan "
+                        "once tasks complete."
+                    ),
                     "plan": plan.public(include_details=False),
                 },
                 settings.max_output_chars,
@@ -1827,24 +1885,62 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def verify_ztp_plan(plan_id: str) -> str:
-        """Read the Orchestrator and verify that the adopted appliance appears as approved in the discovered inventory."""
+        """Verify an applied ZTP adoption: polls the preconfig apply task status (254) and checks the appliance inventory by serial. The apply is asynchronous; verified=true only when every task completed AND the appliance is registered in inventory."""
         try:
             plan = ztp_plans.get(plan_id)
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
-            rows = [
-                row
-                for row in extract_discovered(_read_discovered(client, client.resolve_active_profile()))
-                if str(row.get("uuid", "")).lower() == plan.appliance_uuid.lower()
-            ]
-            approved = bool(rows and rows[0].get("approved"))
+            version = client.resolve_active_profile()
+            tasks_payload = None
+            tasks_summary: dict[str, Any] = {"checked": False}
+            if plan.created_preconfig_id:
+                try:
+                    tasks_payload = client.call(
+                        version,
+                        ZTP_PRECONFIG_STATUS,
+                        preconfigId=plan.created_preconfig_id,
+                    )
+                    tasks = _extract_status_tasks(tasks_payload)
+                    if tasks:
+                        pending = [t.get("name") for t in tasks if not t.get("completionStatus")]
+                        tasks_summary = {
+                            "checked": True,
+                            "total": len(tasks),
+                            "completed": len(tasks) - len(pending),
+                            "pending": pending,
+                        }
+                except Exception as error:
+                    tasks_summary = {"checked": False, "error": str(error)}
+            wanted = normalize_serial(plan.appliance_serial)
+            inventory_match = None
+            for appliance in client.list_appliances():
+                if normalize_serial(appliance.get("serial_number", appliance.get("serial", ""))) == wanted:
+                    inventory_match = {
+                        "nePk": appliance.get("nePk"),
+                        "name": appliance.get("name"),
+                        "serial": appliance.get("serial_number", appliance.get("serial")),
+                        "state": appliance.get("state"),
+                    }
+                    break
+            still_discovered = any(
+                normalize_serial((row.get("applianceInfo") or {}).get("serial")) == wanted
+                for row in extract_discovered(_read_discovered(client, version))
+            )
+            tasks_done = bool(tasks_summary.get("checked") and not tasks_summary.get("pending"))
+            verified = bool(inventory_match and not still_discovered and (tasks_done or not tasks_summary.get("checked")))
+            if verified and plan.status in {"applied", "verification_failed"}:
+                plan.status = "verified"
+                plan.health_check = {"inventory": inventory_match, "tasks": tasks_summary}
+                ztp_plans.put(plan)
             return json_result(
                 {
-                    "verified": approved,
-                    "approved": approved,
-                    "uuid": plan.appliance_uuid,
+                    "verified": verified,
+                    "inventory": inventory_match,
+                    "still_in_discovered": still_discovered,
+                    "apply_tasks": tasks_summary,
                     "hostname": plan.appliance_hostname,
+                    "serial": plan.appliance_serial,
                     "plan_status": plan.status,
                 },
                 settings.max_output_chars,
@@ -1921,6 +2017,433 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
         except Exception as error:
             audit.record("rollback_ztp_plan", ZTP_DENY_OPERATION, settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def prepare_bulk_ztp_adoption(
+        appliance_selectors: str,
+        base_preconfig_yaml: str,
+        hostnames: str = "",
+        sites: str = "",
+    ) -> str:
+        """Prepare a bulk transactional ZTP adoption for many appliances at once. ``appliance_selectors`` is a comma-separated list of serial numbers (preferred) or UUIDs. ``base_preconfig_yaml`` may use {{hostname}} and {{site}} placeholders substituted per appliance from the comma-separated ``hostnames``/``sites`` lists (same order). Returns a bulk plan with one sub-plan per appliance and a single confirmation phrase. Never writes."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            selectors = [item.strip() for item in appliance_selectors.split(",") if item.strip()]
+            if not selectors:
+                raise ValueError("appliance_selectors must contain at least one serial or UUID")
+            hostname_list = [item.strip() for item in hostnames.split(",") if item.strip()] if hostnames else []
+            site_list = [item.strip() for item in sites.split(",") if item.strip()] if sites else []
+            if hostname_list and len(hostname_list) != len(selectors):
+                raise ValueError(
+                    f"hostnames has {len(hostname_list)} entries but there are {len(selectors)} appliances"
+                )
+            if site_list and len(site_list) != len(selectors):
+                raise ValueError(f"sites has {len(site_list)} entries but there are {len(selectors)} appliances")
+            discovered = _read_discovered(client, version)
+            groups_payload = client.call(version, TEMPLATE_GROUPS_READ)
+            overlays_payload = _read_overlays(client, version)
+            bulk_id = secrets.token_hex(6)
+            plans: list[ZtpPlan] = []
+            for index, selector in enumerate(selectors):
+                row = select_discovered(discovered, selector)
+                hostname = hostname_list[index] if hostname_list else str(
+                    (row.get("applianceInfo") or {}).get("hostname") or ""
+                )
+                site = site_list[index] if site_list else ""
+                rendered = render_bulk_yaml(base_preconfig_yaml, hostname, site)
+                plan = prepare_ztp_plan(
+                    row,
+                    rendered,
+                    groups_payload,
+                    overlays_payload,
+                    bulk_id=bulk_id,
+                )
+                plans.append(plan)
+            for plan in plans:
+                ztp_plans.put(plan)
+            bulk = ZtpBulkPlan(
+                bulk_id=bulk_id,
+                plan_ids=[p.plan_id for p in plans],
+                confirmation=f"ADOPTAR-BULK {bulk_id} {len(plans)}",
+            )
+            ztp_bulk_plans[bulk_id] = bulk
+            audit.record(
+                "prepare_bulk_ztp_adoption",
+                ZTP_DISCOVERED_READ,
+                settings.orchestrator_url,
+                "prepared",
+                dry_run=True,
+                details={"bulk_id": bulk_id, "appliances": len(plans)},
+            )
+            return json_result(
+                {
+                    "dry_run": True,
+                    "bulk": bulk.public(),
+                    "plans": [p.public(include_details=False) for p in plans],
+                    "next_step": (
+                        "Review every sub-plan, then call apply_bulk_ztp_plan with the bulk "
+                        "confirmation phrase and confirm=true."
+                    ),
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record("prepare_bulk_ztp_adoption", ZTP_DISCOVERED_READ, settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def apply_bulk_ztp_plan(
+        bulk_id: str,
+        confirmation: str = "",
+        confirm: bool = False,
+    ) -> str:
+        """Apply every prepared sub-plan of a bulk ZTP adoption sequentially: validate, create, apply preconfig (with the numeric discoveredId) per appliance. Requires confirm=true and the bulk phrase. Sub-plans that fail do not stop the rest; the response reports per-plan results. Verify each appliance afterwards with verify_ztp_plan."""
+        try:
+            bulk = ztp_bulk_plans.get(bulk_id)
+            if bulk is None:
+                raise ValueError("Unknown or expired bulk ZTP plan")
+            if bulk.status != "prepared":
+                raise SecurityError(f"Bulk plan status is {bulk.status!r}; only prepared bulks can be applied")
+            if not confirm:
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "bulk": bulk.public(),
+                        "hint": "Set confirm=true and pass confirmation_required exactly.",
+                    },
+                    settings.max_output_chars,
+                )
+            if confirmation != bulk.confirmation:
+                raise SecurityError("Confirmation phrase does not match this bulk plan")
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            results: list[dict[str, Any]] = []
+            applied = 0
+            for plan_id in bulk.plan_ids:
+                entry: dict[str, Any] = {"plan_id": plan_id}
+                try:
+                    plan = ztp_plans.get(plan_id)
+                    if plan.status != "prepared":
+                        raise SecurityError(f"Sub-plan status is {plan.status!r}")
+                    preconfig_body = {
+                        "name": plan.preconfig_name,
+                        "configData": base64.b64encode(plan.preconfig_yaml.encode("utf-8")).decode("ascii"),
+                        "autoApply": False,
+                    }
+                    require_writes(ZTP_PRECONFIG_VALIDATE)
+                    client.call(version, ZTP_PRECONFIG_VALIDATE, json_body=preconfig_body)
+                    require_writes(ZTP_PRECONFIG_CREATE)
+                    created = client.call(version, ZTP_PRECONFIG_CREATE, json_body=preconfig_body)
+                    created_id = extract_preconfig_id(created) or find_preconfig_id_by_name(
+                        client.call(version, ZTP_PRECONFIGS_READ), plan.preconfig_name
+                    )
+                    if not created_id:
+                        raise ValueError("Orchestrator did not return a preconfig id after creation")
+                    plan.created_preconfig_id = created_id
+                    require_writes(ZTP_PRECONFIG_APPLY)
+                    client.call(
+                        version,
+                        ZTP_PRECONFIG_APPLY,
+                        discoveredId=plan.discovered_row_id or plan.appliance_uuid,
+                        preconfigId=created_id,
+                    )
+                    plan.status = "applied"
+                    plan.deny_available = True
+                    ztp_plans.put(plan)
+                    entry.update({"applied": True, "preconfig_id": created_id})
+                    applied += 1
+                except Exception as error:
+                    entry.update({"applied": False, "error": str(error)})
+                results.append(entry)
+            bulk.status = "applied" if applied else "failed"
+            audit.record(
+                "apply_bulk_ztp_plan",
+                ZTP_PRECONFIG_APPLY,
+                settings.orchestrator_url,
+                bulk.status,
+                dry_run=False,
+                details={"bulk_id": bulk_id, "applied": applied, "total": len(bulk.plan_ids)},
+            )
+            return json_result(
+                {
+                    "applied": applied,
+                    "total": len(bulk.plan_ids),
+                    "results": results,
+                    "next_step": (
+                        "The applies are asynchronous: poll get_ztp_apply_status per preconfig id "
+                        "and verify each appliance with verify_ztp_plan."
+                    ),
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record("apply_bulk_ztp_plan", ZTP_PRECONFIG_APPLY, settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def list_bulk_ztp_plans() -> str:
+        """List every bulk ZTP adoption plan with its sub-plans and status."""
+        try:
+            bulks = []
+            for bulk in ztp_bulk_plans.values():
+                item = bulk.public()
+                item["plans"] = []
+                for plan_id in bulk.plan_ids:
+                    try:
+                        item["plans"].append(ztp_plans.get(plan_id).public(include_details=False))
+                    except Exception:
+                        item["plans"].append({"plan_id": plan_id, "status": "expired"})
+                bulks.append(item)
+            return json_result({"bulks": bulks}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_ids_ips_state(appliance_id: str = "all") -> str:
+        """Read the IDS/IPS posture of one appliance (or all): mode (Off/IDS Only/IPS-Performant/IPS-Inline), profile and whether intrusion detection/prevention is active."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            results = []
+            for ne_pk in resolve_ne_pks(client, appliance_id):
+                payload = client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ)
+                results.append({"nePk": ne_pk, **summarize_ids_state(payload)})
+            return json_result({"appliances": results}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_ids_ips_events(appliance_id: str, start_time: str = "", end_time: str = "", limit: int = 50) -> str:
+        """Read recent IDS/IPS security events of an appliance for incident detection and troubleshooting (epoch-seconds time window supported)."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            ne_pk = resolve_ne_pk(client, appliance_id)
+            query: dict[str, Any] = {}
+            if start_time:
+                query["startTime"] = start_time
+            if end_time:
+                query["endTime"] = end_time
+            payload = client.appliance_api_call(version, ne_pk, IDS_IPS_EVENTS_READ, **query)
+            rows = extract_rows(payload)
+            return json_result(
+                {
+                    "nePk": ne_pk,
+                    "total_events": len(rows),
+                    "events": rows[: max(1, int(limit))],
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_zone_matrix(appliance_id: str) -> str:
+        """Read the zone-based security matrix of an appliance: zones, security maps with per-priority zone-to-zone policies, and uncovered zone pairs (no explicit policy) for review."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            ne_pk = resolve_ne_pk(client, appliance_id)
+            zones_payload = client.appliance_api_call(version, ne_pk, ZONE_LIST_READ)
+            maps_payload = client.appliance_api_call(version, ne_pk, SECURITY_MAPS_READ)
+            matrix = summarize_zone_matrix(zones_payload, maps_payload)
+            return json_result({"nePk": ne_pk, **matrix}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_ddos_status(appliance_id: str) -> str:
+        """Read the DDoS protection status of an appliance: threshold status and protection profiles per zone."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            ne_pk = resolve_ne_pk(client, appliance_id)
+            thresholds = client.appliance_api_call(version, ne_pk, DDOS_THRESHOLD_STATUS_READ)
+            profiles = client.appliance_api_call(version, ne_pk, DDOS_PROTECTION_PROFILE_READ)
+            return json_result(
+                {
+                    "nePk": ne_pk,
+                    "threshold_status": summarize_ddos(thresholds),
+                    "protection_profiles": summarize_ddos(profiles),
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_deployment_config(appliance_id: str) -> str:
+        """Read the LAN/WAN deployment configuration of an appliance: deployment mode, total bandwidths and per-interface addressing, labels, zones and firewall modes. First stop for LAN/WAN configuration review."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            ne_pk = resolve_ne_pk(client, appliance_id)
+            payload = client.appliance_api_call(version, ne_pk, DEPLOYMENT_CONFIG_READ)
+            return json_result({"nePk": ne_pk, "deployment": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_site_to_site_tunnels(appliance_id: str = "all", include_third_party: bool = True) -> str:
+        """Read site-to-site tunnel state: standard tunnelsConfigAndState, bonded tunnel state, and (optionally) third-party/SSE VGW tunnels. Use for tunnel flow review and troubleshooting."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            results = []
+            for ne_pk in resolve_ne_pks(client, appliance_id):
+                entry: dict[str, Any] = {
+                    "nePk": ne_pk,
+                    "tunnels": summarize_tunnels(
+                        client.appliance_api_call(version, ne_pk, TUNNELS_CONFIG_AND_STATE_READ)
+                    ),
+                    "bonded": summarize_tunnels(
+                        client.appliance_api_call(version, ne_pk, BONDED_TUNNELS_STATE_READ)
+                    ),
+                }
+                if include_third_party:
+                    entry["third_party"] = summarize_tunnels(
+                        client.appliance_api_call(version, ne_pk, THIRD_PARTY_TUNNELS_STATE_READ)
+                    )
+                results.append(entry)
+            return json_result({"appliances": results}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_bgp_neighbors(appliance_id: str = "all") -> str:
+        """Read BGP neighbor configuration and state (plus BFD sessions) for routing troubleshooting; supports 'all'."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            neighbor_payload = client.call(version, BGP_NEIGHBOR_READ, nePk="")
+            neighbors = summarize_bgp_neighbors(neighbor_payload)
+            bfd_payload = client.call(version, BFD_SESSIONS_READ)
+            results = []
+            for ne_pk in resolve_ne_pks(client, appliance_id):
+                per_appliance = client.appliance_api_call(version, ne_pk, BGP_NEIGHBOR_READ)
+                results.append({"nePk": ne_pk, "neighbors": summarize_bgp_neighbors(per_appliance)})
+            return json_result(
+                {
+                    "orchestrator_neighbors": neighbors,
+                    "bfd_sessions": extract_rows(bfd_payload),
+                    "appliances": results,
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_sse_status(provider: str = "all") -> str:
+        """Read SSE (Secure Service Edge) integration status: connectivity and appliance associations for Zscaler, Netskope and Axis Security (HPE SSE). provider='all' or one of zscaler/netskope/axis."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            selected = list(SSE_PROVIDERS) if provider.strip().lower() in {"", "all"} else [provider.strip().lower()]
+            unknown = [name for name in selected if name not in SSE_PROVIDERS]
+            if unknown:
+                raise ValueError(f"Unknown SSE provider(s): {unknown}; valid: {list(SSE_PROVIDERS)}")
+            results = []
+            for name in selected:
+                ops = SSE_PROVIDERS[name]
+                try:
+                    connectivity = client.call(version, ops["connectivity"])
+                    association = client.call(version, ops["association"])
+                    results.append(extract_sse_status(name, connectivity, association))
+                except Exception as error:
+                    results.append({"provider": name, "error": str(error)})
+            return json_result({"providers": results}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_security_posture(appliance_id: str = "all") -> str:
+        """Single-call security posture snapshot for incident detection: IDS/IPS state, DDoS status, zone matrix coverage and tunnel health per appliance, plus a prioritized findings list."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            findings: list[dict[str, Any]] = []
+            results = []
+            for ne_pk in resolve_ne_pks(client, appliance_id):
+                entry: dict[str, Any] = {"nePk": ne_pk}
+                try:
+                    ids_state = summarize_ids_state(
+                        client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ)
+                    )
+                    entry["ids_ips"] = ids_state
+                    if not ids_state["active"]:
+                        findings.append(
+                            {"nePk": ne_pk, "severity": "high", "finding": "IDS/IPS is not active"}
+                        )
+                except Exception as error:
+                    entry["ids_ips"] = {"error": str(error)}
+                try:
+                    matrix = summarize_zone_matrix(
+                        client.appliance_api_call(version, ne_pk, ZONE_LIST_READ),
+                        client.appliance_api_call(version, ne_pk, SECURITY_MAPS_READ),
+                    )
+                    entry["zone_matrix"] = {"zones": len(matrix["zones"]), "covered_pairs": matrix["covered_pairs"]}
+                    if matrix["uncovered_pairs"]:
+                        findings.append(
+                            {
+                                "nePk": ne_pk,
+                                "severity": "medium",
+                                "finding": f"{len(matrix['uncovered_pairs'])} zone pairs without explicit policy",
+                            }
+                        )
+                except Exception as error:
+                    entry["zone_matrix"] = {"error": str(error)}
+                try:
+                    tunnels = summarize_tunnels(
+                        client.appliance_api_call(version, ne_pk, TUNNELS_CONFIG_AND_STATE_READ)
+                    )
+                    entry["tunnels"] = {"total": tunnels["total"], "up": tunnels["up"], "down": tunnels["down"]}
+                    if tunnels["down"]:
+                        findings.append(
+                            {
+                                "nePk": ne_pk,
+                                "severity": "high",
+                                "finding": f"{tunnels['down']} tunnels down",
+                            }
+                        )
+                except Exception as error:
+                    entry["tunnels"] = {"error": str(error)}
+                results.append(entry)
+            severity_rank = {"high": 0, "medium": 1, "low": 2}
+            findings.sort(key=lambda f: severity_rank.get(f["severity"], 3))
+            return json_result(
+                {
+                    "appliances": results,
+                    "findings": findings,
+                    "finding_count": len(findings),
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()

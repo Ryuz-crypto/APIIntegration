@@ -58,20 +58,54 @@ def extract_discovered(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
-def select_discovered(payload: Any, uuid: str) -> dict[str, Any]:
-    if not UUID_RE.fullmatch(uuid.strip()):
-        raise ValueError(f"Invalid appliance UUID: {uuid!r}")
-    matches = [row for row in extract_discovered(payload) if str(row.get("uuid", "")).lower() == uuid.strip().lower()]
-    if not matches:
-        raise ValueError(f"Discovered appliance with UUID {uuid!r} was not found")
+def normalize_serial(serial: str) -> str:
+    """Normalize serial numbers for comparison (strip dashes/colons/spaces, uppercase)."""
+    return re.sub(r"[-:\s]+", "", str(serial or "")).upper()
+
+
+def select_discovered(payload: Any, selector: str) -> dict[str, Any]:
+    """Select a discovered appliance row by UUID or serial number.
+
+    Serials are normalized: the Orchestrator stores them dashed (``00-1B-BC-46-2C-04``)
+    while users provide them undashed (``001BBC462C04``); both forms must match.
+    """
+    selector = selector.strip()
+    if UUID_RE.fullmatch(selector):
+        matches = [row for row in extract_discovered(payload) if str(row.get("uuid", "")).lower() == selector.lower()]
+        if not matches:
+            raise ValueError(f"Discovered appliance with UUID {selector!r} was not found")
+    else:
+        wanted = normalize_serial(selector)
+        if not wanted or not re.fullmatch(r"[0-9A-F]+", wanted):
+            raise ValueError(f"Invalid appliance UUID or serial number: {selector!r}")
+        matches = [
+            row
+            for row in extract_discovered(payload)
+            if normalize_serial((row.get("applianceInfo") or {}).get("serial")) == wanted
+        ]
+        if not matches:
+            raise ValueError(f"Discovered appliance with serial {selector!r} was not found")
     if len(matches) > 1:
-        raise ValueError(f"Discovered appliance UUID {uuid!r} is ambiguous")
+        raise ValueError(f"Discovered appliance selector {selector!r} is ambiguous")
     row = matches[0]
     if row.get("approved"):
         raise ValueError("Appliance is already approved; adoption is not applicable")
     if row.get("denied"):
         raise ValueError("Appliance is already denied; remove the deny state before adoption")
     return row
+
+
+def discovered_row_id(row: dict[str, Any]) -> str:
+    """Numeric row id used as ``discoveredId`` by the preconfig apply API.
+
+    Production-verified on Orchestrator 9.7.2.40591: the apply (255) executes the
+    full task chain only with the numeric row id; with the UUID it silently
+    no-ops (200 with an empty body).
+    """
+    row_id = row.get("id")
+    if row_id in (None, "", 0):
+        raise ValueError("Discovered row is missing the numeric id required by the apply API")
+    return str(row_id)
 
 
 def extract_template_groups(payload: Any) -> list[dict[str, Any]]:
@@ -276,6 +310,8 @@ class ZtpPlan:
     deny_available: bool = False
     health_check: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    discovered_row_id: str = ""
+    bulk_id: str = ""
 
     def public(self, include_details: bool = True) -> dict[str, Any]:
         result = {
@@ -285,12 +321,15 @@ class ZtpPlan:
                 "uuid": self.appliance_uuid,
                 "hostname": self.appliance_hostname,
                 "serial": self.appliance_serial,
+                "discovered_row_id": self.discovered_row_id,
             },
             "preconfig_name": self.preconfig_name,
             "confirmation_required": self.confirmation,
             "expires_at_epoch": int(self.expires_at),
             "deny_available": self.deny_available,
         }
+        if self.bulk_id:
+            result["bulk_id"] = self.bulk_id
         if self.warnings:
             result["warnings"] = self.warnings
         if include_details:
@@ -379,6 +418,8 @@ class ZtpPlanStore:
                         deny_available=payload.get("deny_available", False),
                         health_check=payload.get("health_check", {}),
                         warnings=payload.get("warnings", []),
+                        discovered_row_id=payload.get("discovered_row_id", ""),
+                        bulk_id=payload.get("bulk_id", ""),
                     )
                     self._plans[plan.plan_id] = plan
             except (OSError, json.JSONDecodeError, KeyError):
@@ -437,6 +478,7 @@ def prepare_ztp_plan(
     template_groups_payload: Any,
     overlays_payload: Any,
     ttl_seconds: int = 900,
+    bulk_id: str = "",
 ) -> ZtpPlan:
     """Validate the preconfig YAML and its references, then build an immutable plan."""
     parsed = validate_preconfig_yaml(preconfig_yaml_text)
@@ -445,6 +487,7 @@ def prepare_ztp_plan(
     info = discovered_row.get("applianceInfo") or {}
     preconfig_name = f"Codex-ZTP-{plan_id}"
     appliance_uuid = str(discovered_row.get("uuid", ""))
+    row_id = discovered_row_id(discovered_row)
     return ZtpPlan(
         plan_id=plan_id,
         appliance_uuid=appliance_uuid,
@@ -452,7 +495,54 @@ def prepare_ztp_plan(
         appliance_serial=str(info.get("serial") or ""),
         preconfig_name=preconfig_name,
         preconfig_yaml=preconfig_yaml_text,
-        confirmation=f"ADOPTAR {plan_id} {appliance_uuid} {preconfig_name}",
+        confirmation=f"ADOPTAR {plan_id} {row_id} {preconfig_name}",
         expires_at=time.time() + ttl_seconds,
         warnings=warnings,
+        discovered_row_id=row_id,
+        bulk_id=bulk_id,
     )
+
+
+BULK_PLACEHOLDER_RE = re.compile(r"\{\{\s*(hostname|site)\s*\}\}")
+
+
+def render_bulk_yaml(
+    base_yaml: str,
+    hostname: str,
+    site: str,
+) -> str:
+    """Substitute ``{{hostname}}``/``{{site}}`` placeholders in a bulk base template."""
+    if not hostname:
+        raise ValueError("hostname is required to render the bulk template")
+
+    def _substitute(match: re.Match[str]) -> str:
+        key = match.group(1)
+        value = hostname if key == "hostname" else site
+        if not value:
+            raise ValueError(f"Template uses {{{{{key}}}}} but no {key} was provided for this appliance")
+        return value
+
+    rendered = BULK_PLACEHOLDER_RE.sub(_substitute, base_yaml)
+    if BULK_PLACEHOLDER_RE.search(rendered):
+        raise ValueError("Template still contains unresolved placeholders")
+    return rendered
+
+
+@dataclass
+class ZtpBulkPlan:
+    """A bundle of per-appliance plans adopted together."""
+
+    bulk_id: str
+    plan_ids: list[str]
+    confirmation: str
+    created_at: float = field(default_factory=time.time)
+    status: str = "prepared"
+
+    def public(self) -> dict[str, Any]:
+        return {
+            "bulk_id": self.bulk_id,
+            "status": self.status,
+            "plan_ids": list(self.plan_ids),
+            "appliance_count": len(self.plan_ids),
+            "confirmation_required": self.confirmation,
+        }
