@@ -76,3 +76,55 @@ def test_invalid_ssh_auth_method_is_rejected():
 def test_keyboard_interactive_handler_accepts_confirmation_prompt():
     handler = ssh_ecos._keyboard_interactive_handler("secret")
     assert handler("title", "instructions", [("Accept certificate? (yes/no)", False)]) == ["yes"]
+
+def test_auto_auth_falls_back_after_generic_authentication_failure(monkeypatch):
+    class FakeChannel:
+        def get_pty(self, **_kwargs):
+            return None
+
+        def invoke_shell(self):
+            return None
+
+        def recv_ready(self):
+            return False
+
+        def close(self):
+            return None
+
+    class FakeTransport:
+        def __init__(self, _sock):
+            self.channel = FakeChannel()
+
+        def start_client(self, timeout):
+            assert timeout == 30
+
+        def auth_interactive(self, username, handler):
+            assert username == "admin"
+            assert handler("", "", [("Password:", False)]) == ["secret"]
+
+        def is_authenticated(self):
+            return True
+
+        def open_session(self):
+            return self.channel
+
+        def close(self):
+            return None
+
+    class FakeParamiko:
+        Transport = FakeTransport
+
+    def fail_connect(**_kwargs):
+        raise RuntimeError("Authentication failed")
+
+    monkeypatch.setattr(ssh_ecos, "ConnectHandler", fail_connect)
+    monkeypatch.setattr(ssh_ecos.socket, "create_connection", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(ssh_ecos, "paramiko", FakeParamiko)
+
+    session = ssh_ecos.ApplianceSession(
+        host="192.0.2.10",
+        username="admin",
+        password="secret",
+        auth_method="auto",
+    )
+    session.close()
