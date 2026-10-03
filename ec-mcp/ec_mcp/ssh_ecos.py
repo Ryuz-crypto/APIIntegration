@@ -26,9 +26,11 @@ class _KeyboardInteractiveConnection:
         if paramiko is None:
             raise RuntimeError("paramiko is required for keyboard-interactive SSH")
 
-        sock = socket.create_connection((host, port), timeout=15)
+        sock = socket.create_connection((host, port), timeout=30)
         self._transport = paramiko.Transport(sock)
-        self._transport.start_client(timeout=15)
+        self._transport.banner_timeout = 30
+        self._transport.auth_timeout = 30
+        self._transport.start_client(timeout=30)
         self._transport.auth_interactive(username, _keyboard_interactive_handler(password))
         if not self._transport.is_authenticated():
             raise RuntimeError("Keyboard-interactive SSH authentication failed")
@@ -65,13 +67,22 @@ class _KeyboardInteractiveConnection:
 
 def _keyboard_interactive_handler(password: str):
     def handler(_title: str, _instructions: str, prompts):
-        return [password for _prompt, _echo in prompts]
+        responses = []
+        for prompt, _echo in prompts:
+            lowered = prompt.strip().lower()
+            is_confirmation = (
+                ("yes/no" in lowered or "y/n" in lowered)
+                and any(word in lowered for word in ("accept", "continue", "confirm", "fingerprint"))
+            )
+            responses.append("yes" if is_confirmation else password)
+        return responses
 
     return handler
 
 
 _AUTH_METHOD_ERROR_RE = re.compile(
-    r"(?i)bad authentication type|allowed types|no authentication methods available"
+    r"(?i)bad authentication type|allowed types|no authentication methods available|"
+r"error reading ssh protocol banner|banner_timeout"
 )
 
 
@@ -136,6 +147,9 @@ class ApplianceSession:
                 username=username,
                 password=password,
                 port=port,
+                ssh_strict=False,
+                banner_timeout=30,
+                auth_timeout=30,
             )
         except Exception as error:
             if auth_method != "auto" or not _AUTH_METHOD_ERROR_RE.search(str(error)):
