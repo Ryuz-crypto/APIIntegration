@@ -40,9 +40,11 @@ from .ztp_workflow import (
     ZTP_PRECONFIG_CREATE,
     ZTP_PRECONFIG_DELETE,
     ZTP_PRECONFIG_VALIDATE,
+    ZTP_PRECONFIGS_READ,
     ZtpPlanStore,
     extract_discovered,
     extract_preconfig_id,
+    find_preconfig_id_by_name,
     prepare_ztp_plan,
     select_discovered,
 )
@@ -1746,6 +1748,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 json_body=preconfig_body,
             )
             created_id = extract_preconfig_id(created)
+            if not created_id:
+                created_id = find_preconfig_id_by_name(
+                    client.call(version, ZTP_PRECONFIGS_READ),
+                    plan.preconfig_name,
+                )
             if not created_id:
                 raise ValueError(f"Orchestrator did not return a preconfig id after creation: {created!r}")
             plan.created_preconfig_id = created_id

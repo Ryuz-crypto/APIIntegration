@@ -175,6 +175,18 @@ class OrchestratorClient:
             if retry.status_code < 400:
                 response = retry
                 full_path = retry_path
+        elif response.status_code < 400 and not response.content and alt_api_root:
+            retry_path = f"{alt_api_root}{resolved.path}"
+            retry = self._client.request(
+                resolved.method,
+                retry_path,
+                headers=self._headers(),
+                params=allowed_query,
+                json=json_body,
+            )
+            if retry.status_code < 400 and retry.content:
+                response = retry
+                full_path = retry_path
         self._record_metric(label, time.monotonic() - started, len(response.content), cache_hit=False)
         if response.status_code >= 400:
             raise RuntimeError(

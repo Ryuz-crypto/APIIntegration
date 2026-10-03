@@ -326,6 +326,28 @@ def extract_preconfig_id(payload: Any) -> str:
     return ""
 
 
+def find_preconfig_id_by_name(payload: Any, name: str) -> str:
+    """Locate a preconfiguration id by name from the listing response."""
+    rows: list[dict[str, Any]] = []
+    if isinstance(payload, list):
+        rows = [row for row in payload if isinstance(row, dict)]
+    elif isinstance(payload, dict):
+        value = payload.get("data")
+        if isinstance(value, list):
+            rows = [row for row in value if isinstance(row, dict)]
+        elif isinstance(value, dict):
+            rows = (find_preconfig_id_by_name(value, name) and []) or []
+            for key in ("data", "result", "preconfigurations"):
+                inner = value.get(key)
+                if isinstance(inner, list):
+                    rows = [row for row in inner if isinstance(row, dict)]
+                    break
+    for row in rows:
+        if str(row.get("name", "")).strip() == name.strip():
+            return str(row.get("id", row.get("preconfigId", "")))
+    return ""
+
+
 class ZtpPlanStore:
     """Plan store with optional disk persistence so plans survive restarts."""
 
