@@ -1,7 +1,6 @@
 # ec-mcp: MCP server for EdgeConnect SD-WAN
 
-**Versión estable: `v1.0.0`** — rama `main` = estable (release). Todo el trabajo
-nuevo se hace en la rama **`develop`** y se fusiona a `main` al cortar cada release.
+**Versión beta: `v2.0.0-beta.1`** — rama `main` contiene la beta desplegable. Los cambios posteriores deben conservar la compatibilidad del contrato MCP y actualizar QA-FULL.md.
 
 
 Servidor MCP (Model Context Protocol) que expone un entorno HPE Aruba Networking
@@ -169,7 +168,7 @@ ec-mcp                           # arranca en stdio; Ctrl+C para salir
 ```
 
 
-## Despliegue de un server nuevo (v1.0.0, de cero a producción)
+## Despliegue de un server nuevo (v2.0.0-beta.1, de cero a producción)
 
 Guía completa para dejar un Linux fresco sirviendo ec-mcp estable: MCP en el
 puerto 8000 (auto-arranque) + UI de admin en 8080 (gestión de credenciales
