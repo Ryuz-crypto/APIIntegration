@@ -420,11 +420,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     )
 
     def project_tunnel_kpis(node: Any) -> Any:
-        """Recursively project raw stats rows (~200 fields) down to tunnel KPIs.
+        """Project tunnel stats to identifiers plus a bounded KPI allow-list.
 
-        Keeps identifier and quality fields (MOS/jitter/loss/latency and their
-        documented variants) plus any field whose name contains one of those
-        tokens; drops counters to keep payloads LLM-consumable.
+        The Orchestrator returns very wide nested rows. Keeping only the
+        documented KPI fields prevents the MCP transport budget from cutting
+        an otherwise valid WAN-health response.
         """
         if isinstance(node, list):
             return [project_tunnel_kpis(item) for item in node]
@@ -433,14 +433,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         projected: dict[str, Any] = {}
         for key, value in node.items():
             lowered = str(key).lower()
-            if lowered in TUNNEL_KPI_KEYS or any(token in lowered for token in ("mos", "jitter", "loss", "latency", "rtt")):
+            if lowered in TUNNEL_KPI_KEYS:
                 projected[str(key)] = project_tunnel_kpis(value) if isinstance(value, (dict, list)) else value
             elif isinstance(value, dict):
                 nested = project_tunnel_kpis(value)
                 if nested:
                     projected[str(key)] = nested
-        if not projected:
-            return {k: v for k, v in list(node.items())[:3]}
+            elif isinstance(value, list):
+                nested = project_tunnel_kpis(value)
+                if nested:
+                    projected[str(key)] = nested
         return projected
 
     def project_wan_health_stats(payload: Any) -> Any:
@@ -712,11 +714,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     rows.append({"nePk": ne_pk, "stats": project_wan_health_stats(stats)})
                 except Exception as error:
                     rows.append({"nePk": ne_pk, "error": str(error)[:200]})
-            mos = None
-            try:
-                mos = project_wan_health_stats(kpi_get(client, "mos", "", granularity, start_time, end_time))
-            except Exception:
-                mos = None
+            mos_rows = []
+            for ne_pk in targets:
+                try:
+                    mos_rows.append({
+                        "nePk": ne_pk,
+                        "data": project_wan_health_stats(
+                            kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
+                        ),
+                    })
+                except Exception as error:
+                    mos_rows.append({"nePk": ne_pk, "error": str(error)[:200]})
+            mos = mos_rows
             reach = reachability_map(client)
             for row in rows:
                 if "error" in row and reach:
@@ -755,8 +764,21 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
-            ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
-            payload = kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
+            if appliance_id.strip().lower() in ("", "all"):
+                targets = resolve_ne_pks(client, "all")
+                rows = []
+                for ne_pk in targets:
+                    try:
+                        rows.append({
+                            "nePk": ne_pk,
+                            "data": kpi_get(client, "mos", ne_pk, granularity, start_time, end_time),
+                        })
+                    except Exception as error:
+                        rows.append({"nePk": ne_pk, "error": str(error)[:200]})
+                payload = {"appliances": rows, "total_count": len(rows)}
+            else:
+                ne_pk = resolve_ne_pk(client, appliance_id)
+                payload = kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
             audit.record("get_mos", "read", settings.orchestrator_url, "ok")
             return json_result({"data": payload, "note": "MOS values may be scaled x100 (440 = 4.40)"}, settings.max_output_chars)
         except Exception as error:
@@ -765,35 +787,51 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def get_tunnel_state(appliance_id: str = "") -> str:
-        """Tunnel state per appliance from /tunnelsConfigAndState (proxied via the Orchestrator): up/down/bonded per tunnel. appliance_id accepts a single appliance; empty = error hint to pass one."""
+        """Tunnel state per appliance from /tunnelsConfigAndState (proxied via the Orchestrator)."""
         try:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if not appliance_id:
-                return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"], "hint": "Pass one appliance (nePk, name or IP); use list_appliances to discover them."}, settings.max_output_chars)
-            ne_pk = resolve_ne_pk(client, appliance_id)
-            payload = kpi_get(client, "tunnel_state", ne_pk)
-            audit.record("get_tunnel_state", "read", ne_pk, "ok")
-            return json_result({"nePk": ne_pk, "data": payload}, settings.max_output_chars)
+                return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"], "hint": "Pass one appliance or 'all'; use list_appliances to discover them."}, settings.max_output_chars)
+            targets = resolve_ne_pks(client, appliance_id)
+            rows = []
+            for ne_pk in targets:
+                try:
+                    rows.append({"nePk": ne_pk, "data": kpi_get(client, "tunnel_state", ne_pk)})
+                except Exception as error:
+                    rows.append({"nePk": ne_pk, "error": str(error)[:200]})
+            audit.record("get_tunnel_state", "read", settings.orchestrator_url, "ok", details={"appliances": len(rows)})
+            return json_result({"appliances": rows, "total_count": len(rows)}, settings.max_output_chars)
         except Exception as error:
             audit.record("get_tunnel_state", "read", appliance_id, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()
     def get_brownout_state(appliance_id: str = "") -> str:
-        """Brownout/blackout detection per tunnel with reason (loss/latency/jitter threshold exceeded), derived from /tunnelsConfigAndState. Compare against each BIO's brownout thresholds from get_overlays."""
+        """Brownout/blackout detection per tunnel with reason."""
         try:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if not appliance_id:
-                return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"], "hint": "Pass one appliance (nePk, name or IP)."}, settings.max_output_chars)
-            ne_pk = resolve_ne_pk(client, appliance_id)
-            payload = kpi_get(client, "brownout", ne_pk)
-            tunnels = brownout_state(payload)
-            audit.record("get_brownout_state", "read", ne_pk, "ok", details={"tunnels": len(tunnels)})
-            return json_result({"nePk": ne_pk, "tunnels": tunnels}, settings.max_output_chars)
+                return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"], "hint": "Pass one appliance or 'all'."}, settings.max_output_chars)
+            targets = resolve_ne_pks(client, appliance_id)
+            rows = []
+            total_tunnels = 0
+            for ne_pk in targets:
+                try:
+                    tunnels = brownout_state(kpi_get(client, "brownout", ne_pk))
+                    total_tunnels += len(tunnels)
+                    rows.append({"nePk": ne_pk, "tunnels": tunnels})
+                except Exception as error:
+                    rows.append({"nePk": ne_pk, "error": str(error)[:200]})
+            payload = {"appliances": rows, "total_count": len(rows)}
+            if total_tunnels == 0:
+                payload["status"] = "SKIPPED_NO_ENTITY"
+                payload["reason"] = "No tunnel brownout entities were reported by the lab."
+            audit.record("get_brownout_state", "read", settings.orchestrator_url, "ok", details={"tunnels": total_tunnels})
+            return json_result(payload, settings.max_output_chars)
         except Exception as error:
             audit.record("get_brownout_state", "read", appliance_id, f"error: {error}")
             return f"Error: {error}"
@@ -811,7 +849,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return json_result({"data": payload, "granularity": granularity}, settings.max_output_chars)
         except Exception as error:
             audit.record("get_availability", "read", settings.orchestrator_url, f"error: {error}")
-            return f"Error: {error}"
+            if "HTTP 404" in str(error):
+                return json_result({
+                    "status": "SKIPPED_NO_ENTITY",
+                    "reason": "Availability endpoint/entity is not exposed by this lab Orchestrator.",
+                    "endpoint_candidates": KPI_ENDPOINTS["availability"]["paths"],
+                }, settings.max_output_chars)
+            return f"Error: {error}
 
     @mcp.tool()
     def get_top_talkers(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "", limit: int = 20) -> str:
@@ -851,43 +895,78 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def get_ha_status(appliance_id: str = "") -> str:
-        """High-availability status: HA peer metadata, HA groups and VRRP, from /appliance/haPeerMeta + /haGroups + /vrrp (all attempted, missing ones reported per source)."""
+        """High-availability status per appliance; missing HA is reported explicitly."""
         try:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
-            ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
-            payload = kpi_get(client, "ha_status", ne_pk)
-            audit.record("get_ha_status", "read", settings.orchestrator_url, "ok")
-            return json_result({"data": payload}, settings.max_output_chars)
+            targets = resolve_ne_pks(client, appliance_id) if appliance_id else [""]
+            rows = []
+            for ne_pk in targets:
+                try:
+                    rows.append({"nePk": ne_pk or None, "data": kpi_get(client, "ha_status", ne_pk)})
+                except Exception as error:
+                    rows.append({"nePk": ne_pk or None, "error": str(error)[:200]})
+            audit.record("get_ha_status", "read", settings.orchestrator_url, "ok", details={"appliances": len(rows)})
+            return json_result({"appliances": rows, "total_count": len(rows)}, settings.max_output_chars)
         except Exception as error:
             audit.record("get_ha_status", "read", settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()
     def get_firmware_compliance() -> str:
-        """Firmware compliance per appliance: active/fallback software partitions from /appliancesSoftwareVersions, to spot mixed versions across the fleet."""
+        """Firmware compliance per appliance from appliance-scoped software partitions."""
         try:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
-            payload = kpi_get(client, "firmware")
-            audit.record("get_firmware_compliance", "read", settings.orchestrator_url, "ok")
-            return json_result({"data": payload}, settings.max_output_chars)
+            targets = resolve_ne_pks(client, "all")
+            rows = []
+            for ne_pk in targets:
+                try:
+                    rows.append({"nePk": ne_pk, "data": kpi_get(client, "firmware", ne_pk)})
+                except Exception as error:
+                    rows.append({"nePk": ne_pk, "error": str(error)[:200]})
+            audit.record("get_firmware_compliance", "read", settings.orchestrator_url, "ok", details={"appliances": len(rows)})
+            return json_result({"appliances": rows, "total_count": len(rows)}, settings.max_output_chars)
         except Exception as error:
             audit.record("get_firmware_compliance", "read", settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()
     def get_ztp_status() -> str:
-        """Zero-Touch Provisioning status: pending/discovered appliances from /spPortal/ztp + /appliance/discovered."""
+        """Zero-Touch Provisioning status with bounded, credential-free discovery rows."""
         try:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             payload = kpi_get(client, "ztp")
-            audit.record("get_ztp_status", "read", settings.orchestrator_url, "ok")
-            return json_result({"data": payload}, settings.max_output_chars)
+            parts = payload if isinstance(payload, list) else [payload]
+            manual = None
+            discovered = []
+            for part in parts:
+                if isinstance(part, dict) and "enableManualProvisioning" in part:
+                    manual = part.get("enableManualProvisioning")
+                elif isinstance(part, list):
+                    for item in part:
+                        if not isinstance(item, dict):
+                            continue
+                        row = {key: item.get(key) for key in ("id", "uuid", "approved", "denied", "enabled", "discoveredTime") if key in item}
+                        info = item.get("applianceInfo")
+                        if isinstance(info, dict):
+                            row["applianceInfo"] = {
+                                key: info.get(key)
+                                for key in ("hostname", "model", "serial", "softwareVersion", "site", "ip", "publicIp", "deviceType", "reachabilityStatus", "enabled")
+                                if key in info
+                            }
+                        discovered.append(row)
+            result = {
+                "manual_provisioning": manual,
+                "discovered_count": len(discovered),
+                "discovered": discovered,
+            }
+            audit.record("get_ztp_status", "read", settings.orchestrator_url, "ok", details={"discovered": len(discovered)})
+            return json_result({"data": result}, settings.max_output_chars)
         except Exception as error:
             audit.record("get_ztp_status", "read", settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
@@ -1039,7 +1118,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
                 def _call_via_appliance_proxy() -> Any:
                     proxy_ne_pk = (query_params.get("nePk") if declares_ne_pk else "") or (
-                        resolve_ne_pk(client, appliance_id) if appliance_id else resolve_ne_pk(client, "")
+                        resolve_ne_pk(client, appliance_id) if appliance_id else resolve_ne_pk(client, "all")
                     )
                     proxy_path = operation.path
                     for key, value in path_params.items():
