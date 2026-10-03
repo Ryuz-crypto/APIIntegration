@@ -144,8 +144,12 @@ class OrchestratorClient:
     ) -> dict[str, Any]:
         resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params)
         profile_api_root = self._profile_api_root(version)
-        api_root = "" if resolved.path.startswith("/gms/") else profile_api_root
-        alt_api_root = profile_api_root if not api_root else ""
+        if resolved.path.startswith("/gms/"):
+            api_root = ""
+        else:
+            api_root = profile_api_root
+        alt_api_root = "" if api_root else profile_api_root
+        has_alt = api_root != alt_api_root
         label = f"{operation_id}"
         operation = self._engine._profiles[version]["operations"][operation_id]
         declared_query = set(operation.get("query_params") or [])
@@ -162,7 +166,7 @@ class OrchestratorClient:
             params=allowed_query,
             json=json_body,
         )
-        if response.status_code == 404 and alt_api_root:
+        if response.status_code == 404 and has_alt:
             retry_path = f"{alt_api_root}{resolved.path}"
             retry = self._client.request(
                 resolved.method,
@@ -174,7 +178,7 @@ class OrchestratorClient:
             if retry.status_code < 400:
                 response = retry
                 full_path = retry_path
-        elif response.status_code < 400 and not response.content and alt_api_root:
+        elif response.status_code < 400 and not response.content and has_alt:
             retry_path = f"{alt_api_root}{resolved.path}"
             retry = self._client.request(
                 resolved.method,
