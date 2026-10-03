@@ -95,14 +95,39 @@ systemctl status ec-mcp-update.timer
 El puerto sigue esta prioridad: `--port`, variable exportada en el proceso, valor `EC_ADMIN_PORT` de `.env` y finalmente `8080`. Reinstalar el servicio conserva el puerto guardado en `.env`.
 
 El instalador habilita ambos servicios. A partir de ese momento la configuración
-y las actualizaciones se administran en `http://<servidor>:8080`; no es
+y las actualizaciones se administran en
+`http://<servidor>:<EC_ADMIN_PORT>` (por ejemplo, puerto `9090`); no es
 necesario entrar por SSH para cambiar el `.env` o aplicar una publicación.
 
-Define una contraseña fuerte en `.env` antes de exponer el panel:
+Define una contraseña fuerte y el puerto deseado en `.env` antes de exponer
+el panel:
 
 ```dotenv
-EC_ADMIN_PASSWORD=example
+EC_ADMIN_HOST=0.0.0.0
+EC_ADMIN_PORT=9090
+EC_ADMIN_PASSWORD=CAMBIA-ESTA-CONTRASENA
+EC_ADMIN_LOGIN_MAX_FAILURES=5
+EC_ADMIN_LOGIN_WINDOW_SECONDS=60
 ```
+
+> **Fuente única de configuración:** mantén cada variable exactamente una vez
+> en `.env`. El JSON del cliente MCP sólo debe incluir `EC_MCP_ENV_FILE`.
+> No declares `EC_ADMIN_PORT`, credenciales ni tokens directamente en la
+> unidad systemd, porque el entorno del proceso tiene prioridad sobre `.env`.
+
+Antes de reiniciar, detecta claves duplicadas y verifica los valores no secretos:
+
+```bash
+cut -d= -f1 .env | sed 's/^export //' | grep '^EC_' | sort | uniq -d
+grep -nE '^(EC_ORCHESTRATOR_URL|EC_VERIFY_TLS|EC_MCP_HOST|EC_MCP_PORT|EC_ADMIN_HOST|EC_ADMIN_PORT|EC_UPDATE_REPOSITORY|EC_UPDATE_BRANCH)=' .env
+sudo systemctl cat ec-mcp-admin
+sudo systemctl show ec-mcp-admin -p Environment -p WorkingDirectory --no-pager
+```
+
+El primer comando no debe producir salida. Si systemd muestra una variable
+`EC_ADMIN_*` fijada en la unidad, reinstala el servicio con el script actual.
+Desde `3.0.0b3`, `install_admin_service.sh --port 9090` actualiza `.env`
+y la unidad sólo define `EC_MCP_ENV_FILE`.
 
 ## Instalación manual
 
@@ -407,6 +432,47 @@ run_show_api(command="show arp", appliance_id="0.NE")
 
 La última llamada debe devolver `applied: true`,
 `transport: orchestrator` y la tabla ARP/NDP del appliance.
+
+## Upgrade por terminal
+
+Usa este procedimiento si el panel no está disponible:
+
+```bash
+cd ~/APIIntegration
+git status --short
+git pull --ff-only origin main
+
+cd ec-mcp
+./scripts/install.sh --non-interactive
+./scripts/install_service.sh
+./scripts/install_admin_service.sh
+
+sudo systemctl daemon-reload
+sudo systemctl restart ec-mcp ec-mcp-admin
+./.venv/bin/python -c "import ec_mcp; print(ec_mcp.__version__)"
+git rev-parse HEAD
+sudo ss -lntp | grep -E ':(8000|9090)\\b'
+```
+
+No continúes con `git pull` si `git status --short` muestra cambios locales
+que todavía necesitas; respáldalos primero. Los instaladores preservan
+`.env`.
+
+### Diagnóstico de acceso al panel
+
+```bash
+grep -n '^EC_ADMIN_' .env
+sudo systemctl cat ec-mcp-admin
+sudo ss -lntp | grep -E ':(8080|9090)\\b'
+curl -I http://127.0.0.1:9090/login
+sudo journalctl -u ec-mcp-admin -n 50 --no-pager
+```
+
+- Conserva una sola línea `EC_ADMIN_PASSWORD=`; una definición duplicada puede
+  hacer que se use una contraseña distinta de la esperada.
+- Si cambias contraseña o puerto, reinicia `ec-mcp-admin`.
+- Tras alcanzar el límite de intentos, espera
+  `EC_ADMIN_LOGIN_WINDOW_SECONDS` antes de volver a probar.
 
 ## Actualización desde la web
 
