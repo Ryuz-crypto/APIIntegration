@@ -137,7 +137,7 @@ def _is_sensitive_key(key) -> bool:
         "token", "apikey", "sessioncookie", "community", "key",
     ))
 
-    
+
 def redact_sensitive_values(value):
     if isinstance(value, dict):
         redacted = {}
