@@ -250,7 +250,7 @@ class OrchestratorClient:
             if appliances:
                 break
         if not appliances:
-            detail = f"GET /appliance: empty inventory response"
+            detail = "GET /appliance: empty inventory response"
             if last_error is not None:
                 detail = f"{detail}; last error: {last_error}"
             raise RuntimeError(

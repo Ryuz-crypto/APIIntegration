@@ -495,7 +495,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         suggestions = suggest_operations(version, operation_id)
         alias = resolve_operation_alias(version, operation_id)
         if alias:
-            suggestions = [alias] + [s for s in suggestions if s != alias][:4]
+            suggestions = [alias, *[s for s in suggestions if s != alias][:4]]
         return json_result(
             {
                 "error": "OPERATION_NOT_FOUND",

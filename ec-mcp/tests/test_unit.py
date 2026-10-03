@@ -472,6 +472,7 @@ def test_list_appliances_falls_through_on_empty_first_source():
 def test_operation_alias_resolves_prefix_mismatch():
     import asyncio
     import json as jsonlib
+
     from ec_mcp.server import create_server
 
     server = create_server()
@@ -503,6 +504,7 @@ def test_operation_alias_resolves_prefix_mismatch():
 def test_kpi_helpers_support_all_fanout():
     import asyncio
     import json as jsonlib
+
     from ec_mcp.server import create_server
 
     server = create_server()
@@ -541,6 +543,7 @@ def test_kpi_helpers_support_all_fanout():
 def test_call_read_api_dynamic_path_param_resolution():
     import asyncio
     import json as jsonlib
+
     from ec_mcp.server import create_server
 
     server = create_server()
