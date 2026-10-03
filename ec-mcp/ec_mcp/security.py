@@ -126,11 +126,23 @@ SENSITIVE_KEYS = {
 }
 
 
+def _is_sensitive_key(key) -> bool:
+    normalized = re.sub(r"[^a-z0-9]", "", str(key).lower())
+    if normalized in SENSITIVE_KEYS:
+        return True
+    # API payloads commonly use compound names such as presharedkey_sha384
+    # and api_key; redact those recursively as credential material.
+    return any(token in normalized for token in (
+        "password", "passwd", "secret", "passphrase", "psk",
+        "token", "apikey", "sessioncookie", "community", "key",
+    ))
+
+
 def redact_sensitive_values(value):
     if isinstance(value, dict):
         redacted = {}
         for key, item in value.items():
-            if str(key).lower() in SENSITIVE_KEYS and item not in (None, "", [], {}):
+            if _is_sensitive_key(key) and item not in (None, "", [], {}):
                 redacted[key] = "***REDACTED***"
             else:
                 redacted[key] = redact_sensitive_values(item)
