@@ -134,6 +134,27 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
     return merged
 
 
+def _rename_overlay_acl(candidate: dict[str, Any], source_name: str, target_name: str) -> None:
+    match = candidate.get("match")
+    if not isinstance(match, dict):
+        return
+    acl_raw = match.get("overlayAcl")
+    if not isinstance(acl_raw, str) or not acl_raw.strip():
+        return
+    try:
+        acl = json.loads(acl_raw)
+    except json.JSONDecodeError:
+        return
+    data = acl.get("data") if isinstance(acl, dict) else None
+    if not isinstance(data, dict):
+        return
+    source_key = f"Overlay_{source_name}"
+    if source_key not in data:
+        return
+    data[f"Overlay_{target_name}"] = data.pop(source_key)
+    match["overlayAcl"] = json.dumps(acl)
+
+
 def sanitize_overlay(source: dict[str, Any], target_name: str, overrides: dict[str, Any]) -> dict[str, Any]:
     if not OVERLAY_NAME_RE.fullmatch(target_name):
         raise ValueError(
@@ -152,6 +173,7 @@ def sanitize_overlay(source: dict[str, Any], target_name: str, overrides: dict[s
     for key in MANAGED_OVERLAY_FIELDS:
         candidate.pop(key, None)
     candidate["name"] = target_name
+    _rename_overlay_acl(candidate, str(source.get("name", "")), target_name)
     validate_overlay_candidate(candidate)
     return candidate
 

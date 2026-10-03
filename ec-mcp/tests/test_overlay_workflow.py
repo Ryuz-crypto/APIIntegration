@@ -162,3 +162,20 @@ def test_exact_operation_search_does_not_return_entire_orchestrator_catalog() ->
     body = json.loads(result.content[0].text)["versions"]["9.6"]
     assert list(body["operations"]) == ["orchestrator.addnewoverlay315"]
     assert body["total_operations"] == 1
+
+def test_sanitize_overlay_renames_acl_key_to_target_name() -> None:
+    acl = json.dumps(
+        {
+            "options": {"merge": True, "delDependent": True},
+            "data": {
+                "Overlay_RealTime": {
+                    "entry": {"1010": {"permit": True, "dscp": "ef"}}
+                }
+            },
+        }
+    )
+    source = {**SOURCE, "match": {"overlayAcl": acl}}
+    candidate = sanitize_overlay(source, "Codex-Lab-Test", {})
+    renamed = json.loads(candidate["match"]["overlayAcl"])
+    assert "Overlay_RealTime" not in renamed["data"]
+    assert renamed["data"]["Overlay_Codex-Lab-Test"]["entry"]["1010"]["dscp"] == "ef"
