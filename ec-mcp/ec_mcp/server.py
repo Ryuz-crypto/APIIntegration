@@ -12,6 +12,7 @@ except ModuleNotFoundError:
     from mcp.server.mcpserver import MCPServer as FastMCP
 
 from .audit import AuditLog
+from .build import build_info
 from .cli_catalog import (
     catalog_entries,
     total_commands,
@@ -525,6 +526,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             except Exception:
                 appliances = []
             payload = {
+                "build": build_info(),
                 "detected_version": detected,
                 "active_profile": matched,
                 "available_profiles": engine.versions,
@@ -731,9 +733,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             field_list = [f.strip() for f in fields.split(",") if f.strip()]
             if field_list:
                 payload["appliances"] = [
-                    {"nePk": row.get("nePk"), "stats": _project_fields(row.get("stats"), field_list), **({k: v for k, v in row.items() if k in ("error", "reachability", "hint")})}
+                    {
+                        "nePk": row.get("nePk"),
+                        "stats": _project_fields(row.get("stats"), field_list),
+                        **({k: v for k, v in row.items() if k in ("error", "reachability", "hint")}),
+                    }
                     for row in payload["appliances"]
                 ]
+            payload["total_count"] = len(payload["appliances"])
+            payload["truncated"] = False
             audit.record("get_wan_health", "read", settings.orchestrator_url, "ok", details={"appliances": len(targets)})
             return json_result(payload, settings.max_output_chars)
         except Exception as error:

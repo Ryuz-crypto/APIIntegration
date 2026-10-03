@@ -48,7 +48,23 @@ Para cada prueba pega **SIEMPRE**:
 
 ---
 
-## 1. Batería de aceptación (T1–T6)
+## 1. Batería de aceptación (T0–T6)
+
+### T0 — Verificación de build (EJECUTAR PRIMERO, SIEMPRE)
+
+```json
+orchestrator_info({})
+```
+
+**Busca el campo `build`** en la respuesta:
+
+```json
+"build": {"package_version": "1.1.0", "git_commit": "828eca71a898"}
+```
+
+**REGLA**: si `git_commit` no es el commit esperado de la revisión bajo prueba, **NINGÚN resultado de T1–T6 es válido como evidencia de esa revisión** — el despliegue está sirviendo una build vieja. Repara el despliegue antes de reportar fallos de código. Si `git_commit` es `unknown`, el paquete no fue instalado desde un checkout git (`pip install -e .` fuera del repo o despliegue por wheel) — también es un hallazgo de despliegue a reportar.
+
+Commit esperado por revisión: rev. 7 = `070ebae` · rev. 8 = `35871af` · rev. 9 = `828eca7` · rev. 10 = el que se anuncie con esta build.
 
 ### T1 — Inventario
 

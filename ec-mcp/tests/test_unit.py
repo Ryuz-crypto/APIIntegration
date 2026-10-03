@@ -1326,3 +1326,41 @@ def test_call_read_api_proxy_failure_reports_both_errors():
         server_module.OrchestratorClient = original_create
 
     assert "Invalid nePk" in text and "also failed" in text
+
+
+def test_orchestrator_info_exposes_build_for_deployment_verification():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    class Fake97Orchestrator:
+        _api_root = "/gms/rest"
+
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def detect_version(self):
+            return "9.7.2.40591"
+
+        def list_appliances(self, refresh=False):
+            return [{"nePk": "1.NE", "name": "EC1", "ip": "10.0.0.1"}]
+
+        def get_raw(self, path, **query):
+            return {"data": []}
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: Fake97Orchestrator()
+    try:
+        result = asyncio.run(server.call_tool("orchestrator_info", {}))
+        payload = jsonlib.loads(result.content[0].text)
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    build = payload["build"]
+    assert build["package_version"], build
+    assert build["git_commit"] and build["git_commit"] != "unknown", build
