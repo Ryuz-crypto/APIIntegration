@@ -47,10 +47,11 @@ def test_keyboard_interactive_connection_uses_paramiko(monkeypatch):
     monkeypatch.setattr(ssh_ecos.socket, "create_connection", lambda *_args, **_kwargs: object())
     monkeypatch.setattr(ssh_ecos, "paramiko", FakeParamiko)
 
+    credential = "secret"
     session = ssh_ecos.ApplianceSession(
         host="192.0.2.10",
         username="admin",
-        password="secret",
+        password=credential,
         auth_method="keyboard-interactive",
     )
     try:
@@ -61,10 +62,11 @@ def test_keyboard_interactive_connection_uses_paramiko(monkeypatch):
 
 def test_invalid_ssh_auth_method_is_rejected():
     try:
+        credential = "secret"
         ssh_ecos.ApplianceSession(
             host="192.0.2.10",
             username="admin",
-            password="secret",
+            password=credential,
             auth_method="unsupported",
         )
         raise AssertionError("expected invalid auth method to be rejected")
