@@ -256,7 +256,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         "availability": {"paths": ["/stats/aggregate/availability/appliance", "/availability/appliance"]},
         "availability_tunnel": {"paths": ["/stats/aggregate/availability/tunnel"]},
         "mos": {"paths": ["/stats/aggregate/mos"]},
-        "latency": {"paths": ["/stats/aggregate/tunnel", "/latency"]},
+        "latency": {"paths": ["/stats/aggregate/tunnel"]},
         "top_talkers": {"paths": ["/stats/aggregate/topTalkers", "/stats/aggregate/topTalkers/split"]},
         "tunnel_state": {"paths": ["/tunnelsConfigAndState"], "appliance_level": True},
         "brownout": {"paths": ["/tunnelsConfigAndState"], "appliance_level": True},
@@ -272,8 +272,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         "as 'further development' by the vendor documentation."
     )
 
+    def _default_stats_window(kpi: str, granularity: str, start_time: str, end_time: str) -> tuple[str, str]:
+        if kpi not in ("latency", "mos", "availability", "availability_tunnel", "top_talkers"):
+            return start_time, end_time
+        if start_time and end_time:
+            return start_time, end_time
+        now = int(time.time())
+        window = {"minute": 60, "5minute": 300, "hour": 3600, "day": 86400}.get(granularity or "hour", 3600)
+        return str(now - window), str(now)
+
     def kpi_get(client: OrchestratorClient, kpi: str, ne_pk: str = "", granularity: str = "", start_time: str = "", end_time: str = "") -> Any:
         spec = KPI_ENDPOINTS[kpi]
+        start_time, end_time = _default_stats_window(kpi, granularity, start_time, end_time)
         query = {k: v for k, v in {"nePk": ne_pk, "granularity": granularity, "startTime": start_time, "endTime": end_time}.items() if v}
         last_error: Exception | None = None
         results: list[Any] = []
@@ -308,6 +318,27 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     raise
         return {"data": None, "reason": "alarm count endpoint not available on this Orchestrator version"}
 
+    ALARM_SEVERITIES = ("critical", "major", "minor", "warning", "info", "cleared")
+
+    def _alarm_row_total(row: dict[str, Any]) -> tuple[int, dict[str, int]]:
+        by_severity: dict[str, int] = {}
+        row_total = 0
+        for key, value in row.items():
+            lowered = key.lower()
+            if lowered in ALARM_SEVERITIES:
+                count = int(value) if isinstance(value, (int, float)) else 0
+                if count:
+                    by_severity[lowered] = by_severity.get(lowered, 0) + count
+                    row_total += count
+        if row_total:
+            return row_total, by_severity
+        count_value = row.get("numOfAlarms") or row.get("count") or row.get("total") or 0
+        count = int(count_value) if isinstance(count_value, (int, float)) else 0
+        severity = str(row.get("severity") or row.get("alarmSeverity") or "").lower()
+        if count and severity in ALARM_SEVERITIES:
+            return count, {severity: count}
+        return count, by_severity
+
     def kpi_alarm_counts_aggregate(client: OrchestratorClient, targets: list[str]) -> dict[str, Any]:
         per_appliance: list[dict[str, Any]] = []
         total_by_severity: dict[str, int] = {}
@@ -320,17 +351,17 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 if isinstance(counts, dict):
                     counts = [counts]
                 appliance_total = 0
+                appliance_by_severity: dict[str, int] = {}
                 for row in counts:
                     if not isinstance(row, dict):
                         continue
-                    row_total = 0
-                    for key, value in row.items():
-                        lowered = key.lower()
-                        if lowered in ("critical", "warning", "major", "minor", "info", "cleared") and isinstance(value, (int, float)):
-                            total_by_severity[lowered] = total_by_severity.get(lowered, 0) + int(value)
-                            row_total += int(value)
-                    appliance_total += row_total or int(row.get("total") or row.get("count") or 0)
+                    row_total, row_severity = _alarm_row_total(row)
+                    appliance_total += row_total
+                    for severity, count in row_severity.items():
+                        appliance_by_severity[severity] = appliance_by_severity.get(severity, 0) + count
+                        total_by_severity[severity] = total_by_severity.get(severity, 0) + count
                 entry["total"] = appliance_total
+                entry["by_severity"] = appliance_by_severity
                 total += appliance_total
             except Exception as error:
                 entry["error"] = str(error)[:200]

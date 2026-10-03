@@ -556,6 +556,7 @@ def test_get_active_alarms_all_expands_inventory_and_aggregates():
         "14.NE": {"critical": 2, "warning": 3, "major": 2},
         "4.NE": {"critical": 0, "warning": 1, "major": 1},
     }
+    LIVE_TOTAL = sum(sum(c.values()) for c in COUNTS.values())
 
     class FakeClient:
         def list_appliances(self):
@@ -563,7 +564,8 @@ def test_get_active_alarms_all_expands_inventory_and_aggregates():
 
         def get_raw(self, path, **query):
             ne_pk = query.get("nePk")
-            return {"data": [dict(COUNTS[ne_pk], nePk=ne_pk)]}
+            rows = [{"nePk": ne_pk, "severity": severity, "numOfAlarms": count} for severity, count in COUNTS[ne_pk].items()]
+            return {"data": rows}
 
     from ec_mcp import server as server_module
 
@@ -578,8 +580,9 @@ def test_get_active_alarms_all_expands_inventory_and_aggregates():
     payload = jsonlib.loads(text)
     data = payload["data"]
     assert len(data["per_appliance"]) == 6
-    assert data["total_alarms"] == 33
-    assert data["by_severity"]["critical"] == 5
+    assert data["total_alarms"] == LIVE_TOTAL
+    assert data["by_severity"]["critical"] == sum(c["critical"] for c in COUNTS.values())
+    assert all(row["total"] > 0 for row in data["per_appliance"])
 
 
 def test_wan_health_all_expands_inventory():
@@ -711,6 +714,7 @@ def test_qa_acceptance_six_tests_against_simulated_97_orchestrator():
             return {"data": []}
 
         def get_raw(self, path, **query):
+            self.raw_paths = [*getattr(self, "raw_paths", []), path]
             if path == "/gms/rest/appliance":
                 return {"data": INVENTORY, "request_echo": {}, "truncated": False}
             if path in ("/alarm/count/appliance", "/gms/rest/alarm/count/appliance"):
@@ -718,7 +722,11 @@ def test_qa_acceptance_six_tests_against_simulated_97_orchestrator():
                 if ne_pk and ne_pk not in ALARM_COUNTS:
                     return {"data": []}
                 count = ALARM_COUNTS.get(ne_pk, 0)
-                return {"data": [{"nePk": ne_pk, "critical": 1, "warning": min(2, count - 1), "major": max(0, count - 3), "minor": 0}]}
+                return {"data": [
+                    {"nePk": ne_pk, "severity": "critical", "numOfAlarms": 1},
+                    {"nePk": ne_pk, "severity": "warning", "numOfAlarms": min(2, max(0, count - 2))},
+                    {"nePk": ne_pk, "severity": "major", "numOfAlarms": max(0, count - 3)},
+                ]}
             if path.startswith("/stats/"):
                 return {"data": []}
             return {"data": []}
@@ -749,13 +757,19 @@ def test_qa_acceptance_six_tests_against_simulated_97_orchestrator():
     assert qa1["count"] == 6, qa1
     assert {a["nePk"] for a in qa1["appliances"]} == set(NE_PKS)
 
+    LIVE_TOTAL = sum(
+        1 + min(2, max(0, c - 2)) + max(0, c - 3)
+        for c in ALARM_COUNTS.values()
+    )
     aggregated = qa2["data"]
-    assert aggregated["total_alarms"] == 33, aggregated
+    assert aggregated["total_alarms"] == LIVE_TOTAL, aggregated
     assert len(aggregated["per_appliance"]) == 6
     assert {row["nePk"] for row in aggregated["per_appliance"]} == set(NE_PKS)
+    assert all(row["total"] > 0 for row in aggregated["per_appliance"])
 
     assert len(qa3["appliances"]) == 6
     assert {row["nePk"] for row in qa3["appliances"]} == set(NE_PKS)
+    assert not any(p.endswith("/latency") for p in fake.raw_paths), fake.raw_paths
 
     assert qa4["truncated"] is False
     assert "nePk" not in qa4["request_echo"]["query_used"]
