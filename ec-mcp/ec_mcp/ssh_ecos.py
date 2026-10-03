@@ -82,7 +82,7 @@ def _keyboard_interactive_handler(password: str):
 
 _AUTH_METHOD_ERROR_RE = re.compile(
     r"(?i)bad authentication type|allowed types|no authentication methods available|"
-r"error reading ssh protocol banner|banner_timeout"
+    r"error reading ssh protocol banner|banner_timeout"
 )
 
 
