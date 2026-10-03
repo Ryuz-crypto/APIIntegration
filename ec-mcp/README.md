@@ -1,7 +1,7 @@
 # ec-mcp — EdgeConnect SD-WAN MCP server
 
-**Versión 3.0 base: 3.0.0b1**  
-Esta entrega inicia la línea 3.0. La base 2.0.0 fue la versión estable anterior; 3.0.0b1 incorpora el control plane web y prepara el flujo ZTP.
+**Versión 3.0 base: 3.0.0b2**  
+Esta entrega inicia la línea 3.0. La base 2.0.0 fue la versión estable anterior; 3.0.0b2 incorpora el control plane web y prepara el flujo ZTP.
 
 `ec-mcp` conecta asistentes compatibles con Model Context Protocol (MCP) con
 HPE Aruba Networking EdgeConnect SD-WAN. Puede consultar el Orchestrator y los
@@ -286,6 +286,8 @@ Una variable ya presente en el proceso no es reemplazada por el archivo.
 | `EC_ADMIN_HOST` | `0.0.0.0` | Dirección de escucha del panel. Usa `127.0.0.1` si no debe aceptar conexiones remotas. |
 | `EC_ADMIN_PORT` | `8080` | Puerto del panel. |
 | `EC_ADMIN_PASSWORD` | vacío | Contraseña del panel. Es obligatoria si se expone fuera de loopback. |
+| `EC_ADMIN_LOGIN_MAX_FAILURES` | `5` | Fallos permitidos por IP antes del bloqueo temporal. |
+| `EC_ADMIN_LOGIN_WINDOW_SECONDS` | `60` | Duración de la ventana de bloqueo; una contraseña correcta desbloquea inmediatamente. |
 | `EC_ADMIN_PASSWORD_FILE` | `.ec-admin-pass` | Archivo alternativo para almacenar la contraseña del primer inicio. |
 | `EC_ADMIN_STORE` | `.ec-admin.json` | Almacén de configuraciones de Orchestrators. |
 
@@ -432,7 +434,7 @@ discover → seleccionar template → validar parámetros → adoptar
          → preview/diff → confirmar → aplicar → health check/rollback
 ```
 
-En `3.0.0b1` esas acciones están intencionalmente bloqueadas: esta entrega
+En `3.0.0b2` esas acciones están intencionalmente bloqueadas: esta entrega
 implementa la administración y el canal seguro de actualización, no activa aún
 la adopción ni el planchado de configuración.
 
@@ -447,6 +449,7 @@ la adopción ni el planchado de configuración.
 | Error TLS | Instala la CA correcta. Usa `EC_VERIFY_TLS=false` solo para diagnóstico en laboratorio. |
 | Herramientas SSH deshabilitadas | Define `EC_SSH_ENABLED=true` y las credenciales SSH. |
 | `run_show_api` falla | Confirma el nePk con `list_appliances` y la conectividad del appliance desde el Orchestrator. |
+| Panel muestra `Demasiados intentos` | Espera el tiempo mostrado o inicia sesión con la contraseña correcta; desde 3.0.0b2 un login válido limpia inmediatamente el bloqueo. |
 | systemd no toma cambios | Ejecuta `sudo systemctl daemon-reload && sudo systemctl restart ec-mcp`. |
 
 ## Seguridad operativa
