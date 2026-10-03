@@ -414,9 +414,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         return {"per_appliance": per_appliance, "total_alarms": total, "by_severity": total_by_severity}
 
     TUNNEL_KPI_KEYS = (
-        "tunnelname", "tunnelid", "overlayid", "nepk", "source", "destination",
+        "tunnelname", "tunnel", "tunnelid", "overlayid", "nepk", "source", "destination",
+        "alias", "hostname",
         "mos", "min_mos", "max_mos", "avg_mos", "mos_score",
-        "jitter", "loss", "latency", "rtt", "packetslost", "losspercent",
+        "min_mos_prefec", "avg_mos_prefec", "max_mos_prefec",
+        "jitter", "avg_jitter", "max_jitter", "avg_tx_jitter", "max_tx_jitter",
+        "loss", "losspercent", "max_pre_pct_loss", "max_post_pct_loss",
+        "max_pre_pct_loss_max", "max_post_pct_loss_max",
+        "latency", "min_latency_min", "max_latency_max", "min_latency_min_from_peak",
+        "rtt", "packetslost",
     )
 
     def project_tunnel_kpis(node: Any) -> Any:
