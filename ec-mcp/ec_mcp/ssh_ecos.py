@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import socket
+import time
 
 from .security import SecurityError, redact_secrets, sanitize_output, validate_show_command
 
@@ -10,20 +11,92 @@ try:
 except ImportError:
     ConnectHandler = None
 
+try:
+    import paramiko
+except ImportError:
+    paramiko = None
+
 FORBIDDEN_CHARS = re.compile(r"[;&`]|\|\||&&|\$\(")
 
 
+class _KeyboardInteractiveConnection:
+    """Small command-timing adapter for appliances that only allow keyboard-interactive."""
+
+    def __init__(self, host: str, username: str, password: str, port: int = 22):
+        if paramiko is None:
+            raise RuntimeError("paramiko is required for keyboard-interactive SSH")
+
+        sock = socket.create_connection((host, port), timeout=15)
+        self._transport = paramiko.Transport(sock)
+        self._transport.start_client(timeout=15)
+        self._transport.auth_interactive(username, _keyboard_interactive_handler(password))
+        if not self._transport.is_authenticated():
+            raise RuntimeError("Keyboard-interactive SSH authentication failed")
+        self._channel = self._transport.open_session()
+        self._channel.get_pty(term="vt100", width=200, height=50)
+        self._channel.invoke_shell()
+        self._read_until_quiet(2)
+
+    def _read_until_quiet(self, read_timeout: float, quiet_period: float = 0.4) -> str:
+        deadline = time.monotonic() + read_timeout
+        last_data = time.monotonic()
+        chunks: list[bytes] = []
+        while time.monotonic() < deadline:
+            if self._channel.recv_ready():
+                chunks.append(self._channel.recv(65535))
+                last_data = time.monotonic()
+                continue
+            if chunks and time.monotonic() - last_data >= quiet_period:
+                break
+            time.sleep(0.05)
+        return b"".join(chunks).decode("utf-8", errors="replace")
+
+    def send_command_timing(self, command: str, read_timeout: int = 30) -> str:
+        self._channel.send(command.rstrip() + "\n")
+        return self._read_until_quiet(read_timeout)
+
+    def write(self, data: str) -> None:
+        self._channel.send(data)
+
+    def disconnect(self) -> None:
+        self._channel.close()
+        self._transport.close()
+
+
+def _keyboard_interactive_handler(password: str):
+    def handler(_title: str, _instructions: str, prompts):
+        return [password for _prompt, _echo in prompts]
+
+    return handler
+
+
+_AUTH_METHOD_ERROR_RE = re.compile(
+    r"(?i)bad authentication type|allowed types|no authentication methods available"
+)
+
+
 class ApplianceSession:
-    def __init__(self, host: str, username: str, password: str, port: int = 22, max_output_chars: int = 12000,
-                 enable_password: str = ""):  # nosec B107
-        if ConnectHandler is None:
-            raise RuntimeError("netmiko is not installed; SSH tools are unavailable")
-        self._connection = ConnectHandler(
-            device_type="linux_ssh",
+    def __init__(
+        self,
+        host: str,
+        username: str,
+        password: str,
+        port: int = 22,
+        max_output_chars: int = 12000,
+        enable_password: str = "",
+        auth_method: str = "auto",
+    ):  # nosec B107
+        auth_method = auth_method.strip().lower()
+        if auth_method not in {"auto", "password", "keyboard-interactive"}:
+            raise ValueError(
+                "Unsupported EC_SSH_AUTH_METHOD; use auto, password, or keyboard-interactive"
+            )
+        self._connection = self._connect(
             host=host,
             username=username,
             password=password,
             port=port,
+            auth_method=auth_method,
         )
         if enable_password:
             enable_result = self._connection.send_command_timing("enable", read_timeout=10)
@@ -45,6 +118,29 @@ class ApplianceSession:
                     f"{probe_text[-500:]!r}"
                 )
         self._max_output_chars = max_output_chars
+
+    @staticmethod
+    def _connect(host: str, username: str, password: str, port: int, auth_method: str):
+        if auth_method == "keyboard-interactive":
+            return _KeyboardInteractiveConnection(host, username, password, port)
+
+        if ConnectHandler is None:
+            if auth_method == "password":
+                raise RuntimeError("netmiko is not installed; SSH tools are unavailable")
+            return _KeyboardInteractiveConnection(host, username, password, port)
+
+        try:
+            return ConnectHandler(
+                device_type="linux_ssh",
+                host=host,
+                username=username,
+                password=password,
+                port=port,
+            )
+        except Exception as error:
+            if auth_method != "auto" or not _AUTH_METHOD_ERROR_RE.search(str(error)):
+                raise
+            return _KeyboardInteractiveConnection(host, username, password, port)
 
     def run_show(self, command: str) -> str:
         validated = validate_show_command(command)
@@ -154,6 +250,7 @@ class ApplianceSshPool:
                 port=self._settings.ssh_port,
                 max_output_chars=self._settings.max_output_chars,
                 enable_password=self._settings.ssh_enable_password,
+                auth_method=self._settings.ssh_auth_method,
             )
         return self._sessions[resolved]
 
