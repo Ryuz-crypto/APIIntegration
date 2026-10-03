@@ -526,17 +526,18 @@ overlay que no haya sido creado por el mismo plan.
 
 ## Flujo transaccional de adopción ZTP
 
-La versión `3.0.0b7` extiende el patrón transaccional a la adopción de
-equipos descubiertos por ZTP, siguiendo el modelo real de preconfiguración
-del Orchestrator: la preconfiguración es un documento YAML con nombre
-propio que se crea vía `createpreconfiguration247_1` y se aplica al equipo
-descubierto con `discoveredId` + `preconfigId` real:
+La línea **3.0.0 (estable)** extiende el patrón transaccional a la adopción
+de equipos descubiertos por ZTP, siguiendo el modelo real de preconfiguración
+del Orchestrator: la preconfiguración es un documento YAML con nombre propio
+que se crea vía `createpreconfiguration247_1` y se aplica al equipo descubierto
+con `discoveredId` + `preconfigId` reales:
 
 ```text
 list_discovered_appliances()
-prepare_ztp_adoption(appliance_uuid="...", preconfig_yaml="...")
+prepare_ztp_adoption(appliance_selector="001BBC462C04", preconfig_yaml="...")
 preview_ztp_plan(plan_id="...")
 apply_ztp_plan(plan_id="...", confirmation="ADOPTAR ...", confirm=true)
+get_ztp_apply_status(preconfig_id="...")
 verify_ztp_plan(plan_id="...")
 rollback_ztp_plan(plan_id="...", confirmation="ROLLBACK ...", confirm=true)
 ```
@@ -544,26 +545,73 @@ rollback_ztp_plan(plan_id="...", confirmation="ROLLBACK ...", confirm=true)
 El flujo:
 
 1. lista equipos descubiertos pendientes (no aprobados ni denegados);
-2. exige el UUID exacto del equipo (formato validado, sin ambigüedad);
+2. selecciona el equipo por **número de serie** (preferido; con o sin
+   guiones, ej. `001BBC462C04` o `00-1B-BC-46-2C-04`) o por UUID;
 3. valida el YAML de preconfiguración contra las reglas documentadas
    (secciones requeridas `applianceInfo`/`deploymentInfo` con `group`,
    `networkRole`, `location`, `contact`; lan exige `ipAddressMask`; wan
    exige `nextHop` + anchos de banda + `firewallMode`; lat/long en par o
    vacíos; `deploymentMode` solo `inline-router`);
 4. verifica que los template groups y overlays referenciados existan;
-5. genera una confirmación ligada a plan + UUID + nombre de preconfig
-   desechable (`Codex-ZTP-<plan>`);
+5. genera una confirmación ligada a plan + id de fila discovered + nombre
+   de preconfig desechable (`Codex-ZTP-<plan>`);
 6. en apply: valida el preconfig (`250`), lo crea (`247_1`, body con
-   `name` + `configData` base64 + `autoApply=false`), lo aplica al
-   discovered (`255` con `discoveredId` + `preconfigId` real), aprueba
-   (`54`) y verifica approved;
-7. registra el `preconfigId` creado para limpieza en rollback;
-8. rollback: deny (`55`) + delete del preconfig creado por el plan (`251`).
+   `name` + `configData` base64 + `autoApply=false`) y lo aplica (`255`).
+   **El `discoveredId` es el id numérico de la fila discovered** — con el
+   UUID el Orchestrator 9.7.2 responde 200-vacío (no-op silencioso);
+   verificado en producción: con el id numérico ejecuta la cadena completa
+   de tareas (Add Appliance → Appliance Info → Zones → license →
+   deployment → **Reboot** → templates → overlays);
+7. el apply es **asíncrono**: `get_ztp_apply_status` consulta el estado de
+   la cadena de tareas (`254`) y `verify_ztp_plan` confirma que el equipo
+   desapareció de discovered y aparece en el inventario por serial;
+8. registra el `preconfigId` creado para limpieza en rollback;
+9. rollback: deny (`55`) + delete del preconfig creado por el plan (`251`).
+
+### Adopción masiva (bulk)
+
+```text
+prepare_bulk_ztp_adoption(
+    appliance_selectors="001BBC462C04,001BBC462C05,...",
+    base_preconfig_yaml="...",          # con {{hostname}} / {{site}}
+    hostnames="EC10,EC11,...",
+    sites="Calimaya,Calimaya,...",
+)
+apply_bulk_ztp_plan(bulk_id="...", confirmation="ADOPTAR-BULK ...", confirm=true)
+list_bulk_ztp_plans()
+```
+
+La plantilla base acepta los placeholders `{{hostname}}` y `{{site}}`,
+sustituidos por equipo desde las listas separadas por comas. Cada equipo
+recibe su propio sub-plan y preconfig desechable; un fallo en un equipo no
+detiene a los demás y el resultado reporta el estado individual.
 
 Los planes pueden persistirse a disco con `EC_ZTP_STATE_DIR` para sobrevivir
 a reinicios del MCP. El rollback (deny + delete) requiere además
 `EC_ALLOW_DANGEROUS_WRITES=true`. No se permite adoptar un equipo ya
 aprobado ni enviar cuerpos vacíos.
+
+## Suite de seguridad y troubleshooting (4.0.0 prebeta)
+
+La versión `4.0.0b1` añade herramientas curadas de solo lectura sobre el
+catálogo crudo, agrupadas por dominio:
+
+| Herramienta | Dominio | Descripción |
+|---|---|---|
+| `get_ids_ips_state(appliance_id)` | IDS/IPS | Postura IDS/IPS por equipo: modo (Off/IDS Only/IPS-Performant/IPS-Inline), perfil, activo o no. Acepta `all`. |
+| `get_ids_ips_events(appliance_id, start_time, end_time)` | IDS/IPS | Eventos de intrusión recientes para detección de incidentes. |
+| `get_zone_matrix(appliance_id)` | Zone matrix | Zonas, security maps con políticas zona↔zona por prioridad y **pares de zonas sin política explícita**. |
+| `get_ddos_status(appliance_id)` | DDoS | Threshold status y protection profiles por zona. |
+| `get_deployment_config(appliance_id)` | LAN/WAN | Modo de deployment, bandwidths e interfaces con addressing/labels/zones/firewall modes. |
+| `get_site_to_site_tunnels(appliance_id, include_third_party)` | Túneles | Estado de túneles site-to-site, bonded y de terceros/SSE (VGWs). |
+| `get_bgp_neighbors(appliance_id)` | Routing | Vecinos BGP con estado y sesiones BFD; acepta `all`. |
+| `get_sse_status(provider)` | SSE | Estado de integración SSE (Zscaler, Netskope, Axis Security/HPE SSE): conectividad y appliances asociados. `provider=all` o individual. |
+| `get_security_posture(appliance_id)` | Incidentes | Snapshot de una llamada: IDS/IPS + zone matrix + túneles por equipo, con lista priorizada de hallazgos (severidad high/medium/low). |
+
+Todas son de solo lectura (`call_read_api`/`appliance_api_call`), sin
+dry-run ni confirmación. Para cambios de configuración de seguridad usa
+`apply_change` con las operaciones crudas (`orchestrator.idpsstateput`,
+`appliance.securitymapspost`, etc.) o los flujos transaccionales.
 
 ## Objetivo ZTP de la línea 3.0
 
