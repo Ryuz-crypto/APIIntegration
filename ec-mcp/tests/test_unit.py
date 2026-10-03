@@ -842,3 +842,159 @@ def test_get_raw_prefixes_api_root_and_inventory_reads_data():
     assert {a["nePk"] for a in appliances} == {"1.NE", "0.NE"}
     assert "password" not in appliances[0]
     assert "userName" not in appliances[0]
+
+
+def test_alarm_all_mode_equals_sum_of_individual_calls():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    LIVE_COUNTS = {
+        "1.NE": {"critical": 2, "major": 2, "warning": 1},
+        "0.NE": {"critical": 1, "major": 2, "warning": 1},
+        "2.NE": {"critical": 2, "major": 2, "warning": 1},
+        "3.NE": {"critical": 3, "major": 2, "warning": 1},
+        "14.NE": {"critical": 1, "major": 1, "warning": 0},
+        "4.NE": {"critical": 2, "major": 3, "warning": 1},
+    }
+
+    class FakeEndpoint:
+        def __init__(self):
+            self.requests = []
+
+        def list_appliances(self, refresh=False):
+            return [{"nePk": k} for k in LIVE_COUNTS]
+
+        def get_raw(self, path, **query):
+            ne_pk = query.get("nePk", "")
+            self.requests.append((path, ne_pk))
+            if path != "/alarm/count/appliance" or ne_pk not in LIVE_COUNTS:
+                return {"data": []}
+            rows = [
+                {"severity": severity, "numOfAlarms": count}
+                for severity, count in LIVE_COUNTS[ne_pk].items()
+            ]
+            return {"data": rows}
+
+    fake = FakeEndpoint()
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: fake
+    try:
+        async def run(tool, args):
+            result = await server.call_tool(tool, args)
+            return jsonlib.loads(result.content[0].text)
+
+        per_appliance_expected = {}
+        for ne_pk, _severities in LIVE_COUNTS.items():
+            one = asyncio.run(run("get_active_alarms", {"appliance_id": ne_pk}))
+            rows = one["data"]["data"] if isinstance(one["data"], dict) and "data" in one["data"] else one["data"]
+            per_appliance_expected[ne_pk] = sum(
+                row.get("numOfAlarms", 0) for row in rows if isinstance(row, dict)
+            )
+
+        all_mode = asyncio.run(run("get_active_alarms", {"appliance_id": "all"}))
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    aggregated = all_mode["data"]
+    for entry in aggregated["per_appliance"]:
+        assert entry["total"] == per_appliance_expected[entry["nePk"]], entry
+    assert aggregated["total_alarms"] == sum(per_appliance_expected.values())
+    assert aggregated["total_alarms"] == sum(sum(c.values()) for c in LIVE_COUNTS.values())
+    assert all(entry["total"] > 0 for entry in aggregated["per_appliance"])
+
+
+def test_call_read_api_final_http_request_has_no_undeclared_params():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.orchestrator_client import OrchestratorClient
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    class FakeHttpx:
+        def __init__(self):
+            self.last_request = None
+
+        def request(self, method, url, headers=None, params=None, json=None):
+            self.last_request = {"method": method, "url": url, "params": dict(params or {}), "json": json}
+            return FakeResponse()
+
+    class FakeResponse:
+        status_code = 200
+        content = b'{"data": {"roleOptions": ["admin", "read-only"]}}'
+
+        def json(self):
+            return {"data": {"roleOptions": ["admin", "read-only"]}}
+
+    fake_httpx = FakeHttpx()
+
+    class FakeClient(OrchestratorClient):
+        def __init__(self):
+            self._client = fake_httpx
+            self._api_key = "k"
+            self._metrics = {}
+            self._cached_profile = "9.6"
+            self._engine = server_module.CompatibilityEngine(load_profiles(PROFILES))
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: FakeClient()
+    try:
+        result = asyncio.run(
+            server.call_tool("call_read_api", {"operation_id": "get_role_options", "appliance_id": "1.NE"})
+        )
+        payload = jsonlib.loads(result.content[0].text)
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    assert payload["truncated"] is False
+    assert fake_httpx.last_request["url"].endswith("/userProfile/options")
+    assert "nePk" not in fake_httpx.last_request["params"], fake_httpx.last_request
+
+
+def test_alarm_extractor_handles_all_documented_orchestrator_shapes():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+
+    SHAPES = {
+        "1.NE": {"data": {"critical": 1, "warning": 3, "major": 3}},
+        "0.NE": {"data": [{"severity": "critical", "numOfAlarms": 5}]},
+        "2.NE": {"data": [{"severity": "major", "numOfAlarms": "3"}, {"severity": "minor", "numOfAlarms": "2"}]},
+        "14.NE": {"data": {"alarms": [{"severity": "warning", "numOfAlarms": 4}]}},
+    }
+    EXPECTED = {"1.NE": 7, "0.NE": 5, "2.NE": 5, "14.NE": 4}
+
+    class FakeClient:
+        def list_appliances(self, refresh=False):
+            return [{"nePk": k} for k in SHAPES]
+
+        def get_raw(self, path, **query):
+            return SHAPES[query.get("nePk")]
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: FakeClient()
+    try:
+        result = asyncio.run(server.call_tool("get_active_alarms", {"appliance_id": "all"}))
+        data = jsonlib.loads(result.content[0].text)["data"]
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    for entry in data["per_appliance"]:
+        assert entry["total"] == EXPECTED[entry["nePk"]], entry
+        assert entry["total"] > 0
+    assert data["total_alarms"] == sum(EXPECTED.values()) == 21

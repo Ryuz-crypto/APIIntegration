@@ -320,24 +320,61 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     ALARM_SEVERITIES = ("critical", "major", "minor", "warning", "info", "cleared")
 
-    def _alarm_row_total(row: dict[str, Any]) -> tuple[int, dict[str, int]]:
-        by_severity: dict[str, int] = {}
-        row_total = 0
-        for key, value in row.items():
-            lowered = key.lower()
-            if lowered in ALARM_SEVERITIES:
-                count = int(value) if isinstance(value, (int, float)) else 0
+    def _alarm_count_value(value: Any) -> int:
+        if isinstance(value, bool):
+            return 0
+        if isinstance(value, (int, float)):
+            return int(value)
+        if isinstance(value, str):
+            try:
+                return int(value.strip())
+            except ValueError:
+                return 0
+        return 0
+
+    def _collect_alarm_counts(node: Any, severity_counts: dict[str, int], severity_context: str = "") -> int:
+        """Recursively extract alarm counts from any payload shape.
+
+        Handles: severity-keyed counters ({"critical": 3}), rows with
+        severity + numOfAlarms, nested data lists, and string values.
+        Returns the total number of alarms found in this subtree.
+        """
+        total = 0
+        if isinstance(node, list):
+            for item in node:
+                total += _collect_alarm_counts(item, severity_counts, severity_context)
+            return total
+        if not isinstance(node, dict):
+            return 0
+        row_severity = str(node.get("severity") or node.get("alarmSeverity") or severity_context or "").lower()
+        counted_as_severity_row = False
+        for key, value in node.items():
+            lowered = str(key).lower()
+            if lowered in ALARM_SEVERITIES and not isinstance(value, (dict, list)):
+                count = _alarm_count_value(value)
                 if count:
-                    by_severity[lowered] = by_severity.get(lowered, 0) + count
-                    row_total += count
-        if row_total:
-            return row_total, by_severity
-        count_value = row.get("numOfAlarms") or row.get("count") or row.get("total") or 0
-        count = int(count_value) if isinstance(count_value, (int, float)) else 0
-        severity = str(row.get("severity") or row.get("alarmSeverity") or "").lower()
-        if count and severity in ALARM_SEVERITIES:
-            return count, {severity: count}
-        return count, by_severity
+                    severity_counts[lowered] = severity_counts.get(lowered, 0) + count
+                    total += count
+                    counted_as_severity_row = True
+            elif lowered == "numofalarms":
+                count = _alarm_count_value(value)
+                if count:
+                    severity = row_severity if row_severity in ALARM_SEVERITIES else "total"
+                    severity_counts[severity] = severity_counts.get(severity, 0) + count
+                    total += count
+                    counted_as_severity_row = True
+            elif isinstance(value, (dict, list)):
+                total += _collect_alarm_counts(value, severity_counts, row_severity)
+        if not counted_as_severity_row:
+            for key in ("count", "total", "totalalarms"):
+                if str(key).lower() in {k.lower() for k in node}:
+                    count = _alarm_count_value(node.get(key))
+                    if count:
+                        severity = row_severity if row_severity in ALARM_SEVERITIES else "total"
+                        severity_counts[severity] = severity_counts.get(severity, 0) + count
+                        total += count
+                    break
+        return total
 
     def kpi_alarm_counts_aggregate(client: OrchestratorClient, targets: list[str]) -> dict[str, Any]:
         per_appliance: list[dict[str, Any]] = []
@@ -347,22 +384,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             entry: dict[str, Any] = {"nePk": ne_pk}
             try:
                 payload = kpi_alarm_counts(client, ne_pk)
-                counts = payload if isinstance(payload, list) else (payload or {}).get("data") or []
-                if isinstance(counts, dict):
-                    counts = [counts]
-                appliance_total = 0
                 appliance_by_severity: dict[str, int] = {}
-                for row in counts:
-                    if not isinstance(row, dict):
-                        continue
-                    row_total, row_severity = _alarm_row_total(row)
-                    appliance_total += row_total
-                    for severity, count in row_severity.items():
-                        appliance_by_severity[severity] = appliance_by_severity.get(severity, 0) + count
-                        total_by_severity[severity] = total_by_severity.get(severity, 0) + count
+                appliance_total = _collect_alarm_counts(payload, appliance_by_severity)
                 entry["total"] = appliance_total
                 entry["by_severity"] = appliance_by_severity
                 total += appliance_total
+                for severity, count in appliance_by_severity.items():
+                    total_by_severity[severity] = total_by_severity.get(severity, 0) + count
             except Exception as error:
                 entry["error"] = str(error)[:200]
             per_appliance.append(entry)

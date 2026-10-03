@@ -145,12 +145,18 @@ class OrchestratorClient:
         resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params)
         api_root = self._profile_api_root(version)
         label = f"{operation_id}"
+        operation = self._engine._profiles[version]["operations"][operation_id]
+        declared_query = set(operation.get("query_params") or [])
+        allowed_query = {k: v for k, v in query.items() if v is not None and k in declared_query}
+        dropped = sorted(set(query) - declared_query)
+        if dropped:
+            logger.debug("dropping undeclared query params for %s: %s", operation_id, dropped)
         started = time.monotonic()
         response = self._client.request(
             resolved.method,
             f"{api_root}{resolved.path}",
             headers=self._headers(),
-            params={k: v for k, v in query.items() if v is not None},
+            params=allowed_query,
             json=json_body,
         )
         self._record_metric(label, time.monotonic() - started, len(response.content), cache_hit=False)
