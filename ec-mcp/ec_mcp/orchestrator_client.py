@@ -143,10 +143,9 @@ class OrchestratorClient:
         **query: Any,
     ) -> dict[str, Any]:
         resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params)
-        api_root = self._profile_api_root(version)
-        if resolved.path.startswith("/gms/"):
-            api_root = ""
-        alt_api_root = self._profile_api_root(version) if not api_root else ""
+        profile_api_root = self._profile_api_root(version)
+        api_root = "" if resolved.path.startswith("/gms/") else profile_api_root
+        alt_api_root = profile_api_root if not api_root else ""
         label = f"{operation_id}"
         operation = self._engine._profiles[version]["operations"][operation_id]
         declared_query = set(operation.get("query_params") or [])
