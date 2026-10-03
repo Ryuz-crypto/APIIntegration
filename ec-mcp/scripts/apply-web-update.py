@@ -15,7 +15,6 @@ import shutil
 import stat
 import subprocess
 import tempfile
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -39,7 +38,7 @@ def load_env(path: Path) -> dict[str, str]:
 
 
 def run(command: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None, timeout: int = 900) -> str:
-    result = subprocess.run(  # nosec B603
+    result = subprocess.run(  # noqa: S603  # nosec B603
         command,
         cwd=cwd,
         env=env,
@@ -151,7 +150,7 @@ def backup(state: Path, project: Path, previous: str) -> Path:
 def unit_exists(name: str) -> bool:
     if not UNIT.fullmatch(name):
         raise ValueError(f"Nombre de servicio inválido: {name}")
-    result = subprocess.run(  # nosec B603
+    result = subprocess.run(  # noqa: S603  # nosec B603
         ["/usr/bin/systemctl", "cat", name],
         check=False,
         stdout=subprocess.DEVNULL,
