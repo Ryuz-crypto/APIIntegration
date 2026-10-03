@@ -293,7 +293,7 @@ class OrchestratorClient:
         path_params: dict[str, str] | None = None,
         json_body: dict[str, Any] | None = None,
         **query: Any,
-    ) -> dict[str, Any]:
+    ) -> Any:
         """Call an appliance-scoped API through the Orchestrator appliance proxy."""
         resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params)
         appliance_path = resolved.path if resolved.path.startswith("/") else f"/{resolved.path}"
@@ -321,4 +321,9 @@ class OrchestratorClient:
             )
         if not response.content:
             return {"ok": True}
-        return response.json()
+        try:
+            return response.json()
+        except json.JSONDecodeError:
+            # CLI endpoints may return plain text (or multiple JSON/text values)
+            # even when proxied successfully through the Orchestrator.
+            return response.text
