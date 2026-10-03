@@ -1384,7 +1384,7 @@ def test_large_helper_response_is_closed_valid_json():
             "nePk": "1.NE",
             "tunnelName": f"bondedTunnel_{index}",
             "MOS": 440,
-            "destination": "edge-" + ("x" * 1800),
+            "AVG_TX_LATENCY": "x" * 1800,
         }
         for index in range(12)
     ]
