@@ -1,6 +1,6 @@
 # ec-mcp: MCP server for EdgeConnect SD-WAN
 
-**Versión beta: `v2.0.0-beta.1`** — rama `main` contiene la beta desplegable. Los cambios posteriores deben conservar la compatibilidad del contrato MCP y actualizar QA-FULL.md.
+**Versión beta: `v2.0.0-beta.2`** — rama `main` contiene la beta desplegable. Los cambios posteriores deben conservar la compatibilidad del contrato MCP y actualizar QA-FULL.md.
 
 
 Servidor MCP (Model Context Protocol) que expone un entorno HPE Aruba Networking
@@ -168,7 +168,7 @@ ec-mcp                           # arranca en stdio; Ctrl+C para salir
 ```
 
 
-## Despliegue de un server nuevo (v2.0.0-beta.1, de cero a producción)
+## Despliegue de un server nuevo (v2.0.0-beta.2, de cero a producción)
 
 Guía completa para dejar un Linux fresco sirviendo ec-mcp estable: MCP en el
 puerto 8000 (auto-arranque) + UI de admin en 8080 (gestión de credenciales
@@ -365,6 +365,7 @@ Ver [`.env.example`](.env.example) con la referencia completa. Resumen:
 | `EC_VERIFY_TLS` | `true` | Verificar certificados TLS |
 | `EC_SSH_ENABLED` | `false` | Habilitar tools SSH |
 | `EC_SSH_HOST/USER/PASSWORD/PORT` | — | Credenciales SSH (comunes para todos los appliances). `EC_SSH_HOST` es opcional: si se omite, el host se descubre desde el Orchestrator (por nePk, nombre, IP o serial) en cada consulta |
+| `EC_SSH_AUTH_METHOD` | `auto` | Método SSH: `auto`, `password` o `keyboard-interactive`. `auto` intenta contraseña y después negociación interactiva |
 | `EC_SSH_ENABLE_PASSWORD` | — | Password de enable (comun para todos los appliances) |
 | `EC_ALLOW_WRITE_TOOLS` | `false` | Kill switch global de escritura |
 | `EC_MAX_OUTPUT_CHARS` | `12000` | Truncado de respuestas al LLM |
@@ -389,6 +390,7 @@ Notas:
 - Puedes configurar ambos métodos del Orchestrator; el MCP prefiere la API key.
 - Para SSH, `run_cli_command`/`run_show_command` aceptan un parámetro `host`
   para dirigirte a un appliance concreto sin cambiar la configuración.
+- Si el appliance solo anuncia `keyboard-interactive`, define `EC_SSH_AUTH_METHOD=keyboard-interactive`; la credencial de `EC_SSH_PASSWORD` se responde de forma no interactiva a los prompts SSH.
 - Si tu usuario de Orchestrator usa OTP, usa una API key para el Orchestrator
   (el OTP de un solo uso no sirve para sesiones automatizadas) y
   usuario/contraseña para SSH a los appliances.
