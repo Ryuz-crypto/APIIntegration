@@ -1208,6 +1208,41 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             pool.close_all()
 
     @mcp.tool()
+    def run_show_api(command: str, appliance_id: str) -> str:
+        """Run an official read-only ECOS show command through the Orchestrator appliance API."""
+        try:
+            risk = classify_cli_command(command)
+            if risk != "read":
+                raise SecurityError(
+                    "Only commands classified as read-only in the official ECOS CLI catalog are allowed"
+                )
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            ne_pk = resolve_ne_pk(client, appliance_id)
+            payload = client.appliance_api_call(
+                version,
+                ne_pk,
+                "appliance.clipost13533",
+                json_body={"command": command.strip()},
+            )
+            audit.record(
+                "run_show_api",
+                command,
+                ne_pk,
+                "ok",
+                details={"transport": "orchestrator", "risk": risk},
+            )
+            return json_result(
+                {"applied": True, "transport": "orchestrator", "appliance": ne_pk, "result": payload},
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record("run_show_api", command, appliance_id, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
     def run_cli_command(command: str, host: str = "", confirm: bool = False) -> str:
         """Run any official ECOS CLI command from the CLI Reference on an appliance over SSH. Monitoring/troubleshooting commands execute directly; configuration/administration/negation commands are dry-run by default and require confirm=true plus EC_ALLOW_WRITE_TOOLS=true. Use list_cli_commands to discover the 1367 available commands."""
         pool = ApplianceSshPool(settings)
