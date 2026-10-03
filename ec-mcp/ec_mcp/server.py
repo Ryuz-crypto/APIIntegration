@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from collections import deque
@@ -29,6 +30,19 @@ from .overlay_workflow import (
 )
 from .security import SecurityError, redact_secrets, redact_sensitive_values
 from .ssh_ecos import ApplianceSshPool
+from .ztp_workflow import (
+    TEMPLATE_GROUPS_READ,
+    ZTP_APPROVE_OPERATION,
+    ZTP_DENY_OPERATION,
+    ZTP_DISCOVERED_READ,
+    ZTP_PRECONFIG_OPERATION,
+    ZTP_VALIDATE_OPERATION,
+    ZtpPlanStore,
+    extract_discovered,
+    prepare_ztp_plan,
+    select_discovered,
+    select_template_group,
+)
 
 
 def create_server(settings: Settings | None = None) -> FastMCP:
@@ -50,6 +64,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     shared_client: OrchestratorClient | None = None
     overlay_plans = OverlayPlanStore()
+    ztp_plans = ZtpPlanStore(state_dir=os.environ.get("EC_ZTP_STATE_DIR", ""))
 
     def require_client() -> OrchestratorClient | None:
         nonlocal shared_client
@@ -1596,6 +1611,283 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
         except Exception as error:
             audit.record("rollback_overlay_plan", OVERLAY_DELETE_OPERATION, settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    def _read_discovered(client: OrchestratorClient, version: str) -> Any:
+        return client.call(version, ZTP_DISCOVERED_READ)
+
+    @mcp.tool()
+    def list_discovered_appliances(limit: int = 20, offset: int = 0) -> str:
+        """List discovered (ZTP) appliances that are not yet approved, with UUID, serial, model and software version."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            rows = extract_discovered(_read_discovered(client, version))
+            pending = [row for row in rows if not row.get("approved") and not row.get("denied")]
+            offset = max(0, int(offset))
+            limit = min(max(1, int(limit)), 100)
+            page = pending[offset : offset + limit]
+            summaries = [
+                {
+                    "uuid": row.get("uuid", ""),
+                    "hostname": (row.get("applianceInfo") or {}).get("hostname", ""),
+                    "model": (row.get("applianceInfo") or {}).get("model", ""),
+                    "serial": (row.get("applianceInfo") or {}).get("serial", ""),
+                    "softwareVersion": (row.get("applianceInfo") or {}).get("softwareVersion", ""),
+                    "deviceType": (row.get("applianceInfo") or {}).get("deviceType", ""),
+                }
+                for row in page
+            ]
+            return json_result(
+                {
+                    "discovered": summaries,
+                    "total_count": len(pending),
+                    "returned": len(summaries),
+                    "offset": offset,
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record("list_discovered_appliances", ZTP_DISCOVERED_READ, settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def prepare_ztp_adoption(
+        appliance_uuid: str,
+        template_group: str,
+        parameters_json: str = "",
+    ) -> str:
+        """Prepare a transactional ZTP adoption: select the exact discovered appliance UUID, read the template group, derive the parameter schema and return a plan plus confirmation phrase. Never writes."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            row = select_discovered(_read_discovered(client, version), appliance_uuid)
+            groups_payload = client.call(version, TEMPLATE_GROUPS_READ)
+            group = select_template_group(groups_payload, template_group)
+            plan = prepare_ztp_plan(row, group, template_group, parameters_json)
+            ztp_plans.put(plan)
+            audit.record(
+                "prepare_ztp_adoption",
+                ZTP_VALIDATE_OPERATION,
+                settings.orchestrator_url,
+                "prepared",
+                dry_run=True,
+                details={"plan_id": plan.plan_id, "uuid": plan.appliance_uuid},
+            )
+            return json_result(
+                {
+                    "dry_run": True,
+                    "plan": plan.public(),
+                    "next_step": "Review schema, parameters and confirmation phrase, then call apply_ztp_plan with confirm=true.",
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record("prepare_ztp_adoption", ZTP_DISCOVERED_READ, settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def preview_ztp_plan(plan_id: str) -> str:
+        """Return the immutable schema, parameters, status and confirmation phrase for a prepared ZTP adoption plan."""
+        try:
+            return json_result({"plan": ztp_plans.get(plan_id).public()}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def apply_ztp_plan(
+        plan_id: str,
+        confirmation: str = "",
+        confirm: bool = False,
+    ) -> str:
+        """Apply a prepared ZTP adoption: validate deployment, apply preconfiguration, approve the appliance and verify it appears in inventory. Requires confirm=true and the plan phrase."""
+        try:
+            plan = ztp_plans.get(plan_id)
+            if plan.status != "prepared":
+                raise SecurityError(f"Plan status is {plan.status!r}; only prepared plans can be applied")
+            if not confirm:
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "plan": plan.public(),
+                        "hint": "Set confirm=true and pass confirmation_required exactly.",
+                    },
+                    settings.max_output_chars,
+                )
+            if confirmation != plan.confirmation:
+                raise SecurityError("Confirmation phrase does not match this plan")
+            require_writes(ZTP_VALIDATE_OPERATION)
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            discovered_before = _read_discovered(client, version)
+            select_discovered(discovered_before, plan.appliance_uuid)
+            plan.validate_result = client.call(
+                version,
+                ZTP_VALIDATE_OPERATION,
+                discoveredApplianceId=plan.appliance_uuid,
+            )
+            require_writes(ZTP_PRECONFIG_OPERATION)
+            plan.preconfig_result = client.call(
+                version,
+                ZTP_PRECONFIG_OPERATION,
+                discoveredId=plan.appliance_uuid,
+                preconfigId=plan.template_group,
+            )
+            require_writes(ZTP_APPROVE_OPERATION)
+            plan.approve_result = client.call(
+                version,
+                ZTP_APPROVE_OPERATION,
+                id=plan.appliance_uuid,
+            )
+            discovered_after = _read_discovered(client, version)
+            rows = [
+                row
+                for row in extract_discovered(discovered_after)
+                if str(row.get("uuid", "")).lower() == plan.appliance_uuid.lower()
+            ]
+            approved = bool(rows and rows[0].get("approved"))
+            plan.deny_available = True
+            ztp_plans.put(plan)
+            if not approved:
+                plan.status = "verification_failed"
+                ztp_plans.put(plan)
+                audit.record(
+                    "apply_ztp_plan",
+                    ZTP_APPROVE_OPERATION,
+                    settings.orchestrator_url,
+                    "verification_failed",
+                    dry_run=False,
+                    details={"plan_id": plan.plan_id, "uuid": plan.appliance_uuid},
+                )
+                return json_result(
+                    {
+                        "applied": True,
+                        "verified": False,
+                        "deny_available": True,
+                        "plan": plan.public(include_details=False),
+                        "hint": "Appliance not marked approved after adoption; call rollback_ztp_plan to deny it.",
+                    },
+                    settings.max_output_chars,
+                )
+            plan.status = "applied"
+            ztp_plans.put(plan)
+            audit.record(
+                "apply_ztp_plan",
+                ZTP_APPROVE_OPERATION,
+                settings.orchestrator_url,
+                "applied",
+                dry_run=False,
+                details={"plan_id": plan.plan_id, "uuid": plan.appliance_uuid},
+            )
+            return json_result(
+                {
+                    "applied": True,
+                    "verified": True,
+                    "health_check": {
+                        "uuid": plan.appliance_uuid,
+                        "approved_after_adopt": True,
+                    },
+                    "plan": plan.public(include_details=False),
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record("apply_ztp_plan", ZTP_APPROVE_OPERATION, settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def verify_ztp_plan(plan_id: str) -> str:
+        """Read the Orchestrator and verify that the adopted appliance appears as approved in the discovered inventory."""
+        try:
+            plan = ztp_plans.get(plan_id)
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            rows = [
+                row
+                for row in extract_discovered(_read_discovered(client, client.resolve_active_profile()))
+                if str(row.get("uuid", "")).lower() == plan.appliance_uuid.lower()
+            ]
+            approved = bool(rows and rows[0].get("approved"))
+            return json_result(
+                {
+                    "verified": approved,
+                    "approved": approved,
+                    "uuid": plan.appliance_uuid,
+                    "hostname": plan.appliance_hostname,
+                    "plan_status": plan.status,
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def rollback_ztp_plan(
+        plan_id: str,
+        confirmation: str = "",
+        confirm: bool = False,
+    ) -> str:
+        """Deny an appliance adopted by this transaction (only while safely reversible). Requires dangerous writes and ROLLBACK <plan_id>."""
+        try:
+            plan = ztp_plans.get(plan_id)
+            expected = f"ROLLBACK {plan.plan_id}"
+            if not confirm:
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_deny_uuid": plan.appliance_uuid,
+                        "confirmation_required": expected,
+                    },
+                    settings.max_output_chars,
+                )
+            if confirmation != expected:
+                raise SecurityError("Rollback confirmation phrase does not match this plan")
+            if plan.status not in {"applied", "verification_failed"}:
+                raise SecurityError(f"Plan status {plan.status!r} has nothing to roll back")
+            require_writes(ZTP_DENY_OPERATION)
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            result = client.call(
+                version,
+                ZTP_DENY_OPERATION,
+                id=plan.appliance_uuid,
+            )
+            rows = [
+                row
+                for row in extract_discovered(_read_discovered(client, version))
+                if str(row.get("uuid", "")).lower() == plan.appliance_uuid.lower()
+            ]
+            denied = bool(rows and rows[0].get("denied"))
+            plan.status = "rolled_back" if denied else "rollback_failed"
+            ztp_plans.put(plan)
+            audit.record(
+                "rollback_ztp_plan",
+                ZTP_DENY_OPERATION,
+                settings.orchestrator_url,
+                plan.status,
+                dry_run=False,
+                details={"plan_id": plan.plan_id, "uuid": plan.appliance_uuid},
+            )
+            return json_result(
+                {
+                    "rolled_back": denied,
+                    "verified_denied": denied,
+                    "result": result,
+                    "plan": plan.public(include_details=False),
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record("rollback_ztp_plan", ZTP_DENY_OPERATION, settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()

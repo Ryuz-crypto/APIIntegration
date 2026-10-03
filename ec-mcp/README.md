@@ -524,6 +524,37 @@ no aplicados. El rollback requiere además `EC_ALLOW_DANGEROUS_WRITES=true`,
 porque elimina configuración. No se permite usar este flujo para borrar un
 overlay que no haya sido creado por el mismo plan.
 
+## Flujo transaccional de adopción ZTP
+
+La versión `3.0.0b6` extiende el patrón transaccional a la adopción de
+equipos descubiertos por ZTP, sin depender del esquema placeholder del
+OpenAPI (el objeto real del template group es la base del esquema):
+
+```text
+list_discovered_appliances()
+prepare_ztp_adoption(appliance_uuid="...", template_group="...", parameters_json="...")
+preview_ztp_plan(plan_id="...")
+apply_ztp_plan(plan_id="...", confirmation="ADOPTAR ...", confirm=true)
+verify_ztp_plan(plan_id="...")
+rollback_ztp_plan(plan_id="...", confirmation="ROLLBACK ...", confirm=true)
+```
+
+El flujo:
+
+1. lista equipos descubiertos pendientes (no aprobados ni denegados);
+2. exige el UUID exacto del equipo (formato validado, sin ambigüedad);
+3. lee el template group real y deriva el esquema de parámetros explícito;
+4. valida que los parámetros requeridos (isSelected) tengan valor;
+5. genera una confirmación ligada a plan + UUID + template group;
+6. valida el despliegue, aplica preconfiguración y aprueba, en orden;
+7. vuelve a leer el inventario para verificar que quedó aprobado;
+8. ofrece rollback (deny) solo para el UUID adoptado por el propio plan.
+
+Los planes pueden persistirse a disco con `EC_ZTP_STATE_DIR` para sobrevivir
+a reinicios del MCP. El rollback (deny) requiere además
+`EC_ALLOW_DANGEROUS_WRITES=true`. No se permite adoptar un equipo ya
+aprobado ni enviar cuerpos vacíos.
+
 ## Objetivo ZTP de la línea 3.0
 
 La pestaña **ZTP** documenta el flujo que construiremos sobre esta base:
