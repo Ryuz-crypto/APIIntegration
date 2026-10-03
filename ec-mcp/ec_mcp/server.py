@@ -361,6 +361,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     severity_counts[severity] = severity_counts.get(severity, 0) + count
                     total += count
                     counted_as_severity_row = True
+                if has_severity_counters:
+                    for missing in ("critical", "major", "minor", "warning"):
+                        severity_counts.setdefault(missing, 0)
             elif lowered in ALARM_SEVERITIES and not isinstance(value, (dict, list)):
                 count = _alarm_count_value(value)
                 if count:

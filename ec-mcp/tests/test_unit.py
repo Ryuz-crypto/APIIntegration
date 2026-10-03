@@ -1130,8 +1130,10 @@ def test_alarm_extractor_maps_num_of_severity_alarms_fields():
 
     aggregated = payload["data"]
     by_ne = {row["nePk"]: row for row in aggregated["per_appliance"]}
-    assert by_ne["1.NE"]["by_severity"] == {"critical": 1, "warning": 2, "major": 2}, by_ne["1.NE"]
-    assert by_ne["0.NE"]["by_severity"] == {"warning": 1, "minor": 3}, by_ne["0.NE"]
+    assert by_ne["1.NE"]["by_severity"] == {"critical": 1, "warning": 2, "major": 2, "minor": 0}, by_ne["1.NE"]
+    assert by_ne["0.NE"]["by_severity"] == {"warning": 1, "minor": 3, "critical": 0, "major": 0}, by_ne["0.NE"]
+    for row in aggregated["per_appliance"]:
+        assert sum(row["by_severity"].values()) == row["total"]
     assert aggregated["total_alarms"] == 9
     assert aggregated["by_severity"] == {"critical": 1, "warning": 3, "major": 2, "minor": 3}
 
