@@ -421,7 +421,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         "jitter", "avg_jitter", "max_jitter", "avg_tx_jitter", "max_tx_jitter",
         "loss", "losspercent", "max_pre_pct_loss", "max_post_pct_loss",
         "max_pre_pct_loss_max", "max_post_pct_loss_max",
-        "latency", "min_latency_min", "max_latency_max", "min_latency_min_from_peak",
+        "latency", "avg_tx_latency", "min_latency_min", "max_latency_max", "min_latency_min_from_peak",
         "rtt", "packetslost",
     )
 
