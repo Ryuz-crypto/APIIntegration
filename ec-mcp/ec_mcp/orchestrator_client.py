@@ -144,6 +144,8 @@ class OrchestratorClient:
     ) -> dict[str, Any]:
         resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params)
         api_root = self._profile_api_root(version)
+        if resolved.path.startswith("/gms/"):
+            api_root = ""
         label = f"{operation_id}"
         operation = self._engine._profiles[version]["operations"][operation_id]
         declared_query = set(operation.get("query_params") or [])
@@ -152,9 +154,10 @@ class OrchestratorClient:
         if dropped:
             logger.debug("dropping undeclared query params for %s: %s", operation_id, dropped)
         started = time.monotonic()
+        full_path = f"{api_root}{resolved.path}"
         response = self._client.request(
             resolved.method,
-            f"{api_root}{resolved.path}",
+            full_path,
             headers=self._headers(),
             params=allowed_query,
             json=json_body,
@@ -162,7 +165,7 @@ class OrchestratorClient:
         self._record_metric(label, time.monotonic() - started, len(response.content), cache_hit=False)
         if response.status_code >= 400:
             raise RuntimeError(
-                self._error_message(response, f"{resolved.method} {api_root}{resolved.path}")
+                self._error_message(response, f"{resolved.method} {full_path}")
             )
         if not response.content:
             return {"ok": True}
