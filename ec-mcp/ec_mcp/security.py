@@ -111,6 +111,34 @@ SECRET_PATTERNS = [
     re.compile(r"(?i)([\"'](?:password|passwd|md5Password|secret|passphrase|psk|userName)[\"']\s*:\s*[\"'])[^\"']*(?=[\"'])"),
 ]
 
+SENSITIVE_KEYS = {
+    "password",
+    "passwd",
+    "md5password",
+    "secret",
+    "passphrase",
+    "psk",
+    "username",
+    "token",
+    "apikey",
+    "sessioncookie",
+    "community",
+}
+
+
+def redact_sensitive_values(value):
+    if isinstance(value, dict):
+        redacted = {}
+        for key, item in value.items():
+            if str(key).lower() in SENSITIVE_KEYS and item not in (None, "", [], {}):
+                redacted[key] = "***REDACTED***"
+            else:
+                redacted[key] = redact_sensitive_values(item)
+        return redacted
+    if isinstance(value, list):
+        return [redact_sensitive_values(item) for item in value]
+    return value
+
 DENIED_PATTERNS = [
     re.compile(r"\bconfig\b(?!uration)"),
     re.compile(r"\bterminal\s+length\b"),

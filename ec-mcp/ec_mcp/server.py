@@ -19,7 +19,7 @@ from .cli_catalog import (
 from .compat import CompatibilityEngine, load_profiles
 from .config import Settings
 from .orchestrator_client import OrchestratorClient
-from .security import SecurityError, redact_secrets, sanitize_output
+from .security import SecurityError, redact_secrets, redact_sensitive_values, sanitize_output
 from .ssh_ecos import ApplianceSshPool
 
 
@@ -82,7 +82,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         write_timestamps.append(now)
 
     def json_result(payload, max_chars: int) -> str:
-        text = json.dumps(payload, ensure_ascii=False, default=str)
+        text = json.dumps(redact_sensitive_values(payload), ensure_ascii=False, default=str)
         return redact_secrets(sanitize_output(text, max_chars), [])
 
     def closed_json_result(payload: dict, max_chars: int) -> tuple[str, bool]:
@@ -91,7 +91,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         If the payload exceeds max_chars, wraps it with explicit truncation
         metadata instead of slicing the serialized text mid-literal.
         """
-        text = json.dumps(payload, ensure_ascii=False, default=str)
+        text = json.dumps(redact_sensitive_values(payload), ensure_ascii=False, default=str)
         if len(text) <= max_chars:
             return redact_secrets(text, []), False
         budget = max_chars - 256
@@ -123,7 +123,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     return redact_secrets(trimmed_text, []), True
         wrapper = {"truncated": True, "max_chars": max_chars}
         wrapper["hint"] = "Payload exceeded max_chars; reduce the result with fields/limit or raise max_chars."
-        wrapper["excerpt"] = text[: max(0, budget)]
+        wrapper["excerpt"] = redact_secrets(text, [])[: max(0, budget)]
         return redact_secrets(json.dumps(wrapper, ensure_ascii=False, default=str), []), True
 
     def paginate_data(data: Any, offset: int, limit: int | None, fields: list[str]) -> tuple[dict, bool]:
@@ -300,7 +300,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return {}
 
     def kpi_alarm_counts(client: OrchestratorClient, ne_pk: str = "") -> Any:
-        for path in ("/alarm/count/appliance", "/gms/rest/alarm/count/appliance"):
+        for path in ("/alarm/count/appliance",):
             try:
                 return client.get_raw(path, **({"nePk": ne_pk} if ne_pk else {}))
             except RuntimeError as error:

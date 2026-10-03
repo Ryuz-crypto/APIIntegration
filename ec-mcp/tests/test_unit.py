@@ -340,6 +340,7 @@ def test_get_raw_caches_and_collects_metrics(monkeypatch):
     client._response_cache = {}
     client._cache_ttl = 30.0
     client._cache_max_entries = 128
+    client._api_root = "/gms/rest"
     client._metrics = {}
 
     first = client.get_raw("/flow", nePk="0.NE")
@@ -373,6 +374,7 @@ def test_get_raw_raises_on_http_error():
     client._response_cache = {}
     client._cache_ttl = 30.0
     client._cache_max_entries = 128
+    client._api_root = "/gms/rest"
     client._metrics = {}
     try:
         client.get_raw("/missing")
@@ -431,6 +433,7 @@ def test_empty_404_semantics():
     client._response_cache = {}
     client._cache_ttl = 30.0
     client._cache_max_entries = 128
+    client._api_root = "/gms/rest"
     client._metrics = {}
     result = client.get_raw("/applicationGroups")
     assert result.get("data") is None
@@ -500,7 +503,7 @@ def test_inventory_parser_skips_empty_approved_list():
 
         def get(self, path, headers=None, params=None):
             self.paths.append(path)
-            if path == "/appliance":
+            if path == "/gms/rest/appliance":
                 return FakeResponse({"data": [
                     {"nePk": "1.NE", "hostName": "EC1", "password": "x", "userName": "admin"},
                 ], "truncated": False})
@@ -527,10 +530,11 @@ def test_inventory_parser_skips_empty_approved_list():
     client._response_cache = {}
     client._cache_ttl = 30.0
     client._cache_max_entries = 128
+    client._api_root = "/gms/rest"
     client._metrics = {}
 
     appliances = client.list_appliances(refresh=True)
-    assert fake.paths[0] == "/appliance"
+    assert fake.paths[0] == "/gms/rest/appliance"
     assert len(appliances) == 1
     assert appliances[0]["nePk"] == "1.NE"
     assert appliances[0]["name"] == "EC1"
@@ -707,7 +711,7 @@ def test_qa_acceptance_six_tests_against_simulated_97_orchestrator():
             return {"data": []}
 
         def get_raw(self, path, **query):
-            if path == "/appliance":
+            if path == "/gms/rest/appliance":
                 return {"data": INVENTORY, "request_echo": {}, "truncated": False}
             if path in ("/alarm/count/appliance", "/gms/rest/alarm/count/appliance"):
                 ne_pk = query.get("nePk")
@@ -763,3 +767,64 @@ def test_qa_acceptance_six_tests_against_simulated_97_orchestrator():
     assert "example-not-a-real-password-token" not in qa6_text
     assert '"admin"' not in qa6_text
     assert "***REDACTED***" in qa6_text
+
+
+def test_get_raw_prefixes_api_root_and_inventory_reads_data():
+    import json as jsonlib
+
+    from ec_mcp.orchestrator_client import OrchestratorClient
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.status_code = 200
+            self._payload = payload
+            self.content = jsonlib.dumps(payload).encode()
+
+        def json(self):
+            return self._payload
+
+    class FakeHttpx:
+        def __init__(self):
+            self.paths = []
+
+        def get(self, path, headers=None, params=None):
+            self.paths.append(path)
+            if path == "/gms/rest/appliance":
+                return FakeResponse({
+                    "data": [
+                        {"nePk": "1.NE", "hostName": "EC1", "password": "p1", "userName": "admin"},
+                        {"nePk": "0.NE", "hostName": "EC2", "password": "p2", "userName": "admin"},
+                    ],
+                    "request_echo": {},
+                    "truncated": False,
+                })
+            return FakeResponse([])
+
+    class FakeEngine:
+        _profiles: ClassVar = {"9.6": {"api_root": "/gms/rest"}}
+
+    class FakeSettings:
+        orchestrator_url = "https://orch.example"
+        verify_tls = True
+        api_cache_ttl = 30.0
+
+    fake = FakeHttpx()
+    client = OrchestratorClient.__new__(OrchestratorClient)
+    client._settings = FakeSettings()
+    client._engine = FakeEngine()
+    client._api_key = "k"
+    client._client = fake
+    client._cached_profile = None
+    client._appliances_cache = None
+    client._response_cache = {}
+    client._cache_ttl = 30.0
+    client._cache_max_entries = 128
+    client._api_root = client._resolve_api_root()
+    client._metrics = {}
+
+    appliances = client.list_appliances(refresh=True)
+    assert fake.paths == ["/gms/rest/appliance"], fake.paths
+    assert len(appliances) == 2
+    assert {a["nePk"] for a in appliances} == {"1.NE", "0.NE"}
+    assert "password" not in appliances[0]
+    assert "userName" not in appliances[0]

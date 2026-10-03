@@ -25,6 +25,7 @@ class OrchestratorClient:
         self._response_cache: dict[tuple, tuple[float, Any]] = {}
         self._cache_ttl = float(getattr(settings, "api_cache_ttl", 30.0))
         self._cache_max_entries = 128
+        self._api_root = self._resolve_api_root()
         self._metrics: dict[str, dict[str, float]] = {}
         self._client = client or httpx.Client(
             base_url=settings.orchestrator_url,
@@ -60,6 +61,11 @@ class OrchestratorClient:
     def _cache_key(self, path: str, query: dict[str, Any]) -> tuple:
         return (path, tuple(sorted((k, str(v)) for k, v in query.items() if v is not None)))
 
+    def _full_path(self, path: str) -> str:
+        if path.startswith("/gms/"):
+            return path
+        return f"{self._api_root}{path}"
+
     def get_raw(self, path: str, **query: Any) -> Any:
         key = self._cache_key(path, query)
         now = time.monotonic()
@@ -67,12 +73,13 @@ class OrchestratorClient:
         if cached is not None and now - cached[0] < self._cache_ttl:
             self._record_metric(path, 0.0, 0, cache_hit=True)
             return cached[1]
+        full_path = self._full_path(path)
         started = time.monotonic()
-        response = self._client.get(path, headers=self._headers(), params={k: v for k, v in query.items() if v is not None})
+        response = self._client.get(full_path, headers=self._headers(), params={k: v for k, v in query.items() if v is not None})
         elapsed = time.monotonic() - started
         self._record_metric(path, elapsed, len(response.content), cache_hit=False)
         if response.status_code >= 400:
-            message = self._error_message(response, f"GET {path}")
+            message = self._error_message(response, f"GET {full_path}")
             if response.status_code == 404:
                 body = (response.text or "").strip()
                 if any(marker in body for marker in ("No application groups configured", "no data", "not configured", "No configured")):
@@ -158,6 +165,13 @@ class OrchestratorClient:
     def _profile_api_root(self, version: str) -> str:
         profile = getattr(self._engine, "_profiles", {}).get(version, {})
         return profile.get("api_root", "/gms/rest")
+
+    def _resolve_api_root(self) -> str:
+        for profile in getattr(self._engine, "_profiles", {}).values():
+            api_root = profile.get("api_root")
+            if api_root:
+                return api_root
+        return "/gms/rest"
 
     def _error_message(self, response: httpx.Response, action: str) -> str:
         detail = ""
