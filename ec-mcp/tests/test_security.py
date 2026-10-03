@@ -280,3 +280,18 @@ def test_transport_security_allows_public_host():
         assert "https://mcp.example.com:*" in ts.allowed_origins
     finally:
         del os.environ["EC_MCP_ALLOWED_HOSTS"]
+
+
+def test_redact_secrets_keeps_json_valid():
+    import json
+
+    from ec_mcp.security import redact_secrets
+
+    payload = json.dumps(
+        {"password": "tok123", "userName": "admin", "hostName": "EC1", "nePk": "1.NE"}
+    )
+    redacted = json.loads(redact_secrets(payload, []))
+    assert redacted["password"] == "***REDACTED***"
+    assert redacted["userName"] == "***REDACTED***"
+    assert redacted["hostName"] == "EC1"
+    assert redacted["nePk"] == "1.NE"

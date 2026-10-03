@@ -187,46 +187,33 @@ class OrchestratorClient:
             hint = " HTTP 401 = authentication failed: check EC_ORCHESTRATOR_API_KEY or credentials."
         return f"Orchestrator returned HTTP {response.status_code} for {action}: {detail!r}.{hint}"
 
-    def list_appliances(self, refresh: bool = False) -> list[dict[str, Any]]:
-        if self._appliances_cache is not None and not refresh:
-            return self._appliances_cache
-        data: Any = None
-        last_error: Exception | None = None
-        for path in ("/appliance/approved", "/neStatus", "/appliance"):
-            try:
-                data = self.get_raw(path)
-                break
-            except RuntimeError as error:
-                last_error = error
-                message = str(error)
-                if "HTTP 404" not in message and "HTTP 405" not in message:
-                    raise
-        if data is None:
-            raise RuntimeError(
-                f"Could not fetch the appliance inventory from the Orchestrator: {last_error}"
-            )
+    def _parse_appliance_inventory(self, data: Any) -> list[dict[str, Any]]:
+        rows: Any = data
         if isinstance(data, dict):
-            data = (
+            rows = (
                 data.get("appliances")
                 or data.get("data")
                 or data.get("result")
                 or data.get("neStatus")
                 or []
             )
+        elif not isinstance(data, list):
+            rows = []
         appliances = []
-        for item in data or []:
+        for item in rows or []:
             if not isinstance(item, dict):
                 continue
             appliances.append(
                 {
                     "nePk": item.get("nePk") or item.get("nePK") or item.get("id"),
-                    "name": item.get("name") or item.get("hostname") or item.get("dnsName"),
+                    "name": item.get("name") or item.get("hostName") or item.get("hostname") or item.get("dnsName"),
                     "model": item.get("model") or item.get("modelNumber"),
                     "serial_number": item.get("serialNumber") or item.get("serial"),
                     "software_version": item.get("softwareVersion") or item.get("currentSoftwareVersion"),
                     "ip": item.get("ipAddress") or item.get("managementIp") or item.get("ip"),
                     "site": item.get("site") or item.get("location") or item.get("siteName"),
                     "state": item.get("state") or item.get("adminState"),
+                    "network_role": item.get("networkRole"),
                     "reachability": item.get("reachability") or item.get("neState"),
                     "lan_ip": item.get("lanIp") or item.get("lanIPAddress") or item.get("dataIp"),
                     "wan_ips": [
@@ -242,6 +229,32 @@ class OrchestratorClient:
                         if value
                     ],
                 }
+            )
+        return appliances
+
+    def list_appliances(self, refresh: bool = False) -> list[dict[str, Any]]:
+        if self._appliances_cache is not None and not refresh:
+            return self._appliances_cache
+        last_error: Exception | None = None
+        appliances: list[dict[str, Any]] = []
+        for path in ("/appliance/approved", "/neStatus", "/appliance"):
+            try:
+                data = self.get_raw(path)
+            except RuntimeError as error:
+                last_error = error
+                message = str(error)
+                if "HTTP 404" not in message and "HTTP 405" not in message:
+                    raise
+                continue
+            appliances = self._parse_appliance_inventory(data)
+            if appliances:
+                break
+        if not appliances:
+            detail = "GET /appliance: empty inventory response"
+            if last_error is not None:
+                detail = f"{detail}; last error: {last_error}"
+            raise RuntimeError(
+                f"Could not fetch the appliance inventory from the Orchestrator: {detail}"
             )
         self._appliances_cache = appliances
         return appliances
