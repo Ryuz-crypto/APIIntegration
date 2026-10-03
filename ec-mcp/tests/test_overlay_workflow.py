@@ -14,7 +14,6 @@ from ec_mcp.overlay_workflow import (
 )
 from ec_mcp.server import create_server
 
-
 SOURCE = {
     "id": 1,
     "name": "RealTime",
