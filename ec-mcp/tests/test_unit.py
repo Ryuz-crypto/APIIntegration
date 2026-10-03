@@ -1364,3 +1364,54 @@ def test_orchestrator_info_exposes_build_for_deployment_verification():
     build = payload["build"]
     assert build["package_version"], build
     assert build["git_commit"] and build["git_commit"] != "unknown", build
+
+
+def test_beta_package_version_is_consistent():
+    from ec_mcp import __version__
+
+    assert __version__ == "2.0.0b1"
+
+
+def test_large_helper_response_is_closed_valid_json():
+    import asyncio
+    import json as jsonlib
+
+    from ec_mcp.server import create_server
+
+    server = create_server()
+    large_rows = [
+        {
+            "nePk": "1.NE",
+            "tunnelName": f"bondedTunnel_{index}",
+            "MOS": 440,
+            "destination": "edge-" + ("x" * 1800),
+        }
+        for index in range(12)
+    ]
+
+    class FakeClient:
+        def get_raw(self, path, **query):
+            if path == "/stats/aggregate/tunnel":
+                return {"data": large_rows}
+            if path == "/stats/aggregate/mos":
+                return {"data": []}
+            if path == "/reachability/appliance":
+                return {"data": []}
+            return {"data": []}
+
+        def list_appliances(self, refresh=False):
+            return [{"nePk": "1.NE", "name": "EC1", "ip": "10.0.0.1"}]
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: FakeClient()
+    try:
+        result = asyncio.run(
+            server.call_tool("get_wan_health", {"appliance_id": "1.NE", "granularity": "day"})
+        )
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    payload = jsonlib.loads(result.content[0].text)
+    assert payload["truncated"] is True

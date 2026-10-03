@@ -22,6 +22,8 @@ echo "==> Cargando .env y arrancando"
 pkill -f "ec-mcp http" 2>/dev/null || true
 sleep 1
 set -a; source .env; set +a
+# Garantiza que orchestrator_info pueda identificar el checkout servido.
+export EC_MCP_BUILD_COMMIT="${EC_MCP_BUILD_COMMIT:-$(git rev-parse HEAD)}"
 
 HOST="${EC_MCP_HOST:-0.0.0.0}"
 PORT="${EC_MCP_PORT:-8000}"

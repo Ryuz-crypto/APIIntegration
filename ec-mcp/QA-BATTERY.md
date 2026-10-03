@@ -59,7 +59,7 @@ orchestrator_info({})
 **Busca el campo `build`** en la respuesta:
 
 ```json
-"build": {"package_version": "1.1.0", "git_commit": "828eca71a898"}
+"build": {"package_version": "2.0.0b1", "git_commit": "<deployed-commit>"}
 ```
 
 **REGLA**: si `git_commit` no es el commit esperado de la revisión bajo prueba, **NINGÚN resultado de T1–T6 es válido como evidencia de esa revisión** — el despliegue está sirviendo una build vieja. Repara el despliegue antes de reportar fallos de código. Si `git_commit` es `unknown`, el paquete no fue instalado desde un checkout git (`pip install -e .` fuera del repo o despliegue por wheel) — también es un hallazgo de despliegue a reportar.

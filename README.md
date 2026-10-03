@@ -1,7 +1,7 @@
 # APIIntegration — EdgeConnect SD-WAN Platform
 
 [![DashboardAPI-EC](https://img.shields.io/badge/DashboardAPI--EC-1.5.1%20stable-2fbf9b)](DashboardAPI-EC/README.md)
-[![ec-mcp](https://img.shields.io/badge/ec--mcp-0.1.0%20MCP%20server-7B61FF)](ec-mcp/README.md)
+[![ec-mcp](https://img.shields.io/badge/ec--mcp-2.0.0--beta.1%20MCP%20server-7B61FF)](ec-mcp/README.md)
 [![DashboardAPI-EC CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 [![ec-mcp CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
