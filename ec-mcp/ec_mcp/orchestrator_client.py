@@ -166,12 +166,7 @@ class OrchestratorClient:
             )
         if not response.content:
             return {"ok": True}
-        try:
-            return response.json()
-        except json.JSONDecodeError:
-            # CLI endpoints may return plain text (or multiple JSON/text values)
-            # even when proxied successfully through the Orchestrator.
-            return response.text
+        return response.json()
 
     def _profile_api_root(self, version: str) -> str:
         profile = getattr(self._engine, "_profiles", {}).get(version, {})
@@ -326,4 +321,9 @@ class OrchestratorClient:
             )
         if not response.content:
             return {"ok": True}
-        return response.json()
+        try:
+            return response.json()
+        except json.JSONDecodeError:
+            # CLI endpoints may return plain text (or multiple JSON/text values)
+            # even when proxied successfully through the Orchestrator.
+            return response.text
