@@ -855,7 +855,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     "reason": "Availability endpoint/entity is not exposed by this lab Orchestrator.",
                     "endpoint_candidates": KPI_ENDPOINTS["availability"]["paths"],
                 }, settings.max_output_chars)
-            return f"Error: {error}
+            return f"Error: {error}"
 
     @mcp.tool()
     def get_top_talkers(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "", limit: int = 20) -> str:
