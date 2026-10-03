@@ -12,6 +12,7 @@ except ModuleNotFoundError:
     from mcp.server.mcpserver import MCPServer as FastMCP
 
 from .audit import AuditLog
+from .build import build_info
 from .cli_catalog import (
     catalog_entries,
     total_commands,
@@ -19,7 +20,7 @@ from .cli_catalog import (
 from .compat import CompatibilityEngine, load_profiles
 from .config import Settings
 from .orchestrator_client import OrchestratorClient
-from .security import SecurityError, redact_secrets, sanitize_output
+from .security import SecurityError, redact_secrets, redact_sensitive_values, sanitize_output
 from .ssh_ecos import ApplianceSshPool
 
 
@@ -82,7 +83,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         write_timestamps.append(now)
 
     def json_result(payload, max_chars: int) -> str:
-        text = json.dumps(payload, ensure_ascii=False, default=str)
+        text = json.dumps(redact_sensitive_values(payload), ensure_ascii=False, default=str)
         return redact_secrets(sanitize_output(text, max_chars), [])
 
     def closed_json_result(payload: dict, max_chars: int) -> tuple[str, bool]:
@@ -91,7 +92,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         If the payload exceeds max_chars, wraps it with explicit truncation
         metadata instead of slicing the serialized text mid-literal.
         """
-        text = json.dumps(payload, ensure_ascii=False, default=str)
+        text = json.dumps(redact_sensitive_values(payload), ensure_ascii=False, default=str)
         if len(text) <= max_chars:
             return redact_secrets(text, []), False
         budget = max_chars - 256
@@ -123,7 +124,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     return redact_secrets(trimmed_text, []), True
         wrapper = {"truncated": True, "max_chars": max_chars}
         wrapper["hint"] = "Payload exceeded max_chars; reduce the result with fields/limit or raise max_chars."
-        wrapper["excerpt"] = text[: max(0, budget)]
+        wrapper["excerpt"] = redact_secrets(text, [])[: max(0, budget)]
         return redact_secrets(json.dumps(wrapper, ensure_ascii=False, default=str), []), True
 
     def paginate_data(data: Any, offset: int, limit: int | None, fields: list[str]) -> tuple[dict, bool]:
@@ -218,6 +219,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     def resolve_ne_pk(client: OrchestratorClient, appliance_id: str) -> str:
         candidate = appliance_id.strip()
+        if candidate.lower() == "all":
+            candidates = [str(a.get("nePk")) for a in client.list_appliances() if a.get("nePk")]
+            if not candidates:
+                raise SecurityError(
+                    "No appliances registered in the Orchestrator inventory; "
+                    "cannot expand 'all'."
+                )
+            return candidates[0]
         direct = normalize_ne_pk(candidate)
         if direct:
             return direct
@@ -235,7 +244,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         )
 
     def resolve_ne_pks(client: OrchestratorClient, appliance_ids: str) -> list[str]:
-        if not appliance_ids.strip():
+        if not appliance_ids.strip() or appliance_ids.strip().lower() == "all":
             return [str(a.get("nePk")) for a in client.list_appliances()]
         resolved = []
         for part in appliance_ids.split(","):
@@ -248,7 +257,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         "availability": {"paths": ["/stats/aggregate/availability/appliance", "/availability/appliance"]},
         "availability_tunnel": {"paths": ["/stats/aggregate/availability/tunnel"]},
         "mos": {"paths": ["/stats/aggregate/mos"]},
-        "latency": {"paths": ["/stats/aggregate/tunnel", "/latency"]},
+        "latency": {"paths": ["/stats/aggregate/tunnel"]},
         "top_talkers": {"paths": ["/stats/aggregate/topTalkers", "/stats/aggregate/topTalkers/split"]},
         "tunnel_state": {"paths": ["/tunnelsConfigAndState"], "appliance_level": True},
         "brownout": {"paths": ["/tunnelsConfigAndState"], "appliance_level": True},
@@ -264,8 +273,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         "as 'further development' by the vendor documentation."
     )
 
+    def _default_stats_window(kpi: str, granularity: str, start_time: str, end_time: str) -> tuple[str, str]:
+        if kpi not in ("latency", "mos", "availability", "availability_tunnel", "top_talkers"):
+            return start_time, end_time
+        if start_time and end_time:
+            return start_time, end_time
+        now = int(time.time())
+        window = {"minute": 60, "5minute": 300, "hour": 3600, "day": 86400}.get(granularity or "hour", 3600)
+        return str(now - window), str(now)
+
     def kpi_get(client: OrchestratorClient, kpi: str, ne_pk: str = "", granularity: str = "", start_time: str = "", end_time: str = "") -> Any:
         spec = KPI_ENDPOINTS[kpi]
+        start_time, end_time = _default_stats_window(kpi, granularity, start_time, end_time)
         query = {k: v for k, v in {"nePk": ne_pk, "granularity": granularity, "startTime": start_time, "endTime": end_time}.items() if v}
         last_error: Exception | None = None
         results: list[Any] = []
@@ -291,14 +310,174 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except Exception:
             return {}
 
-    def kpi_alarm_counts(client: OrchestratorClient) -> Any:
-        for path in ("/alarm/count/appliance", "/gms/rest/alarm/count/appliance"):
+    def kpi_alarm_counts(client: OrchestratorClient, ne_pk: str = "") -> Any:
+        for path in ("/alarm/count/appliance",):
             try:
-                return client.get_raw(path)
+                return client.get_raw(path, **({"nePk": ne_pk} if ne_pk else {}))
             except RuntimeError as error:
                 if "HTTP 404" not in str(error):
                     raise
         return {"data": None, "reason": "alarm count endpoint not available on this Orchestrator version"}
+
+    ALARM_SEVERITIES = ("critical", "major", "minor", "warning", "info", "cleared")
+
+    NUM_OF_SEVERITY_RE = re.compile(r"^numOf(Critical|Major|Minor|Warning|Info|Cleared)Alarms$", re.IGNORECASE)
+
+    def _alarm_count_value(value: Any) -> int:
+        if isinstance(value, bool):
+            return 0
+        if isinstance(value, (int, float)):
+            return int(value)
+        if isinstance(value, str):
+            try:
+                return int(value.strip())
+            except ValueError:
+                return 0
+        return 0
+
+    def _collect_alarm_counts(node: Any, severity_counts: dict[str, int], severity_context: str = "") -> int:
+        """Recursively extract alarm counts from any payload shape.
+
+        Handles: severity-keyed counters ({"critical": 3}), rows with
+        severity + numOfAlarms, nested data lists, and string values.
+        Returns the total number of alarms found in this subtree.
+        """
+        total = 0
+        if isinstance(node, list):
+            for item in node:
+                total += _collect_alarm_counts(item, severity_counts, severity_context)
+            return total
+        if not isinstance(node, dict):
+            return 0
+        row_severity = str(node.get("severity") or node.get("alarmSeverity") or severity_context or "").lower()
+        counted_as_severity_row = False
+        has_severity_counters = any(NUM_OF_SEVERITY_RE.match(str(key)) for key in node)
+        for key, value in node.items():
+            lowered = str(key).lower()
+            severity_match = NUM_OF_SEVERITY_RE.match(str(key))
+            if severity_match and not isinstance(value, (dict, list)):
+                count = _alarm_count_value(value)
+                if count:
+                    severity = severity_match.group(1).lower()
+                    severity_counts[severity] = severity_counts.get(severity, 0) + count
+                    total += count
+                    counted_as_severity_row = True
+                if has_severity_counters:
+                    for missing in ("critical", "major", "minor", "warning"):
+                        severity_counts.setdefault(missing, 0)
+            elif lowered in ALARM_SEVERITIES and not isinstance(value, (dict, list)):
+                count = _alarm_count_value(value)
+                if count:
+                    severity_counts[lowered] = severity_counts.get(lowered, 0) + count
+                    total += count
+                    counted_as_severity_row = True
+            elif lowered == "numofalarms":
+                if has_severity_counters:
+                    continue
+                count = _alarm_count_value(value)
+                if count:
+                    severity = row_severity if row_severity in ALARM_SEVERITIES else "total"
+                    severity_counts[severity] = severity_counts.get(severity, 0) + count
+                    total += count
+                    counted_as_severity_row = True
+            elif isinstance(value, (dict, list)):
+                total += _collect_alarm_counts(value, severity_counts, row_severity)
+        if not counted_as_severity_row:
+            for key in ("count", "total", "totalalarms"):
+                if str(key).lower() in {k.lower() for k in node}:
+                    count = _alarm_count_value(node.get(key))
+                    if count:
+                        severity = row_severity if row_severity in ALARM_SEVERITIES else "total"
+                        severity_counts[severity] = severity_counts.get(severity, 0) + count
+                        total += count
+                    break
+        return total
+
+    def kpi_alarm_counts_aggregate(client: OrchestratorClient, targets: list[str]) -> dict[str, Any]:
+        per_appliance: list[dict[str, Any]] = []
+        total_by_severity: dict[str, int] = {}
+        total = 0
+        for ne_pk in targets:
+            entry: dict[str, Any] = {"nePk": ne_pk}
+            try:
+                payload = kpi_alarm_counts(client, ne_pk)
+                appliance_by_severity: dict[str, int] = {}
+                appliance_total = _collect_alarm_counts(payload, appliance_by_severity)
+                entry["total"] = appliance_total
+                entry["by_severity"] = appliance_by_severity
+                total += appliance_total
+                for severity, count in appliance_by_severity.items():
+                    total_by_severity[severity] = total_by_severity.get(severity, 0) + count
+            except Exception as error:
+                entry["error"] = str(error)[:200]
+            per_appliance.append(entry)
+        return {"per_appliance": per_appliance, "total_alarms": total, "by_severity": total_by_severity}
+
+    TUNNEL_KPI_KEYS = (
+        "tunnelname", "tunnelid", "overlayid", "nepk", "source", "destination",
+        "mos", "min_mos", "max_mos", "avg_mos", "mos_score",
+        "jitter", "loss", "latency", "rtt", "packetslost", "losspercent",
+    )
+
+    def project_tunnel_kpis(node: Any) -> Any:
+        """Recursively project raw stats rows (~200 fields) down to tunnel KPIs.
+
+        Keeps identifier and quality fields (MOS/jitter/loss/latency and their
+        documented variants) plus any field whose name contains one of those
+        tokens; drops counters to keep payloads LLM-consumable.
+        """
+        if isinstance(node, list):
+            return [project_tunnel_kpis(item) for item in node]
+        if not isinstance(node, dict):
+            return node
+        projected: dict[str, Any] = {}
+        for key, value in node.items():
+            lowered = str(key).lower()
+            if lowered in TUNNEL_KPI_KEYS or any(token in lowered for token in ("mos", "jitter", "loss", "latency", "rtt")):
+                projected[str(key)] = project_tunnel_kpis(value) if isinstance(value, (dict, list)) else value
+            elif isinstance(value, dict):
+                nested = project_tunnel_kpis(value)
+                if nested:
+                    projected[str(key)] = nested
+        if not projected:
+            return {k: v for k, v in list(node.items())[:3]}
+        return projected
+
+    def project_wan_health_stats(payload: Any) -> Any:
+        """Project stats aggregates: accepts list rows or dict-of-tunnels shapes.
+
+        Handles GET /stats/aggregate/* responses that arrive as {"data": [rows]}
+        or as {"data": {"<tunnelName>": {"<nePk>": {<kpi>...}}}} (tunnel-keyed
+        dict per orchestrator version), always returning KPI-only structures.
+        """
+        if not isinstance(payload, (dict, list)):
+            return payload
+        if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+            return {k: project_tunnel_kpis(v) for k, v in payload["data"].items()}
+        rows = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), list) else payload
+        projected_rows = project_tunnel_kpis(rows)
+        if isinstance(payload, dict) and payload.get("data") is projected_rows:
+            return {**payload, "data": projected_rows}
+        return projected_rows
+
+    def _project_fields(node: Any, field_list: list[str]) -> Any:
+        """Apply a client-requested field projection at the tunnel/KPI level."""
+        if isinstance(node, list):
+            return [_project_fields(item, field_list) for item in node]
+        if not isinstance(node, dict):
+            return node
+        lowered = {str(k).lower(): k for k in node}
+        kept = {}
+        for f in field_list:
+            key = lowered.get(f.strip().lower())
+            if key is not None:
+                kept[key] = _project_fields(node[key], field_list)
+        if kept:
+            return kept
+        nested = {k: _project_fields(v, field_list) for k, v in node.items() if isinstance(v, (dict, list))}
+        if any(nested.values()):
+            return nested
+        return {k: v for k, v in node.items() if str(k).lower() in ("tunnelname", "tunnel", "tunnelid")} or node
 
     def brownout_state(payload: Any) -> list[dict[str, Any]]:
         rows = payload if isinstance(payload, list) else payload.get("tunnels") or payload.get("data") or [] if isinstance(payload, dict) else []
@@ -347,6 +526,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             except Exception:
                 appliances = []
             payload = {
+                "build": build_info(),
                 "detected_version": detected,
                 "active_profile": matched,
                 "available_profiles": engine.versions,
@@ -529,12 +709,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             for ne_pk in targets:
                 try:
                     stats = kpi_get(client, "latency", ne_pk, granularity, start_time, end_time)
-                    rows.append({"nePk": ne_pk, "stats": stats})
+                    rows.append({"nePk": ne_pk, "stats": project_wan_health_stats(stats)})
                 except Exception as error:
                     rows.append({"nePk": ne_pk, "error": str(error)[:200]})
             mos = None
             try:
-                mos = kpi_get(client, "mos", "", granularity, start_time, end_time)
+                mos = project_wan_health_stats(kpi_get(client, "mos", "", granularity, start_time, end_time))
             except Exception:
                 mos = None
             reach = reachability_map(client)
@@ -552,7 +732,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             }
             field_list = [f.strip() for f in fields.split(",") if f.strip()]
             if field_list:
-                payload, _ = paginate_data(payload, 0, None, field_list)
+                payload["appliances"] = [
+                    {
+                        "nePk": row.get("nePk"),
+                        "stats": _project_fields(row.get("stats"), field_list),
+                        **({k: v for k, v in row.items() if k in ("error", "reachability", "hint")}),
+                    }
+                    for row in payload["appliances"]
+                ]
+            payload["total_count"] = len(payload["appliances"])
+            payload["truncated"] = False
             audit.record("get_wan_health", "read", settings.orchestrator_url, "ok", details={"appliances": len(targets)})
             return json_result(payload, settings.max_output_chars)
         except Exception as error:
@@ -643,12 +832,17 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def get_active_alarms(appliance_id: str = "") -> str:
-        """Active alarm counts per appliance from /alarm/count/appliance (the /alarm/gms detail endpoint rejects view/severity filters — known upstream contract). Use it for 'how many alarms are active right now' instead of alarm/gms."""
+        """Active alarm counts per appliance from /alarm/count/appliance (the /alarm/gms detail endpoint rejects view/severity filters — known upstream contract). appliance_id accepts 'all' (or empty) for every appliance, or a single nePk/name/IP; with 'all' the counts are aggregated per appliance and by severity. Use it for 'how many alarms are active right now' instead of alarm/gms."""
         try:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
-            payload = kpi_alarm_counts(client)
+            if appliance_id.strip().lower() == "all":
+                targets = resolve_ne_pks(client, "all")
+                payload = kpi_alarm_counts_aggregate(client, targets)
+            else:
+                ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
+                payload = kpi_alarm_counts(client, ne_pk)
             audit.record("get_active_alarms", "read", settings.orchestrator_url, "ok")
             return json_result({"data": payload, "note": "Counts per appliance/severity; the alarm/gms detail endpoint only accepts from+to (epoch seconds) upstream."}, settings.max_output_chars)
         except Exception as error:
@@ -727,6 +921,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 multi_targets = [str(a.get("nePk")) for a in client.list_appliances()]
                 appliance_id = ""
             missing_required: list[str] = []
+            granularity_hint = False
             needs_ne_pk = "nePk" in (spec.get("query_params") or []) or "nePk" in (
                 spec.get("path_params") or []
             )
@@ -736,13 +931,20 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 else ""
             ):
                 missing_required.append("appliance_id (nePk)")
-            if "/stats/" in spec["path"] and not granularity:
+            declared_query = spec.get("query_params") or []
+            used_appliance_proxy = False
+            if (
+                "/stats/" in spec["path"]
+                and "/stats/infrastructure/" not in spec["path"]
+                and "granularity" in declared_query
+                and not granularity
+            ):
                 missing_required.append("granularity")
                 granularity_hint = True
             if "/timeseries/" in spec["path"]:
-                if not start_time:
+                if not start_time and "startTime" in declared_query:
                     missing_required.append("start_time")
-                if not end_time:
+                if not end_time and "endTime" in declared_query:
                     missing_required.append("end_time")
             if missing_required:
                 hint = "Provide the missing parameters; no upstream call was made."
@@ -814,24 +1016,59 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         )
                     payload = client.appliance_api_get(ne_pk, appliance_path, **query_params)
             else:
-                if multi_targets:
-                    results = []
-                    for target in multi_targets:
-                        per_query = dict(query_params)
-                        per_query["nePk"] = target
-                        if "groupByNE" not in per_query and "nePk" in (spec.get("query_params") or []):
-                            per_query.setdefault("groupByNE", "true")
+                declares_ne_pk = "nePk" in (spec.get("query_params") or []) or "nePk" in (spec.get("path_params") or [])
+
+                def _call_orchestrator_op() -> Any:
+                    if multi_targets:
+                        results = []
+                        for target in multi_targets:
+                            per_query = dict(query_params)
+                            if declares_ne_pk:
+                                per_query["nePk"] = target
+                                if "groupByNE" in (spec.get("query_params") or []):
+                                    per_query.setdefault("groupByNE", "true")
+                            try:
+                                results.append({"nePk": target, "data": client.call(version, operation_id, path_params=path_params, **per_query)})
+                            except Exception as per_error:
+                                results.append({"nePk": target, "error": str(per_error)[:200]})
+                        return results
+                    if appliance_id and declares_ne_pk:
+                        query_params.setdefault("nePk", resolve_ne_pk(client, appliance_id))
+                        path_params.setdefault("nePk", query_params["nePk"])
+                    return client.call(version, operation_id, path_params=path_params, **query_params)
+
+                def _call_via_appliance_proxy() -> Any:
+                    proxy_ne_pk = (query_params.get("nePk") if declares_ne_pk else "") or (
+                        resolve_ne_pk(client, appliance_id) if appliance_id else resolve_ne_pk(client, "")
+                    )
+                    proxy_path = operation.path
+                    for key, value in path_params.items():
+                        proxy_path = proxy_path.replace("{" + key + "}", value)
+                    proxy_path = proxy_path.replace("{appliance_id}", proxy_ne_pk)
+                    if re.search(r"\{[^}]+\}", proxy_path):
+                        raise RuntimeError(str(last_orchestrator_error)[:200])
+                    proxy_query = {k: v for k, v in query_params.items() if k != "nePk"}
+                    return client.appliance_api_get(proxy_ne_pk, proxy_path, **proxy_query)
+
+                last_orchestrator_error: Exception | None = None
+                try:
+                    payload = _call_orchestrator_op()
+                except Exception as error:
+                    last_orchestrator_error = error
+                    payload = None
+                    error_text = str(error)
+                    if "Invalid nePk" in error_text or ("HTTP 400" in error_text and "nePk" in error_text):
                         try:
-                            results.append({"nePk": target, "data": client.call(version, operation_id, path_params=path_params, **per_query)})
-                        except Exception as per_error:
-                            results.append({"nePk": target, "error": str(per_error)[:200]})
-                    payload = results
-                elif appliance_id:
-                    query_params.setdefault("nePk", resolve_ne_pk(client, appliance_id))
-                    path_params.setdefault("nePk", query_params["nePk"])
-                    payload = client.call(version, operation_id, path_params=path_params, **query_params)
-                else:
-                    payload = client.call(version, operation_id, path_params=path_params, **query_params)
+                            payload = _call_via_appliance_proxy()
+                            used_appliance_proxy = True
+                        except Exception as proxy_error:
+                            raise RuntimeError(
+                                f"{error} | appliance-scoped fallback via /appliance/rest also failed: {proxy_error}"
+                            ) from error
+                    else:
+                        raise
+                if payload is None:
+                    raise last_orchestrator_error
             field_list = [f.strip() for f in fields.split(",") if f.strip()] if fields else []
             if field_list or offset or limit:
                 paginated, _ = paginate_data(payload, max(0, offset), limit or None, field_list)
@@ -841,8 +1078,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 "data": payload,
                 "request_echo": {
                     "operation_id": operation_id,
-                    "resolved_path": operation.path,
+                    "resolved_path": "/appliance/rest" if used_appliance_proxy else operation.path,
                     "query_used": {k: str(v) for k, v in query_params.items()},
+                    **({"via_appliance_proxy": True} if used_appliance_proxy else {}),
                 },
             }
             result_text, truncated = closed_json_result(wrapper, budget)

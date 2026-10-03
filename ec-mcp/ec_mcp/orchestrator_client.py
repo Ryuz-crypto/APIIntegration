@@ -25,6 +25,7 @@ class OrchestratorClient:
         self._response_cache: dict[tuple, tuple[float, Any]] = {}
         self._cache_ttl = float(getattr(settings, "api_cache_ttl", 30.0))
         self._cache_max_entries = 128
+        self._api_root = self._resolve_api_root()
         self._metrics: dict[str, dict[str, float]] = {}
         self._client = client or httpx.Client(
             base_url=settings.orchestrator_url,
@@ -60,6 +61,11 @@ class OrchestratorClient:
     def _cache_key(self, path: str, query: dict[str, Any]) -> tuple:
         return (path, tuple(sorted((k, str(v)) for k, v in query.items() if v is not None)))
 
+    def _full_path(self, path: str) -> str:
+        if path.startswith("/gms/"):
+            return path
+        return f"{self._api_root}{path}"
+
     def get_raw(self, path: str, **query: Any) -> Any:
         key = self._cache_key(path, query)
         now = time.monotonic()
@@ -67,12 +73,13 @@ class OrchestratorClient:
         if cached is not None and now - cached[0] < self._cache_ttl:
             self._record_metric(path, 0.0, 0, cache_hit=True)
             return cached[1]
+        full_path = self._full_path(path)
         started = time.monotonic()
-        response = self._client.get(path, headers=self._headers(), params={k: v for k, v in query.items() if v is not None})
+        response = self._client.get(full_path, headers=self._headers(), params={k: v for k, v in query.items() if v is not None})
         elapsed = time.monotonic() - started
         self._record_metric(path, elapsed, len(response.content), cache_hit=False)
         if response.status_code >= 400:
-            message = self._error_message(response, f"GET {path}")
+            message = self._error_message(response, f"GET {full_path}")
             if response.status_code == 404:
                 body = (response.text or "").strip()
                 if any(marker in body for marker in ("No application groups configured", "no data", "not configured", "No configured")):
@@ -138,12 +145,18 @@ class OrchestratorClient:
         resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params)
         api_root = self._profile_api_root(version)
         label = f"{operation_id}"
+        operation = self._engine._profiles[version]["operations"][operation_id]
+        declared_query = set(operation.get("query_params") or [])
+        allowed_query = {k: v for k, v in query.items() if v is not None and k in declared_query}
+        dropped = sorted(set(query) - declared_query)
+        if dropped:
+            logger.debug("dropping undeclared query params for %s: %s", operation_id, dropped)
         started = time.monotonic()
         response = self._client.request(
             resolved.method,
             f"{api_root}{resolved.path}",
             headers=self._headers(),
-            params={k: v for k, v in query.items() if v is not None},
+            params=allowed_query,
             json=json_body,
         )
         self._record_metric(label, time.monotonic() - started, len(response.content), cache_hit=False)
@@ -158,6 +171,13 @@ class OrchestratorClient:
     def _profile_api_root(self, version: str) -> str:
         profile = getattr(self._engine, "_profiles", {}).get(version, {})
         return profile.get("api_root", "/gms/rest")
+
+    def _resolve_api_root(self) -> str:
+        for profile in getattr(self._engine, "_profiles", {}).values():
+            api_root = profile.get("api_root")
+            if api_root:
+                return api_root
+        return "/gms/rest"
 
     def _error_message(self, response: httpx.Response, action: str) -> str:
         detail = ""
@@ -192,10 +212,24 @@ class OrchestratorClient:
             return self._appliances_cache
         data: Any = None
         last_error: Exception | None = None
-        for path in ("/appliance/approved", "/neStatus", "/appliance"):
+        for path in ("/appliance", "/appliance/approved", "/neStatus"):
             try:
                 data = self.get_raw(path)
-                break
+                if isinstance(data, dict):
+                    candidates = (
+                        data.get("appliances")
+                        or data.get("data")
+                        or data.get("result")
+                        or data.get("neStatus")
+                        or []
+                    )
+                else:
+                    candidates = data
+                if isinstance(candidates, list) and candidates:
+                    data = candidates
+                    break
+                last_error = RuntimeError(f"GET {path}: empty inventory response")
+                data = None
             except RuntimeError as error:
                 last_error = error
                 message = str(error)
@@ -220,7 +254,7 @@ class OrchestratorClient:
             appliances.append(
                 {
                     "nePk": item.get("nePk") or item.get("nePK") or item.get("id"),
-                    "name": item.get("name") or item.get("hostname") or item.get("dnsName"),
+                    "name": item.get("name") or item.get("hostname") or item.get("hostName") or item.get("dnsName"),
                     "model": item.get("model") or item.get("modelNumber"),
                     "serial_number": item.get("serialNumber") or item.get("serial"),
                     "software_version": item.get("softwareVersion") or item.get("currentSoftwareVersion"),

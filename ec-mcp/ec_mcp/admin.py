@@ -203,7 +203,7 @@ async def login_page(request):
 async def login_post(request):
     body = await request.json()
     password = str(body.get("password") or "")
-    host = os.environ.get("EC_ADMIN_HOST", "0.0.0.0")
+    host = os.environ.get("EC_ADMIN_HOST", "0.0.0.0")  # nosec B104
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
     failures = [t for t in LOGIN_FAILURES.get(client_ip, []) if now - t < LOGIN_WINDOW_SECONDS]
@@ -303,11 +303,11 @@ ENV_KEYS = {
     "url": "EC_ORCHESTRATOR_URL",
     "api_key": "EC_ORCHESTRATOR_API_KEY",
     "username": "EC_ORCHESTRATOR_USER",
-    "password": "EC_ORCHESTRATOR_PASSWORD",
+    "password": "EC_ORCHESTRATOR_PASSWORD",  # nosec B105
     "verify_tls": "EC_VERIFY_TLS",
     "ssh_user": "EC_SSH_USER",
-    "ssh_password": "EC_SSH_PASSWORD",
-    "ssh_enable_password": "EC_SSH_ENABLE_PASSWORD",
+    "ssh_password": "EC_SSH_PASSWORD",  # nosec B105
+    "ssh_enable_password": "EC_SSH_ENABLE_PASSWORD",  # nosec B105
     "ssh_host": "EC_SSH_HOST",
 }
 
@@ -397,7 +397,7 @@ def main() -> None:
     from .__main__ import _load_env_file
 
     _load_env_file()
-    host = os.environ.get("EC_ADMIN_HOST", "0.0.0.0")
+    host = os.environ.get("EC_ADMIN_HOST", "0.0.0.0")  # nosec B104
     port = int(os.environ.get("EC_ADMIN_PORT", "8080"))
     if not _loopback_only(host) and not _has_password_configured():
         raise SystemExit(
