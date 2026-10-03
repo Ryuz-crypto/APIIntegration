@@ -44,6 +44,7 @@ set_env_value() {
 set_env_value EC_UPDATE_PROJECT_DIR "$PROJECT_DIR"
 set_env_value EC_UPDATE_STATE_DIR "$STATE_DIR"
 set_env_value EC_UPDATE_ALLOW_WEB "true"
+set_env_value EC_ADMIN_PORT "$PORT"
 chmod 600 .env
 sudo install -d -m 0750 -o "$INSTALL_USER" -g "$INSTALL_GROUP" "$STATE_DIR"
 
@@ -63,8 +64,6 @@ User=${INSTALL_USER}
 Group=${INSTALL_GROUP}
 WorkingDirectory=${PROJECT_DIR}
 Environment=EC_MCP_ENV_FILE=${PROJECT_DIR}/.env
-Environment=EC_ADMIN_HOST=0.0.0.0
-Environment=EC_ADMIN_PORT=${PORT}
 ExecStart=${PROJECT_DIR}/.venv/bin/ec-mcp admin
 Restart=on-failure
 RestartSec=5
@@ -85,7 +84,6 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=${PROJECT_DIR}
 Environment=EC_MCP_ENV_FILE=${PROJECT_DIR}/.env
-Environment=EC_UPDATE_PROJECT_DIR=${PROJECT_DIR}
 ExecStart=${PROJECT_DIR}/.venv/bin/python ${PROJECT_DIR}/scripts/apply-web-update.py
 PrivateTmp=true
 ProtectHome=read-only
