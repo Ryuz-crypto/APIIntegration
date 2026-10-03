@@ -234,9 +234,11 @@ def public_diagnostic(error: Exception, settings: dict[str, str]) -> str:
 
 
 def main() -> None:
-    project = Path(os.environ.get("EC_UPDATE_PROJECT_DIR", Path.cwd())).resolve()
-    env_file = Path(os.environ.get("EC_MCP_ENV_FILE", project / ".env"))
+    initial_project = Path.cwd().resolve()
+    env_file = Path(os.environ.get("EC_MCP_ENV_FILE", initial_project / ".env"))
     settings = {**load_env(env_file), **os.environ}
+    project = Path(settings.get("EC_UPDATE_PROJECT_DIR") or initial_project).resolve()
+    settings["EC_UPDATE_PROJECT_DIR"] = str(project)
     state = Path(settings.get("EC_UPDATE_STATE_DIR", "/var/lib/ec-mcp-update"))
     try:
         request = read_request(state)
