@@ -1050,7 +1050,6 @@ def test_call_read_api_retries_via_appliance_proxy_on_invalid_nepk():
 
 def test_call_read_api_non_nepk_error_is_not_redirected_to_proxy():
     import asyncio
-    import json as jsonlib
 
     from ec_mcp.server import create_server
 
