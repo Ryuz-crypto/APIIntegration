@@ -23931,11 +23931,33 @@
    "risk": "write",
    "source": "official-oas",
    "notes": [
-    "Set protection profiles"
+    "Set protection profiles (body per postman/OAS: profiles[] con profile_name/enable/tid thresholds)"
    ],
    "tags": [
     "security"
-   ]
+   ],
+   "body_example": {
+    "profiles": [
+     {
+      "profile_name": "<name>",
+      "enable": true,
+      "comment": "<text>",
+      "preset_threshold_type": "<preset>",
+      "tid": {
+       "<thresholdId>": {
+        "classification": "<class>",
+        "enable": true,
+        "max_action": "<action>",
+        "max_value": 1000,
+        "metric": "<metric>",
+        "min_action": "<action>",
+        "min_value": 10,
+        "protocol": "<protocol>"
+       }
+      }
+     }
+    ]
+   }
   },
   "appliance.protectionprofilesetget574729": {
    "method": "GET",

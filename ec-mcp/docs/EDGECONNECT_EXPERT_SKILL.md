@@ -68,3 +68,39 @@ Cuenta portal: Silver Peak SE - Lab Account 20.
 - Body usa **`nePks` (lista)**, no `nePk` singular; startTime/endTime en epoch ms, `allowed: true|false`, `top: N`.
 - Datos vacíos = aún no hay tráfico clasificado (o appliance recién adoptado); el collector necesita tráfico real para poblar.
 - `GET /secureWebServicesConfig?nePk=` valida que URL Classification/IP Reputation están activos y `isWebccSupported` del modelo.
+
+## 10. DDoS Protection (ADDoS) — perfiles y umbrales
+
+- Endpoints appliance-scoped (vía Orchestrator proxied):
+  - **Listar perfiles**: `GET /security/ddos/protectionProfile` (todos) o `GET /security/ddos/protectionProfile/{zoneId}` (por zona).
+  - **Crear/actualizar perfiles**: `POST /security/ddos/protectionProfile` con body `{"profiles": [ {profile} ]}`.
+  - **Quitar perfil de una zona**: `DELETE /security/ddos/protectionProfile/{zoneId}` (elimina el perfil asignado a esa zona).
+  - **Estado de umbrales**: `GET /security/ddos/thresholdStatus` (todas) o `/{zoneId}`.
+  - Vista orchestrator: `GET /security/ddos/protectionProfiles/appliance?nePk=&cached=`.
+- Schema del perfil (POST):
+  ```json
+  {"profiles":[{
+    "profile_name":"...","enable":true,"comment":"...",
+    "preset_threshold_type":"...",
+    "spoof_check":true,"icmp_verify":true,"dpi_app_verify":true,
+    "ftp_bounce_attack":true,"rst_verify":false,"udp_verify":false,
+    "discard_non_syn_tcp":false,"strict_3way_tcp":false,"is_asymmetric":false,
+    "aggr_age_time":5,"blacklist_time":60,"embryonic_time":10,"embryonic_non_tcp_time":10,
+    "whitelist":"...","blacklist":"...",
+    "tid":{"<thresholdId>":{"classification":"...","protocol":"...","metric":"...",
+      "enable":true,"min_action":"...","min_value":10,"max_action":"...","max_value":1000,
+      "min_value_percent":1,"max_value_percent":100,"is_custom_type":true}}
+  }]}
+  ```
+- Umbral (`tid`): `classification` + `protocol` + `metric` definen qué se mide; `min_action`/`max_action` con `min_value`/`max_value` (o `_percent`) disparan acciones (p. ej. drop, syn-cookie, blacklist).
+- Stats para incidentes: `POST /stats/timeseries/ddosTotalStats`, `ddosPeakAndPeakDropRate`, `ddosSrcIpSample10`, `ddosTopTalkers` (query: startTime/endTime epoch ms, granularity, zoneId, metric, protocol, statIds, limit); baseline ADDoS: `POST /stats/timeseries/addos/*` (maxTimestamp, segmentZoneView, trends/baselineZone...). Body `{"nePk": "..."}`.
+- IP Reputation DDoS: `GET /security/ddos/ipReputation?filter=trusted|...` y `POST /security/ddos/ipReputationStatus` con `{"segment": <id>, "ipAddress": "x.x.x.x"}`.
+
+## 11. Hallazgos de ambiente (postura de seguridad lab)
+
+- **EC-CLOUD (1-4.NE) ilegibles vía Orchestrator**: error 500 `PortalWS: DH key exchange is not completed` en toda lectura appliance-scoped (IDS/zones/tunnels). Canal WS Orchestrator↔appliance sin handshake DH completado; reintenta o reconecta el appliance, no es problema de config.
+- **14.NE MATAMOROS**: único con IDS/IPS activo (`ips_inline`), 0 eventos en ventana 24h.
+- **16.NE EC3**: IDS/IPS desactivado a propósito (licencia adv_sec retirada tras pruebas); licencia portal tier 500 Mbps restaurada manualmente.
+- Zone matrix vacía (0 políticas inter-zona) en 14.NE y 16.NE → tráfico inter-zona en default policy; hallazgo para endurecimiento futuro.
+- SSE: Zscaler/Netskope/Axis con conectividad 0 y 0 appliances asociados (sin integración configurada en este Orchestrator).
+- Región NFR (regionId 3) creada para appliances de pruebas NFR; EC3 movido ahí. Sin hubs asignados todavía → sin túneles esperado hasta asignar hubs de overlay en NFR.
