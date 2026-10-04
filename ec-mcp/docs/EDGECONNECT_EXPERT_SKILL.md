@@ -131,3 +131,11 @@ Cuenta portal: Silver Peak SE - Lab Account 20.
 - Cada `applianceIPs[]` debe llevar `mask` entero y `version: 4` (o 6).
 - **Verificación** (después del reboot): `GET /dhcpd/config` nativo del appliance (appliance.dhcpdconfig735985) — debe mostrar `lan0: {"type":"server","server":{...}}`. Leases activos en `GET /dhcpd/leases` (appliance.dhcpdleases559133) con ip/mac/client-hostname/state.
 - **Validado en vivo**: al terminar el reboot, un cliente Windows (DESKTOP-ESNSE7L) obtuvo lease `172.16.200.100` activo vía lan0.
+
+## 12.2 POST /deployment — replace completo (hallazgo de licencia, validado en vivo)
+
+- **POST /deployment es REPLACE del deployment completo del appliance**, no merge. Si se omite una sección del GET actual, se pierde.
+- **`sysConfig.license` es la suscripción "configured" (la que vive en el appliance)**; el portal muestra el "granted" por separado. Si un POST /deployment omite `sysConfig.license`, el appliance queda con licencia local vacía (portal sigue mostrando granted) → sin servicio aunque el grant exista.
+- Siempre: `GET /deployment` → copiar íntegro (modeIfs, sysConfig completo incl. license/ifLabels/zones/vrfs, dhcpFailover, dpRoutes) → modificar solo lo necesario → `POST /deployment`.
+- Verificar licencia activa en el appliance: `GET /spPortal/licenses/tokens` nativo (appliancegetapi70 con `url=/spPortal/licenses/tokens`) — muestra `ecTier/ecBase/ecBoost/features` con `enable` y desc p.ej. "EC Tier License - 500 Mbps - 500000 kbps bandwidth limit".
+- El appliance reinicia con cada POST /deployment aplicado ("rebooting appliance now") — contar con ~2 min de downtime por apply.
