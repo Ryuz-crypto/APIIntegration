@@ -6636,14 +6636,27 @@
    "risk": "write",
    "source": "official-oas",
    "notes": [
-    "Changes ec appliance license settings"
+    "Change EC appliance license settings (pyedgeconnect change_appliance_license). Query nePk required. Body license.tier.bandwidth in Kbps: valid 20000/50000/100000/200000/500000/1000000/2000000, Unlimited=1000000000. feature.adv_sec_unlimited {reqValue:1, display:EC-AS-UL} assigns the Advanced Security Unlimited subscription (IDS/IPS). feature.adv_sec_standard {reqValue:1, display:EC-AS}. Omitted keys unchanged."
    ],
    "query_params": [
     "nePk"
    ],
    "body_example": {
-    "placeholderProperty1": "",
-    "placeholderProperty2": ""
+    "license": {
+     "boost": {
+      "enable": true,
+      "bandwidth": 1000000
+     },
+     "tier": {
+      "bandwidth": 200000
+     },
+     "feature": {
+      "adv_sec_unlimited": {
+       "reqValue": 1,
+       "display": "EC-AS-UL"
+      }
+     }
+    }
    },
    "tags": [
     "license"
