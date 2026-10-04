@@ -118,3 +118,16 @@ Cuenta portal: Silver Peak SE - Lab Account 20.
 - **POST /dhcpConfig validado en vivo (9.6)**: body completo server-mode devuelve `{"ok": true}` y `GET /dhcpConfig` refleja el estado exacto (el orchestrator normaliza `blockMask` a 0 y agrega `numOfIps`).
 - Alternativa ZTP/preconfig YAML: sección `dhcpInfo` en `deploymentInfo` (dhcpInterfaceName, dhcpType "server", dhcpAddressMask, startIpAddress/endIpAddress, iPRanges[], gatewayIpAddress, dnsServers[], maximumLease, defaultLease, options, staticIpAssignments[hostname/macAddress/ipAddress]); relay: dhcpType "relay" con dhcpProxyServers[] y option82.
 - DHCP failover (EdgeHA): `dhcpFailoverRole` ("primary"/"secondary"), settings compartidos por interfaz física, solo el último role definido aplica si hay duplicados.
+
+## 12.1 DHCP — hallazgos de aplicación en vivo (EC3/16.NE, 9.6)
+
+- **El POST /dhcpConfig del Orchestrator NO activa el DHCP por sí solo**: guarda la config global en la BD del Orchestrator, pero el DHCP server se activa **por interfaz** en el deployment del appliance.
+- **Ruta correcta (3 pasos)**:
+  1. `POST /dhcpConfig?nePk=` (config global server/relay — referencia de pool/gateway/DNS).
+  2. `POST /deployment` (appliance, vía `/appliance/rest?nePk=...&url=/deployment`): incluir el deployment completo actual (GET /deployment primero) + en la interfaz LAN (`modeIfs[].applianceIPs[]` de lan0) el objeto `dhcpd: {"type":"server","server":{...}}`.
+  3. El appliance responde `"Deployment configuration successfully applied, rebooting appliance now"` — **reinicia solo** (el POST /deployment con dhcpd nuevo fuerza reboot).
+- **Contrato dhcpd.server del deployment (appliance)**: `prefix` es **CIDR string** (`"172.16.200.0/24"`), NO entero — con `"24"` devuelve 500 `"Invalid value - 24"` en "Unable to add/update appliance IPs". Claves: `ipStart`, `ipEnd`, `prefix` (CIDR), `gw[]`, `dns[]`, `ntpd[]`, `netbios[]`, `netbiosNodeType` (1=B en el appliance), `defaultLease`, `maxLease`, `failover` (bool), `host{}`, `ip_range{}`, `options{}`.
+- **`sysConfig` del POST /deployment requiere `maxInBW`** (shaper inbound del sistema); sin él → 400 `"Binding is not of correct type ... key: max_bw"` en shaperinbound/wan. Copiar TODOS los campos del GET actual (maxBW, maxInBW, mode, inline, vrfEnable, serverPerSegment, bonding, etc.).
+- Cada `applianceIPs[]` debe llevar `mask` entero y `version: 4` (o 6).
+- **Verificación** (después del reboot): `GET /dhcpd/config` nativo del appliance (appliance.dhcpdconfig735985) — debe mostrar `lan0: {"type":"server","server":{...}}`. Leases activos en `GET /dhcpd/leases` (appliance.dhcpdleases559133) con ip/mac/client-hostname/state.
+- **Validado en vivo**: al terminar el reboot, un cliente Windows (DESKTOP-ESNSE7L) obtuvo lease `172.16.200.100` activo vía lan0.
