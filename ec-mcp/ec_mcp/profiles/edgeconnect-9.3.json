@@ -1116,20 +1116,20 @@
       "method": "POST",
       "path": "/appliance/networkRoleAndSite",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "To verify or change a Network Role (hub / spoke) for appliances and to assign them to a site"
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Change network role (hub|nrhub|non-hub) and/or site of an appliance (query nePk). Site prevents tunnels between appliances sharing the same site name."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "networkRole": "non-hub",
+        "site": "<site-name>"
       },
       "tags": [
-        "networkRoleAndSite"
-      ]
+        "appliance"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.peerpriorityget66": {
       "method": "GET",
@@ -3986,35 +3986,35 @@
       "method": "POST",
       "path": "/gms/appliance/preconfiguration",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Create a preconfiguration"
+        "Create a preconfiguration template (ZTP YAML). Body is the preconfig object: name plus the applianceInfo/templateGroups/businessIntentOverlays/deploymentInfo YAML sections as structured fields. The transactional ZTP workflow tools (prepare/apply_ztp_plan) are the preferred path."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "<preconfig-name>",
+        "preConfig": "<yaml-or-structured-preconfig>"
       },
       "tags": [
-        "appliancePreconfig"
-      ]
+        "preconfiguration"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.createpreconfiguration247_2": {
       "method": "PUT",
       "path": "/gms/appliance/preconfiguration",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Update preconfiguration given by preconfigId"
-      ],
-      "query_params": [
-        "preconfigId"
+        "Update an existing preconfiguration template (ZTP)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "<preconfig-name>",
+        "preConfig": "<yaml-or-structured-preconfig>"
       },
       "tags": [
-        "appliancePreconfig"
+        "preconfiguration"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "preconfigId"
       ]
     },
     "orchestrator.deletepreconfiguration251": {
@@ -4433,17 +4433,17 @@
       "method": "POST",
       "path": "/gms/group/new",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add new group"
+        "Add a new appliance group to the Orchestrator tree."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "<group-name>",
+        "parent": "<parent-group-name-or-empty-for-root>"
       },
       "tags": [
-        "group"
-      ]
+        "groups"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.rootgroupget281": {
       "method": "GET",
@@ -4491,19 +4491,19 @@
       "method": "POST",
       "path": "/gms/group",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Update a group"
-      ],
-      "query_params": [
-        "id"
+        "Update an existing appliance group (rename / move)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "<group-name>",
+        "newName": "<new-group-name>"
       },
       "tags": [
-        "group"
+        "groups"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "id"
       ]
     },
     "orchestrator.httpscertificatevalidation285": {
@@ -4558,20 +4558,28 @@
       "method": "POST",
       "path": "/gms/interfaceLabels",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Save interface labels, will completely replace the current implementation. "
-      ],
       "query_params": [
         "deleteDependencies"
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
+      "notes": [
+        "Save interface labels. WARNING: completely replaces the current label set \u2014 GET the current labels first (GET /gms/interfaceLabels?active&type) and include them all plus the new ones. type: 0=lan, 1=wan."
+      ],
+      "body_example": [
+        {
+          "id": 0,
+          "type": 1,
+          "value": "<wan-label-name>"
+        },
+        {
+          "id": 0,
+          "type": 0,
+          "value": "<lan-label-name>"
+        }
+      ],
       "tags": [
         "interfaceLabels"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getinternalsubnets290": {
       "method": "GET",
@@ -4776,17 +4784,21 @@
       "method": "POST",
       "path": "/gms/overlays/association/remove",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Remove appliances from overlays"
+        "Remove appliances from overlays."
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
+      "body_example": [
+        {
+          "overlayId": 0,
+          "nePks": [
+            "<nePk>"
+          ]
+        }
+      ],
       "tags": [
-        "overlayAssociation"
-      ]
+        "overlays"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getappliancesforoverlay312": {
       "method": "GET",
@@ -4807,17 +4819,21 @@
       "method": "POST",
       "path": "/gms/overlays/association",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add appliances to overlays"
+        "Add appliances to overlays."
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
+      "body_example": [
+        {
+          "overlayId": 0,
+          "nePks": [
+            "<nePk>"
+          ]
+        }
+      ],
       "tags": [
-        "overlayAssociation"
-      ]
+        "overlays"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.deleteoverlayapplianceassociation313": {
       "method": "DELETE",
@@ -4901,17 +4917,27 @@
       "method": "POST",
       "path": "/gms/overlays/config",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Saves a new overlay to the Orchestrator"
+        "Saves a new Business Intent Overlay. Body mirrors objects returned by GET /gms/overlays/config."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "<overlay-name>",
+        "dnRules": [],
+        "rules": [],
+        "rating": 0,
+        "enableWanOptimization": false,
+        "enableForwardErrorCorrection": false,
+        "enableJitterBuffer": false,
+        "enableTcpPriority": false,
+        "enableUdpPriority": false,
+        "enableColorPriority": false,
+        "backupLAN": false,
+        "regionId": 0
       },
       "tags": [
         "overlays"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.deleteexistingoverlay322": {
       "method": "DELETE",
@@ -4947,20 +4973,21 @@
       "method": "PUT",
       "path": "/gms/overlays/config",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Update the properties of an existing overlay"
-      ],
       "query_params": [
         "overlayId"
       ],
+      "notes": [
+        "Update an existing overlay (query overlayId). Clone the object from GET /gms/overlays/config first \u2014 the PUT replaces overlay properties."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "<overlay-name>",
+        "rating": 0,
+        "rules": []
       },
       "tags": [
         "overlays"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getoverlayprioritymap325": {
       "method": "GET",
@@ -4978,17 +5005,19 @@
       "method": "POST",
       "path": "/gms/overlays/priority",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Change the overlay priorities "
+        "Change overlay priorities (evaluation order)."
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
+      "body_example": [
+        {
+          "overlayId": 0,
+          "priority": 0
+        }
+      ],
       "tags": [
         "overlays"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.gmsuserpermission": {
       "method": "GET",
@@ -5046,17 +5075,19 @@
       "method": "POST",
       "path": "/gms/services",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Save the service list"
+        "Save the service list (business services used by overlay rules)."
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
+      "body_example": [
+        {
+          "id": 0,
+          "name": "<service-name>"
+        }
+      ],
       "tags": [
         "services"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.sessiontimeout331": {
       "method": "GET",
@@ -6081,17 +6112,17 @@
       "method": "POST",
       "path": "/haGroups",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Modify appliances paired in a HA configuration"
+        "Create an HA group. Shape mirrors objects from GET /haGroups."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "<ha-group-name>",
+        "haMode": "hnha"
       },
       "tags": [
-        "haGroups"
-      ]
+        "ha"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.healthsummary406": {
       "method": "POST",
@@ -6226,20 +6257,19 @@
       "method": "POST",
       "path": "/hostname",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "add/updates the gms hostname"
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Add/update the hostname of an appliance (query nePk). Do not rely on default hostnames \u2014 all appliances ship with the same one; drive routines by serial number."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "hostname": "<new-hostname>"
       },
       "tags": [
-        "vxoaHostname"
-      ]
+        "appliance"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.httpscertificatenepk": {
       "method": "GET",
@@ -6622,16 +6652,33 @@
       "method": "POST",
       "path": "/license/portal/appliance/grant",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Grant an appliance a base license via Cloud Portal"
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Grant portal license to appliance (query nePk). Shape mirrors the license object from GET /license/portal/appliance (fx.tier.bandwidth Kbps, fx.boost, fx.feature adv_sec_standard/adv_sec_unlimited)."
+      ],
+      "body_example": {
+        "fx": {
+          "tier": {
+            "bandwidth": 500000
+          },
+          "boost": {
+            "bandwidth": 0,
+            "enable": false
+          },
+          "feature": {
+            "adv_sec_unlimited": {
+              "reqValue": 1
+            }
+          }
+        }
+      },
       "tags": [
-        "license"
-      ]
+        "license",
+        "portal"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.deletelicensetoken442": {
       "method": "DELETE",
@@ -6652,16 +6699,18 @@
       "method": "POST",
       "path": "/license/portal/appliance/revoke",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Revoke an appliance a base license via Cloud Portal"
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Revoke the portal license from an appliance (query nePk). WARNING: revoking removes the appliance subscription \u2014 the appliance loses licensed features. Re-verify with GET /license/portal/appliance afterwards."
+      ],
+      "body_example": {},
       "tags": [
-        "license"
-      ]
+        "license",
+        "portal"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.licensing444": {
       "method": "POST",
@@ -6686,20 +6735,30 @@
       "method": "POST",
       "path": "/license/portal/appliance/ec/account/license",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Changes ec appliance account and license settings"
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Grant or revoke a portal license for an appliance (query nePk). Body selects the license: action grant|revoke, tier bandwidth in Kbps (pick the tier immediately above the sum of WAN bandwidths), optional boost. Grant may take >60s \u2014 always re-verify with GET /license/portal/appliance before retrying (a duplicate grant can consume extra portal licenses)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "action": "grant",
+        "license": {
+          "license": {
+            "tier": {
+              "bandwidth": 500000
+            },
+            "boost": {
+              "enable": false
+            }
+          }
+        }
       },
       "tags": [
-        "license"
-      ]
+        "license",
+        "portal"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.licensing445": {
       "method": "GET",
@@ -7917,19 +7976,19 @@
       "method": "PUT",
       "path": "/regions/appliances",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Update region association"
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Associate an appliance (query nePk) with a region by regionId. Note: POST /regions/appliances rejects this body on existing appliances (400 \"supply correct input\") \u2014 use PUT. A re-adopted appliance loses its region association."
+      ],
       "body_example": {
-        "regionId": 2
+        "regionId": 0
       },
       "tags": [
         "regions"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.regionassociationget525": {
       "method": "GET",
@@ -7980,35 +8039,36 @@
       "method": "PUT",
       "path": "/regions",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Update regions"
-      ],
       "query_params": [
         "regionId"
       ],
+      "notes": [
+        "Update a region (query regionId required). Body mirrors the region object returned by GET /regions."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "regionId": 0,
+        "regionName": "<region-name>"
       },
       "tags": [
         "regions"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.regionpost521": {
       "method": "POST",
       "path": "/regions",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Create region"
+        "Create a region. Body mirrors the region object returned by GET /regions; regionName identifies the new region."
       ],
       "body_example": {
-        "regionName": "NFR"
+        "regionId": 0,
+        "regionName": "<new-region-name>"
       },
       "tags": [
         "regions"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.releases530": {
       "method": "GET",
@@ -14598,17 +14658,20 @@
       "method": "POST",
       "path": "/upgradeAppliances",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Upgrade appliances with option"
+        "Trigger a software upgrade on appliances. Body lists appliance nePks and the target version; validate compatibility first with POST /validateApplianceUpgrade. Appliances reboot as part of the upgrade."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "applianceList": [
+          "<nePk>"
+        ],
+        "version": "<target-version>",
+        "reboot": true
       },
       "tags": [
         "upgradeAppliances"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getuseraccount906": {
       "method": "GET",
@@ -14743,17 +14806,19 @@
       "method": "POST",
       "path": "/validateApplianceUpgrade",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Check ECOS version compatibility for appliance upgrades through Portal"
+        "Check ECOS version compatibility for an appliance upgrade through the Portal. Body lists appliances and target version; run before POST /upgradeAppliances."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "applianceList": [
+          "<nePk>"
+        ],
+        "version": "<target-version>"
       },
       "tags": [
         "upgradeAppliances"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.loopbackget916": {
       "method": "GET",
@@ -14941,39 +15006,45 @@
       ]
     },
     "orchestrator.segmentpost931": {
-      "method": "PUT",
+      "method": "POST",
       "path": "/vrf/config/segments",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Modify existing Segment"
-      ],
-      "query_params": [
-        "id"
+        "Create routing segments (VRF). In 9.3-9.5 the endpoint is /vrf/config/segments; in 9.6 it moved to /segment. Shape mirrors segment objects from the sibling GET."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "segment": "<segment-name>",
+        "segmentId": 0,
+        "enable": true,
+        "isDefault": false
       },
       "tags": [
-        "vrf"
+        "segments"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "id"
       ]
     },
     "orchestrator.segmentspost928": {
       "method": "POST",
       "path": "/vrf/config/segments",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add new Segment"
+        "Create routing segments (VRF). In 9.3-9.5 the endpoint is /vrf/config/segments; in 9.6 it moved to /segments. Body is a list of segment objects."
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
+      "body_example": [
+        {
+          "segment": "<segment-name>",
+          "segmentId": 0,
+          "enable": true,
+          "isDefault": false
+        }
+      ],
       "tags": [
-        "vrf"
-      ]
+        "segments"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.snatmapsget932": {
       "method": "GET",
@@ -15113,19 +15184,21 @@
       "method": "POST",
       "path": "/zones",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add/Edit Zones"
+        "Create firewall zones. Body is a list of zone objects (shape mirrors GET /zones)."
       ],
-      "query_params": [
-        "deleteDependencies"
+      "body_example": [
+        {
+          "name": "<zone-name>",
+          "segmentId": 0
+        }
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
       "tags": [
         "zones"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "deleteDependencies"
       ]
     },
     "orchestrator.zoneeeenableget942": {
@@ -15393,17 +15466,28 @@
       "method": "PUT",
       "path": "/ids/config",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set IDPS configuration"
+        "Set IDPS configuration. Body mirrors configData from GET /ids/config."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "schedule": {},
+        "auto": "on",
+        "idsVersions": {
+          "<nePk>": "<signature-version>"
+        },
+        "supportedAppliances": [
+          "<nePk>"
+        ],
+        "signatures": [
+          1,
+          210,
+          211
+        ]
       },
       "tags": [
         "idps"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.idpssignaturesget": {
       "method": "GET",
@@ -15494,17 +15578,18 @@
       "method": "PUT",
       "path": "/ids/profilestate",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set IDPS profile state"
+        "Assign IDPS signature profiles per appliance. Body mirrors GET /ids/profilestate: map of profile name -> list of nePks. Profile names come from GET /ids/signatures/profiles."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<profile-name>": [
+          "<nePk>"
+        ]
       },
       "tags": [
         "idps"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.idpsstateget": {
       "method": "GET",
@@ -15522,17 +15607,23 @@
       "method": "PUT",
       "path": "/ids/state",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set IDPS state"
+        "Set IDPS mode per appliance. Body mirrors GET /ids/state: each key is a list of nePks. ips_inline = IPS-Inline, ips_lookaside = IPS-Performant, ids = IDS Only, disabled = Off. Include ALL appliances in exactly one list (the PUT replaces state)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "ips_inline": [
+          "<nePk>"
+        ],
+        "ips_lookaside": [],
+        "ids": [],
+        "disabled": [
+          "<nePk>"
+        ]
       },
       "tags": [
         "idps"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.idpsupdatesignaturefromportalpost": {
       "method": "GET",
@@ -15602,20 +15693,19 @@
       "method": "PUT",
       "path": "/orch-ha/instances",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Update HA instance comment"
-      ],
       "query_params": [
         "id"
       ],
+      "notes": [
+        "Update HA instance comment (query id)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "comment": "<ha-instance-comment>"
       },
       "tags": [
-        "Orchestrator High Availablability"
-      ]
+        "ha"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.deleteorchinstance": {
       "method": "DELETE",
