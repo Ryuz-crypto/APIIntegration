@@ -6646,16 +6646,33 @@
       "method": "POST",
       "path": "/license/portal/appliance/grant",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Grant an appliance a base license via Cloud Portal"
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Grant portal license to appliance (query nePk). Shape mirrors the license object from GET /license/portal/appliance (fx.tier.bandwidth Kbps, fx.boost, fx.feature adv_sec_standard/adv_sec_unlimited)."
+      ],
+      "body_example": {
+        "fx": {
+          "tier": {
+            "bandwidth": 500000
+          },
+          "boost": {
+            "bandwidth": 0,
+            "enable": false
+          },
+          "feature": {
+            "adv_sec_unlimited": {
+              "reqValue": 1
+            }
+          }
+        }
+      },
       "tags": [
-        "license"
-      ]
+        "license",
+        "portal"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.deletelicensetoken442": {
       "method": "DELETE",
@@ -6676,16 +6693,18 @@
       "method": "POST",
       "path": "/license/portal/appliance/revoke",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Revoke an appliance a base license via Cloud Portal"
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Revoke the portal license from an appliance (query nePk). WARNING: revoking removes the appliance subscription \u2014 the appliance loses licensed features. Re-verify with GET /license/portal/appliance afterwards."
+      ],
+      "body_example": {},
       "tags": [
-        "license"
-      ]
+        "license",
+        "portal"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.licensing444": {
       "method": "POST",
@@ -6723,39 +6742,30 @@
       "method": "POST",
       "path": "/license/portal/appliance/ec/account/license",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Changes EC appliance account and license settings. Query nePk required. action: grant|revoke|update (portal semantics). license.license mirrors GET /license/portal/appliance licenses block: tier.bandwidth = sum of WAN bandwidths Kbps (subscription taken = next tier >= that sum), boost, feature.adv_sec_unlimited reqValue 1 = IDS/IPS advanced security subscription assigned."
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Grant or revoke a portal license for an appliance (query nePk). Body selects the license: action grant|revoke, tier bandwidth in Kbps (pick the tier immediately above the sum of WAN bandwidths), optional boost. Grant may take >60s \u2014 always re-verify with GET /license/portal/appliance before retrying (a duplicate grant can consume extra portal licenses)."
+      ],
       "body_example": {
-        "account": {
-          "account": "Silver Peak SE - Lab Account 20"
-        },
         "action": "grant",
         "license": {
           "license": {
-            "boost": {
-              "bandwidth": 1000000,
-              "enable": true
-            },
-            "feature": {
-              "adv_sec_unlimited": {
-                "reqValue": 1
-              }
-            },
             "tier": {
-              "bandwidth": 300000,
-              "display": "300 Mbps"
+              "bandwidth": 500000
+            },
+            "boost": {
+              "enable": false
             }
           }
         }
       },
       "tags": [
-        "license"
-      ]
+        "license",
+        "portal"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.licensing445": {
       "method": "GET",
@@ -14662,17 +14672,20 @@
       "method": "POST",
       "path": "/upgradeAppliances",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Upgrade appliances with option"
+        "Trigger a software upgrade on appliances. Body lists appliance nePks and the target version; validate compatibility first with POST /validateApplianceUpgrade. Appliances reboot as part of the upgrade."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "applianceList": [
+          "<nePk>"
+        ],
+        "version": "<target-version>",
+        "reboot": true
       },
       "tags": [
         "upgradeAppliances"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getuseraccount906": {
       "method": "GET",
@@ -14807,17 +14820,19 @@
       "method": "POST",
       "path": "/validateApplianceUpgrade",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Check ECOS version compatibility for appliance upgrades through Portal"
+        "Check ECOS version compatibility for an appliance upgrade through the Portal. Body lists appliances and target version; run before POST /upgradeAppliances."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "applianceList": [
+          "<nePk>"
+        ],
+        "version": "<target-version>"
       },
       "tags": [
         "upgradeAppliances"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.loopbackget916": {
       "method": "GET",
@@ -15005,39 +15020,45 @@
       ]
     },
     "orchestrator.segmentpost931": {
-      "method": "PUT",
-      "path": "/vrf/config/segments",
+      "method": "POST",
+      "path": "/segment",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Modify existing Segment"
-      ],
-      "query_params": [
-        "id"
+        "Create a routing segment (VRF). Shape mirrors objects from GET /segment."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "segment": "<segment-name>",
+        "segmentId": 0,
+        "enable": true,
+        "isDefault": false
       },
       "tags": [
-        "vrf"
+        "segments"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "id"
       ]
     },
     "orchestrator.segmentspost928": {
       "method": "POST",
-      "path": "/vrf/config/segments",
+      "path": "/segments",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add new Segment"
+        "Create routing segments (VRF). Body is a list of segment objects (same shape as GET /segment)."
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
+      "body_example": [
+        {
+          "segment": "<segment-name>",
+          "segmentId": 0,
+          "enable": true,
+          "isDefault": false
+        }
+      ],
       "tags": [
-        "vrf"
-      ]
+        "segments"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.snatmapsget932": {
       "method": "GET",
@@ -15177,19 +15198,21 @@
       "method": "POST",
       "path": "/zones",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add/Edit Zones"
+        "Create firewall zones. Body is a list of zone objects (shape mirrors GET /zones)."
       ],
-      "query_params": [
-        "deleteDependencies"
+      "body_example": [
+        {
+          "name": "<zone-name>",
+          "segmentId": 0
+        }
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
       "tags": [
         "zones"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "deleteDependencies"
       ]
     },
     "orchestrator.zoneeeenableget942": {
