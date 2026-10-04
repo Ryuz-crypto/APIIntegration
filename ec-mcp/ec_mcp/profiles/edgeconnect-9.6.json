@@ -13269,19 +13269,18 @@
       "method": "POST",
       "path": "/thirdPartyServices/serviceOrchestration/bioBreakout",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set Service Orchestration BIO Breakout state."
-      ],
-      "query_params": [
-        "serviceId"
+        "Set BIO breakout per service provider. Body mirrors GET /thirdPartyServices/serviceOrchestration/bioBreakout."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<serviceId>": "<0|1|2>"
       },
       "tags": [
-        "thirdPartyServices"
+        "serviceOrchestration"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "serviceId"
       ]
     },
     "orchestrator.serviceorchestrationipslasettingget858": {
@@ -13303,19 +13302,18 @@
       "method": "POST",
       "path": "/thirdPartyServices/serviceOrchestration/ipslaSetting",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Enable/Disable IPSLA Settings for Service Provider."
-      ],
-      "query_params": [
-        "serviceId"
+        "Enable/disable IP SLA per service provider. Body mirrors GET /thirdPartyServices/serviceOrchestration/ipslaSetting."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<serviceId>": "<0|1>"
       },
       "tags": [
-        "thirdPartyServices"
+        "serviceOrchestration"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "serviceId"
       ]
     },
     "orchestrator.serviceorchestrationipslaruledestinationget858": {
@@ -13337,19 +13335,18 @@
       "method": "POST",
       "path": "/thirdPartyServices/serviceOrchestration/ipslaRuleDestination",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Posts IPSLA Settings for Service Provider."
-      ],
-      "query_params": [
-        "serviceId"
+        "Set IP SLA destinations per service provider. Body mirrors GET /thirdPartyServices/serviceOrchestration/ipslaRuleDestination."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<serviceId>": "<ip-or-fqdn>"
       },
       "tags": [
-        "thirdPartyServices"
+        "serviceOrchestration"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "serviceId"
       ]
     },
     "orchestrator.serviceorchdefaulttunnelsettingget832": {
@@ -13383,19 +13380,21 @@
       "method": "POST",
       "path": "/thirdPartyServices/serviceOrchestration/interfaces",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set primary and/or backup interfaces for a Service Provider."
-      ],
-      "query_params": [
-        "serviceId"
+        "Select WAN interface labels per service provider. Body mirrors GET /thirdPartyServices/serviceOrchestration/interfaces."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<serviceId>": [
+          "<wan-label-1>",
+          "<wan-label-2>"
+        ]
       },
       "tags": [
-        "thirdPartyServices"
+        "serviceOrchestration"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "serviceId"
       ]
     },
     "orchestrator.pauseorchestrationget835": {
@@ -13417,19 +13416,18 @@
       "method": "POST",
       "path": "/thirdPartyServices/serviceOrchestration/pauseOrchestration",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set Service Orchestration Pause state."
-      ],
-      "query_params": [
-        "serviceId"
+        "Pause/resume orchestration per service provider. Body mirrors GET /thirdPartyServices/serviceOrchestration/pauseOrchestration."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<serviceId>": "<0|1>"
       },
       "tags": [
-        "thirdPartyServices"
+        "serviceOrchestration"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "serviceId"
       ]
     },
     "orchestrator.getremoteendpointassociation837": {
@@ -13451,38 +13449,45 @@
       "method": "POST",
       "path": "/thirdPartyServices/serviceOrchestration/remoteEndPointAssociations",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Updates appliance to remote endpoint association."
-      ],
-      "query_params": [
-        "serviceId"
+        "Associate appliances with remote endpoints of a service. Body mirrors GET /thirdPartyServices/serviceOrchestration/remoteEndPointAssociations."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<nePk>": [
+          "<endpoint-name>"
+        ]
       },
       "tags": [
-        "thirdPartyServices"
+        "serviceOrchestration"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "serviceId"
       ]
     },
     "orchestrator.addremoteendpointentry839": {
       "method": "POST",
       "path": "/thirdPartyServices/serviceOrchestration/remoteEndpoints/addEndpoints",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add list of Remote Endpoints to existing remote endpoints of the Service Provider."
+        "Add remote endpoints for a service (SSE locations). Body: list of endpoint objects per serviceId."
       ],
+      "body_example": [
+        {
+          "serviceId": 0,
+          "name": "<endpoint-name>",
+          "ipAddress": "<ip>",
+          "mask": 32,
+          "enabled": true
+        }
+      ],
+      "tags": [
+        "serviceOrchestration",
+        "sse"
+      ],
+      "source": "official-oas",
       "query_params": [
         "serviceId"
-      ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
-      "tags": [
-        "thirdPartyServices"
       ]
     },
     "orchestrator.deleteremoteendpointentry840": {
@@ -13519,19 +13524,24 @@
       "method": "POST",
       "path": "/thirdPartyServices/serviceOrchestration/remoteEndpoints",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set Remote Endpoints list for the service."
+        "Update remote endpoints of a service. Body mirrors the endpoint objects (needs valid query params on GET)."
       ],
+      "body_example": [
+        {
+          "serviceId": 0,
+          "name": "<endpoint-name>",
+          "ipAddress": "<ip>",
+          "mask": 32,
+          "enabled": true
+        }
+      ],
+      "tags": [
+        "serviceOrchestration"
+      ],
+      "source": "official-oas",
       "query_params": [
         "serviceId"
-      ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
-      "tags": [
-        "thirdPartyServices"
       ]
     },
     "orchestrator.serviceproviderconfigurationget843": {
@@ -13608,17 +13618,21 @@
       "method": "POST",
       "path": "/thirdPartyServices/serviceOrchestration/serviceProviders",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add new Service Provider"
+        "Add a service provider entry (generic SSE orchestration). Body mirrors objects from GET /thirdPartyServices/serviceOrchestration/serviceProviders (serviceId, serviceName, servicePrefix, bioBreakout...)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "serviceId": 0,
+        "serviceName": "<service-name>",
+        "servicePrefix": "<PREFIX>",
+        "bioBreakout": 1,
+        "pauseOrchestration": 0
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "serviceOrchestration",
+        "sse"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getserviceorchtunnelsettings847": {
       "method": "GET",
@@ -13639,19 +13653,22 @@
       "method": "POST",
       "path": "/thirdPartyServices/serviceOrchestration/tunnelSetting",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set tunnel settings for a Service Provider."
-      ],
-      "query_params": [
-        "serviceId"
+        "Set tunnel settings per service provider (IKE/IPsec). Body mirrors GET /thirdPartyServices/serviceOrchestration/tunnelSetting."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<serviceId>": {
+          "admin": "up",
+          "mode": "ipsec_ip",
+          "ikeVersion": 2
+        }
       },
       "tags": [
-        "thirdPartyServices"
+        "serviceOrchestration"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "serviceId"
       ]
     },
     "orchestrator.zscalerassociationget849": {
@@ -13670,17 +13687,19 @@
       "method": "POST",
       "path": "/thirdPartyServices/zscaler/applianceAssociation",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Posts Appliance to Zscaler association"
+        "Associate appliances with Zscaler. Body mirrors GET /thirdPartyServices/zscaler/applianceAssociation: enabled = list of nePks."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "enabled": [
+          "<nePk>"
+        ]
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "zscaler",
+        "sse"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.zscalerconfigurationget851": {
       "method": "GET",
@@ -13698,17 +13717,48 @@
       "method": "POST",
       "path": "/thirdPartyServices/zscaler/configuration",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Update Returns Zscaler configuration, including tunnel setting, selected interface label order"
+        "Save Zscaler tunnel + location configuration. Body mirrors GET /thirdPartyServices/zscaler/configuration: tunnelSetting (IKE/IPsec params) and locationSetting (sslScan, xff, ofw, auth)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "interfaces": [
+          [],
+          []
+        ],
+        "tunnelSetting": {
+          "admin": "up",
+          "mode": "ipsec_ip",
+          "autoMaxBandwidthEnabled": true,
+          "presharedKey": "<preshared-key>",
+          "ikeAuthenticationAlgorithm": "sha256",
+          "ikeEncryptionAlgorithm": "aes256",
+          "dhgroup": "2",
+          "ikeLifetime": 1440,
+          "dpdDelay": 10,
+          "dpdRetry": 3,
+          "idType": "ufqdn",
+          "idStr": "<id>",
+          "exchangeMode": "aggressive",
+          "ikeVersion": 2,
+          "authenticationAlgorithm": "sha256",
+          "encryptionAlgorithm": "aes256",
+          "ipsecAntiReplayWindow": "1024",
+          "lifetime": 480,
+          "pfs": false,
+          "pfsgroup": "14"
+        },
+        "locationSetting": {
+          "authRequired": false,
+          "sslScanEnabled": false,
+          "xffForwardEnabled": false,
+          "ofwEnabled": false
+        }
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "zscaler",
+        "sse"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.zscalerconnectivityget853": {
       "method": "GET",
@@ -13799,17 +13849,16 @@
       "method": "POST",
       "path": "/thirdPartyServices/zscaler/ipslaRuleDestination",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Posts IPSLA Settings for Zscaler."
+        "Set IP SLA probe destinations for Zscaler. Body mirrors GET /thirdPartyServices/zscaler/ipslaRuleDestination."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "destination": "<ip-or-fqdn>"
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "zscaler"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.zscaleripslasettingget858": {
       "method": "GET",
@@ -13827,17 +13876,16 @@
       "method": "POST",
       "path": "/thirdPartyServices/zscaler/ipslaSetting",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Enable/Disable IPSLA Settings for Zscaler."
+        "Enable/disable IP SLA probing toward Zscaler gateways. Body mirrors GET /thirdPartyServices/zscaler/ipslaSetting."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "enable": true
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "zscaler"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.gatewayoptionsappliance860": {
       "method": "GET",
@@ -13870,17 +13918,19 @@
       "method": "POST",
       "path": "/thirdPartyServices/zscaler/interfaceTunnelSetting",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Posts InterfaceTunnelSetting for every interface label."
+        "Select WAN interface labels used for the Zscaler VPN tunnels. Body mirrors GET /thirdPartyServices/zscaler/interfaceTunnelSetting."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<nePk>": [
+          "<wan-label-1>",
+          "<wan-label-2>"
+        ]
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "zscaler"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.zscalerlocationconfigget863": {
       "method": "GET",
@@ -13928,17 +13978,16 @@
       "method": "POST",
       "path": "/thirdPartyServices/zscaler/orchestrateGatewayOptions",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Update whether to use current location configuration to controll locations or sub-locations gateway options or bandwidth control"
+        "Set Zscaler gateway orchestration options. Body mirrors GET /thirdPartyServices/zscaler/orchestrateGatewayOptions."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<option>": "<value>"
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "zscaler"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.zscalervpnlocationexceptionpost867_1": {
       "method": "POST",
@@ -13986,17 +14035,16 @@
       "method": "POST",
       "path": "/thirdPartyServices/zscaler/pauseOrchestration",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "update pause Zscaler Orchestration configuration"
+        "Pause/resume Zscaler orchestration. Body mirrors GET /thirdPartyServices/zscaler/pauseOrchestration."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "pause": true
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "zscaler"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.zscalerpollingintervalget870": {
       "method": "GET",
@@ -14045,20 +14093,22 @@
       "method": "POST",
       "path": "/thirdPartyServices/zscaler/remoteEndpointException",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add/Update user configured ZEN override data"
+        "Set Zscaler remote endpoint exceptions (traffic bypassing the service). Body mirrors GET /thirdPartyServices/zscaler/remoteEndpointException."
       ],
+      "body_example": [
+        {
+          "ip": "<ip-address>",
+          "mask": 32
+        }
+      ],
+      "tags": [
+        "zscaler"
+      ],
+      "source": "official-oas",
       "query_params": [
         "labelId",
         "nePk"
-      ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
-      "tags": [
-        "thirdPartyServices"
       ]
     },
     "orchestrator.zscalerremoteendpointexceptionget871": {
@@ -14101,17 +14151,19 @@
       "method": "POST",
       "path": "/thirdPartyServices/zscaler/subscription",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add/Update Subscription"
+        "Save Zscaler subscription credentials. Body mirrors GET /thirdPartyServices/zscaler/subscription."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "username": "<api-user>",
+        "password": "<api-password>",
+        "key": "<subscription-key>"
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "zscaler",
+        "sse"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.zscalertimezones877": {
       "method": "GET",
@@ -14181,17 +14233,17 @@
       "method": "POST",
       "path": "/thirdPartyServices/netskope/subscription",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add/Update Subscription"
+        "Save Netskope subscription credentials. Body mirrors GET /thirdPartyServices/netskope/subscription."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "token": "<api-token-v2>"
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "netskope",
+        "sse"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.netskopeconnectivityget853": {
       "method": "GET",
@@ -14221,17 +14273,19 @@
       "method": "POST",
       "path": "/thirdPartyServices/netskope/interfaces",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Update Returns Netskope configuration, including tunnel setting, selected interface label order"
+        "Save Netskope interface configuration. Body mirrors GET /thirdPartyServices/netskope/interfaces."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "interfaces": [
+          [],
+          []
+        ]
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "netskope"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.interfacetunnelsetting861_2": {
       "method": "GET",
@@ -14249,17 +14303,19 @@
       "method": "POST",
       "path": "/thirdPartyServices/netskope/interfaceTunnelSetting",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Posts InterfaceTunnelSetting for every interface label."
+        "Select WAN interface labels used for the Netskope VPN tunnels. Body mirrors GET /thirdPartyServices/netskope/interfaceTunnelSetting."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<nePk>": [
+          "<wan-label-1>",
+          "<wan-label-2>"
+        ]
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "netskope"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.defaulttunnelsetting861": {
       "method": "GET",
@@ -14289,17 +14345,16 @@
       "method": "POST",
       "path": "/thirdPartyServices/netskope/ipslaRuleDestination",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Posts IPSLA Settings for Netskope."
+        "Set IP SLA probe destinations for Netskope. Body mirrors GET /thirdPartyServices/netskope/ipslaRuleDestination."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "destination": "<ip-or-fqdn>"
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "netskope"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.netskopeipslasettingget858": {
       "method": "GET",
@@ -14317,17 +14372,16 @@
       "method": "POST",
       "path": "/thirdPartyServices/netskope/ipslaSetting",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Enable/Disable IPSLA Settings for Netskope."
+        "Enable/disable IP SLA probing toward Netskope. Body mirrors GET /thirdPartyServices/netskope/ipslaSetting."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "enable": true
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "netskope"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.netskopeassociationget849": {
       "method": "GET",
@@ -14345,17 +14399,19 @@
       "method": "POST",
       "path": "/thirdPartyServices/netskope/applianceAssociation",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Posts Appliance to Netskope association"
+        "Associate appliances with Netskope. Body mirrors GET /thirdPartyServices/netskope/applianceAssociation: enabled = list of nePks."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "enabled": [
+          "<nePk>"
+        ]
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "netskope",
+        "sse"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getconnectionstatus785_2": {
       "method": "GET",
@@ -14403,17 +14459,16 @@
       "method": "POST",
       "path": "/thirdPartyServices/netskope/pauseOrchestration",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "update pause Netskope Orchestration configuration"
+        "Pause/resume Netskope orchestration. Body mirrors GET /thirdPartyServices/netskope/pauseOrchestration."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "pause": true
       },
       "tags": [
-        "thirdPartyServices"
-      ]
+        "netskope"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.netskopepollingintervalget870": {
       "method": "GET",
