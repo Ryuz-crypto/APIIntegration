@@ -77,7 +77,7 @@ def summarize_ids_state(payload: Any) -> dict[str, Any]:
     for row in rows:
         mode = row.get("mode") or mode
         profile = row.get("profile") or row.get("profileName") or profile
-    inactive_modes = {"off", "disabled", "", "unknown"}
+    inactive_modes = {"off", "disabled", "none", "", "unknown"}
     active = bool(mode and str(mode).lower() not in inactive_modes)
     return {
         "mode": mode or "unknown",

@@ -147,6 +147,7 @@ def test_summarize_ids_state():
 def test_summarize_ids_state_off_is_inactive():
     assert summarize_ids_state({"data": {"mode": "Off", "profile": "Default"}})["active"] is False
     assert summarize_ids_state({"data": {"mode": "disabled", "profile": "Default"}})["active"] is False
+    assert summarize_ids_state({"data": {"mode": "none", "profile": "Default"}})["active"] is False
     assert summarize_ids_state({"data": {"mode": "IPS-Inline", "profile": "Default"}})["active"] is True
 
 
