@@ -963,6 +963,136 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
+    def troubleshoot_flows(appliance_id: str, application: str = "", ip: str = "", limit: int = 20) -> str:
+        """One-call flow troubleshooting: top talkers, filtered flows and today's firewall log (allow/drop with Flow-ID) for one appliance, cross-correlated: drops found in the security log are matched against active flows. Use for 'app X does not work / is slow / is blocked' investigations."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            if not appliance_id:
+                return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"]}, settings.max_output_chars)
+            ne_pk = resolve_ne_pk(client, appliance_id)
+            version = client.resolve_active_profile()
+            result: dict[str, Any] = {"nePk": ne_pk}
+            try:
+                talks = kpi_get(client, "top_talkers", ne_pk, "hour", "", "")
+                if isinstance(talks, list):
+                    talks = talks[: max(0, limit)]
+                result["top_talkers"] = talks
+            except Exception as error:
+                result["top_talkers_error"] = str(error)[:200]
+            query: dict[str, Any] = {"nePk": ne_pk, "maxFlows": str(max(1, limit))}
+            if application:
+                query["application"] = application
+            if ip:
+                query["ipEitherFlag"] = "true"
+                query["ip1"] = ip
+            try:
+                result["flows"] = client.call(version, "orchestrator.flows242", query_params=None, json_body=None, **query)
+            except Exception as error:
+                result["flows_error"] = str(error)[:200]
+            try:
+                from ec_mcp.security_workflow import (
+                    LOG_VIEWER_FILE_READ,
+                    parse_firewall_log_entries,
+                    summarize_security_log,
+                )
+                today = __import__("datetime").datetime.now().strftime("%Y-%m-%d")
+                log_payload = client.appliance_api_call(
+                    version, ne_pk, LOG_VIEWER_FILE_READ,
+                    path_params={"logType": "Firewall", "date": today, "lines": str(max(50, limit * 5))},
+                )
+                entries = parse_firewall_log_entries(log_payload)
+                drops = [e for e in entries if str(e.get("Action", "")).lower().startswith("drop")]
+                if application:
+                    drops = [e for e in drops if application.lower() in str(e.get("Application", "")).lower()]
+                if ip:
+                    drops = [e for e in drops if ip in (str(e.get("SrcAddr", "")), str(e.get("DstAddr", "")))]
+                result["security_log"] = {
+                    "date": today,
+                    "total_entries": len(entries),
+                    "drops": drops[: max(1, limit)],
+                    "summary": summarize_security_log(entries),
+                }
+            except Exception as error:
+                result["security_log_error"] = str(error)[:200]
+            findings: list[str] = []
+            drops = (result.get("security_log") or {}).get("drops") or []
+            if drops:
+                reasons = sorted({str(d.get("Reason", "")).strip() for d in drops if d.get("Reason")})[:5]
+                findings.append(f"{len(drops)} drop event(s) found in today's firewall log — reasons: {'; '.join(reasons)}")
+                policy_drops = [d for d in drops if "policy" in str(d.get("Reason", "")).lower()]
+                if policy_drops:
+                    zones = sorted({f"{d.get('FromZone','?')}->{d.get('ToZone','?')}" for d in policy_drops})
+                    findings.append(f"Policy drops on zone pairs {', '.join(zones)} — review the zone matrix for these pairs")
+            else:
+                findings.append("No drops in today's firewall log — if traffic still fails, check reachability and routing")
+            result["findings"] = findings
+            audit.record("troubleshoot_flows", "read", settings.orchestrator_url, "ok", details={"drops": len(drops)})
+            return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            audit.record("troubleshoot_flows", "read", appliance_id, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def troubleshoot_tunnel(appliance_id: str, granularity: str = "hour", start_time: str = "", end_time: str = "") -> str:
+        """One-call tunnel troubleshooting: tunnel state, brownout reasons, WAN health KPIs (latency/jitter/loss/MOS) and reachability for one appliance, plus a prioritized diagnostic interpretation (tunnel down vs degraded vs healthy). Use it instead of calling get_tunnel_state + get_brownout_state + get_wan_health separately."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            if not appliance_id:
+                return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"]}, settings.max_output_chars)
+            ne_pk = resolve_ne_pk(client, appliance_id)
+            result: dict[str, Any] = {"nePk": ne_pk}
+            tunnels: list[dict[str, Any]] = []
+            try:
+                tunnels = kpi_get(client, "tunnel_state", ne_pk)
+                result["tunnels_raw_count"] = len(tunnels) if isinstance(tunnels, list) else None
+            except Exception as error:
+                result["tunnel_state_error"] = str(error)[:200]
+            try:
+                brownouts = brownout_state(kpi_get(client, "brownout", ne_pk))
+                result["brownout"] = brownouts
+            except Exception as error:
+                result["brownout_error"] = str(error)[:200]
+            try:
+                stats = project_wan_health_stats(kpi_get(client, "latency", ne_pk, granularity, start_time, end_time))
+                result["wan_health"] = stats
+            except Exception as error:
+                result["wan_health_error"] = str(error)[:200]
+            reach = reachability_map(client)
+            state = reach.get(ne_pk, "")
+            if state:
+                result["reachability"] = state
+            findings: list[str] = []
+            tunnels_list = tunnels if isinstance(tunnels, list) else []
+            down_admin = [t for t in tunnels_list if isinstance(t, dict) and str(t.get("adminState") or t.get("admin") or "").lower() in ("down", "disabled", "false")]
+            down_oper = [t for t in tunnels_list if isinstance(t, dict) and str(t.get("state") or t.get("status") or "").lower() == "down"]
+            brownout_rows = result.get("brownout") or []
+            active_brownouts = [b for b in brownout_rows if isinstance(b, dict) and b.get("brownout")]
+            if down_admin:
+                findings.append(f"{len(down_admin)} tunnel(s) are administratively down — verify intent before treating as failure")
+            if down_oper:
+                names = [str(t.get("tunnelName") or t.get("name") or t.get("tunnelId")) for t in down_oper[:5]]
+                findings.append(f"{len(down_oper)} tunnel(s) operationally DOWN ({', '.join(names)}) — check transport/NAT-D; use traceroute under the tunnel to find the failing hop")
+            if active_brownouts:
+                reasons = sorted({str(b.get("reason")) for b in active_brownouts if b.get("reason")})
+                findings.append(f"{len(active_brownouts)} tunnel(s) in brownout — reason: {'; '.join(reasons) if reasons else 'loss/latency/jitter threshold exceeded'}")
+            if not down_oper and not active_brownouts and tunnels_list:
+                findings.append("No tunnels down and no active brownouts — tunnel plane looks healthy")
+            if not tunnels_list and "tunnel_state_error" not in result:
+                findings.append("No tunnel entities reported — appliance may have no tunnels configured or reachability issues")
+            if state and state.lower() not in ("", "ok", "reachable", "up"):
+                findings.append(f"Orchestrator reports reachability '{state}' for this appliance — errors may be reachability, not the endpoint")
+            result["findings"] = findings
+            audit.record("troubleshoot_tunnel", "read", settings.orchestrator_url, "ok", details={"findings": len(findings)})
+            return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            audit.record("troubleshoot_tunnel", "read", appliance_id, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
     def get_availability(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "") -> str:
         """Availability per appliance/site from GET /stats/aggregate/availability/appliance (fallback /availability/appliance)."""
         try:
