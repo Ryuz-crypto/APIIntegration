@@ -902,11 +902,13 @@
    "risk": "write",
    "source": "official-oas",
    "notes": [
-    "Delete denied appliances."
+    "Delete denied appliances.",
+    "permanently delete denied appliances; body.DeniedAppliancePortalObjectId = list of portalObjectId; expects 204"
    ],
    "body_example": {
-    "placeholderProperty1": "",
-    "placeholderProperty2": ""
+    "DeniedAppliancePortalObjectId": [
+     "6193c766026ea2b776b038ac"
+    ]
    },
    "tags": [
     "appliance"
@@ -931,12 +933,16 @@
    "source": "official-oas",
    "notes": [
     "Add discovered appliances to Orchestrator",
-    "query-only write: id query param moves a denied appliance back to discovered; body must be empty"
+    "add discovered appliance: id query param = numeric row id; body.id = target group pk (e.g. 4.Network), latitude/longitude optional; expects 204"
    ],
    "query_params": [
     "id"
    ],
-   "body_example": null,
+   "body_example": {
+    "id": "4.Network",
+    "latitude": 0,
+    "longitude": 0
+   },
    "tags": [
     "appliance"
    ]
