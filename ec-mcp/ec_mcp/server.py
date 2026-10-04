@@ -2271,6 +2271,52 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
+    def get_security_log(
+        appliance_id: str,
+        log_type: str = "Firewall",
+        date: str = "",
+        lines: int = 100,
+        summarize: bool = True,
+    ) -> str:
+        """Read the appliance security log (Security Log Viewer equivalent): zone-based firewall entries with Action (allow/drop), Flow-ID, zones, application, NAT and reputation. log_type: Firewall|Alarm|Audit|Event. date: YYYY-MM-DD (defaults to today). Use it for incident detection and to correlate flow IDs with allow/drop decisions."""
+        from ec_mcp.security_workflow import (
+            LOG_VIEWER_FILE_READ,
+            LOG_VIEWER_TYPES,
+            parse_firewall_log_entries,
+            summarize_security_log,
+        )
+
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            if log_type not in LOG_VIEWER_TYPES:
+                return f"Error: log_type must be one of {list(LOG_VIEWER_TYPES)}"
+            version = client.resolve_active_profile()
+            ne_pk = resolve_ne_pk(client, appliance_id)
+            if not date:
+                date = __import__("datetime").datetime.now().strftime("%Y-%m-%d")
+            payload = client.appliance_api_call(
+                version,
+                ne_pk,
+                LOG_VIEWER_FILE_READ,
+                path_params={"logType": log_type, "date": date, "lines": str(max(1, int(lines)))},
+            )
+            entries = parse_firewall_log_entries(payload)
+            result: dict[str, Any] = {
+                "nePk": ne_pk,
+                "log_type": log_type,
+                "date": date,
+                "total_entries": len(entries),
+                "entries": entries,
+            }
+            if summarize and entries:
+                result["summary"] = summarize_security_log(entries)
+            return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
     def get_zone_matrix(appliance_id: str) -> str:
         """Read the zone-based security matrix of an appliance: zones, security maps with per-priority zone-to-zone policies, and uncovered zone pairs (no explicit policy) for review."""
         try:

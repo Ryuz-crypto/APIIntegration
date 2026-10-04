@@ -1683,3 +1683,38 @@ def test_deployment_replace_guard_accepts_complete_body():
         server_module.OrchestratorClient = original_create
 
     assert '"applied": true' in result.content[0].text.lower()
+
+
+def test_parse_firewall_log_entries_structures_zone_firewall_rows():
+    from ec_mcp.security_workflow import parse_firewall_log_entries, summarize_security_log
+
+    payload = {
+        "logEntries": [
+            [
+                "10/04/2026 23:33:17",
+                "LogType:Zone Based Firewall, Action:allow, Reason:flow create, Flow-ID:189710, "
+                "SrcAddr:172.17.253.1, DstAddr:54.236.159.130, Application:SilverPeakCloud, "
+                "FromZone:DATOS, ToZone:WAN_LAB,",
+                "host",
+                "WARNING",
+            ],
+            [
+                "10/04/2026 23:32:59",
+                "LogType:Zone Based Firewall, Action:drop, Reason: Dropped - Local dest interface is down, "
+                "Flow-ID:189694, FromZone:DATOS, ToZone:WAN_LAB, Application:SilverPeakCloud,",
+                "host",
+                "EMERG",
+            ],
+        ]
+    }
+    entries = parse_firewall_log_entries(payload)
+    assert len(entries) == 2
+    assert entries[0]["Action"] == "allow"
+    assert entries[0]["Flow-ID"] == "189710"
+    assert entries[0]["FromZone"] == "DATOS"
+    assert entries[1]["Action"] == "drop"
+    summary = summarize_security_log(entries)
+    assert summary["total_entries"] == 2
+    assert summary["actions"] == {"allow": 1, "drop": 1}
+    assert summary["zone_pairs"]["DATOS->WAN_LAB"] == 2
+    assert "Dropped - Local dest interface is down" in summary["drop_reasons"]

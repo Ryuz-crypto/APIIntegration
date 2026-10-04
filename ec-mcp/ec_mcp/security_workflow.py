@@ -49,6 +49,62 @@ SSE_PROVIDERS = {
 
 IDS_IPS_MODES = {"Off", "IDS Only", "IPS-Performant", "IPS-Inline"}
 
+LOG_VIEWER_DATE_RANGE_READ = "appliance.getdaterange457535"
+LOG_VIEWER_FILE_READ = "appliance.getlogfile458377"
+LOG_VIEWER_TYPES = ("Firewall", "Alarm", "Audit", "Event")
+
+
+def parse_firewall_log_entries(payload: Any) -> list[dict[str, Any]]:
+    """Parse raw logViewer rows into structured security log entries.
+
+    Each raw row is a list whose second element is a comma-separated
+    key:value string produced by the zone-based firewall logger.
+    """
+    entries: list[dict[str, Any]] = []
+    rows = payload.get("logEntries") if isinstance(payload, dict) else payload
+    if not isinstance(rows, list):
+        return entries
+    for row in rows:
+        if not isinstance(row, list) or len(row) < 2:
+            continue
+        raw = row[1]
+        fields: dict[str, str] = {}
+        for part in str(raw).split(","):
+            if ":" in part:
+                key, _, value = part.partition(":")
+                fields[key.strip()] = value.strip()
+        entry = {"timestamp": row[0] if row else None}
+        entry.update(fields)
+        entries.append(entry)
+    return entries
+
+
+def summarize_security_log(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate a security summary: actions, drops, zones and applications."""
+    actions: dict[str, int] = {}
+    drop_reasons: dict[str, int] = {}
+    zone_pairs: dict[str, int] = {}
+    applications: dict[str, int] = {}
+    for entry in entries:
+        action = entry.get("Action", "unknown")
+        actions[action] = actions.get(action, 0) + 1
+        if action.lower().startswith("drop"):
+            reason = entry.get("Reason", "unspecified").strip()
+            drop_reasons[reason] = drop_reasons.get(reason, 0) + 1
+        from_zone = entry.get("FromZone", "-")
+        to_zone = entry.get("ToZone", "-")
+        pair = f"{from_zone}->{to_zone}"
+        zone_pairs[pair] = zone_pairs.get(pair, 0) + 1
+        app = entry.get("Application", "unknown")
+        applications[app] = applications.get(app, 0) + 1
+    return {
+        "total_entries": len(entries),
+        "actions": actions,
+        "drop_reasons": drop_reasons,
+        "zone_pairs": zone_pairs,
+        "top_applications": dict(sorted(applications.items(), key=lambda kv: -kv[1])[:10]),
+    }
+
 
 def extract_rows(payload: Any) -> list[dict[str, Any]]:
     """Extract row lists from the common Orchestrator response wrappers."""
