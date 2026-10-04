@@ -30,6 +30,9 @@ ec_mcp = ["profiles/*.json"]
 line-length = 120
 target-version = "py312"
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "S", "RUF"]
 ignore = [

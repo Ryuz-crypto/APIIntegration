@@ -1,4 +1,5 @@
 
+import json as jsonlib
 import pathlib
 from typing import ClassVar
 
@@ -1530,3 +1531,155 @@ def test_confirmed_empty_overlay_write_is_rejected_before_upstream_call():
         server_module.OrchestratorClient = original_create
 
     assert "Refusing a confirmed write with an empty JSON body" in result.content[0].text
+
+
+def test_deployment_replace_guard_rejects_body_without_mode_ifs():
+    """Regression (EC3 16.NE live incident): a confirmed POST /deployment that
+    omits modeIfs would REPLACE the deployment and wipe every LAN/WAN interface.
+    The MCP must refuse the write before it reaches the Orchestrator."""
+    import asyncio
+
+    from ec_mcp.config import Settings
+    from ec_mcp.server import create_server
+
+    class FakeClient:
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def call(self, *args, **kwargs):
+            raise AssertionError("partial deployment body must not reach the appliance")
+
+        def appliance_api_call(self, *args, **kwargs):
+            raise AssertionError("partial deployment body must not reach the appliance")
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *args, **kwargs: FakeClient()
+    try:
+        result = asyncio.run(
+            create_server(
+                Settings(orchestrator_url="https://orch.example", allow_write_tools=True)
+            ).call_tool(
+                "apply_change",
+                {
+                    "operation_id": "appliance.deploymentpost567554",
+                    "appliance_id": "16.NE",
+                    "body_json": jsonlib.dumps(
+                        {
+                            "sysConfig": {
+                                "maxBW": 500000,
+                                "maxInBW": 500000,
+                                "mode": "inline-router",
+                                "license": {"ecTier": 500000},
+                            }
+                        }
+                    ),
+                    "confirm": True,
+                },
+            )
+        )
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    text = result.content[0].text
+    assert "missing required sections" in text
+    assert "modeIfs" in text
+
+
+def test_deployment_replace_guard_rejects_body_without_sys_config():
+    import asyncio
+
+    from ec_mcp.config import Settings
+    from ec_mcp.server import create_server
+
+    class FakeClient:
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def call(self, *args, **kwargs):
+            raise AssertionError("partial deployment body must not reach the appliance")
+
+        def appliance_api_call(self, *args, **kwargs):
+            raise AssertionError("partial deployment body must not reach the appliance")
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *args, **kwargs: FakeClient()
+    try:
+        result = asyncio.run(
+            create_server(
+                Settings(orchestrator_url="https://orch.example", allow_write_tools=True)
+            ).call_tool(
+                "apply_change",
+                {
+                    "operation_id": "appliance.deploymentpost567554",
+                    "appliance_id": "16.NE",
+                    "body_json": jsonlib.dumps({"modeIfs": []}),
+                    "confirm": True,
+                },
+            )
+        )
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    assert "missing required sections" in result.content[0].text
+    assert "sysConfig" in result.content[0].text
+
+
+def test_deployment_replace_guard_accepts_complete_body():
+    import asyncio
+
+    from ec_mcp.config import Settings
+    from ec_mcp.server import create_server
+
+    class FakeClient:
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def call(self, *args, **kwargs):
+            raise AssertionError("appliance-scoped write must go through appliance_api_call")
+
+        def appliance_api_call(self, *args, **kwargs):
+            return {"applied": True}
+
+    from ec_mcp import server as server_module
+
+    original_create = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *args, **kwargs: FakeClient()
+    try:
+        result = asyncio.run(
+            create_server(
+                Settings(orchestrator_url="https://orch.example", allow_write_tools=True)
+            ).call_tool(
+                "apply_change",
+                {
+                    "operation_id": "appliance.deploymentpost567554",
+                    "appliance_id": "16.NE",
+                    "body_json": jsonlib.dumps(
+                        {
+                            "modeIfs": [
+                                {
+                                    "name": "lan0",
+                                    "applianceIPs": [],
+                                }
+                            ],
+                            "sysConfig": {
+                                "maxBW": 500000,
+                                "maxInBW": 500000,
+                                "mode": "inline-router",
+                                "license": {"ecTier": 500000},
+                            },
+                            "dhcpFailover": [],
+                            "dpRoutes": [],
+                        }
+                    ),
+                    "confirm": True,
+                },
+            )
+        )
+    finally:
+        server_module.OrchestratorClient = original_create
+
+    assert '"applied": true' in result.content[0].text.lower()

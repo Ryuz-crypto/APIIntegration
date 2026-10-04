@@ -132,6 +132,22 @@ Cuenta portal: Silver Peak SE - Lab Account 20.
 - **Verificación** (después del reboot): `GET /dhcpd/config` nativo del appliance (appliance.dhcpdconfig735985) — debe mostrar `lan0: {"type":"server","server":{...}}`. Leases activos en `GET /dhcpd/leases` (appliance.dhcpdleases559133) con ip/mac/client-hostname/state.
 - **Validado en vivo**: al terminar el reboot, un cliente Windows (DESKTOP-ESNSE7L) obtuvo lease `172.16.200.100` activo vía lan0.
 
+- ⚠️ **PELIGRO GRAVE (validado en vivo)**: un POST /deployment con body minimizado (p.ej. solo `sysConfig` con `license`) **borra todas las interfaces LAN/WAN del appliance** porque el endpoint es REPLACE total. Un body sin `modeIfs` deja el equipo sin service: lan0/wan0/wan1/wan2 pierden su IPv4 (solo queda link-local) y eth1-4 quedan admin-down, con mgmt0 por DHCP como única vía de acceso.
+- ⚠️ **En un appliance YA APROBADO, GMS descarta silenciosamente `modeIfs` enviado vía POST /deployment por REST**: responde "successfully applied" pero la lectura siempre devuelve `[]`. Probado con body completo y con sección `reboot` explícita — nunca persiste.
+- **Consecuencia operativa**: en un appliance aprobado las interfaces LAN/WAN solo se pueden (re)aplicar vía el **flujo transaccional de preconfiguración** (ZTP/wizard con `discoveredId`), que es la única vía probada que funciona. Para recuperar un appliance sin interfaces: eliminarlo del inventario → reaparece en Discover → re-adoption ZTP con el YAML base.
+- **Vías que NO funcionan para restaurar interfaces**: POST /deployment con modeIfs (descartado), POST /networkInterfaces (schema `ifInfo`) + saveChanges (responde ok pero sin efecto operativo), CLI vía SSH (Authentication failed con credenciales del conector).
+- **Lo que SÍ persiste vía POST /deployment sin reboot**: `sysConfig.license` (suscripción configured) + `orchestrator.savechanges73` (POST /appliance/saveChanges con `{"nePks":["<nePk>"]}`) — licencia aplicada sin reinicio.
+- Regla de oro: `GET /deployment` completo → clonar íntegro → modificar solo lo necesario → POST. Jamás construir el body desde cero.
+- Endpoints discovered: GET /appliance/discovered; approve/deny/delete (portalObjectId); POST /appliance/discovered/add?id=; preconfig aplicada vía flujo transaccional con discoveredId.
+
+## 12.3 Deployment vía REST — PELIGRO (resumen ejecutivo)
+
+1. POST /deployment es **REPLACE**: nunca enviar un body parcial sin `modeIfs`; su omisión borra las interfaces del appliance (incidente real: EC3 16.NE perdió lan0/wan0/wan1/wan2).
+2. En appliance aprobado, GMS **descarta `modeIfs` vía REST** (lectura devuelve `[]` sin error). Interfaces solo vía flujo transaccional de preconfig (ZTP/wizard).
+3. POST /networkInterfaces + saveChanges responde ok pero **sin efecto operativo**.
+4. Licencia configured sí aplica vía POST /deployment + saveChanges **sin reboot**.
+5. **Guarda codificada en el MCP (v4)**: `apply_change` con confirm=true sobre `appliance.deploymentpost567554` rechaza bodies sin `modeIfs` o sin `sysConfig` ("missing required sections") — el incidente ya no es reproducible desde el conector.
+
 ## 12.2 POST /deployment — replace completo (hallazgo de licencia, validado en vivo)
 
 - **POST /deployment es REPLACE del deployment completo del appliance**, no merge. Si se omite una sección del GET actual, se pierde.

@@ -78,6 +78,29 @@ from .ztp_workflow import (
 )
 
 
+def guard_partial_deployment_body(body: dict | None) -> None:
+    """Refuse a confirmed POST /deployment body that omits sections of a live deployment.
+
+    Live finding (EC3 16.NE): POST /deployment is a full REPLACE, not a merge. A
+    minimized body (e.g. only sysConfig.license) wiped every LAN/WAN interface
+    (modeIfs) of an approved appliance. The contract-correct flow is:
+    GET /deployment -> clone the whole object -> modify only what is needed -> POST.
+    """
+    if not body:
+        return
+    missing = [key for key in ("modeIfs", "sysConfig") if key not in body]
+    if missing:
+        raise SecurityError(
+            "Refusing a confirmed POST /deployment: the body is a full REPLACE of the "
+            "appliance deployment, but it is missing required sections: "
+            + ", ".join(missing)
+            + ". Live incident: a partial body wiped every LAN/WAN interface of an "
+            "approved appliance. Always GET /deployment first, clone the complete "
+            "object (modeIfs, sysConfig, dhcpFailover, dpRoutes), modify only what "
+            "needs to change, and POST the full body."
+        )
+
+
 def create_server(settings: Settings | None = None) -> FastMCP:
     settings = settings or Settings.from_env()
     engine = CompatibilityEngine(load_profiles(settings.profiles_dir))
@@ -2505,6 +2528,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     "Refusing a confirmed write because the catalog only has placeholder fields "
                     "for this endpoint. Capture a valid schema or known-good object first."
                 )
+            if confirm and operation_id == "appliance.deploymentpost567554":
+                guard_partial_deployment_body(body)
             audit_entry = {
                 **operation_details(version, operation_id),
                 "resolved_path": operation.path,
