@@ -3526,14 +3526,55 @@
    "risk": "write",
    "source": "official-oas",
    "notes": [
-    "Save orchestrator DHCP settings"
+    "Save orchestrator DHCP settings. mode: 'server'|'relay'. serverConfig para mode=server; relayConfig para mode=relay. Requiere nePk (query)."
    ],
    "body_example": {
-    "placeholderProperty1": "",
-    "placeholderProperty2": ""
+    "mode": "server",
+    "serverConfig": {
+     "startIp": "172.16.200.100",
+     "endIp": "172.16.200.200",
+     "defaultSubnetMask": 24,
+     "defaultLease": 86400,
+     "maxLease": 172800,
+     "defaultGateway": "172.16.200.1",
+     "defaultGatewayEnabled": true,
+     "dnsServers": [
+      "8.8.8.8"
+     ],
+     "ntpServers": [],
+     "netBiosServers": [],
+     "netBiosNodeType": "B",
+     "blockStartIp": "",
+     "blockMask": "",
+     "startOffset": 0,
+     "endOffset": 0,
+     "options": {},
+     "staticIps": [],
+     "reservations": [],
+     "localReservations": [],
+     "applianceReservations": [],
+     "failover": false
+    },
+    "relayConfig": {
+     "destDhcpServer": "",
+     "opt82": false,
+     "opt82Policy": "append",
+     "opt82SubOpt1": false,
+     "opt82SubOpt5": false,
+     "opt82SubOpt10": false,
+     "opt82SubOpt11": false,
+     "opt82SubOpt150": false,
+     "opt82SubOpt151": false,
+     "opt82SubOpt152": false,
+     "serverPerSegment": false
+    },
+    "dhcpFoSetting": {}
    },
    "tags": [
     "dhcpConfig"
+   ],
+   "query_params": [
+    "nePk"
    ]
   },
   "orchestrator.dhcpdleases221": {
@@ -3576,8 +3617,10 @@
     "nePk"
    ],
    "body_example": {
-    "placeholderProperty1": "",
-    "placeholderProperty2": ""
+    "ifName": "lan0",
+    "mask": 24,
+    "serialNum": "001BBC462C04",
+    "startIp": "172.16.200.0"
    },
    "tags": [
     "dhcpConfig"
@@ -3593,8 +3636,11 @@
    ],
    "body_example": [
     {
-     "placeholderProperty1": "",
-     "placeholderProperty2": ""
+     "ifName": "lan0",
+     "ip": "172.16.200.5",
+     "mask": 24,
+     "neId": "16.NE",
+     "source": "local"
     }
    ],
    "tags": [
@@ -3607,7 +3653,7 @@
    "risk": "write",
    "source": "official-oas",
    "notes": [
-    "Remove all DHCP pool reservations"
+    "Remove all DHCP pool reservations. POST sin body."
    ],
    "tags": [
     "dhcpConfig"
