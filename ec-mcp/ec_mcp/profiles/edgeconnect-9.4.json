@@ -15493,11 +15493,13 @@
    "risk": "write",
    "source": "official-oas",
    "notes": [
-    "Set IDPS state"
+    "Set IDPS state. Body mirrors GET /ids/state: full nePk lists per mode. Every list must be complete (replace semantics); appliances not listed default to disabled."
    ],
    "body_example": {
-    "placeholderProperty1": "",
-    "placeholderProperty2": ""
+    "ips_inline": [],
+    "ids": [],
+    "disabled": [],
+    "ips_lookaside": []
    },
    "tags": [
     "idps"
