@@ -92,7 +92,14 @@ Cuenta portal: Silver Peak SE - Lab Account 20.
       "min_value_percent":1,"max_value_percent":100,"is_custom_type":true}}
   }]}
   ```
-- Umbral (`tid`): `classification` + `protocol` + `metric` definen qué se mide; `min_action`/`max_action` con `min_value`/`max_value` (o `_percent`) disparan acciones (p. ej. drop, syn-cookie, blacklist).
+- **Validado en vivo (EC3/16.NE, 9.6)** — contrato real del POST `{"profiles":[...],"profileMaps":[...]}`:
+  - `profileMaps` usa **`zone_id`** (snake_case), NO `zoneId`. Con `zoneId` el appliance devuelve 400/timeout silencioso.
+  - El body debe llevar **ambas claves** `profiles` y `profileMaps` (aunque sea `[]`); sin `profileMaps` → 400 "Object does not have profiles / profileMaps key".
+  - Rangos validados por el appliance: `aggr_age_time` **15-45** ("Rapid aging"), `embryonic_time` y `embryonic_non_tcp_time` **20-45** ("Embryonic timeout"). Valores default seguros: 30/30/30.
+  - Para mapear perfil→zona: `{"profile_name":"<name>","zone_id":<id>}` en `profileMaps`; el appliance responde "Protection profiles updated successfully".
+  - **Quitar**: `DELETE /security/ddos/protectionProfile/{zoneId}` → "Protection profile deleted". Para borrar perfiles: POST con `{"profiles":[],"profileMaps":[]}` los limpia.
+  - Umbrales `tid`: usar valores **numéricos** (classification: 1=zone/2=source; protocol numérico p. ej. 6=TCP); strings como "dos"/"tcp" → 400 "Value not valid".
+  - Respuestas del appliance vía Orchestrator WS a veces dan "read operation timed out" aunque el apply haya fallado — siempre re-verificar con GET.
 - Stats para incidentes: `POST /stats/timeseries/ddosTotalStats`, `ddosPeakAndPeakDropRate`, `ddosSrcIpSample10`, `ddosTopTalkers` (query: startTime/endTime epoch ms, granularity, zoneId, metric, protocol, statIds, limit); baseline ADDoS: `POST /stats/timeseries/addos/*` (maxTimestamp, segmentZoneView, trends/baselineZone...). Body `{"nePk": "..."}`.
 - IP Reputation DDoS: `GET /security/ddos/ipReputation?filter=trusted|...` y `POST /security/ddos/ipReputationStatus` con `{"segment": <id>, "ipAddress": "x.x.x.x"}`.
 

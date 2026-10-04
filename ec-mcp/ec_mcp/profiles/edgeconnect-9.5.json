@@ -23931,7 +23931,7 @@
    "risk": "write",
    "source": "official-oas",
    "notes": [
-    "Set protection profiles (body per postman/OAS: profiles[] con profile_name/enable/tid thresholds)"
+    "Set protection profiles. body: profiles[] + profileMaps[] (zone_id + profile_name). Ranges: aggr_age_time 15-45, embryonic_time/_non_tcp 20-45."
    ],
    "tags": [
     "security"
@@ -23942,19 +23942,27 @@
       "profile_name": "<name>",
       "enable": true,
       "comment": "<text>",
-      "preset_threshold_type": "<preset>",
-      "tid": {
-       "<thresholdId>": {
-        "classification": "<class>",
-        "enable": true,
-        "max_action": "<action>",
-        "max_value": 1000,
-        "metric": "<metric>",
-        "min_action": "<action>",
-        "min_value": 10,
-        "protocol": "<protocol>"
-       }
-      }
+      "spoof_check": true,
+      "icmp_verify": true,
+      "dpi_app_verify": true,
+      "ftp_bounce_attack": true,
+      "udp_verify": false,
+      "rst_verify": false,
+      "strict_3way_tcp": false,
+      "discard_non_syn_tcp": false,
+      "is_asymmetric": false,
+      "aggr_age_time": 30,
+      "blacklist_time": 60,
+      "embryonic_time": 30,
+      "embryonic_non_tcp_time": 30,
+      "whitelist": "<acl>",
+      "blacklist": "<acl>"
+     }
+    ],
+    "profileMaps": [
+     {
+      "zone_id": 14,
+      "profile_name": "<name>"
      }
     ]
    }
