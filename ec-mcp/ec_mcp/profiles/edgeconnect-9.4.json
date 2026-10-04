@@ -705,17 +705,19 @@
       "method": "POST",
       "path": "/apiKey",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add new API key"
+        "Create an API key entry for external REST access."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "<key-name>",
+        "role": "<role-name>",
+        "expireDate": "<epoch-ms>"
       },
       "tags": [
-        "apiKey"
-      ]
+        "apiKey",
+        "rbac"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.deleteapikeyentry37": {
       "method": "DELETE",
@@ -736,20 +738,20 @@
       "method": "PUT",
       "path": "/apiKey",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Update API key entry"
-      ],
       "query_params": [
         "name"
       ],
+      "notes": [
+        "Update an API key entry (query name)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "role": "<role-name>",
+        "expireDate": "<epoch-ms>"
       },
       "tags": [
         "apiKey"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.admindistanceconfig41": {
       "method": "GET",
@@ -831,40 +833,42 @@
       "method": "POST",
       "path": "/appliance/changeGroup",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Change one or more appliances' group"
-      ],
       "query_params": [
         "groupPk"
       ],
+      "notes": [
+        "Move appliances to a group (query groupPk). Body lists the appliances."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "nePks": [
+          "<nePk>"
+        ]
       },
       "tags": [
-        "appliance"
-      ]
+        "appliance",
+        "groups"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.changeappliancepassword47": {
       "method": "POST",
       "path": "/appliance/changePassword",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Change a user's password on appliance."
-      ],
       "query_params": [
         "nePk",
         "username"
       ],
+      "notes": [
+        "Change an appliance UI/CLI user password (query nePk + username)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "password": "<new-password>"
       },
       "tags": [
-        "appliance"
-      ]
+        "appliance",
+        "users"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getcustomtagmeta48": {
       "method": "GET",
@@ -1063,20 +1067,20 @@
       "method": "POST",
       "path": "/appliance/extraInfo",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Saves the extra information for the appliance"
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Save appliance extra info (contact/location notes shown in UI)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "notes": "<notes>",
+        "location": "<location>"
       },
       "tags": [
-        "applianceExtraInfo"
-      ]
+        "appliance"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.gethapeermeta61": {
       "method": "GET",
@@ -1367,20 +1371,19 @@
       "method": "POST",
       "path": "/appliance",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Modify an appliance's IP address, username, password, networkRole, and webProtocol."
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Change appliance settings (query nePk). Body mirrors the appliance object from GET /appliance."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<field>": "<value>"
       },
       "tags": [
         "appliance"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.resyncappliance83": {
       "method": "POST",
@@ -1484,17 +1487,21 @@
       "method": "POST",
       "path": "/applicationDefinition/appExpressAppConfig",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Create user defined application AppExpress application config"
+        "Save AppExpress application config. Body mirrors GET /applicationDefinition/appExpressAppConfig."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "id": 0,
+        "name": "<appexpress-app>",
+        "applications": [
+          "<app>"
+        ]
       },
       "tags": [
-        "applicationDefinition"
-      ]
+        "appDefinition",
+        "appExpress"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.apptagsgroupget299": {
       "method": "GET",
@@ -1512,17 +1519,19 @@
       "method": "POST",
       "path": "/applicationDefinition/appExpressGroup/config",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Create/Modify AppExpress group config"
+        "Save AppExpress group config. Body mirrors GET /applicationDefinition/appExpressGroup/config."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "id": 0,
+        "name": "<appexpress-group>",
+        "apps": []
       },
       "tags": [
-        "applicationDefinition"
-      ]
+        "appDefinition",
+        "appExpress"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.appexpressgroupdelete999": {
       "method": "DELETE",
@@ -1558,17 +1567,19 @@
       "method": "POST",
       "path": "/applicationDefinition/appExpressGroup/association",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Create/Modify AppExpress group config"
+        "Associate appliances with an AppExpress group. Body mirrors GET /applicationDefinition/appExpressGroup/association."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<nePk>": [
+          "<appexpress-group>"
+        ]
       },
       "tags": [
-        "applicationDefinition"
-      ]
+        "appDefinition",
+        "appExpress"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.apptagsget89": {
       "method": "GET",
@@ -1589,20 +1600,27 @@
       "method": "POST",
       "path": "/applicationDefinition/applicationTags",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "(1) Create user defined application groups (2) Change mode to application groups and user defined applications"
-      ],
       "query_params": [
         "mode"
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
+      "notes": [
+        "Save custom application definitions. Body mirrors objects from GET /applicationDefinition/applicationTags (mode query selects add/replace)."
+      ],
+      "body_example": [
+        {
+          "id": 0,
+          "name": "<app-name>",
+          "category": "<category>",
+          "services": [
+            "<svc>"
+          ],
+          "dscpTags": []
+        }
+      ],
       "tags": [
-        "applicationDefinition"
-      ]
+        "appDefinition"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.appgroupsearchpost91": {
       "method": "POST",
@@ -1688,20 +1706,21 @@
       "method": "POST",
       "path": "/applicationDefinition/compoundClassification",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Create/modify user defined application related to Compound data"
-      ],
       "query_params": [
         "id"
       ],
+      "notes": [
+        "Save compound application classification (composite of multiple match criteria)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "id": 0,
+        "name": "<compound-name>",
+        "expressions": []
       },
       "tags": [
-        "applicationDefinition"
-      ]
+        "appDefinition"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.dnsdelete99": {
       "method": "DELETE",
@@ -1722,20 +1741,20 @@
       "method": "POST",
       "path": "/applicationDefinition/dnsClassification",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Create/modify user defined application related to Domain Name"
-      ],
       "query_params": [
         "domain"
       ],
+      "notes": [
+        "Save DNS classification (map domain to application)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "domain": "<domain-name>",
+        "application": "<app-name>"
       },
       "tags": [
-        "applicationDefinition"
-      ]
+        "appDefinition"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.domaindeletepost101": {
       "method": "POST",
@@ -1789,21 +1808,22 @@
       "method": "POST",
       "path": "/applicationDefinition/ipIntelligenceClassification",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Create/modify user defined application related to Address Map"
-      ],
       "query_params": [
         "ipEnd",
         "ipStart"
       ],
+      "notes": [
+        "Save IP intelligence classification (map IP range to category)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "ipStart": "<start-ip>",
+        "ipEnd": "<end-ip>",
+        "category": "<category-name>"
       },
       "tags": [
-        "applicationDefinition"
-      ]
+        "appDefinition"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.ipintelligenceconfidencepost106": {
       "method": "POST",
@@ -1907,21 +1927,22 @@
       "method": "POST",
       "path": "/applicationDefinition/portProtocolClassification",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Create/modify user defined application related to IP Protocol, TCP Port, UDP Port"
-      ],
       "query_params": [
         "port",
         "protocol"
       ],
+      "notes": [
+        "Save port/protocol classification (map port+protocol to application)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "port": 0,
+        "protocol": "<tcp|udp>",
+        "application": "<app-name>"
       },
       "tags": [
-        "applicationDefinition"
-      ]
+        "appDefinition"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.saasdelete117": {
       "method": "DELETE",
@@ -2477,17 +2498,20 @@
       "method": "POST",
       "path": "/broadcastCli",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Broadcasts CLI commands to all the selected appliances"
+        "Broadcast a CLI command to multiple appliances. WARNING: arbitrary CLI \u2014 restrict to trusted automation."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "nePks": [
+          "<nePk>"
+        ],
+        "command": "<cli-command>"
       },
       "tags": [
-        "broadcastCli"
-      ]
+        "appliance",
+        "cli"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.bypassget156": {
       "method": "GET",
@@ -2509,17 +2533,18 @@
       "method": "POST",
       "path": "/bypass",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Toggles bypass mode - only effective on NX appliances"
+        "Set bypass tunnels config (pairwise bypass between appliances)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<nePk1>": [
+          "<nePk2>"
+        ]
       },
       "tags": [
-        "bypass"
-      ]
+        "tunnels"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.builtinappget157": {
       "method": "GET",
@@ -2581,17 +2606,20 @@
       "method": "POST",
       "path": "/cloudDeployment/aws/accounts",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add AWS account for deployment"
+        "Add an AWS account for cloud deployment. Body carries the AWS credentials; shape mirrors objects from GET /cloudDeployment/aws/accounts."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "accessKeyId": "<aws-access-key-id>",
+        "secretAccessKey": "<aws-secret-key>",
+        "accountName": "<display-name>",
+        "region": "<aws-region>"
       },
       "tags": [
-        "awsCloudDeployment"
-      ]
+        "cloudDeployment",
+        "aws"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getawsaccounts164": {
       "method": "DELETE",
@@ -2627,36 +2655,44 @@
       "method": "PUT",
       "path": "/cloudDeployment/aws/accounts",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Update AWS account"
-      ],
-      "query_params": [
-        "id"
+        "Update an AWS account entry. Same shape as POST /cloudDeployment/aws/accounts."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "accessKeyId": "<aws-access-key-id>",
+        "secretAccessKey": "<aws-secret-key>",
+        "accountName": "<display-name>",
+        "region": "<aws-region>"
       },
       "tags": [
-        "awsCloudDeployment"
+        "cloudDeployment",
+        "aws"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "id"
       ]
     },
     "orchestrator.deployawsappliances168": {
       "method": "POST",
       "path": "/cloudDeployment/aws/edgeconnects",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Deploy Cloud Hub(s) in AWS"
+        "Deploy an EdgeConnect virtual appliance into AWS (VGW/TGW workflows). Body mirrors deployment config objects from GET /cloudDeployment/aws/edgeconnects."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "accountId": "<account-id>",
+        "instanceName": "<ec-instance-name>",
+        "instanceType": "<ec2-size>",
+        "region": "<aws-region>",
+        "vpcId": "<vpc-id>",
+        "subnetId": "<subnet-id>"
       },
       "tags": [
-        "awsCloudDeployment"
-      ]
+        "cloudDeployment",
+        "aws"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.destroydeploymentbyid169": {
       "method": "DELETE",
@@ -2711,20 +2747,20 @@
       "method": "POST",
       "path": "/cloudDeployment/aws/edgeconnects/instance",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "add instance in an existing aws cloud deployment"
-      ],
       "query_params": [
         "id"
       ],
+      "notes": [
+        "Update instance comment/config for an AWS-deployed EdgeConnect (query id)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "comment": "<instance-comment>"
       },
       "tags": [
-        "awsCloudDeployment"
-      ]
+        "cloudDeployment",
+        "aws"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getclouddeploymentlog": {
       "method": "GET",
@@ -2823,36 +2859,45 @@
       "method": "PUT",
       "path": "/cloudDeployment/azure/accounts",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Update Azure subscription"
-      ],
-      "query_params": [
-        "id"
+        "Add/update an Azure account for cloud deployment. Body mirrors GET /cloudDeployment/azure/accounts."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "subscriptionId": "<azure-subscription-id>",
+        "tenantId": "<tenant-id>",
+        "clientId": "<app-client-id>",
+        "clientSecret": "<client-secret>",
+        "accountName": "<display-name>"
       },
       "tags": [
-        "azureCloudDeployment"
+        "cloudDeployment",
+        "azure"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "id"
       ]
     },
     "orchestrator.deployazureappliances179": {
       "method": "POST",
       "path": "/cloudDeployment/azure/edgeconnects",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Deploy Cloud Hub(s) in Azure"
+        "Deploy an EdgeConnect virtual appliance into Azure (vWAN/vNet workflows). Body mirrors deployment config objects from GET /cloudDeployment/azure/edgeconnects."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "accountId": "<account-id>",
+        "instanceName": "<ec-instance-name>",
+        "instanceType": "<vm-size>",
+        "region": "<azure-region>",
+        "vnetId": "<vnet-id>",
+        "subnetId": "<subnet-id>"
       },
       "tags": [
-        "azureCloudDeployment"
-      ]
+        "cloudDeployment",
+        "azure"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.destroydeploymentbyid180": {
       "method": "DELETE",
@@ -2907,20 +2952,20 @@
       "method": "POST",
       "path": "/cloudDeployment/azure/edgeconnects/instance",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "add instance in an existing azure cloud deployment"
-      ],
       "query_params": [
         "id"
       ],
+      "notes": [
+        "Update instance comment/config for an Azure-deployed EdgeConnect (query id)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "comment": "<instance-comment>"
       },
       "tags": [
-        "azureCloudDeployment"
-      ]
+        "cloudDeployment",
+        "azure"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getazureclouddeploymentlog": {
       "method": "GET",
@@ -2971,17 +3016,20 @@
       "method": "POST",
       "path": "/cloudDeployment/gcp/accounts",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add gcp account for deployment"
+        "Add a GCP account for cloud deployment. Body mirrors GET /cloudDeployment/gcp/accounts (service account JSON credentials)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "project": "<gcp-project-id>",
+        "clientEmail": "<sa-email>",
+        "privateKey": "<sa-private-key>",
+        "accountName": "<display-name>"
       },
       "tags": [
-        "gcpCloudDeployment"
-      ]
+        "cloudDeployment",
+        "gcp"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.deletegcpaccounts186": {
       "method": "DELETE",
@@ -3091,17 +3139,22 @@
       "method": "POST",
       "path": "/cloudDeployment/gcp/edgeconnects",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Deploy Cloud Hub(s) in GCP"
+        "Deploy an EdgeConnect virtual appliance into GCP. Body mirrors deployment config objects from GET /cloudDeployment/gcp/edgeconnects."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "accountId": "<account-id>",
+        "instanceName": "<ec-instance-name>",
+        "instanceType": "<machine-type>",
+        "region": "<gcp-region>",
+        "vpcId": "<vpc-id>",
+        "subnetId": "<subnet-id>"
       },
       "tags": [
-        "gcpCloudDeployment"
-      ]
+        "cloudDeployment",
+        "gcp"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.destroygcpdeploymentbyid192": {
       "method": "DELETE",
@@ -3241,17 +3294,18 @@
       "method": "POST",
       "path": "/customCert",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add new or update existing custom CA certificate"
+        "Upload a custom certificate (PEM)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "<cert-name>",
+        "cert": "<pem-cert>",
+        "key": "<pem-key>"
       },
       "tags": [
-        "customCerts"
-      ]
+        "certificates"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.deletecustomcert207": {
       "method": "DELETE",
@@ -3438,17 +3492,19 @@
       "method": "POST",
       "path": "/debugFiles/proxyConfig ",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set the proxy config settings"
+        "Set proxy config for debug file uploads."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "host": "<proxy-host>",
+        "port": 8080,
+        "username": "<user>",
+        "password": "<pass>"
       },
       "tags": [
-        "debugFiles"
-      ]
+        "proxy"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.debugfiles215": {
       "method": "GET",
@@ -4624,17 +4680,20 @@
       "method": "POST",
       "path": "/gms/internalSubnets2",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Save internal subnets"
+        "Save the internal subnets list (LAN-side networks; drives tunnel vs pass-through decisions)."
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
+      "body_example": [
+        {
+          "subnet": "<ip>/<mask>",
+          "name": "<subnet-name>",
+          "location": "<site-or-empty>"
+        }
+      ],
       "tags": [
-        "internalSubnets"
-      ]
+        "subnets"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getipallowlistdrops292": {
       "method": "GET",
@@ -4700,17 +4759,19 @@
       "method": "POST",
       "path": "/gms/job",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Schedule a new job in Orchestrator"
+        "Create a scheduled job (reports, backups). Body mirrors job objects."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "<job-name>",
+        "type": "<job-type>",
+        "schedule": "<cron>",
+        "enable": true
       },
       "tags": [
-        "scheduledJobs2"
-      ]
+        "jobs"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.scheduledjobdelete301": {
       "method": "DELETE",
@@ -5546,17 +5607,16 @@
       "method": "POST",
       "path": "/gmsLicense",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set Orchestrator license key"
+        "Upload/replace the Orchestrator (GMS) license."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "license": "<license-key-or-file>"
       },
       "tags": [
-        "gmsLicense"
-      ]
+        "license"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.validatekey363": {
       "method": "GET",
@@ -5992,17 +6052,21 @@
       "method": "POST",
       "path": "/gmsSMTP",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "used to set SMTP settings"
+        "Save SMTP server config for notifications. Body mirrors GET /gmsSMTP."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "server": "<smtp-server>",
+        "port": 587,
+        "username": "<user>",
+        "password": "<pass>",
+        "fromAddress": "<from-email>",
+        "useTLS": true
       },
       "tags": [
-        "gmsSMTP"
-      ]
+        "smtp"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.delunverifiedemails395": {
       "method": "POST",
@@ -6356,17 +6420,20 @@
       "method": "POST",
       "path": "/ikeless/config",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Change Ikeless key material configuration, seed lifetime, max activation wait time, whether persist seed"
+        "Save IKEless tunnel configuration."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<nePk>": {
+          "enable": true,
+          "peerId": "<peer-id>"
+        }
       },
       "tags": [
-        "ikeless"
-      ]
+        "ikeless",
+        "tunnels"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.ikelesshistory419": {
       "method": "GET",
@@ -6889,17 +6956,18 @@
       "method": "POST",
       "path": "/linkIntegrityTest/run",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "POST operation to start link integrity test between two appliances."
+        "Run a link integrity test (health probe) on appliances."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "nePks": [
+          "<nePk>"
+        ]
       },
       "tags": [
-        "linkIntegrity"
-      ]
+        "diagnostics"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.linkintegritystatus449": {
       "method": "GET",
@@ -6975,17 +7043,24 @@
       "method": "POST",
       "path": "/loopbackOrch",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set loopback orchestration setting"
+        "Save loopback interface configuration (Orchestrator-managed). Body mirrors GET /loopbackOrch objects."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "nePk": "<nePk>",
+        "loopback": [
+          {
+            "ifName": "lo1",
+            "ip": "<ip>/<mask>",
+            "segment": "Default",
+            "zone": "<zone>"
+          }
+        ]
       },
       "tags": [
-        "loopbackOrch"
-      ]
+        "loopback"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.loopbackpoolinfo455": {
       "method": "GET",
@@ -7305,17 +7380,19 @@
       "method": "POST",
       "path": "/networkMemory",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Erase Network Memory on one or more appliances."
+        "Erase network memory entries. WARNING: destructive \u2014 removes stored network state."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "nePks": [
+          "<nePk>"
+        ]
       },
       "tags": [
-        "networkMemory"
-      ]
+        "appliance",
+        "maintenance"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.delnotification476": {
       "method": "DELETE",
@@ -7345,17 +7422,20 @@
       "method": "POST",
       "path": "/notification",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add or update the message of notification banner."
+        "Send/save a notification. Body mirrors GET /notification shapes."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "subject": "<subject>",
+        "message": "<message>",
+        "recipients": [
+          "<email>"
+        ]
       },
       "tags": [
-        "gmsNotification"
-      ]
+        "notification"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.optmap479": {
       "method": "GET",
@@ -7806,17 +7886,20 @@
       "method": "POST",
       "path": "/rbac/assignment",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Create or update rbacAssignment."
+        "Create/update an RBAC assignment (user/group to role+scope)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "userName": "<username>",
+        "roleName": "<role-name>",
+        "groups": [
+          "<groupPk>"
+        ]
       },
       "tags": [
-        "rbacAssignment"
-      ]
+        "rbac"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getallroles512": {
       "method": "GET",
@@ -7837,17 +7920,20 @@
       "method": "POST",
       "path": "/rbac/role",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Create role or Update existing role."
+        "Create/update an RBAC role. Body mirrors role objects from the rbac endpoints."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "id": 0,
+        "name": "<role-name>",
+        "permissions": {
+          "<resource>": "<access-level>"
+        }
       },
       "tags": [
-        "rbacRole"
-      ]
+        "rbac"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.deleterolebyrolename515": {
       "method": "DELETE",
@@ -8271,20 +8357,22 @@
       "method": "POST",
       "path": "/remoteLogReceiver/subscribe",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "To query specific log(s) with log type and sequence id(s) provided in the request body"
-      ],
       "query_params": [
         "receiverId"
       ],
+      "notes": [
+        "Subscribe an appliance to a remote log receiver (query receiverId)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "nePks": [
+          "<nePk>"
+        ]
       },
       "tags": [
-        "remoteLogReceiver"
-      ]
+        "notification",
+        "logging"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.dns542": {
       "method": "GET",
@@ -8318,17 +8406,16 @@
       "method": "POST",
       "path": "/restApiConfig",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set the REST API config"
+        "Configure REST API access settings for the Orchestrator."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<setting>": "<value>"
       },
       "tags": [
-        "restApiConfig"
-      ]
+        "restApi"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getrestrequesttimestatssummary545": {
       "method": "GET",
@@ -8436,17 +8523,16 @@
       "method": "POST",
       "path": "/security/advancedSettings",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Configure advanced security settings"
+        "Save advanced security settings (Orchestrator-wide)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<setting>": "<value>"
       },
       "tags": [
-        "securitySettings"
-      ]
+        "security"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.protectionprofilesget574729": {
       "method": "GET",
@@ -8542,17 +8628,17 @@
       "method": "POST",
       "path": "/shell/shellAccessSetting",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Sets shell access setting on Orchestrator"
+        "Configure shell access settings (support/debug access control)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "enable": false,
+        "idleTimeout": 0
       },
       "tags": [
-        "shell"
-      ]
+        "security"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.snatmapsconfig558": {
       "method": "GET",
@@ -8824,17 +8910,18 @@
       "method": "POST",
       "path": "/spPortal/config",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Post Silver Peak Cloud Portal registration information"
+        "Save Silver Peak / Aruba portal connection config for the Orchestrator."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "username": "<portal-user>",
+        "password": "<portal-password>",
+        "url": "<portal-url>"
       },
       "tags": [
         "spPortal"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.spportalaccountsecondarypost579": {
       "method": "POST",
@@ -9282,17 +9369,19 @@
       "method": "POST",
       "path": "/spPortal/ztp",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Post Zero Touch Provisioning information to Silver Peak Portal"
+        "Post ZTP information to the portal (registration data shown in Discover)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "serialNumber": "<serial>",
+        "model": "<model>",
+        "orchestratorUrl": "<orch-url>"
       },
       "tags": [
+        "ztp",
         "spPortal"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.sslcertsget607": {
       "method": "GET",
@@ -11745,20 +11834,22 @@
       "method": "POST",
       "path": "/subnets/configured",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Configure an appliance's subnets."
-      ],
       "query_params": [
         "nePk"
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
+      "notes": [
+        "Save configured subnets for an appliance (query nePk)."
+      ],
+      "body_example": [
+        {
+          "subnet": "<ip>/<mask>",
+          "name": "<subnet-name>"
+        }
+      ],
       "tags": [
         "subnets"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getsubnetsfordiscoveredappliance729": {
       "method": "GET",
@@ -11925,20 +12016,24 @@
       "method": "POST",
       "path": "/template/applianceAssociation",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Associates the templates with a specific appliance. The array posted is the complete association for that appliance."
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Associate templates/template groups with an appliance (query nePk)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "templateGroups": [
+          "<template-group-name>"
+        ],
+        "templates": [
+          "<template-name>"
+        ]
       },
       "tags": [
-        "template"
-      ]
+        "templates"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.template743": {
       "method": "GET",
@@ -11975,17 +12070,18 @@
       "method": "POST",
       "path": "/template/templateCreate",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Creates a new template group"
+        "Create a configuration template. Body mirrors objects from the template GET endpoints."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "<template-name>",
+        "type": "<template-type>",
+        "body": "<template-content>"
       },
       "tags": [
-        "template"
-      ]
+        "templates"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.template747": {
       "method": "DELETE",
@@ -12021,20 +12117,22 @@
       "method": "POST",
       "path": "/template/templateGroups",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Creates a new template group from an existing one or updates the configuration of the requested template group "
-      ],
       "query_params": [
         "templateGroup"
       ],
+      "notes": [
+        "Create a template group (query templateGroup name)."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "<template-group-name>",
+        "templates": [
+          "<template-name>"
+        ]
       },
       "tags": [
-        "template"
-      ]
+        "templates"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.template1002": {
       "method": "POST",
@@ -14860,20 +14958,23 @@
       "method": "POST",
       "path": "/users",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Creates a new user or updates it. 'Status: Active/Inactive. Role: Admin Manager/Network Monitor'"
-      ],
       "query_params": [
         "newUser"
       ],
+      "notes": [
+        "Create a user (query newUser). Body mirrors the user object."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "userName": "<username>",
+        "password": "<password>",
+        "email": "<email>",
+        "role": "<role-name>"
       },
       "tags": [
-        "user"
-      ]
+        "users",
+        "rbac"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.users912": {
       "method": "DELETE",
@@ -15701,17 +15802,22 @@
       "method": "POST",
       "path": "/ids/signatures/profiles",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set IDPS signatures profiles"
+        "Save IDPS signature profiles. Body mirrors objects from GET /ids/signatures/profiles."
       ],
-      "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
-      },
+      "body_example": [
+        {
+          "name": "<profile-name>",
+          "signatureIds": [
+            0
+          ],
+          "severity": "high"
+        }
+      ],
       "tags": [
         "idps"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.idpsprofilestateget": {
       "method": "GET",
