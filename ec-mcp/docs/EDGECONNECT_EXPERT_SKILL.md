@@ -1,3 +1,7 @@
+# EdgeConnect Expert Skill (GENÉRICO)
+
+Reglas y métodos aplicables a cualquier HPE Aruba EdgeConnect/Orchestrator. Los datos específicos del laboratorio viven en `EDGECONNECT_LAB_ENV.md`.
+
 # EdgeConnect Expert Skill — Hallazgos, reglas y runbooks
 
 Living knowledge base capturado de despliegues reales. Actualizar con cada hallazgo nuevo.
