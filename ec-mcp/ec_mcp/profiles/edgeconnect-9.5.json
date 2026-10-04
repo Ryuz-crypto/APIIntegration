@@ -6663,14 +6663,33 @@
    "risk": "write",
    "source": "official-oas",
    "notes": [
-    "Changes ec appliance account and license settings"
+    "Changes EC appliance account and license settings. Query nePk required. action: grant|revoke|update (portal semantics). license.license mirrors GET /license/portal/appliance licenses block: tier.bandwidth = sum of WAN bandwidths Kbps (subscription taken = next tier >= that sum), boost, feature.adv_sec_unlimited reqValue 1 = IDS/IPS advanced security subscription assigned."
    ],
    "query_params": [
     "nePk"
    ],
    "body_example": {
-    "placeholderProperty1": "",
-    "placeholderProperty2": ""
+    "account": {
+     "account": "Silver Peak SE - Lab Account 20"
+    },
+    "action": "grant",
+    "license": {
+     "license": {
+      "boost": {
+       "bandwidth": 1000000,
+       "enable": true
+      },
+      "feature": {
+       "adv_sec_unlimited": {
+        "reqValue": 1
+       }
+      },
+      "tier": {
+       "bandwidth": 300000,
+       "display": "300 Mbps"
+      }
+     }
+    }
    },
    "tags": [
     "license"
