@@ -4915,17 +4915,27 @@
       "method": "POST",
       "path": "/gms/overlays/config",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Saves a new overlay to the Orchestrator"
+        "Saves a new overlay. Shape mirrors objects from GET /gms/overlays/config."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "name": "NewOverlay",
+        "dnRules": [],
+        "rules": [],
+        "rating": 0,
+        "enableWanOptimization": false,
+        "enableForwardErrorCorrection": false,
+        "enableJitterBuffer": false,
+        "enableTcpPriority": false,
+        "enableUdpPriority": false,
+        "enableColorPriority": false,
+        "backupLAN": false,
+        "regionId": 0
       },
       "tags": [
         "overlays"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.deleteexistingoverlay322": {
       "method": "DELETE",
@@ -7963,19 +7973,19 @@
       "method": "PUT",
       "path": "/regions/appliances",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Update region association"
-      ],
       "query_params": [
         "nePk"
       ],
+      "notes": [
+        "Associate an appliance with a region (live validated). POST /regions/appliances with this body returns 400 \"supply correct input\" \u2014 use PUT for existing appliances. A re-adopted appliance loses its region association."
+      ],
       "body_example": {
-        "regionId": 2
+        "regionId": 3
       },
       "tags": [
         "regions"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.regionassociationget525": {
       "method": "GET",
@@ -8026,35 +8036,36 @@
       "method": "PUT",
       "path": "/regions",
       "risk": "write",
-      "source": "official-oas",
-      "notes": [
-        "Update regions"
-      ],
       "query_params": [
         "regionId"
       ],
+      "notes": [
+        "Update a region. Body is the region object shape returned by GET /regions."
+      ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "regionId": 3,
+        "regionName": "NFR"
       },
       "tags": [
         "regions"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.regionpost521": {
       "method": "POST",
       "path": "/regions",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Create region"
+        "Create a region. Body uses the region object shape from GET /regions."
       ],
       "body_example": {
-        "regionName": "NFR"
+        "regionId": 0,
+        "regionName": "NewRegion"
       },
       "tags": [
         "regions"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.releases530": {
       "method": "GET",
@@ -15446,17 +15457,28 @@
       "method": "PUT",
       "path": "/ids/config",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set IDPS configuration"
+        "Set IDPS configuration. Shape mirrors GET /ids/config configData."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "schedule": {},
+        "auto": "on",
+        "idsVersions": {
+          "16.NE": "11303"
+        },
+        "supportedAppliances": [
+          "16.NE"
+        ],
+        "signatures": [
+          1,
+          210,
+          211
+        ]
       },
       "tags": [
         "idps"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.idpssignaturesget": {
       "method": "GET",
@@ -15547,17 +15569,23 @@
       "method": "PUT",
       "path": "/ids/profilestate",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set IDPS profile state"
+        "Assign IDPS signature profiles per appliance. Map profile name -> list of nePks (live captured)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "Default_S7": [
+          "1.NE",
+          "0.NE",
+          "2.NE",
+          "3.NE",
+          "14.NE",
+          "4.NE"
+        ]
       },
       "tags": [
         "idps"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.idpsstateget": {
       "method": "GET",
@@ -15575,20 +15603,23 @@
       "method": "PUT",
       "path": "/ids/state",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set IDPS state. Body: nePks = full list of appliances affected by this change; ids/disabled/ips_lookaside/ips_inline = resulting per-mode nePk lists (replace semantics)."
+        "Set IDPS per-appliance state. Lists of nePks per mode (live captured). ips_inline = IPS-Inline, ips_lookaside = IPS-Performant, ids = IDS Only, disabled = Off."
       ],
       "body_example": {
-        "nePks": [],
-        "ids": [],
-        "disabled": [],
+        "ips_inline": [
+          "1.NE"
+        ],
         "ips_lookaside": [],
-        "ips_inline": []
+        "ids": [],
+        "disabled": [
+          "16.NE"
+        ]
       },
       "tags": [
         "idps"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.idpsupdatesignaturefromportalpost": {
       "method": "GET",
