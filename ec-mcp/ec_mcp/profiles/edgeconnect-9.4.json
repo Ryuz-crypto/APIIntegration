@@ -8550,11 +8550,15 @@
    "risk": "write",
    "source": "official-oas",
    "notes": [
-    "Assign EC-SP licenses on Portal"
+    "Assign EC-SP licenses on Portal. Body licenses[].applianceId = nePk, licenseId = ECSP license id from GET ecsp status."
    ],
    "body_example": {
-    "placeholderProperty1": "",
-    "placeholderProperty2": ""
+    "licenses": [
+     {
+      "applianceId": "16.NE",
+      "licenseId": ""
+     }
+    ]
    },
    "tags": [
     "spPortal"
@@ -8578,11 +8582,14 @@
    "risk": "write",
    "source": "official-oas",
    "notes": [
-    "Unassign EC-SP licenses on Portal"
+    "Unassign EC-SP licenses on Portal. Body licenses[].licenseId."
    ],
    "body_example": {
-    "placeholderProperty1": "",
-    "placeholderProperty2": ""
+    "licenses": [
+     {
+      "licenseId": ""
+     }
+    ]
    },
    "tags": [
     "spPortal"
