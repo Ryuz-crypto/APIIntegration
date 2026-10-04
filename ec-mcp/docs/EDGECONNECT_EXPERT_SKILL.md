@@ -1,0 +1,70 @@
+# EdgeConnect Expert Skill — Hallazgos, reglas y runbooks
+
+Living knowledge base capturado de despliegues reales. Actualizar con cada hallazgo nuevo.
+
+## 1. ZTP / Onboarding vía Orchestrator
+
+- Flujo UI Discover: al presionar **Approve** aparece primero la opción de **actualizar software** (se puede dar *skip*), después se puede elegir **Wizard** o **aplicar YAML**. Si el serial coincide con un template conocido, el sistema ofrece aplicar el YAML y autoconfigura.
+- El appliance **solo se reinicia si se actualiza software**; aplicar preconfig YAML no reinicia.
+- Un appliance puede quedar en **Discover** sin aprobar, o en la **lista de denegados** (denied). Revisar ambas antes de asumir que el ZTP falló.
+- Los appliances por defecto traen el **mismo hostname** → las rutinas de adopción deben **basarse en número de serie**, no en hostname. Para volumen masivo usar bulk adoption por seriales.
+- Template de preconfig: si una sección no aplica, **removerla** (los campos vacíos a veces se validan). Post-approval behavior: replace/merge según sección (documentado en el header del template).
+
+## 2. Licenciamiento (AAS / Portal)
+
+- **Regla de ancho de banda**: la suscripción se calcula con la **suma del ancho de banda de los enlaces WAN** del YAML; se toma el **tier inmediato superior** disponible en la cuenta (tiers típicos: 50M, 200M, 500M, 1G, 2G, Unlimited).
+- **Boost** solo si el cliente lo pide explícitamente (ráfagas). No asignar por defecto.
+- Si el YAML de ZTP incluye `ecLicensing` con `bandwidthLevel` (p.ej. `base`), **ese valor se impone** durante el aprovisionamiento y el appliance queda con licencia **Base** — quitar esa sección si el licenciamiento se maneja por portal.
+- **"Enabled, EC Not Licensed" en IDS/IPS** = falta la feature license `adv_sec` (EC-AS / EC-AS-UL) en el appliance; no es problema de configuración.
+- APIs clave: `GET /license/portal/appliance` (estado por appliance), `GET /license/portal/summary` (inventario de cuenta), `POST /license/portal/appliance/ec/account/license` con `action: grant` + `license.license.tier/boost/feature` para asignar, `POST /license/portal/appliance/revoke` para quitar.
+- Grant exitoso puede tardar (>60s timeout del cliente) — **siempre re-verificar con GET** antes de reintentar; reintentar un grant puede duplicar consumo.
+
+## 3. IDS/IPS
+
+- Modos: `Off`, `IDS Only`, `IPS-Performant`, `IPS-Inline` (`idsIpsConfig` en preconfig: `mode` + `profile`).
+- Requiere feature license `adv_sec` en el appliance (ver §2).
+- `mode: none` o `disabled` en el API = inactivo.
+- Events: leer por appliance con ventana de tiempo (epoch-secs) para incidentes.
+
+## 4. Seguridad / Troubleshooting
+
+- Revisar siempre: posture (IDS/IPS + DDoS + zone matrix + tunnels en una llamada), alarmas activas por appliance, zone matrix (pares de zonas sin política explícita = hallazgo).
+- DDoS: threshold status + perfiles por zona.
+- NO tocar nunca `ECV-CALIMAYA` (0.NE): es la salida a internet del laboratorio.
+
+## 5. Filtrado de contenido (Secure Web Services / NSS)
+
+- `secureWebServicesConfig` en preconfig: `urlClassificationConfig` (`hasURLClassification`, `incrementalUpdate`, `queryOnMiss`, `urlReputation` 1=High Risk..5=Trustworthy) e `ipReputationConfig`.
+- Para filtrar por categorías web (p.ej. pornografía) se requiere **Network Security Services (NSS)** activo y URL Classification habilitado en el appliance; el bloqueo por categoría se aplica vía policy/overlay (BIO) o reglas de seguridad con la categoría como match.
+
+## 6. Ambiente conocido (lab)
+
+| nePk | Hostname | Modelo | Notas |
+|------|----------|--------|-------|
+| 0.NE | ECV-EMX-CALIMAYA | EC-V | **NO TOCAR** — salida internet |
+| 14.NE | EC-10104-MATAMOROS | EC-10104 | pruebas físicas, Unlimited + AAS |
+| 16.NE | EC3 | EC-V | ZTP de pruebas, 500 Mbps tier, serial 001BBC462C04 |
+| 1-4.NE | EC1-4-CLOUD | EC-V | cloud |
+
+Cuenta portal: Silver Peak SE - Lab Account 20.
+
+## 7. Regiones y regional routing (túneles)
+
+- Alarma `APPLIANCE_NOT_IN_REGION` (WARNING, source /orchestration): regional routing habilitado pero el appliance sin región asociada → **no se construye ningún túnel** (0 túneles aunque el despliegue LAN/WAN esté correcto).
+- Regiones: `GET /regions` lista (regionId + nombre). Asociación por appliance: `GET /regions/appliances?nePk=` y `PUT /regions/appliances?nePk=` con body `{"regionId": <integer>}`.
+- `POST /regions/appliances` rechaza ese body (400 "supply correct input") — **usar PUT** para reasociar un appliance existente.
+- Un appliance re-adoptado (delete + re-add) **pierde la asociación de región** (vuelve a Default/0) y también puede perder la licencia portal asignada → re-verificar ambos tras re-adopción.
+
+## 8. Alarmas y eventos (contract findings)
+
+- `GET /alarm/gms` usa `from`/`to` en **epoch milisegundos** (no segundos). Con segundos devuelve lista vacía o 400 según filtros.
+- `POST /alarm/appliance` (detalle) no acepta los filtros combinados de la spec (`view`/`severity` rechazados upstream) — contrato conocido; para detalle usar `/alarm/gms` con from/to ms.
+- Cada alarma trae `name`, `description`, `recommendedAction`, `occurrenceCount`, `closed`, `serviceAffect` — suficiente para triage automático.
+- Alarmas típicas de lab: `APPLIANCE_NOT_IN_REGION`, `OVERLAY_REGION_MISSING` (overlay sin hub en una región), `FAILED_TO_CONNECT_TO_AZURE/AWS` (sin suscripción cloud en el Orchestrator).
+
+## 9. Stats SWS / WebCC (filtrado de contenido)
+
+- Endpoints timeseries bajo `POST /stats/timeseries/secureWebServices/*`: `configStats` (totalFlows/deniedFlows/highRiskUrls/highRiskips), `allowedDeniedCategory`, `allowedDeniedCategoryUrl`, `allowedDeniedUrl`, `allowedDeniedUrlSrcIp`.
+- Body usa **`nePks` (lista)**, no `nePk` singular; startTime/endTime en epoch ms, `allowed: true|false`, `top: N`.
+- Datos vacíos = aún no hay tráfico clasificado (o appliance recién adoptado); el collector necesita tráfico real para poblar.
+- `GET /secureWebServicesConfig?nePk=` valida que URL Classification/IP Reputation están activos y `isWebccSupported` del modelo.

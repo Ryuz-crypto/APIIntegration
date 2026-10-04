@@ -7924,8 +7924,7 @@
     "nePk"
    ],
    "body_example": {
-    "placeholderProperty1": "",
-    "placeholderProperty2": ""
+    "regionId": 2
    },
    "tags": [
     "regions"
