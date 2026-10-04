@@ -344,9 +344,10 @@
     "orchestrator.alarmappliancegetpost9": {
       "method": "POST",
       "path": "/alarm/appliance",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Returns active, historical, or all alarms for appliances whose ids provided in the request body"
       ],
       "query_params": [
@@ -449,17 +450,16 @@
       "method": "POST",
       "path": "/alarm/customization/severity",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Create customized alarm severities"
+        "Customize alarm severity mapping. Body mirrors GET /alarm/customization/severity."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<alarmTypeId>": "<critical|major|minor|warning>"
       },
       "tags": [
         "alarm"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.customseverityput17": {
       "method": "PUT",
@@ -505,17 +505,16 @@
       "method": "POST",
       "path": "/alarm/delayEmail",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Create alarm email delay configuration"
+        "Set alarm email delay. Body mirrors GET /alarm/delayEmail."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "delay": 0
       },
       "tags": [
         "alarm"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.alarmemaildelayput23": {
       "method": "PUT",
@@ -618,17 +617,23 @@
       "method": "POST",
       "path": "/alarm/notification",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set alarm notification"
+        "Save alarm email notification config. Body mirrors objects from GET /alarm/notification."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "configurationName": "<config-name>",
+        "alarmType": "GMS",
+        "critical": true,
+        "major": true,
+        "minor": true,
+        "warning": true,
+        "emailAddresses": "<email1>,<email2>",
+        "format": "HTML Formatted"
       },
       "tags": [
         "alarm"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.alarmsummarytype31": {
       "method": "GET",
@@ -673,17 +678,21 @@
       "method": "POST",
       "path": "/alarm/suppress",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Update disabled alarms configuration"
+        "Suppress (disable) alarms. Body mirrors GET /alarm/suppress: applianceIds and alarmTypeIds to suppress."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "applianceIds": [
+          "<nePk>"
+        ],
+        "alarmTypeIds": [
+          0
+        ]
       },
       "tags": [
         "alarm"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.getapikeys35": {
       "method": "GET",
@@ -782,17 +791,17 @@
       "method": "POST",
       "path": "/appliance/backup",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Backup appliance configuration to Orchestrator database"
+        "Create an appliance configuration backup. Body mirrors GET /appliance/backup."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "nePk": "<nePk>",
+        "comment": "<backup-comment>"
       },
       "tags": [
-        "applianceBackup"
-      ]
+        "backup"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.backupdelete44": {
       "method": "DELETE",
@@ -1246,19 +1255,19 @@
       "method": "POST",
       "path": "/appliance/restore",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Restore the appliance from the specified back."
-      ],
-      "query_params": [
-        "nePk"
+        "Restore an appliance configuration from a backup. WARNING: replaces the running configuration; the appliance reboots."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "nePk": "<nePk>",
+        "backupId": "<backup-id>"
       },
       "tags": [
-        "applianceBackup"
+        "backup"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "nePk"
       ]
     },
     "orchestrator.savechanges73": {
@@ -1294,9 +1303,10 @@
     "orchestrator.statsconfigpost76": {
       "method": "POST",
       "path": "/appliance/statsConfig",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "To modify stats config which will be synchronized to appliances."
       ],
       "body_example": {
@@ -1384,17 +1394,16 @@
       "method": "POST",
       "path": "/applianceResync",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Synchronize a list of appliances."
+        "Force resync of an appliance with the Orchestrator (no reboot)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "nePk": "<nePk>"
       },
       "tags": [
-        "applianceResync"
-      ]
+        "appliance"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.appliancessoftwareversions84": {
       "method": "GET",
@@ -1606,9 +1615,10 @@
     "orchestrator.appgroupsearchpost91": {
       "method": "POST",
       "path": "/applicationDefinition/applicationTags/wildcard",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Search application groups based on wildcard and limit"
       ],
       "body_example": {
@@ -1622,9 +1632,10 @@
     "orchestrator.appsearchpost93": {
       "method": "POST",
       "path": "/applicationDefinition/applications/wildcard",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Search applications based on wildcard and limit"
       ],
       "body_example": {
@@ -3829,9 +3840,10 @@
     "orchestrator.flowsreclassification240": {
       "method": "POST",
       "path": "/flow/flowReClassification",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Reclassifies the flow(s)"
       ],
       "query_params": [
@@ -3848,9 +3860,10 @@
     "orchestrator.flowsreset241": {
       "method": "POST",
       "path": "/flow/flowReset",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Resets the flow(s)"
       ],
       "query_params": [
@@ -3885,9 +3898,10 @@
     "orchestrator.post_flow_flowwarning": {
       "method": "POST",
       "path": "/flow/flowWarning",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Enable or disable flow alerting"
       ],
       "query_params": [
@@ -4238,17 +4252,18 @@
       "method": "POST",
       "path": "/gms/backup/config",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "add or update orchestrator backup config data"
+        "Configure Orchestrator (GMS) backup settings. Body mirrors GET /gms/backup."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "enable": true,
+        "schedule": "daily",
+        "time": "02:00"
       },
       "tags": [
-        "gmsBackup"
-      ]
+        "backup"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.goldenorchestratorexport263": {
       "method": "GET",
@@ -5265,9 +5280,10 @@
     "orchestrator.statsretentionnotificationinfopost341": {
       "method": "POST",
       "path": "/gms/stats/statsRetentionNotification",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Update Orchestrator Stats Retention notification boolean flag value"
       ],
       "body_example": {
@@ -5293,9 +5309,10 @@
     "orchestrator.statscollection343": {
       "method": "POST",
       "path": "/gms/statsCollection",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Used to enable/disable stats collection by orchestrator"
       ],
       "body_example": {
@@ -6147,9 +6164,10 @@
     "orchestrator.healthsummary406": {
       "method": "POST",
       "path": "/health",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Returns health summary of all appliances"
       ],
       "body_example": {
@@ -7050,17 +7068,16 @@
       "method": "POST",
       "path": "/maintenanceMode",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Set maintenance mode for appliances"
+        "Enable/disable Orchestrator maintenance mode (pauses stats collection)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "enable": true
       },
       "tags": [
-        "maintenanceMode"
-      ]
+        "maintenance"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.deleteuploadedmap460": {
       "method": "POST",
@@ -7962,9 +7979,10 @@
     "orchestrator.realtime_stats519": {
       "method": "POST",
       "path": "/realtimeStats",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get per second statistics from a ECOS appliance"
       ],
       "query_params": [
@@ -9439,9 +9457,10 @@
     "orchestrator.stats_aggregate_tunnel616": {
       "method": "POST",
       "path": "/stats/aggregate/appliance",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate appliance stats data filter by query parameters."
       ],
       "query_params": [
@@ -9490,9 +9509,10 @@
     "orchestrator.stats_aggregate_application619": {
       "method": "POST",
       "path": "/stats/aggregate/application",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate application stats data filter by query parameters"
       ],
       "query_params": [
@@ -9538,9 +9558,10 @@
     "orchestrator.stats_aggregate_application622": {
       "method": "POST",
       "path": "/stats/aggregate/application2",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate application stats data filter by query parameters"
       ],
       "query_params": [
@@ -9701,9 +9722,10 @@
     "orchestrator.boost_aggregate_stats624": {
       "method": "POST",
       "path": "/stats/aggregate/boost",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate boost stats data"
       ],
       "query_params": [
@@ -9747,9 +9769,10 @@
     "orchestrator.stats_aggregate_dns626": {
       "method": "POST",
       "path": "/stats/aggregate/dns",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate dns stats data filter by query parameters."
       ],
       "query_params": [
@@ -9796,9 +9819,10 @@
     "orchestrator.stats_drc_aggregate_tunnel629": {
       "method": "POST",
       "path": "/stats/aggregate/drc",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate tunnel drc stats data filter by query parameters."
       ],
       "query_params": [
@@ -9846,9 +9870,10 @@
     "orchestrator.stats_aggregate_dscp632": {
       "method": "POST",
       "path": "/stats/aggregate/dscp",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate dscp stats data filter by query parameters"
       ],
       "query_params": [
@@ -9896,9 +9921,10 @@
     "orchestrator.stats_aggregate_flow635": {
       "method": "POST",
       "path": "/stats/aggregate/flow",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate flow stats data filter by query parameters"
       ],
       "query_params": [
@@ -9922,9 +9948,10 @@
     "orchestrator.get_active_flow_counts636": {
       "method": "POST",
       "path": "/stats/aggregate/flow/active",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get active flow counts by NE id"
       ],
       "query_params": [
@@ -9941,9 +9968,10 @@
     "orchestrator.interface_aggregate_stats639": {
       "method": "POST",
       "path": "/stats/aggregate/interface",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate interface stats data"
       ],
       "query_params": [
@@ -9988,9 +10016,10 @@
     "orchestrator.stats_aggregate_jitter642": {
       "method": "POST",
       "path": "/stats/aggregate/jitter",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate jitter stats data filter by query parameters."
       ],
       "query_params": [
@@ -10060,9 +10089,10 @@
     "orchestrator.mos_aggregate_stats644": {
       "method": "POST",
       "path": "/stats/aggregate/mos",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate Mean Opinion Score stats data"
       ],
       "query_params": [
@@ -10109,9 +10139,10 @@
     "orchestrator.stats_aggregate_ports647": {
       "method": "POST",
       "path": "/stats/aggregate/ports",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate ports stats data filter by query parameters."
       ],
       "query_params": [
@@ -10159,9 +10190,10 @@
     "orchestrator.security_policy_aggregate_stats649": {
       "method": "POST",
       "path": "/stats/aggregate/securityPolicy",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate security policy stats data"
       ],
       "query_params": [
@@ -10201,9 +10233,10 @@
     "orchestrator.stats_aggregate_toptalkers652": {
       "method": "POST",
       "path": "/stats/aggregate/topTalkers",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate topTalkers stats data filter by query parameters."
       ],
       "query_params": [
@@ -10263,9 +10296,10 @@
     "orchestrator.traffic_behavior656": {
       "method": "POST",
       "path": "/stats/aggregate/trafficBehavior",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate Traffic Behavioral stats data for a single appliance filter by query parameters"
       ],
       "query_params": [
@@ -10313,9 +10347,10 @@
     "orchestrator.stats_aggregate_traffic_class659": {
       "method": "POST",
       "path": "/stats/aggregate/trafficClass",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate traffic class stats data filter by query parameters"
       ],
       "query_params": [
@@ -10366,9 +10401,10 @@
     "orchestrator.stats_aggregate_tunnel662": {
       "method": "POST",
       "path": "/stats/aggregate/tunnel",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate tunnel stats data filter by query parameters."
       ],
       "query_params": [
@@ -10434,9 +10470,10 @@
     "orchestrator.stats_timeseries_appliance666": {
       "method": "POST",
       "path": "/stats/timeseries/appliance",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get appliance time series stats data filter by certain query parameters and certain appliance IDs."
       ],
       "query_params": [
@@ -10551,9 +10588,10 @@
     "orchestrator.stats_timeseries_application673_1": {
       "method": "POST",
       "path": "/stats/timeseries/application2",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get new application time series stats data filter by certain query parameters and certain appliance IDs."
       ],
       "query_params": [
@@ -10575,9 +10613,10 @@
     "orchestrator.stats_timeseries_application673_2": {
       "method": "POST",
       "path": "/stats/timeseries/user2",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get new user time series stats data filter by certain query parameters and certain appliance IDs."
       ],
       "query_params": [
@@ -10638,9 +10677,10 @@
     "orchestrator.stats_timeseries_drc_tunnel677": {
       "method": "POST",
       "path": "/stats/timeseries/drc",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get tunnel time series drc stats data filter by certain query parameters and certain appliance IDs."
       ],
       "query_params": [
@@ -10688,9 +10728,10 @@
     "orchestrator.stats_timeseries_dscp680": {
       "method": "POST",
       "path": "/stats/timeseries/dscp",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get dscp time series stats data filter by certain query parameters and certain appliance IDs."
       ],
       "query_params": [
@@ -10740,9 +10781,10 @@
     "orchestrator.stats_timeseries_flow683": {
       "method": "POST",
       "path": "/stats/timeseries/flow",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get flow time series stats data filter by certain query parameters and certain appliance IDs."
       ],
       "query_params": [
@@ -10875,9 +10917,10 @@
     "orchestrator.stats_timeseries_memory689": {
       "method": "POST",
       "path": "/stats/timeseries/memory",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get memory statistics data of the appliance IDs for the specified duration of time."
       ],
       "query_params": [
@@ -10976,9 +11019,10 @@
     "orchestrator.shaper_timeseries_stats694": {
       "method": "POST",
       "path": "/stats/timeseries/shaper",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get Shaper time series stats data filter by certain query parameters and certain appliance IDs."
       ],
       "query_params": [
@@ -11026,9 +11070,10 @@
     "orchestrator.stats_timeseries_traffic_class696": {
       "method": "POST",
       "path": "/stats/timeseries/trafficClass",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get traffic class time series stats data filter by certain query parameters and certain appliance IDs."
       ],
       "query_params": [
@@ -11076,9 +11121,10 @@
     "orchestrator.stats2_aggregate_application699": {
       "method": "POST",
       "path": "/stats2/aggregate/application",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate application stats data filter by query parameters"
       ],
       "query_params": [
@@ -11105,9 +11151,10 @@
     "orchestrator.stats2_aggregate_application2700_1": {
       "method": "POST",
       "path": "/stats2/aggregate/application2",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate application stats data filter by query parameters"
       ],
       "query_params": [
@@ -11130,9 +11177,10 @@
     "orchestrator.stats2_aggregate_application2700_2": {
       "method": "POST",
       "path": "/stats2/aggregate/user2",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate user stats data filter by query parameters"
       ],
       "query_params": [
@@ -11151,9 +11199,10 @@
     "orchestrator.stats2_aggregate_application2700_3": {
       "method": "POST",
       "path": "/stats/aggregate/user2",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate user stats data filter by query parameters"
       ],
       "query_params": [
@@ -11172,9 +11221,10 @@
     "orchestrator.stats_aggregate_dns2701": {
       "method": "POST",
       "path": "/stats2/aggregate/dns",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate dns stats data filter by query parameters."
       ],
       "query_params": [
@@ -11251,9 +11301,10 @@
     "orchestrator.stats2_aggregate_overlay_bandwidth704": {
       "method": "POST",
       "path": "/stats2/aggregate/overlays/bandwidth",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate overlay bandwidth stats data filter by query parameters"
       ],
       "query_params": [
@@ -11274,9 +11325,10 @@
     "orchestrator.stats_aggregate_ports2705": {
       "method": "POST",
       "path": "/stats2/aggregate/ports",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate ports stats data filter by query parameters."
       ],
       "query_params": [
@@ -11328,9 +11380,10 @@
     "orchestrator.stats_aggregate_toptalkers2707": {
       "method": "POST",
       "path": "/stats2/aggregate/topTalkers",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate topTalkers stats data filter by query parameters."
       ],
       "query_params": [
@@ -11352,9 +11405,10 @@
     "orchestrator.stats_aggregate_tunnel708_1": {
       "method": "POST",
       "path": "/stats2/aggregate/tunnel",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate tunnel stats data filter by query parameters."
       ],
       "query_params": [
@@ -11379,9 +11433,10 @@
     "orchestrator.stats_aggregate_tunnel708_2": {
       "method": "POST",
       "path": "/stats2/aggregate/applicationPerformance",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate tunnel stats data filter by query parameters."
       ],
       "query_params": [
@@ -11401,9 +11456,10 @@
     "orchestrator.stats_aggregate_tunnel908": {
       "method": "POST",
       "path": "/stats2/aggregate/apdex",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate tunnel stats data filter by query parameters."
       ],
       "query_params": [
@@ -11436,9 +11492,10 @@
     "orchestrator.statscollectorassociationsbynepks710": {
       "method": "POST",
       "path": "/statsCollector/associationsByNepks",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get stats collector assignments for provided appliance ids(NePk)"
       ],
       "body_example": {
@@ -11816,17 +11873,19 @@
       "method": "POST",
       "path": "/tcpdump/run",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "POST operation to start the packet capture process."
+        "Run a packet capture on an appliance. High overhead \u2014 stop promptly (POST /tcpdump/stop) and filter narrowly."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "nePk": "<nePk>",
+        "interface": "<ifName>",
+        "filter": "<tcpdump-bpf>",
+        "count": 100
       },
       "tags": [
-        "tcpdump"
-      ]
+        "diagnostics"
+      ],
+      "source": "official-oas"
     },
     "orchestrator.tcpdump_status738": {
       "method": "GET",
@@ -12808,9 +12867,10 @@
     "orchestrator.getcheckpointsites804": {
       "method": "POST",
       "path": "/thirdPartyServices/checkPoint/sites",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get check point sites configuration."
       ],
       "body_example": {
@@ -14391,9 +14451,10 @@
     "orchestrator.getbondedtunnelsstates880": {
       "method": "POST",
       "path": "/tunnels/bonded/state",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get the current list of tunnels state"
       ],
       "body_example": {
@@ -14407,9 +14468,10 @@
     "orchestrator.gettunnelsstates882": {
       "method": "POST",
       "path": "/tunnels/physical/state",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get the current list of tunnels state"
       ],
       "query_params": [
@@ -14482,9 +14544,10 @@
     "orchestrator.getthirdpartytunnelsstates887": {
       "method": "POST",
       "path": "/tunnels/thirdParty/state",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get the current list of tunnels state"
       ],
       "query_params": [
@@ -14566,9 +14629,10 @@
     "orchestrator.gettunnelsbetweenappliances893": {
       "method": "POST",
       "path": "/tunnels2/getTunnelsBetweenAppliances",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get all tunnels between appliances"
       ],
       "query_params": [
@@ -14651,9 +14715,10 @@
     "orchestrator.gettunnelcounts900": {
       "method": "POST",
       "path": "/tunnels2/tunnelCounts",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Returns individual tunnel count by overlay on selected appliances"
       ],
       "body_example": {
@@ -14908,17 +14973,16 @@
       "method": "POST",
       "path": "/vrf/config/enable",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Update Routing Segmentation enable"
+        "Enable routing segmentation (VRF). Body mirrors GET /vrf/config/enable."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "enable": true
       },
       "tags": [
         "vrf"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.segmentmapdelete921": {
       "method": "DELETE",
@@ -14954,19 +15018,20 @@
       "method": "POST",
       "path": "/vrf/config/maps",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Edit DNAT Policies of required source segment"
-      ],
-      "query_params": [
-        "srcSegmentId"
+        "Save VRF segment maps (interface-to-segment assignment). Body mirrors GET /vrf/config/maps."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<nePk>": {
+          "<interfaceName>": "<segment-name>"
+        }
       },
       "tags": [
         "vrf"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "srcSegmentId"
       ]
     },
     "orchestrator.securitymapget924": {
@@ -14988,19 +15053,18 @@
       "method": "POST",
       "path": "/vrf/config/securityPolicies",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Edit orchestration Security policies"
-      ],
-      "query_params": [
-        "map"
+        "Save VRF security policies (inter-segment policy matrix). Body mirrors GET /vrf/config/securityPolicies (requires valid query params)."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<segmentName1>-<segmentName2>": "deny"
       },
       "tags": [
         "vrf"
+      ],
+      "source": "official-oas",
+      "query_params": [
+        "map"
       ]
     },
     "orchestrator.getsecuritymaps926": {
@@ -15102,17 +15166,16 @@
       "method": "POST",
       "path": "/vrf/config/snatMaps",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add/Edit Inter-Segment SNAT rules"
+        "Save VRF SNAT maps. Body mirrors GET /vrf/config/snatMaps."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "<mapName>": "<segment-name>"
       },
       "tags": [
         "vrf"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.vrrpget934": {
       "method": "GET",
@@ -15257,17 +15320,16 @@
       "method": "POST",
       "path": "/zones/eeEnable",
       "risk": "write",
-      "source": "official-oas",
       "notes": [
-        "Add/Edit End to End Zone Based Firewall Config"
+        "Enable zones east-west. Body mirrors GET /zones/eeEnable."
       ],
       "body_example": {
-        "placeholderProperty1": "",
-        "placeholderProperty2": ""
+        "enable": true
       },
       "tags": [
         "zones"
-      ]
+      ],
+      "source": "official-oas"
     },
     "orchestrator.nextidget944": {
       "method": "GET",
@@ -15324,9 +15386,10 @@
     "orchestrator.availabilitytimesettingsget1": {
       "method": "POST",
       "path": "/stats/config/applianceBusinessHours/get",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get availability time settings for provided appliance ids(NePk)"
       ],
       "body_example": {
@@ -15470,9 +15533,10 @@
     "orchestrator.post_stats_aggregate_toptalkers_destinations": {
       "method": "POST",
       "path": "/stats/aggregate/topTalkers/destinations",
-      "risk": "write",
+      "risk": "read",
       "source": "official-oas",
       "notes": [
+        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Get aggregate topTalkers destination stats data."
       ],
       "query_params": [
