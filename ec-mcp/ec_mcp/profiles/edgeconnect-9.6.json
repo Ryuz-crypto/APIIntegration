@@ -4916,10 +4916,10 @@
       "path": "/gms/overlays/config",
       "risk": "write",
       "notes": [
-        "Saves a new overlay. Shape mirrors objects from GET /gms/overlays/config."
+        "Saves a new Business Intent Overlay. Body mirrors objects returned by GET /gms/overlays/config."
       ],
       "body_example": {
-        "name": "NewOverlay",
+        "name": "<overlay-name>",
         "dnRules": [],
         "rules": [],
         "rating": 0,
@@ -7977,10 +7977,10 @@
         "nePk"
       ],
       "notes": [
-        "Associate an appliance with a region (live validated). POST /regions/appliances with this body returns 400 \"supply correct input\" \u2014 use PUT for existing appliances. A re-adopted appliance loses its region association."
+        "Associate an appliance (query nePk) with a region by regionId. Note: POST /regions/appliances rejects this body on existing appliances (400 \"supply correct input\") \u2014 use PUT. A re-adopted appliance loses its region association."
       ],
       "body_example": {
-        "regionId": 3
+        "regionId": 0
       },
       "tags": [
         "regions"
@@ -8040,11 +8040,11 @@
         "regionId"
       ],
       "notes": [
-        "Update a region. Body is the region object shape returned by GET /regions."
+        "Update a region (query regionId required). Body mirrors the region object returned by GET /regions."
       ],
       "body_example": {
-        "regionId": 3,
-        "regionName": "NFR"
+        "regionId": 0,
+        "regionName": "<region-name>"
       },
       "tags": [
         "regions"
@@ -8056,11 +8056,11 @@
       "path": "/regions",
       "risk": "write",
       "notes": [
-        "Create a region. Body uses the region object shape from GET /regions."
+        "Create a region. Body mirrors the region object returned by GET /regions; regionName identifies the new region."
       ],
       "body_example": {
         "regionId": 0,
-        "regionName": "NewRegion"
+        "regionName": "<new-region-name>"
       },
       "tags": [
         "regions"
@@ -15458,16 +15458,16 @@
       "path": "/ids/config",
       "risk": "write",
       "notes": [
-        "Set IDPS configuration. Shape mirrors GET /ids/config configData."
+        "Set IDPS configuration. Body mirrors configData from GET /ids/config."
       ],
       "body_example": {
         "schedule": {},
         "auto": "on",
         "idsVersions": {
-          "16.NE": "11303"
+          "<nePk>": "<signature-version>"
         },
         "supportedAppliances": [
-          "16.NE"
+          "<nePk>"
         ],
         "signatures": [
           1,
@@ -15570,16 +15570,11 @@
       "path": "/ids/profilestate",
       "risk": "write",
       "notes": [
-        "Assign IDPS signature profiles per appliance. Map profile name -> list of nePks (live captured)."
+        "Assign IDPS signature profiles per appliance. Body mirrors GET /ids/profilestate: map of profile name -> list of nePks. Profile names come from GET /ids/signatures/profiles."
       ],
       "body_example": {
-        "Default_S7": [
-          "1.NE",
-          "0.NE",
-          "2.NE",
-          "3.NE",
-          "14.NE",
-          "4.NE"
+        "<profile-name>": [
+          "<nePk>"
         ]
       },
       "tags": [
@@ -15604,16 +15599,16 @@
       "path": "/ids/state",
       "risk": "write",
       "notes": [
-        "Set IDPS per-appliance state. Lists of nePks per mode (live captured). ips_inline = IPS-Inline, ips_lookaside = IPS-Performant, ids = IDS Only, disabled = Off."
+        "Set IDPS mode per appliance. Body mirrors GET /ids/state: each key is a list of nePks. ips_inline = IPS-Inline, ips_lookaside = IPS-Performant, ids = IDS Only, disabled = Off. Include ALL appliances in exactly one list (the PUT replaces state)."
       ],
       "body_example": {
         "ips_inline": [
-          "1.NE"
+          "<nePk>"
         ],
         "ips_lookaside": [],
         "ids": [],
         "disabled": [
-          "16.NE"
+          "<nePk>"
         ]
       },
       "tags": [
@@ -31142,5 +31137,8 @@
         "Imported from Postman collection folder 'cipherSettings'."
       ]
     }
+  },
+  "_meta": {
+    "body_example_convention": "body_example is a GENERIC REFERENCE CONTRACT for the endpoint schema: field names, types and structure. Values are illustrative placeholders (<nePk>, <region-name>, example IPs) \u2014 never environment-specific data. To apply a write: GET the sibling/current object, clone it, substitute real values, dry-run, then confirm."
   }
 }
