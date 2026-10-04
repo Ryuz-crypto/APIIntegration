@@ -8011,8 +8011,7 @@
     "Create region"
    ],
    "body_example": {
-    "placeholderProperty1": "",
-    "placeholderProperty2": ""
+    "regionName": "NFR"
    },
    "tags": [
     "regions"
