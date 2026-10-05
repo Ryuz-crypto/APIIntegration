@@ -1968,7 +1968,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             select_discovered(discovered_before, plan.appliance_uuid)
             preconfig_body = {
                 "name": plan.preconfig_name,
-                "configData": base64.b64encode(plan.preconfig_yaml.encode("utf-8")).decode("ascii"),
+                "preConfig": base64.b64encode(plan.preconfig_yaml.encode("utf-8")).decode("ascii"),
                 "autoApply": False,
             }
             plan.validate_result = client.call(
@@ -2132,7 +2132,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             result = client.call(
                 version,
                 ZTP_DENY_OPERATION,
-                id=plan.appliance_uuid,
+                id=plan.discovered_row_id or plan.appliance_uuid,
             )
             delete_result = None
             if plan.created_preconfig_id:
@@ -2286,7 +2286,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         raise SecurityError(f"Sub-plan status is {plan.status!r}")
                     preconfig_body = {
                         "name": plan.preconfig_name,
-                        "configData": base64.b64encode(plan.preconfig_yaml.encode("utf-8")).decode("ascii"),
+                        "preConfig": base64.b64encode(plan.preconfig_yaml.encode("utf-8")).decode("ascii"),
                         "autoApply": False,
                     }
                     require_writes(ZTP_PRECONFIG_VALIDATE)

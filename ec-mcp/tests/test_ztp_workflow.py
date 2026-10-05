@@ -387,7 +387,7 @@ def test_full_transactional_cycle(monkeypatch):
         apply_call = next(c for c in fake.calls if c[0] == "orchestrator.applydiscoveredpreconfiguration255")
         assert apply_call[2].get("discoveredId") == "54"
         assert fake.created_preconfig["name"] == plan["preconfig_name"]
-        assert base64.b64decode(fake.created_preconfig["configData"]).decode() == PRECONFIG_YAML
+        assert base64.b64decode(fake.created_preconfig["preConfig"]).decode() == PRECONFIG_YAML
         assert "orchestrator.applydiscoveredpreconfiguration255" in [c[0] for c in fake.calls]
 
         rolled_back = asyncio.run(
@@ -624,7 +624,7 @@ def test_full_bulk_cycle(monkeypatch):
         assert all(r["applied"] for r in applied_payload["results"])
         apply_calls = [c for c in fake.calls if c[0] == "orchestrator.applydiscoveredpreconfiguration255"]
         assert [c[2].get("discoveredId") for c in apply_calls] == ["54", "55"]
-        configs = [base64.b64decode(c[1]["configData"]).decode() for c in fake.calls
+        configs = [base64.b64decode(c[1]["preConfig"]).decode() for c in fake.calls
                    if c[0] == "orchestrator.createpreconfiguration247_1"]
         assert 'hostname: "EC10"' in configs[0]
         assert 'hostname: "EC11"' in configs[1]
