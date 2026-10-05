@@ -1718,3 +1718,22 @@ def test_parse_firewall_log_entries_structures_zone_firewall_rows():
     assert summary["actions"] == {"allow": 1, "drop": 1}
     assert summary["zone_pairs"]["DATOS->WAN_LAB"] == 2
     assert "Dropped - Local dest interface is down" in summary["drop_reasons"]
+
+
+def test_guard_partial_deployment_body_accepts_full_body():
+    from ec_mcp.server import guard_partial_deployment_body
+
+    full = {"modeIfs": [{"interfaceName": "lan0"}], "sysConfig": {"license": {}}}
+    guard_partial_deployment_body(full)
+
+
+def test_guard_partial_deployment_body_refuses_partial():
+    from ec_mcp.server import SecurityError, guard_partial_deployment_body
+
+    partial = {"sysConfig": {"license": {}}}
+    try:
+        guard_partial_deployment_body(partial)
+    except SecurityError as error:
+        assert "full REPLACE" in str(error)
+    else:
+        raise AssertionError("expected SecurityError for partial deployment body")
