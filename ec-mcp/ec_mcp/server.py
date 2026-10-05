@@ -2721,7 +2721,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 "confirmed": confirm,
             }
             audit_public_entry = {k: v for k, v in audit_entry.items() if k != "body"}
-            audit_public_entry["body_keys"] = sorted(body.keys()) if body else []
+            if isinstance(body, dict):
+                audit_public_entry["body_keys"] = sorted(body.keys())
+            elif isinstance(body, list):
+                audit_public_entry["body_items"] = len(body)
+            else:
+                audit_public_entry["body_keys"] = []
             if not confirm:
                 audit.record("apply_change", operation_id, operation.path, "dry-run", dry_run=True, details=audit_public_entry)
                 return json_result({"dry_run": True, "would_execute": audit_entry}, settings.max_output_chars)
