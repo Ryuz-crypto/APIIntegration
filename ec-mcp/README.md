@@ -1,7 +1,7 @@
 # ec-mcp — EdgeConnect SD-WAN MCP server
 
-**Versión 3.0 base: 3.0.0b5**  
-Esta entrega inicia la línea 3.0. La base 2.0.0 fue la versión estable anterior; 3.0.0b5 incorpora el primer flujo transaccional de configuración para Business Intent Overlays.
+**Versión estable: 4.0.0**  
+Línea de versiones: 2.0.0 → 3.0.0 → **4.0.0 (estable)**. La versión 4.0.0 consolida la suite de seguridad y troubleshooting, el catálogo de schemas de escritura (0 placeholders restantes) y las herramientas compuestas de diagnóstico. La línea 5.0 inicia en prebeta (`5.0.0b1`) sobre esta base.
 
 `ec-mcp` conecta asistentes compatibles con Model Context Protocol (MCP) con
 HPE Aruba Networking EdgeConnect SD-WAN. Puede consultar el Orchestrator y los
@@ -591,9 +591,9 @@ a reinicios del MCP. El rollback (deny + delete) requiere además
 `EC_ALLOW_DANGEROUS_WRITES=true`. No se permite adoptar un equipo ya
 aprobado ni enviar cuerpos vacíos.
 
-## Suite de seguridad y troubleshooting (4.0.0 prebeta)
+## Suite de seguridad y troubleshooting (4.0.0 estable)
 
-La versión `4.0.0b1` añade herramientas curadas de solo lectura sobre el
+La versión `4.0.0` — ahora estable — añade herramientas curadas de solo lectura sobre el
 catálogo crudo, agrupadas por dominio:
 
 | Herramienta | Dominio | Descripción |
