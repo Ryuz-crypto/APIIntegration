@@ -2654,9 +2654,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         interface_name: str = "",
         extra_path_params_json: str = "",
         extra_query_params_json: str = "",
+        verify_operation_id: str = "",
         confirm: bool = False,
     ) -> str:
-        """Apply a configuration change through the Orchestrator/Appliance API. Dry-run by default: without confirm=true it returns the exact method, path and body that would be executed. Effective permissions are those of the authenticated user. Use list_api_operations to discover available write operations and their required parameters."""
+        """Apply a configuration change through the Orchestrator/Appliance API. Dry-run by default: without confirm=true it returns the exact method, path and body that would be executed. Effective permissions are those of the authenticated user. Use list_api_operations to discover available write operations and their required parameters. Some upstream endpoints accept array bodies declared as arrays in body_example; those are accepted here. Pass verify_operation_id (a GET operation) to read-after-write and fail loudly if the write left no trace. Upstream throttles writes (~10/min); on repeated write failures wait 60s before retrying."""
         try:
             require_writes(operation_id)
             client = require_client()
@@ -2677,12 +2678,19 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     **_parse_json_object(extra_query_params_json, "extra_query_params_json"),
                 },
             )
-            body: dict | None = None
+            body: dict | list | None = None
             if body_json.strip():
                 parsed = json.loads(body_json)
-                if not isinstance(parsed, dict):
-                    raise SecurityError("body_json must be a JSON object")
-                body = parsed
+                example_for_body = operation_details(version, operation_id).get("body_example")
+                if isinstance(parsed, dict):
+                    body = parsed
+                elif isinstance(parsed, list) and isinstance(example_for_body, list):
+                    body = parsed
+                else:
+                    raise SecurityError(
+                        "body_json must be a JSON object"
+                        + (" (or an array matching the catalog's array body_example)" if isinstance(parsed, list) else "")
+                    )
             example = operation_details(version, operation_id).get("body_example")
             placeholder_example = isinstance(example, dict) and any(
                 str(key).lower().startswith("placeholderproperty") for key in example
@@ -2736,7 +2744,21 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     **query_params,
                 )
             audit.record("apply_change", operation_id, operation.path, "ok", dry_run=False, details=audit_public_entry)
-            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+            verification = None
+            if verify_operation_id:
+                verify_op = engine.resolve(version, verify_operation_id)
+                if verify_op.method != "GET":
+                    raise SecurityError("verify_operation_id must be a GET operation")
+                if verify_operation_id.startswith("appliance."):
+                    verify_ne_pk = resolve_ne_pk(client, appliance_id)
+                    verification = client.appliance_api_call(
+                        version, verify_ne_pk, verify_operation_id,
+                        path_params={}, **{},
+                    )
+                else:
+                    verification = client.call(version, verify_operation_id, path_params={})
+                audit.record("apply_change", verify_operation_id, verify_op.path, "read-after-write", dry_run=False)
+            return json_result({"applied": True, "result": payload, "read_after_write": verification}, settings.max_output_chars)
         except json.JSONDecodeError as error:
             audit.record("apply_change", operation_id, "", f"invalid body JSON: {error}")
             return f"Invalid body_json: {error}"
