@@ -167,7 +167,7 @@ class FakeZtpClient:
             }
         raise AssertionError(f"unexpected operation {operation_id}")
 
-    def list_appliances(self):
+    def list_appliances(self, refresh=False):
         if "applydiscoveredpreconfiguration255" in [c[0] for c in self.calls]:
             return [
                 {
@@ -402,6 +402,8 @@ def test_full_transactional_cycle(monkeypatch):
         )
         rollback_payload = json.loads(rolled_back.content[0].text)
         assert rollback_payload["rolled_back"] is True
+        deny_call = next(c for c in fake.calls if c[0] == "orchestrator.denydiscoveredappliances55")
+        assert deny_call[2]["id"] == "54"
         assert "orchestrator.deletepreconfiguration251" in [c[0] for c in fake.calls]
     finally:
         server_module.OrchestratorClient = original_create
@@ -661,3 +663,54 @@ def test_bulk_prepare_rejects_mismatched_hostnames(monkeypatch):
         assert prepared.content[0].text.startswith("Error:")
     finally:
         server_module.OrchestratorClient = original_create
+
+
+@pytest.mark.parametrize("mode", ["success", "status_error", "empty_tasks", "pending", "failed", "unknown_status", "still_discovered", "prepared", "empty_inventory"])
+def test_ztp_verification_requires_complete_current_evidence(monkeypatch, tmp_path, mode):
+    fake = FakeZtpClient()
+    _set_client(monkeypatch, fake)
+    server = create_server(Settings(allow_write_tools=True, allow_dangerous_writes=True, audit_log_path=tmp_path / "audit.jsonl"))
+    plan = _parse(_tool(server, "prepare_ztp_adoption", appliance_selector=UUID, preconfig_yaml=PRECONFIG_YAML))["plan"]
+    if mode != "prepared":
+        applied = _parse(_tool(server, "apply_ztp_plan", plan_id=plan["plan_id"], confirmation=plan["confirmation_required"], confirm=True))
+        assert applied["applied"] is True
+    if mode != "still_discovered":
+        fake.discovered = []
+    original_call = fake.call
+
+    def call(version, operation_id, **kwargs):
+        if operation_id == "orchestrator.getpreconfigurationapplystatus254":
+            if mode == "status_error":
+                raise RuntimeError("status unavailable")
+            if mode == "empty_tasks":
+                return {"data": {"result": []}}
+            if mode in {"pending", "failed", "unknown_status"}:
+                return {"data": {"result": [{"name": "Apply", "completionStatus": mode != "pending", "taskStatus": 3 if mode == "failed" else None}]}}
+        return original_call(version, operation_id, **kwargs)
+
+    monkeypatch.setattr(fake, "call", call)
+    refreshed = []
+
+    def inventory(refresh=False):
+        refreshed.append(refresh)
+        if not refresh or mode == "empty_inventory":
+            return []
+        return [{"nePk": "15.NE", "name": "EC3", "serial_number": DISCOVERED_ROW["applianceInfo"]["serial"]}]
+
+    monkeypatch.setattr(fake, "list_appliances", inventory)
+    payload = _parse(_tool(server, "verify_ztp_plan", plan_id=plan["plan_id"]))
+    assert payload["verified"] is (mode == "success")
+    assert refreshed == [True]
+    assert (payload["plan_status"] == "verified") is (mode == "success")
+    if mode == "success":
+        current_call = fake.call
+
+        def unavailable(version, operation_id, **kwargs):
+            if operation_id == "orchestrator.getpreconfigurationapplystatus254":
+                raise RuntimeError("status unavailable")
+            return current_call(version, operation_id, **kwargs)
+
+        monkeypatch.setattr(fake, "call", unavailable)
+        subsequent = _parse(_tool(server, "verify_ztp_plan", plan_id=plan["plan_id"]))
+        assert subsequent["verified"] is False
+        assert subsequent["plan_status"] == "verification_failed"

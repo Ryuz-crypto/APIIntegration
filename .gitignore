@@ -26,3 +26,6 @@ dist/
 logs/
 *.log
 audit*.log
+
+# Generated QA reports (published by CI).
+ec-mcp/reports/

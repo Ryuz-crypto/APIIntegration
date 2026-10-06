@@ -8,6 +8,10 @@
 
 Plataforma para descubrir, consultar, visualizar y **conversar** con entornos **HPE Aruba Networking EdgeConnect SD-WAN** mediante sus APIs y su CLI ECOS.
 
+## Registro de bugs
+
+Todo bug detectado por personas o asistentes de IA se registra en [GitHub Issues](https://github.com/Ryuz-crypto/APIIntegration/issues), buscando duplicados primero. El número del issue (`#123`) es su **Bug ID** y se enlaza desde el PR de corrección. Usa la [plantilla de reporte](.github/ISSUE_TEMPLATE/bug_report.md), identifica si el hallazgo está reproducido o pendiente de validar y excluye secretos y datos sensibles. La regla provisional para cualquier IA que trabaje en el repositorio está en [AGENTS.md](AGENTS.md); el equipo podrá ampliarla con su criterio definitivo.
+
 | Componente | Qué hace | Documentación |
 | --- | --- | --- |
 | **DashboardAPI-EC** | Plataforma web: detecta la versión del Orchestrator, identifica capacidades y ensambla un dashboard con datos reales. Paquete `.deb` para Ubuntu, Python 3.12+. | [DashboardAPI-EC/README.md](DashboardAPI-EC/README.md) |
@@ -154,7 +158,7 @@ No continúes si hay cambios locales sin respaldar. El instalador conserva `.env
 
 ### Mejoras de operación e inconsistencias
 
-La base estable integra las correcciones existentes del PR #37 y alinea paquete, README y CI en 4.5.0. Las siguientes mejoras se desarrollan por separado en `fix/operation-integrity-4.5`: evitar repetir escrituras ante respuestas vacías, verificar ZTP con evidencia completa e inventario fresco, aplicar los mismos controles CLI en todas las rutas y distinguir escritura aplicada de verificación fallida. El endurecimiento SSH/updater y las inconsistencias del dashboard continúan pendientes de esa línea de trabajo.
+La base estable integra las correcciones existentes del PR #37 y alinea paquete, README y CI en 4.5.0. Esta rama `fix/operation-integrity-4.5` implementa por separado las primeras mejoras: una sola solicitud por escritura, ZTP con evidencia completa e inventario fresco, controles CLI en todas las rutas, parámetros `0`/`false`, auditoría saneada y respuestas que distinguen escritura aplicada de verificación fallida. Estos cambios aún no forman parte de `release/4.5.0`. La revisión del path de seguridad corrige omisiones DDoS y estados sin evidencia, restringe escrituras de seguridad sin contrato y añade planes de remediación IDS/IPS y DDoS con conflictos, verificación y rollback. El [CI de ec-mcp](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml) mantiene el conteo vigente; el [informe de seguridad](ec-mcp/QA-SECURITY.md) y el [README de ec-mcp](ec-mcp/README.md#suite-de-seguridad-y-troubleshooting) documentan resultados y validaciones de laboratorio pendientes. SSE conectado no acredita filtrado web. El endurecimiento SSH/updater y las inconsistencias del dashboard continúan pendientes de esa línea de trabajo.
 
 ### Validación y errores comunes
 

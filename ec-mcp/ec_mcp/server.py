@@ -7,6 +7,7 @@ import re
 import secrets
 import time
 from collections import deque
+from threading import Lock
 from typing import Any
 
 try:
@@ -20,8 +21,19 @@ from .cli_catalog import (
     catalog_entries,
     total_commands,
 )
-from .compat import CompatibilityEngine, load_profiles
+from .compat import CompatibilityEngine, is_read_only_operation, load_profiles, render_path
 from .config import Settings
+from .edgeconnect_evidence import (
+    ENDPOINT_ASSOCIATIONS,
+    FLOW_DETAILS,
+    IPSLA_SETTINGS,
+    REMOTE_ENDPOINTS,
+    SERVICE_PROVIDERS,
+    bounded_id,
+    flow_evidence,
+    service_evidence,
+)
+from .hpe_sse import SSE_RESOURCES, SSEAdminClient
 from .orchestrator_client import OrchestratorClient
 from .overlay_workflow import (
     OverlayPlanStore,
@@ -30,7 +42,22 @@ from .overlay_workflow import (
     prepare_overlay_plan,
     select_overlay,
 )
-from .security import SecurityError, redact_secrets, redact_sensitive_values
+from .security import (
+    SecurityError,
+    redact_sensitive_values,
+    validate_cli_command,
+    validate_show_command,
+)
+from .security_remediation import (
+    DDOS_READ,
+    IDS_STATE_READ,
+    SecurityPlanStore,
+    fingerprint,
+    prepare_security_plan,
+    security_write_guard,
+    validate_ddos_snapshot,
+    validate_ids_snapshot,
+)
 from .security_workflow import (
     BFD_SESSIONS_READ,
     BGP_NEIGHBOR_READ,
@@ -40,6 +67,7 @@ from .security_workflow import (
     DEPLOYMENT_CONFIG_READ,
     IDS_IPS_EVENTS_READ,
     IDS_IPS_STATE_READ,
+    SECURITY_MAP_SETTINGS_READ,
     SECURITY_MAPS_READ,
     SSE_PROVIDERS,
     THIRD_PARTY_TUNNELS_STATE_READ,
@@ -122,6 +150,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     overlay_plans = OverlayPlanStore()
     ztp_plans = ZtpPlanStore(state_dir=os.environ.get("EC_ZTP_STATE_DIR", ""))
     ztp_bulk_plans: dict[str, ZtpBulkPlan] = {}
+    security_plans = SecurityPlanStore()
 
     def require_client() -> OrchestratorClient | None:
         nonlocal shared_client
@@ -140,11 +169,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return None
 
     DANGEROUS_OPERATION_PATTERN = re.compile(
-        r"(?i)reboot|suspend|delete|remove|wipe|factory|purge|halt|shutdown|decommission"
+        r"(?i)reboot|restart|reload|reset|erase|clear|suspend|delete|remove|wipe|factory|purge|halt|shutdown|decommission"
     )
     write_timestamps: deque[float] = deque()
+    write_lock = Lock()
 
-    def require_writes(operation: str = "") -> None:
+    def require_writes(operation: str = "", *, execute: bool = True) -> None:
         if not settings.allow_write_tools:
             raise SecurityError("Write tools are disabled (EC_ALLOW_WRITE_TOOLS != true)")
         if operation and DANGEROUS_OPERATION_PATTERN.search(operation):
@@ -153,14 +183,17 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     f"Operation '{operation}' is classified as dangerous and requires "
                     "EC_ALLOW_DANGEROUS_WRITES=true"
                 )
-        now = time.monotonic()
-        while write_timestamps and now - write_timestamps[0] > 60.0:
-            write_timestamps.popleft()
-        if len(write_timestamps) >= settings.max_writes_per_minute:
-            raise SecurityError(
-                f"Write rate limit reached (max {settings.max_writes_per_minute} per minute)"
-            )
-        write_timestamps.append(now)
+        if not execute:
+            return
+        with write_lock:
+            now = time.monotonic()
+            while write_timestamps and now - write_timestamps[0] > 60.0:
+                write_timestamps.popleft()
+            if len(write_timestamps) >= settings.max_writes_per_minute:
+                raise SecurityError(
+                    f"Write rate limit reached (max {settings.max_writes_per_minute} per minute)"
+                )
+            write_timestamps.append(now)
 
     def json_result(payload, max_chars: int) -> str:
         # Reuse the closed serializer so every helper response remains valid JSON.
@@ -174,7 +207,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         """
         text = json.dumps(redact_sensitive_values(payload), ensure_ascii=False, default=str)
         if len(text) <= max_chars:
-            return redact_secrets(text, []), False
+            return text, False
         budget = max_chars - 256
         if isinstance(payload.get("versions"), dict):
             shrunk = json.loads(text)
@@ -201,11 +234,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     body["page_size_adjusted"] = keep
                 trimmed_text = json.dumps(shrunk, ensure_ascii=False, default=str)
                 if len(trimmed_text) <= max_chars:
-                    return redact_secrets(trimmed_text, []), True
+                    return trimmed_text, True
         wrapper = {"truncated": True, "max_chars": max_chars}
         wrapper["hint"] = "Payload exceeded max_chars; reduce the result with fields/limit or raise max_chars."
-        wrapper["excerpt"] = redact_secrets(text, [])[: max(0, budget)]
-        return redact_secrets(json.dumps(wrapper, ensure_ascii=False, default=str), []), True
+        wrapper["excerpt"] = text[: max(0, budget)]
+        return json.dumps(wrapper, ensure_ascii=False, default=str), True
 
     def paginate_data(data: Any, offset: int, limit: int | None, fields: list[str]) -> tuple[dict, bool]:
         """Client-side pagination over a list payload, with explicit metadata."""
@@ -276,14 +309,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if alias not in source and source.get(canonical):
                 source[alias] = source[canonical]
         for name in operation.get("path_params", []):
-            value = source.get(name) or ""
-            if not value:
+            value = source.get(name)
+            if value is None or value == "":
                 raise SecurityError(f"Missing required path parameter '{name}' for operation '{operation_id}'")
-            path_params[name] = value
+            path_params[name] = str(value)
         for name in operation.get("query_params", []):
             value = source.get(name)
-            if value:
-                query_params[name] = str(value)
+            if value is not None and value != "":
+                query_params[name] = str(value).lower() if isinstance(value, bool) else str(value)
         return path_params, query_params
 
     def normalize_ne_pk(value: str) -> str:
@@ -325,13 +358,31 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     def resolve_ne_pks(client: OrchestratorClient, appliance_ids: str) -> list[str]:
         if not appliance_ids.strip() or appliance_ids.strip().lower() == "all":
-            return [str(a.get("nePk")) for a in client.list_appliances()]
+            return list(dict.fromkeys(str(a["nePk"]) for a in client.list_appliances() if a.get("nePk")))
         resolved = []
         for part in appliance_ids.split(","):
             part = part.strip()
             if part:
-                resolved.append(resolve_ne_pk(client, part))
-        return resolved
+                resolved.append(resolve_single_target(client, part))
+        return list(dict.fromkeys(resolved))
+
+    def resolve_single_target(client: OrchestratorClient, appliance_id: str) -> str:
+        candidate = appliance_id.strip()
+        if not candidate or candidate.lower() == "all" or "," in candidate:
+            raise SecurityError("This operation requires one explicit appliance target; all, empty and comma-separated selectors are refused")
+        direct = normalize_ne_pk(candidate)
+        if direct:
+            return direct
+        matches = {
+            str(appliance["nePk"])
+            for appliance in client.list_appliances()
+            if appliance.get("nePk") and candidate.casefold() in {
+                str(appliance.get(key) or "").casefold() for key in ("name", "ip", "nePk", "serial_number")
+            }
+        }
+        if len(matches) != 1:
+            raise SecurityError("Appliance target is unknown or ambiguous; use an explicit nePk")
+        return matches.pop()
 
     KPI_ENDPOINTS: dict[str, dict[str, Any]] = {
         "availability": {"paths": ["/stats/aggregate/availability/appliance", "/availability/appliance"]},
@@ -603,7 +654,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         parsed = json.loads(raw)
         if not isinstance(parsed, dict):
             raise SecurityError(f"{name} must be a JSON object")
-        return {str(k): str(v) for k, v in parsed.items()}
+        return {str(k): v for k, v in parsed.items()}
 
     def classify_cli_command(command: str) -> str | None:
         lowered = command.strip().lower()
@@ -613,6 +664,27 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if lowered == entry or lowered.startswith(entry + " "):
                 return cli_risk_by_command[entry]
         return None
+
+    def validate_catalog_command(command: str) -> tuple[str, str]:
+        normalized = validate_cli_command(command)
+        risk = classify_cli_command(normalized)
+        if risk is None:
+            raise SecurityError("Command not in the official ECOS CLI catalog")
+        if risk == "read":
+            normalized = validate_show_command(normalized)
+        return normalized, risk
+
+    def guard_cli_body(path: str, body: Any) -> None:
+        if path not in {"/cli", "/cliMultiple", "/broadcastCli"}:
+            return
+        if not isinstance(body, dict):
+            raise SecurityError("CLI body must be a JSON object")
+        commands = body.get("commands") if path == "/cliMultiple" else [body.get("command")]
+        if not isinstance(commands, list) or not commands or not all(isinstance(c, str) for c in commands):
+            raise SecurityError("CLI body requires a non-empty command or commands list")
+        for command in commands:
+            normalized, _risk = validate_catalog_command(command)
+            require_writes(normalized, execute=False)
 
     @mcp.tool()
     def orchestrator_info() -> str:
@@ -1264,10 +1336,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if operation_id not in engine._profiles[version]["operations"]:
                 return operation_not_found_error(version, operation_id)
             spec = engine._profiles[version]["operations"][operation_id]
+            if spec["method"].upper() != "GET" or not is_read_only_operation(spec):
+                raise SecurityError(f"Operation '{operation_id}' is not read-only; use apply_change")
             multi_targets: list[str] = []
-            if appliance_id.strip().lower() == "all":
-                multi_targets = [str(a.get("nePk")) for a in client.list_appliances()]
+            if appliance_id.strip().lower() == "all" or "," in appliance_id:
+                multi_targets = resolve_ne_pks(client, appliance_id)
                 appliance_id = ""
+                if not multi_targets:
+                    return json_result({"data": [], "coverage_complete": False, "scope": "no_appliances_resolved"}, settings.max_output_chars)
             missing_required: list[str] = []
             granularity_hint = False
             needs_ne_pk = "nePk" in (spec.get("query_params") or []) or "nePk" in (
@@ -1315,7 +1391,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             path_params, query_params = build_params(
                 version,
                 operation_id,
-                appliance_id,
+                appliance_id or (multi_targets[0] if multi_targets else ""),
                 group_id,
                 "",
                 {
@@ -1326,7 +1402,22 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     **_parse_json_object(extra_query_params_json, "extra_query_params_json"),
                 },
             )
-            if operation_id.startswith("appliance."):
+            if operation_id.startswith("appliance.") and multi_targets:
+                payload = []
+                for target in multi_targets:
+                    try:
+                        per_path = dict(path_params)
+                        for key in ("appliance_id", "nePk", "ne", "applianceId"):
+                            if key in per_path:
+                                per_path[key] = target
+                        per_query = {key: value for key, value in query_params.items() if key != "nePk"}
+                        proxy_path = render_path(operation.path, per_path)
+                        payload.append({"nePk": target, "data": client.appliance_api_get(target, proxy_path, **per_query)})
+                    except Exception as error:
+                        payload.append({"nePk": target, "error": str(error)})
+            elif operation_id.startswith("appliance."):
+                if not appliance_id and not query_params.get("nePk"):
+                    raise SecurityError("Appliance-scoped reads require appliance_id; use all for explicit fanout")
                 needs_ne = "nePk" in (spec.get("query_params") or []) or "nePk" in (spec.get("path_params") or [])
                 if needs_ne and not query_params.get("nePk"):
                     if not appliance_id:
@@ -1347,10 +1438,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 else:
                     ne_pk = query_params.get("nePk") or resolve_ne_pk(client, appliance_id)
                     query_params.pop("nePk", None)
-                    appliance_path = operation.path
-                    for key, value in path_params.items():
-                        appliance_path = appliance_path.replace("{" + key + "}", value)
-                    appliance_path = appliance_path.replace("{appliance_id}", ne_pk)
+                    appliance_path = render_path(operation.path, {**path_params, "appliance_id": ne_pk})
                     if re.search(r"\{[^}]+\}", appliance_path):
                         missing = re.findall(r"\{([^}]+)\}", appliance_path)
                         return json_result(
@@ -1389,10 +1477,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     proxy_ne_pk = (query_params.get("nePk") if declares_ne_pk else "") or (
                         resolve_ne_pk(client, appliance_id) if appliance_id else resolve_ne_pk(client, "all")
                     )
-                    proxy_path = operation.path
-                    for key, value in path_params.items():
-                        proxy_path = proxy_path.replace("{" + key + "}", value)
-                    proxy_path = proxy_path.replace("{appliance_id}", proxy_ne_pk)
+                    proxy_path = render_path(operation.path, {**path_params, "appliance_id": proxy_ne_pk})
                     if re.search(r"\{[^}]+\}", proxy_path):
                         raise RuntimeError(str(last_orchestrator_error)[:200])
                     proxy_query = {k: v for k, v in query_params.items() if k != "nePk"}
@@ -1475,7 +1560,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     def run_show_api(command: str, appliance_id: str) -> str:
         """Run an official read-only ECOS show command through the Orchestrator appliance API."""
         try:
-            risk = classify_cli_command(command)
+            command, risk = validate_catalog_command(command)
             if risk != "read":
                 raise SecurityError(
                     "Only commands classified as read-only in the official ECOS CLI catalog are allowed"
@@ -1512,11 +1597,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         pool = ApplianceSshPool(settings)
         target = host or settings.ssh_host
         try:
-            risk = classify_cli_command(command)
-            if risk is None:
-                raise SecurityError(f"Command not in the official ECOS CLI catalog: {command}")
+            command, risk = validate_catalog_command(command)
             if risk == "write":
-                require_writes()
+                require_writes(command, execute=confirm)
                 if not confirm:
                     audit.record("run_cli_command", command, target, "dry-run", dry_run=True)
                     return json_result(
@@ -1820,6 +1903,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         break
         return rows
 
+    def _ztp_task_completed(task: dict[str, Any]) -> bool:
+        # taskStatus=2 is the completed state observed in the supported 9.6 contract.
+        return (
+            task.get("completionStatus") is True
+            and task.get("taskStatus") in (2, "2")
+            and not task.get("error")
+            and task.get("success") is not False
+        )
+
     @mcp.tool()
     def get_ztp_apply_status(preconfig_id: str) -> str:
         """Read the asynchronous preconfig apply task chain status (operation 254) for a ZTP adoption: per-task completion (Add Appliance, Appliance Info, Zones, license, deployment, Reboot, templates, overlays)."""
@@ -1833,7 +1925,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 preconfigId=preconfig_id,
             )
             tasks = _extract_status_tasks(payload)
-            pending = [t.get("name") for t in tasks if not t.get("completionStatus")]
+            pending = [t.get("name") for t in tasks if not _ztp_task_completed(t)]
             return json_result(
                 {
                     "preconfig_id": preconfig_id,
@@ -2056,7 +2148,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     )
                     tasks = _extract_status_tasks(tasks_payload)
                     if tasks:
-                        pending = [t.get("name") for t in tasks if not t.get("completionStatus")]
+                        pending = [t.get("name") for t in tasks if not _ztp_task_completed(t)]
                         tasks_summary = {
                             "checked": True,
                             "total": len(tasks),
@@ -2067,7 +2159,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     tasks_summary = {"checked": False, "error": str(error)}
             wanted = normalize_serial(plan.appliance_serial)
             inventory_match = None
-            for appliance in client.list_appliances():
+            for appliance in client.list_appliances(refresh=True):
                 if normalize_serial(appliance.get("serial_number", appliance.get("serial", ""))) == wanted:
                     inventory_match = {
                         "nePk": appliance.get("nePk"),
@@ -2081,9 +2173,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 for row in extract_discovered(_read_discovered(client, version))
             )
             tasks_done = bool(tasks_summary.get("checked") and not tasks_summary.get("pending"))
-            verified = bool(inventory_match and not still_discovered and (tasks_done or not tasks_summary.get("checked")))
+            verified = bool(
+                plan.status in {"applied", "verification_failed", "verified"}
+                and inventory_match and not still_discovered and tasks_done
+            )
             if verified and plan.status in {"applied", "verification_failed"}:
                 plan.status = "verified"
+                plan.health_check = {"inventory": inventory_match, "tasks": tasks_summary}
+                ztp_plans.put(plan)
+            elif not verified and plan.status == "verified":
+                plan.status = "verification_failed"
                 plan.health_check = {"inventory": inventory_match, "tasks": tasks_summary}
                 ztp_plans.put(plan)
             return json_result(
@@ -2367,21 +2466,48 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             version = client.resolve_active_profile()
             results = []
             for ne_pk in resolve_ne_pks(client, appliance_id):
-                payload = client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ)
-                results.append({"nePk": ne_pk, **summarize_ids_state(payload)})
-            return json_result({"appliances": results}, settings.max_output_chars)
+                try:
+                    payload = client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ)
+                    results.append({"nePk": ne_pk, **summarize_ids_state(payload)})
+                except Exception as error:
+                    results.append(
+                        {
+                            "nePk": ne_pk,
+                            "error": str(error),
+                            "evidence_status": "error",
+                            "active": False,
+                            "detection_enabled": False,
+                            "prevention_enabled": False,
+                        }
+                    )
+            return json_result(
+                {
+                    "appliances": results,
+                    "coverage_complete": bool(results) and all(row["evidence_status"] == "observed" for row in results),
+                    "enforcement_verified": False,
+                },
+                settings.max_output_chars,
+            )
         except Exception as error:
             return f"Error: {error}"
 
+
     @mcp.tool()
     def get_ids_ips_events(appliance_id: str, start_time: str = "", end_time: str = "", limit: int = 50) -> str:
-        """Read recent IDS/IPS security events of an appliance for incident detection and troubleshooting (epoch-seconds time window supported)."""
+        """Read recent IDS/IPS events. Time windows are refused when absent from the active vendor contract; limit is 1..1000."""
         try:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
-            ne_pk = resolve_ne_pk(client, appliance_id)
+            ne_pk = resolve_single_target(client, appliance_id)
+            if not 1 <= limit <= 1000:
+                raise SecurityError("limit must be in [1, 1000]")
+            declared = set(engine._profiles[version]["operations"][IDS_IPS_EVENTS_READ].get("query_params", []))
+            if (start_time or end_time) and not {"startTime", "endTime"} <= declared:
+                raise SecurityError(
+                    "IDS event time window is unsupported by this API profile; it cannot be silently ignored"
+                )
             query: dict[str, Any] = {}
             if start_time:
                 query["startTime"] = start_time
@@ -2393,12 +2519,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 {
                     "nePk": ne_pk,
                     "total_events": len(rows),
-                    "events": rows[: max(1, int(limit))],
+                    "events": rows[:limit],
+                    "returned": min(len(rows), limit),
+                    "truncated": len(rows) > limit,
+                    "time_filter_applied": bool(query),
                 },
                 settings.max_output_chars,
             )
         except Exception as error:
             return f"Error: {error}"
+
 
     @mcp.tool()
     def get_security_log(
@@ -2423,14 +2553,25 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if log_type not in LOG_VIEWER_TYPES:
                 return f"Error: log_type must be one of {list(LOG_VIEWER_TYPES)}"
             version = client.resolve_active_profile()
-            ne_pk = resolve_ne_pk(client, appliance_id)
+            ne_pk = resolve_single_target(client, appliance_id)
+            from datetime import UTC, datetime
+
+            if not 1 <= lines <= 1000:
+                raise SecurityError("lines must be in [1, 1000]")
             if not date:
-                date = __import__("datetime").datetime.now().strftime("%Y-%m-%d")
+                date = datetime.now(UTC).strftime("%Y-%m-%d")
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+                raise SecurityError("date must be YYYY-MM-DD")
+            datetime.strptime(date, "%Y-%m-%d")
             payload = client.appliance_api_call(
                 version,
                 ne_pk,
                 LOG_VIEWER_FILE_READ,
-                path_params={"logType": log_type, "date": date, "lines": str(max(1, int(lines)))},
+                path_params={
+                    "logType": log_type,
+                    "date": date,
+                    "lines": str(max(1, int(lines))),
+                },
             )
             entries = parse_firewall_log_entries(payload)
             result: dict[str, Any] = {
@@ -2446,6 +2587,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except Exception as error:
             return f"Error: {error}"
 
+
     @mcp.tool()
     def get_zone_matrix(appliance_id: str) -> str:
         """Read the zone-based security matrix of an appliance: zones, security maps with per-priority zone-to-zone policies, and uncovered zone pairs (no explicit policy) for review."""
@@ -2454,13 +2596,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
-            ne_pk = resolve_ne_pk(client, appliance_id)
+            ne_pk = resolve_single_target(client, appliance_id)
             zones_payload = client.appliance_api_call(version, ne_pk, ZONE_LIST_READ)
             maps_payload = client.appliance_api_call(version, ne_pk, SECURITY_MAPS_READ)
-            matrix = summarize_zone_matrix(zones_payload, maps_payload)
+            settings_payload = client.appliance_api_call(version, ne_pk, SECURITY_MAP_SETTINGS_READ)
+            matrix = summarize_zone_matrix(zones_payload, maps_payload, settings_payload)
             return json_result({"nePk": ne_pk, **matrix}, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
+
 
     @mcp.tool()
     def get_ddos_status(appliance_id: str) -> str:
@@ -2470,7 +2614,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
-            ne_pk = resolve_ne_pk(client, appliance_id)
+            ne_pk = resolve_single_target(client, appliance_id)
             thresholds = client.appliance_api_call(version, ne_pk, DDOS_THRESHOLD_STATUS_READ)
             profiles = client.appliance_api_call(version, ne_pk, DDOS_PROTECTION_PROFILE_READ)
             return json_result(
@@ -2484,6 +2628,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except Exception as error:
             return f"Error: {error}"
 
+
     @mcp.tool()
     def get_deployment_config(appliance_id: str) -> str:
         """Read the LAN/WAN deployment configuration of an appliance: deployment mode, total bandwidths and per-interface addressing, labels, zones and firewall modes. First stop for LAN/WAN configuration review."""
@@ -2492,11 +2637,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
-            ne_pk = resolve_ne_pk(client, appliance_id)
+            ne_pk = resolve_single_target(client, appliance_id)
             payload = client.appliance_api_call(version, ne_pk, DEPLOYMENT_CONFIG_READ)
             return json_result({"nePk": ne_pk, "deployment": payload}, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
+
 
     @mcp.tool()
     def get_site_to_site_tunnels(appliance_id: str = "all", include_third_party: bool = True) -> str:
@@ -2510,12 +2656,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             for ne_pk in resolve_ne_pks(client, appliance_id):
                 entry: dict[str, Any] = {
                     "nePk": ne_pk,
-                    "tunnels": summarize_tunnels(
-                        client.appliance_api_call(version, ne_pk, TUNNELS_CONFIG_AND_STATE_READ)
-                    ),
-                    "bonded": summarize_tunnels(
-                        client.appliance_api_call(version, ne_pk, BONDED_TUNNELS_STATE_READ)
-                    ),
+                    "tunnels": summarize_tunnels(client.appliance_api_call(version, ne_pk, TUNNELS_CONFIG_AND_STATE_READ)),
+                    "bonded": summarize_tunnels(client.appliance_api_call(version, ne_pk, BONDED_TUNNELS_STATE_READ)),
                 }
                 if include_third_party:
                     entry["third_party"] = summarize_tunnels(
@@ -2525,6 +2667,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return json_result({"appliances": results}, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
+
 
     @mcp.tool()
     def get_bgp_neighbors(appliance_id: str = "all") -> str:
@@ -2552,6 +2695,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except Exception as error:
             return f"Error: {error}"
 
+
     @mcp.tool()
     def get_sse_status(provider: str = "all") -> str:
         """Read SSE (Secure Service Edge) integration status: connectivity and appliance associations for Zscaler, Netskope and Axis Security (HPE SSE). provider='all' or one of zscaler/netskope/axis."""
@@ -2577,73 +2721,597 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except Exception as error:
             return f"Error: {error}"
 
+
+    @mcp.tool()
+    def get_service_orchestration_evidence(appliance_id: str, service_id: int) -> str:
+        """Read one Service Orchestration provider, endpoints, appliance association and IP SLA presence. No tunnel state or enforcement is inferred."""
+        try:
+            service_id = bounded_id(service_id, "service_id")
+            client = require_client()
+            if client is None:
+                raise ValueError("Orchestrator is not configured")
+            ne_pk = resolve_single_target(client, appliance_id)
+            version = client.resolve_active_profile()
+            result = service_evidence(
+                service_id,
+                ne_pk,
+                client.call(version, SERVICE_PROVIDERS),
+                client.call(version, REMOTE_ENDPOINTS, serviceId=service_id),
+                client.call(version, ENDPOINT_ASSOCIATIONS, serviceId=service_id),
+                client.call(version, IPSLA_SETTINGS, serviceId=service_id),
+            )
+            audit.record("get_service_orchestration_evidence", "read", ne_pk, "association_observed", details={"service_id": service_id})
+            return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_service_orchestration_evidence", "read", appliance_id, "not_observed")
+            reason = str(error) if isinstance(error, (ValueError, SecurityError)) else "Orchestrator read failed"
+            return json_result({"error": reason, "evidence_scope": "not_observed", "enforcement_verified": False}, settings.max_output_chars)
+
+
+    @mcp.tool()
+    def get_flow_evidence(appliance_id: str, flow_id: int, sequence: int) -> str:
+        """Read one flow detail via Orchestrator, allowing only known scalar fields in the output."""
+        try:
+            flow_id = bounded_id(flow_id, "flow_id")
+            sequence = bounded_id(sequence, "sequence")
+            client = require_client()
+            if client is None:
+                raise ValueError("Orchestrator is not configured")
+            ne_pk = resolve_single_target(client, appliance_id)
+            version = client.resolve_active_profile()
+            result = flow_evidence(ne_pk, flow_id, sequence, client.call(
+                version, FLOW_DETAILS, nePk=ne_pk, id=flow_id, seq=sequence,
+            ))
+            audit.record("get_flow_evidence", "read", ne_pk, result["evidence_scope"])
+            return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_flow_evidence", "read", appliance_id, "not_observed")
+            reason = str(error) if isinstance(error, (ValueError, SecurityError)) else "Orchestrator read failed"
+            return json_result({"error": reason, "evidence_scope": "not_observed", "enforcement_verified": False}, settings.max_output_chars)
+
+
+    @mcp.tool()
+    def get_hpe_sse_inventory(resource: str, page: int = 1, page_size: int = 50) -> str:
+        """Read HPE SSE Admin API inventory (web/IP categories, SSL exclusions, locations, tunnels, health). This does not establish applied web-filter policy or enforcement."""
+        try:
+            if resource not in SSE_RESOURCES:
+                raise ValueError(f"Unknown SSE resource; valid: {sorted(SSE_RESOURCES)}")
+            with SSEAdminClient(settings) as sse:
+                result = sse.read(resource, page, page_size)
+            audit.record("get_hpe_sse_inventory", "read", resource, "inventory_observed")
+            return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_hpe_sse_inventory", "read", resource, f"error: {error}")
+            return json_result(
+                {"resource": resource, "error": str(error), "evidence_scope": "not_observed", "enforcement_verified": False},
+                settings.max_output_chars,
+            )
+
+    @mcp.tool()
+    def get_web_filter_status(appliance_id: str, provider: str) -> str:
+        """Read this appliance's SSE association and provider connectivity. URL/category policy and web-filter enforcement are explicitly not observed by these API profiles."""
+        try:
+            name = provider.strip().lower()
+            if name not in SSE_PROVIDERS:
+                raise SecurityError(f"provider must be one of {list(SSE_PROVIDERS)}")
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            ne_pk = resolve_single_target(client, appliance_id)
+            version = client.resolve_active_profile()
+            ops = SSE_PROVIDERS[name]
+            status = extract_sse_status(
+                name,
+                client.call(version, ops["connectivity"]),
+                client.call(version, ops["association"]),
+            )
+            result = {
+                "nePk": ne_pk,
+                "provider": name,
+                "connectivity": status["connectivity"],
+                "appliance_associated": (ne_pk in status["associated_appliances"])
+                if status["association_evidence_status"] == "observed"
+                else None,
+                "association_evidence_status": status["association_evidence_status"],
+                "evidence_scope": "connectivity_and_association_only",
+                "policy_status": "not_observed",
+                "coverage_complete": False,
+                "enforcement_verified": False,
+                "next_step": "Read URL/category policy and decision logs from the SSE provider; validate with bounded lab probes",
+            }
+            audit.record(
+                "get_web_filter_status",
+                "read",
+                ne_pk,
+                "policy_not_observed",
+                details={
+                    "provider": name,
+                    "appliance_associated": result["appliance_associated"],
+                },
+            )
+            return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_web_filter_status", "read", appliance_id, f"error: {error}")
+            return json_result(
+                {
+                    "nePk": appliance_id,
+                    "provider": provider,
+                    "error": str(error),
+                    "policy_status": "not_observed",
+                    "coverage_complete": False,
+                    "enforcement_verified": False,
+                },
+                settings.max_output_chars,
+            )
+
+
     @mcp.tool()
     def get_security_posture(appliance_id: str = "all") -> str:
-        """Single-call security posture snapshot for incident detection: IDS/IPS state, DDoS status, zone matrix coverage and tunnel health per appliance, plus a prioritized findings list."""
+        """Read IDS/IPS, DDoS, directional firewall policies and tunnels. Errors and unknown evidence remain explicit findings; SSE/web filtering and data-plane enforcement are not verified."""
         try:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
+            targets = resolve_ne_pks(client, appliance_id)
             findings: list[dict[str, Any]] = []
             results = []
-            for ne_pk in resolve_ne_pks(client, appliance_id):
-                entry: dict[str, Any] = {"nePk": ne_pk}
-                try:
-                    ids_state = summarize_ids_state(
+            complete = bool(targets)
+
+            def finding(
+                ne_pk: str,
+                control: str,
+                severity: str,
+                message: str,
+                kind: str = "observation",
+            ) -> None:
+                findings.append(
+                    {
+                        "nePk": ne_pk,
+                        "control": control,
+                        "severity": severity,
+                        "finding": message,
+                        "kind": kind,
+                    }
+                )
+
+            for ne_pk in targets:
+                entry: dict[str, Any] = {"nePk": ne_pk, "coverage_complete": True}
+                checks = {
+                    "ids_ips": lambda ne_pk=ne_pk: summarize_ids_state(
                         client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ)
-                    )
-                    entry["ids_ips"] = ids_state
-                    if not ids_state["active"]:
-                        findings.append(
-                            {"nePk": ne_pk, "severity": "high", "finding": "IDS/IPS is not active"}
-                        )
-                except Exception as error:
-                    entry["ids_ips"] = {"error": str(error)}
-                try:
-                    matrix = summarize_zone_matrix(
+                    ),
+                    "zone_matrix": lambda ne_pk=ne_pk: summarize_zone_matrix(
                         client.appliance_api_call(version, ne_pk, ZONE_LIST_READ),
                         client.appliance_api_call(version, ne_pk, SECURITY_MAPS_READ),
-                    )
-                    entry["zone_matrix"] = {"zones": len(matrix["zones"]), "covered_pairs": matrix["covered_pairs"]}
-                    if matrix["uncovered_pairs"]:
-                        findings.append(
-                            {
-                                "nePk": ne_pk,
-                                "severity": "medium",
-                                "finding": f"{len(matrix['uncovered_pairs'])} zone pairs without explicit policy",
-                            }
-                        )
-                except Exception as error:
-                    entry["zone_matrix"] = {"error": str(error)}
-                try:
-                    tunnels = summarize_tunnels(
+                        client.appliance_api_call(version, ne_pk, SECURITY_MAP_SETTINGS_READ),
+                    ),
+                    "ddos": lambda ne_pk=ne_pk: {
+                        "threshold_status": summarize_ddos(
+                            client.appliance_api_call(version, ne_pk, DDOS_THRESHOLD_STATUS_READ)
+                        ),
+                        "protection_profiles": summarize_ddos(
+                            client.appliance_api_call(version, ne_pk, DDOS_PROTECTION_PROFILE_READ)
+                        ),
+                    },
+                    "tunnels": lambda ne_pk=ne_pk: summarize_tunnels(
                         client.appliance_api_call(version, ne_pk, TUNNELS_CONFIG_AND_STATE_READ)
-                    )
-                    entry["tunnels"] = {"total": tunnels["total"], "up": tunnels["up"], "down": tunnels["down"]}
-                    if tunnels["down"]:
-                        findings.append(
-                            {
-                                "nePk": ne_pk,
-                                "severity": "high",
-                                "finding": f"{tunnels['down']} tunnels down",
-                            }
+                    ),
+                }
+                for control, read in checks.items():
+                    try:
+                        observation = read()
+                        entry[control] = observation
+                        evidence = observation.get("evidence_status", "observed")
+                        if control == "ddos":
+                            profiles = observation["protection_profiles"]
+                            evidence = profiles["evidence_status"]
+                            if profiles["disabled_zones"]:
+                                finding(
+                                    ne_pk,
+                                    control,
+                                    "high",
+                                    f"DDoS protection disabled in zones {profiles['disabled_zones']}",
+                                )
+                        elif control == "ids_ips" and evidence == "observed":
+                            if not observation["detection_enabled"]:
+                                finding(ne_pk, control, "high", "IDS/IPS is not active")
+                            elif not observation["prevention_enabled"]:
+                                finding(
+                                    ne_pk,
+                                    control,
+                                    "medium",
+                                    "IDS detection is active; IPS prevention is disabled",
+                                )
+                        elif control == "zone_matrix":
+                            if observation["uncovered_pair_count"]:
+                                finding(
+                                    ne_pk,
+                                    control,
+                                    "low",
+                                    f"{observation['uncovered_pair_count']} directional zone pairs without explicit policy; review default action {observation['default_action']}",
+                                    "review",
+                                )
+                            if observation["ambiguous_priorities"] or observation["invalid_rules"]:
+                                finding(
+                                    ne_pk,
+                                    control,
+                                    "medium",
+                                    "Firewall rules contain invalid fields or ambiguous priorities",
+                                    "review",
+                                )
+                            if observation["default_action"] == "unknown":
+                                evidence = "unknown"
+                        elif control == "tunnels":
+                            if observation["down"]:
+                                finding(
+                                    ne_pk,
+                                    control,
+                                    "high",
+                                    f"{observation['down']} tunnels down",
+                                )
+                            if observation["unknown"]:
+                                evidence = "unknown"
+                        if evidence != "observed":
+                            entry["coverage_complete"] = False
+                            finding(
+                                ne_pk,
+                                control,
+                                "medium",
+                                f"{control} evidence is {evidence}; protection cannot be inferred",
+                                "coverage_gap",
+                            )
+                    except Exception as error:
+                        entry[control] = {"error": str(error), "evidence_status": "error"}
+                        entry["coverage_complete"] = False
+                        finding(
+                            ne_pk,
+                            control,
+                            "high",
+                            f"{control} read failed: {error}",
+                            "collection_error",
                         )
-                except Exception as error:
-                    entry["tunnels"] = {"error": str(error)}
+                entry["assessed_controls_complete"] = entry["coverage_complete"]
+                entry["web_filtering"] = {
+                    "evidence_status": "not_observed",
+                    "reason": "Loaded profiles expose SSE connectivity, not URL/category filtering policy",
+                    "enforcement_verified": False,
+                }
+                entry["coverage_complete"] = False
+                finding(
+                    ne_pk,
+                    "web_filtering",
+                    "medium",
+                    "Web-filter policy and enforcement are not observed; check the SSE provider and lab probes",
+                    "coverage_gap",
+                )
+                complete = complete and entry["coverage_complete"]
                 results.append(entry)
-            severity_rank = {"high": 0, "medium": 1, "low": 2}
-            findings.sort(key=lambda f: severity_rank.get(f["severity"], 3))
+            if not targets:
+                finding(
+                    "",
+                    "inventory",
+                    "high",
+                    "No appliances resolved; security coverage is empty",
+                    "coverage_gap",
+                )
+            findings.sort(key=lambda item: {"high": 0, "medium": 1, "low": 2}.get(item["severity"], 3))
+            audit.record(
+                "get_security_posture",
+                "read",
+                appliance_id,
+                "complete" if complete else "incomplete",
+                details={"appliances": len(results), "finding_count": len(findings)},
+            )
             return json_result(
                 {
                     "appliances": results,
                     "findings": findings,
                     "finding_count": len(findings),
+                    "coverage_complete": complete,
+                    "assessed_controls_complete": bool(results)
+                    and all(row["assessed_controls_complete"] for row in results),
+                    "enforcement_verified": False,
+                    "coverage_scope": "configuration_and_state",
                 },
                 settings.max_output_chars,
             )
         except Exception as error:
             return f"Error: {error}"
+
+
+    def record_security_event(
+        tool: str,
+        action: str,
+        target: str,
+        result: str,
+        *,
+        response: dict | None = None,
+        before_write: bool = False,
+        **kwargs,
+    ) -> str | None:
+        try:
+            audit.record(tool, action, target, result, **kwargs)
+            return None
+        except OSError as error:
+            if before_write:
+                raise SecurityError(f"Cannot record security write attempt: {error}") from error
+            if response is not None:
+                response["audit_error"] = str(error)
+            return str(error)
+
+
+    def read_security_snapshot(client: OrchestratorClient, plan) -> dict:
+        version = client.resolve_active_profile()
+        if version != plan.version:
+            raise SecurityError("API profile changed after preparation; prepare a new plan")
+        if plan.ne_pk not in {str(a.get("nePk")) for a in client.list_appliances(refresh=True)}:
+            raise SecurityError("Security target disappeared from the refreshed appliance inventory")
+        if plan.control == "ids_ips":
+            return validate_ids_snapshot(client.call(version, plan.read_operation))
+        return validate_ddos_snapshot(client.appliance_api_call(version, plan.ne_pk, plan.read_operation))
+
+
+    def write_security_snapshot(client: OrchestratorClient, plan, snapshot: dict) -> Any:
+        if plan.control == "ids_ips":
+            return client.call(plan.version, plan.write_operation, json_body=snapshot)
+        return client.appliance_api_call(plan.version, plan.ne_pk, plan.write_operation, json_body=snapshot)
+
+
+    @mcp.tool()
+    def prepare_security_remediation(appliance_id: str, control: str, mode: str = "", profile_name: str = "") -> str:
+        """Prepare a ten-minute, explicit-target plan: ids_ips changes one mode while preserving all assignments; ddos enables an existing assigned profile. NGFW/web-filter writes need validated contracts. No writes occur."""
+        try:
+            if control not in {"ids_ips", "ddos"}:
+                raise SecurityError(
+                    "Supported remediation controls: ids_ips, ddos. NGFW and web-filter writes require validated contracts"
+                )
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            ne_pk = resolve_single_target(client, appliance_id)
+            # Plans require positive inventory evidence, including direct IDs.
+            if ne_pk not in {str(a.get("nePk")) for a in client.list_appliances(refresh=True)}:
+                raise SecurityError("Target is not present in the refreshed appliance inventory")
+            version = client.resolve_active_profile()
+            payload = (
+                client.call(version, IDS_STATE_READ)
+                if control == "ids_ips"
+                else client.appliance_api_call(version, ne_pk, DDOS_READ)
+            )
+            plan = prepare_security_plan(ne_pk, version, control, payload, mode, profile_name)
+            security_plans.put(plan)
+            record_security_event(
+                "prepare_security_remediation",
+                plan.write_operation,
+                ne_pk,
+                "prepared",
+                dry_run=True,
+                details=plan.public(),
+            )
+            return json_result({"dry_run": True, "plan": plan.public()}, settings.max_output_chars)
+        except Exception as error:
+            record_security_event("prepare_security_remediation", control, appliance_id, f"error: {error}")
+            return f"Error: {error}"
+
+
+    @mcp.tool()
+    def apply_security_remediation(plan_id: str, confirmation: str = "", confirm: bool = False) -> str:
+        """Apply a prepared snapshot once, with exact APPLY phrase and fresh conflict check; verify the complete desired configuration. An uncertain write must be verified, never blindly repeated."""
+        try:
+            plan = security_plans.get(plan_id)
+            with security_plans.scope_lock(plan), plan.lock:
+                if plan.status != "prepared":
+                    raise SecurityError(f"Security plan status is {plan.status}; only prepared plans can be applied")
+                if not confirm:
+                    return json_result({"dry_run": True, "plan": plan.public()}, settings.max_output_chars)
+                if confirmation != f"APPLY {plan.plan_id}":
+                    raise SecurityError("Confirmation phrase does not match this security plan")
+                guard = "security-disable" if plan.dangerous else plan.write_operation
+                require_writes(guard, execute=False)
+                if plan.dangerous and not settings.allow_dangerous_writes:
+                    raise SecurityError("Protection downgrade requires EC_ALLOW_DANGEROUS_WRITES=true")
+                client = require_client()
+                if client is None:
+                    return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+                if read_security_snapshot(client, plan) != plan.before:
+                    raise SecurityError(
+                        "Security configuration changed since preparation; conflict detected, prepare a new plan"
+                    )
+                record_security_event(
+                    "apply_security_remediation",
+                    plan.write_operation,
+                    plan.ne_pk,
+                    "attempt",
+                    before_write=True,
+                    details={
+                        "plan_id": plan_id,
+                        "before_sha256": fingerprint(plan.before),
+                        "candidate_sha256": fingerprint(plan.candidate),
+                    },
+                )
+                require_writes(guard)
+                plan.status = "apply_unknown"
+                try:
+                    payload = write_security_snapshot(client, plan, plan.candidate)
+                except Exception as error:
+                    record_security_event(
+                        "apply_security_remediation",
+                        plan.write_operation,
+                        plan.ne_pk,
+                        "apply_unknown",
+                        details={"plan_id": plan_id, "error": str(error)},
+                    )
+                    return json_result(
+                        {
+                            "applied": None,
+                            "verified": False,
+                            "error": str(error),
+                            "next_step": "verify_security_remediation; do not repeat this write",
+                            "plan": plan.public(),
+                        },
+                        settings.max_output_chars,
+                    )
+                plan.status = "applied"
+                result = {
+                    "applied": True,
+                    "verified": False,
+                    "result": payload,
+                    "enforcement_verified": False,
+                }
+                try:
+                    result["verified"] = read_security_snapshot(client, plan) == plan.candidate
+                    plan.status = "verified" if result["verified"] else "verification_failed"
+                except Exception as error:
+                    plan.status = "verification_failed"
+                    result["verification_error"] = str(error)
+                result["plan"] = plan.public()
+                record_security_event(
+                    "apply_security_remediation",
+                    plan.write_operation,
+                    plan.ne_pk,
+                    plan.status,
+                    details={"plan_id": plan_id, "verified": result["verified"]},
+                    response=result,
+                )
+                return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            record_security_event("apply_security_remediation", "apply", plan_id, f"error: {error}")
+            return f"Error: {error}"
+
+
+    @mcp.tool()
+    def verify_security_remediation(plan_id: str) -> str:
+        """Re-read full state, compare with the desired snapshot, and keep missing evidence unverified. After rollback compare with the original snapshot."""
+        try:
+            plan = security_plans.get(plan_id)
+            with security_plans.scope_lock(plan), plan.lock:
+                client = require_client()
+                if client is None:
+                    return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+                rolling_back = plan.status.startswith("rollback") or plan.status == "rolled_back"
+                expected = plan.before if rolling_back else plan.candidate
+                try:
+                    current = read_security_snapshot(client, plan)
+                    verified = plan.status != "prepared" and current == expected
+                    if plan.status != "prepared":
+                        plan.status = (
+                            ("rolled_back" if verified else "rollback_verification_failed")
+                            if rolling_back
+                            else ("verified" if verified else "verification_failed")
+                        )
+                    result = {
+                        "verified": verified,
+                        "observed_sha256": fingerprint(current),
+                        "plan": plan.public(),
+                        "enforcement_verified": False,
+                    }
+                except Exception as error:
+                    if plan.status != "prepared":
+                        plan.status = "rollback_verification_failed" if rolling_back else "verification_failed"
+                    result = {
+                        "verified": False,
+                        "verification_error": str(error),
+                        "plan": plan.public(),
+                        "enforcement_verified": False,
+                    }
+                record_security_event(
+                    "verify_security_remediation",
+                    plan.read_operation,
+                    plan.ne_pk,
+                    plan.status,
+                    details={"plan_id": plan_id, "verified": result["verified"]},
+                    response=result,
+                )
+                return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+
+    @mcp.tool()
+    def rollback_security_remediation(plan_id: str, confirmation: str = "", confirm: bool = False) -> str:
+        """Restore the full original snapshot only while current state equals this plan's candidate. Exact ROLLBACK phrase, write permission and dangerous-write permission are required."""
+        try:
+            plan = security_plans.get(plan_id)
+            with security_plans.scope_lock(plan), plan.lock:
+                if plan.status not in {
+                    "applied",
+                    "verified",
+                    "verification_failed",
+                    "apply_unknown",
+                }:
+                    raise SecurityError("Only an applied or uncertain security plan can be rolled back")
+                if not confirm:
+                    return json_result({"dry_run": True, "plan": plan.public()}, settings.max_output_chars)
+                if confirmation != f"ROLLBACK {plan.plan_id}":
+                    raise SecurityError("Rollback confirmation phrase does not match this security plan")
+                require_writes("security-rollback", execute=False)
+                if not settings.allow_dangerous_writes:
+                    raise SecurityError("Security rollback requires EC_ALLOW_DANGEROUS_WRITES=true")
+                client = require_client()
+                if client is None:
+                    return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+                if read_security_snapshot(client, plan) != plan.candidate:
+                    raise SecurityError(
+                        "Security state drifted or apply is incomplete; refusing to overwrite it during rollback"
+                    )
+                record_security_event(
+                    "rollback_security_remediation",
+                    plan.write_operation,
+                    plan.ne_pk,
+                    "attempt",
+                    before_write=True,
+                    details={
+                        "plan_id": plan_id,
+                        "restore_sha256": fingerprint(plan.before),
+                    },
+                )
+                require_writes("security-rollback")
+                plan.status = "rollback_unknown"
+                try:
+                    write_security_snapshot(client, plan, plan.before)
+                except Exception as error:
+                    record_security_event(
+                        "rollback_security_remediation",
+                        plan.write_operation,
+                        plan.ne_pk,
+                        "rollback_unknown",
+                        details={"plan_id": plan_id, "error": str(error)},
+                    )
+                    return json_result(
+                        {
+                            "rolled_back": None,
+                            "verified": False,
+                            "error": str(error),
+                            "plan": plan.public(),
+                        },
+                        settings.max_output_chars,
+                    )
+                result = {
+                    "rolled_back": True,
+                    "verified": False,
+                    "enforcement_verified": False,
+                }
+                try:
+                    result["verified"] = read_security_snapshot(client, plan) == plan.before
+                    plan.status = "rolled_back" if result["verified"] else "rollback_verification_failed"
+                except Exception as error:
+                    plan.status = "rollback_verification_failed"
+                    result["verification_error"] = str(error)
+                result["plan"] = plan.public()
+                record_security_event(
+                    "rollback_security_remediation",
+                    plan.write_operation,
+                    plan.ne_pk,
+                    plan.status,
+                    details={"plan_id": plan_id, "verified": result["verified"]},
+                    response=result,
+                )
+                return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            record_security_event("rollback_security_remediation", "rollback", plan_id, f"error: {error}")
+            return f"Error: {error}"
+
 
     @mcp.tool()
     def apply_change(
@@ -2657,27 +3325,46 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         verify_operation_id: str = "",
         confirm: bool = False,
     ) -> str:
-        """Apply a configuration change through the Orchestrator/Appliance API. Dry-run by default: without confirm=true it returns the exact method, path and body that would be executed. Effective permissions are those of the authenticated user. Use list_api_operations to discover available write operations and their required parameters. Some upstream endpoints accept array bodies declared as arrays in body_example; those are accepted here. Pass verify_operation_id (a GET operation) to read-after-write and fail loudly if the write left no trace. Upstream throttles writes (~10/min); on repeated write failures wait 60s before retrying."""
+        """Apply a configuration change through the Orchestrator/Appliance API. Dry-run by default: without confirm=true it returns the method, resolved path, query and body. Effective permissions are those of the authenticated user. Use list_api_operations to discover contracts. Catalog-declared array bodies are accepted. verify_operation_id must be a GET and is validated before writing; its result is a read-after-write observation, not a comparison with desired state. A failed read after a successful write returns applied=true plus read_after_write_error: do not repeat that write. Only confirmed writes consume the local write quota."""
         try:
-            require_writes(operation_id)
+            require_writes(operation_id, execute=False)
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
             operation = engine.resolve(version, operation_id)
-            if operation.method == "GET":
-                raise SecurityError("Use call_read_api for GET operations")
+            if is_read_only_operation(engine._profiles[version]["operations"][operation_id]):
+                raise SecurityError("Use call_read_api for read-only operations")
+            extras = {
+                **_parse_json_object(extra_path_params_json, "extra_path_params_json"),
+                **_parse_json_object(extra_query_params_json, "extra_query_params_json"),
+            }
             path_params, query_params = build_params(
                 version,
                 operation_id,
                 appliance_id,
                 group_id,
                 interface_name,
-                {
-                    **_parse_json_object(extra_path_params_json, "extra_path_params_json"),
-                    **_parse_json_object(extra_query_params_json, "extra_query_params_json"),
-                },
+                extras,
             )
+            operation = engine.resolve(version, operation_id, path_params)
+            verify_op = None
+            verify_path_params, verify_query_params = {}, {}
+            if verify_operation_id:
+                verify_op = engine.resolve(version, verify_operation_id)
+                if verify_op.method != "GET" or not is_read_only_operation(
+                    engine._profiles[version]["operations"][verify_operation_id]
+                ):
+                    raise SecurityError("verify_operation_id must be a GET operation")
+                verify_path_params, verify_query_params = build_params(
+                    version,
+                    verify_operation_id,
+                    appliance_id,
+                    group_id,
+                    interface_name,
+                    extras,
+                )
+                verify_op = engine.resolve(version, verify_operation_id, verify_path_params)
             body: dict | list | None = None
             if body_json.strip():
                 parsed = json.loads(body_json)
@@ -2697,12 +3384,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
             spec = engine._profiles[version]["operations"][operation_id]
             query_only_write = bool(spec.get("query_params")) and not spec.get("body_example")
-            if (
-                confirm
-                and operation.method in ("POST", "PUT", "PATCH")
-                and not body
-                and not query_only_write
-            ):
+            if confirm and operation.method in ("POST", "PUT", "PATCH") and not body and not query_only_write:
                 raise SecurityError(
                     "Refusing a confirmed write with an empty JSON body. "
                     "Discover the required schema or copy a known-good object before applying."
@@ -2714,9 +3396,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 )
             if confirm and operation_id == "appliance.deploymentpost567554":
                 guard_partial_deployment_body(body)
+            guard_cli_body(operation.path, body)
+            if confirm and security_write_guard(operation.path, operation.method, body, query_params):
+                require_writes("security-disable-or-DELETE", execute=False)
+            ne_pk = None
+            if operation_id.startswith("appliance.") or verify_operation_id.startswith("appliance."):
+                ne_pk = resolve_single_target(client, appliance_id)
+                if {"nePk", "url"} & extras.keys():
+                    raise SecurityError("Proxy routing parameters cannot be overridden")
             audit_entry = {
                 **operation_details(version, operation_id),
                 "resolved_path": operation.path,
+                "query": query_params,
                 "body": body,
                 "confirmed": confirm,
             }
@@ -2728,47 +3419,117 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             else:
                 audit_public_entry["body_keys"] = []
             if not confirm:
-                audit.record("apply_change", operation_id, operation.path, "dry-run", dry_run=True, details=audit_public_entry)
-                return json_result({"dry_run": True, "would_execute": audit_entry}, settings.max_output_chars)
-            if operation_id.startswith("appliance."):
-                ne_pk = resolve_ne_pk(client, appliance_id)
-                payload = client.appliance_api_call(
-                    version,
-                    ne_pk,
+                record_security_event(
+                    "apply_change",
                     operation_id,
-                    path_params=path_params,
-                    json_body=body,
-                    **query_params,
+                    operation.path,
+                    "dry-run",
+                    dry_run=True,
+                    details=audit_public_entry,
                 )
-            else:
-                payload = client.call(
-                    version,
-                    operation_id,
-                    path_params=path_params,
-                    json_body=body,
-                    **query_params,
+                return json_result(
+                    {"dry_run": True, "would_execute": audit_entry},
+                    settings.max_output_chars,
                 )
-            audit.record("apply_change", operation_id, operation.path, "ok", dry_run=False, details=audit_public_entry)
-            verification = None
-            if verify_operation_id:
-                verify_op = engine.resolve(version, verify_operation_id)
-                if verify_op.method != "GET":
-                    raise SecurityError("verify_operation_id must be a GET operation")
-                if verify_operation_id.startswith("appliance."):
-                    verify_ne_pk = resolve_ne_pk(client, appliance_id)
-                    verification = client.appliance_api_call(
-                        version, verify_ne_pk, verify_operation_id,
-                        path_params={}, **{},
+            record_security_event(
+                "apply_change",
+                operation_id,
+                operation.path,
+                "attempt",
+                before_write=True,
+                details=audit_public_entry,
+            )
+            require_writes(operation_id)
+            try:
+                if operation_id.startswith("appliance."):
+                    payload = client.appliance_api_call(
+                        version,
+                        ne_pk,
+                        operation_id,
+                        path_params=path_params,
+                        json_body=body,
+                        **query_params,
                     )
                 else:
-                    verification = client.call(version, verify_operation_id, path_params={})
-                audit.record("apply_change", verify_operation_id, verify_op.path, "read-after-write", dry_run=False)
-            return json_result({"applied": True, "result": payload, "read_after_write": verification}, settings.max_output_chars)
+                    payload = client.call(
+                        version,
+                        operation_id,
+                        path_params=path_params,
+                        json_body=body,
+                        **query_params,
+                    )
+            except Exception as error:
+                result = {
+                    "applied": None,
+                    "error": str(error),
+                    "write_status": "unknown",
+                    "next_step": "Read live state before preparing a new change; do not automatically repeat this write",
+                }
+                record_security_event(
+                    "apply_change",
+                    operation_id,
+                    operation.path,
+                    "write_unknown",
+                    response=result,
+                    details={"error": str(error)},
+                )
+                return json_result(result, settings.max_output_chars)
+            audit_error = record_security_event(
+                "apply_change",
+                operation_id,
+                operation.path,
+                "ok",
+                dry_run=False,
+                details=audit_public_entry,
+            )
+            result = {
+                "applied": True,
+                "result": payload,
+                "read_after_write": None,
+                "read_after_write_status": "not_requested",
+                "audit_error": audit_error,
+            }
+            if verify_op is not None:
+                try:
+                    if verify_operation_id.startswith("appliance."):
+                        result["read_after_write"] = client.appliance_api_call(
+                            version,
+                            ne_pk,
+                            verify_operation_id,
+                            path_params=verify_path_params,
+                            **verify_query_params,
+                        )
+                    else:
+                        result["read_after_write"] = client.call(
+                            version,
+                            verify_operation_id,
+                            path_params=verify_path_params,
+                            **verify_query_params,
+                        )
+                    result["read_after_write_status"] = "ok"
+                    record_security_event(
+                        "apply_change",
+                        verify_operation_id,
+                        verify_op.path,
+                        "read-after-write",
+                        dry_run=False,
+                    )
+                except Exception as error:
+                    result["read_after_write_status"] = "error"
+                    result["read_after_write_error"] = str(error)
+                    record_security_event(
+                        "apply_change",
+                        verify_operation_id,
+                        verify_op.path,
+                        "verification-error",
+                        details={"error": str(error)},
+                    )
+            return json_result(result, settings.max_output_chars)
         except json.JSONDecodeError as error:
-            audit.record("apply_change", operation_id, "", f"invalid body JSON: {error}")
+            record_security_event("apply_change", operation_id, "", f"invalid body JSON: {error}")
             return f"Invalid body_json: {error}"
         except Exception as error:
-            audit.record("apply_change", operation_id, "", f"error: {error}")
+            record_security_event("apply_change", operation_id, "", f"error: {error}")
             return f"Error: {error}"
 
     return mcp

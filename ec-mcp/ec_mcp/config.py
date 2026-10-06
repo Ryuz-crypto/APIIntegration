@@ -12,6 +12,8 @@ class Settings:
     orchestrator_username: str = ""
     orchestrator_password: str = ""
     verify_tls: bool = True
+    hpe_sse_api_token: str = ""
+    hpe_sse_api_url: str = "https://admin-api.axissecurity.com"
 
     ssh_enabled: bool = False
     ssh_host: str = ""
@@ -41,6 +43,8 @@ class Settings:
             orchestrator_username=os.environ.get("EC_ORCHESTRATOR_USER", ""),
             orchestrator_password=os.environ.get("EC_ORCHESTRATOR_PASSWORD", ""),
             verify_tls=os.environ.get("EC_VERIFY_TLS", "true").lower() != "false",
+            hpe_sse_api_token=os.environ.get("EC_HPE_SSE_API_TOKEN", ""),
+            hpe_sse_api_url=os.environ.get("EC_HPE_SSE_API_URL", "https://admin-api.axissecurity.com").rstrip("/"),
             ssh_enabled=os.environ.get("EC_SSH_ENABLED", "false").lower() == "true",
             ssh_host=os.environ.get("EC_SSH_HOST", ""),
             ssh_username=os.environ.get("EC_SSH_USER", ""),

@@ -32,6 +32,7 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = ["security: security posture, contracts and controlled remediation battery"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "S", "RUF"]

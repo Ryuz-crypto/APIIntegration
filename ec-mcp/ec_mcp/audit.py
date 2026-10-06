@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .security import redact_sensitive_values
+
 
 class AuditLog:
     def __init__(self, path: Path):
@@ -20,7 +22,7 @@ class AuditLog:
         dry_run: bool = False,
         details: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        entry = {
+        entry = redact_sensitive_values({
             "timestamp": datetime.now(UTC).isoformat(),
             "tool": tool,
             "action": action,
@@ -28,7 +30,7 @@ class AuditLog:
             "result": result,
             "dry_run": dry_run,
             "details": details or {},
-        }
+        })
         with self._path.open("a", encoding="utf-8") as log_file:
             log_file.write(json.dumps(entry) + "\n")
         return entry
