@@ -23,6 +23,16 @@ from .cli_catalog import (
 )
 from .compat import CompatibilityEngine, is_read_only_operation, load_profiles, render_path
 from .config import Settings
+from .edgeconnect_evidence import (
+    ENDPOINT_ASSOCIATIONS,
+    FLOW_DETAILS,
+    IPSLA_SETTINGS,
+    REMOTE_ENDPOINTS,
+    SERVICE_PROVIDERS,
+    bounded_id,
+    flow_evidence,
+    service_evidence,
+)
 from .hpe_sse import SSE_RESOURCES, SSEAdminClient
 from .orchestrator_client import OrchestratorClient
 from .overlay_workflow import (
@@ -2710,6 +2720,54 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return json_result({"providers": results}, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
+
+
+    @mcp.tool()
+    def get_service_orchestration_evidence(appliance_id: str, service_id: int) -> str:
+        """Read one Service Orchestration provider, endpoints, appliance association and IP SLA presence. No tunnel state or enforcement is inferred."""
+        try:
+            service_id = bounded_id(service_id, "service_id")
+            client = require_client()
+            if client is None:
+                raise ValueError("Orchestrator is not configured")
+            ne_pk = resolve_single_target(client, appliance_id)
+            version = client.resolve_active_profile()
+            result = service_evidence(
+                service_id,
+                ne_pk,
+                client.call(version, SERVICE_PROVIDERS),
+                client.call(version, REMOTE_ENDPOINTS, serviceId=service_id),
+                client.call(version, ENDPOINT_ASSOCIATIONS, serviceId=service_id),
+                client.call(version, IPSLA_SETTINGS, serviceId=service_id),
+            )
+            audit.record("get_service_orchestration_evidence", "read", ne_pk, "association_observed", details={"service_id": service_id})
+            return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_service_orchestration_evidence", "read", appliance_id, "not_observed")
+            reason = str(error) if isinstance(error, (ValueError, SecurityError)) else "Orchestrator read failed"
+            return json_result({"error": reason, "evidence_scope": "not_observed", "enforcement_verified": False}, settings.max_output_chars)
+
+
+    @mcp.tool()
+    def get_flow_evidence(appliance_id: str, flow_id: int, sequence: int) -> str:
+        """Read one flow detail via Orchestrator, allowing only known scalar fields in the output."""
+        try:
+            flow_id = bounded_id(flow_id, "flow_id")
+            sequence = bounded_id(sequence, "sequence")
+            client = require_client()
+            if client is None:
+                raise ValueError("Orchestrator is not configured")
+            ne_pk = resolve_single_target(client, appliance_id)
+            version = client.resolve_active_profile()
+            result = flow_evidence(ne_pk, flow_id, sequence, client.call(
+                version, FLOW_DETAILS, nePk=ne_pk, id=flow_id, seq=sequence,
+            ))
+            audit.record("get_flow_evidence", "read", ne_pk, result["evidence_scope"])
+            return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_flow_evidence", "read", appliance_id, "not_observed")
+            reason = str(error) if isinstance(error, (ValueError, SecurityError)) else "Orchestrator read failed"
+            return json_result({"error": reason, "evidence_scope": "not_observed", "enforcement_verified": False}, settings.max_output_chars)
 
 
     @mcp.tool()

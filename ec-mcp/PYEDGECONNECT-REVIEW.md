@@ -8,8 +8,8 @@ Revisión: 2026-10-06. Fuente: [SDK oficial `aruba/pyedgeconnect`](https://githu
 
 | Uso útil | Referencia del SDK | Estado en el MCP / decisión |
 |---|---|---|
-| EdgeConnect↔SSE | `get_service_orchestration_all_services`, `get_service_orchestration_remote_endpoints`, `get_service_orchestration_appliance_association`, labels, tunnel settings e IP SLA | Los GET ya existen en los cuatro perfiles; `get_sse_status` consulta integraciones específicas, pero falta un resumen **genérico** por servicio/`nePk` que cruce endpoint, label, asociación, túnel e IP SLA. Prioridad alta de lectura. |
-| Flujos NGFW | `EdgeConnect.get_appliance_flows`, `get_appliance_flow_details_verbose`, `get_appliance_security_policies` | `get_security_log` y la matriz de zonas no muestran todavía una correlación completa de Flow ID con detalle `/flow/flowDetails2` o `/flowDetails2`. Añadir lectura acotada por `nePk`, ID y secuencia, distinguiendo política configurada de decisión del flujo. |
+| EdgeConnect↔SSE | `get_service_orchestration_all_services`, `get_service_orchestration_remote_endpoints`, `get_service_orchestration_appliance_association`, labels, tunnel settings e IP SLA | `get_service_orchestration_evidence` consulta un servicio y un appliance y muestra asociación y endpoints con campos permitidos. No muestra configuraciones de túnel que pueden contener PSK ni verifica su estado. |
+| Flujos NGFW | `EdgeConnect.get_appliance_flows`, `get_appliance_flow_details_verbose`, `get_appliance_security_policies` | `get_flow_evidence` consulta un ID y secuencia en un `nePk` explícito. Extrae solo escalares conocidos; si el esquema es desconocido lo indica. Una acción observada en el detalle no verifica enforcement. Falta correlación con política, zonas y logs. |
 | Estadística por segundo | `Orchestrator.get_realtime_stats` consulta `POST /realtimeStats` | El perfil declara `orchestrator.realtime_stats519` como POST de consulta; el guard genérico del MCP lo trata como escritura. Si se necesita, crear un helper de solo lectura con cuerpo y tipo estrictamente permitidos, frecuencia y costo acotados; nunca abrir todos los POST declarados `risk=read`. El SDK señala retención de solo tres segundos en ECOS. |
 | Seguridad NGFW | `EdgeConnect.get_appliance_security_policy_map` y ejemplo CSV | El ejemplo muestra merge y que una regla con igual prioridad en el mismo par de zonas se sobrescribe. Utilizar para diseñar dry-run, snapshot completo, conflicto, verificación y rollback; no desbloquear escritura hasta comprobar contratos 9.3–9.6 y comportamiento real. |
 | ZTP/BIO/túneles | APIs de preconfig, overlays, deployment y túneles | El MCP ya tiene workflows controlados de overlay y ZTP e inventario de túneles. Tomar campos documentados como casos de QA; evitar reimplementar otro cliente REST. |
@@ -22,8 +22,8 @@ Los cuatro perfiles etiquetaban los POST `/flow/flowReset` y `/flow/flowReClassi
 
 ## Validación pendiente antes de ampliar el MCP
 
-1. En un laboratorio autorizado, obtener respuestas reales de `/thirdPartyServices/serviceOrchestration/*`, estados de túnel e IP SLA para 9.3–9.6, incluida una pareja HA y fallos parciales. Inspeccionar si las cadenas JSON escapadas de labels y tunnel settings varían por versión.
-2. Probar el detalle de flujo (`nePk`, ID y `seq`) y su relación con `securityMaps`, zonas y logs; acotar volumen y datos sensibles.
+1. En un laboratorio autorizado, contrastar el resumen de `/thirdPartyServices/serviceOrchestration/*` con respuestas reales 9.3–9.6, estados de túnel e IP SLA, incluida una pareja HA y fallos parciales. Inspeccionar las variaciones de etiquetas y ajustes serializados antes de ampliar los campos.
+2. Probar el detalle de flujo (`nePk`, ID y `seq`) y su relación con `securityMaps`, zonas y logs; validar nombres de campos por versión y ampliar solo los estrictamente necesarios.
 3. Verificar semántica y carga real de `POST /realtimeStats`, límites de polling, autenticación y fallos. Solo entonces exponer consulta dedicada.
 4. Mantener separadas las escrituras en Orchestrator y el `Commit` del tenant SSE; preparar plan, permisos, confirmación y reconciliación para ambos sistemas antes de automatizar aprovisionamiento.
 
