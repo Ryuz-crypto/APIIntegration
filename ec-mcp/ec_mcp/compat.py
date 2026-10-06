@@ -5,10 +5,26 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 
 class CompatibilityError(ValueError):
     pass
+
+
+# The vendor exposes this mutation as GET. HTTP method alone is not a permission.
+SIDE_EFFECTING_GET_PATHS = {"/ids/updateSignatureFromPortal"}
+
+
+def is_read_only_operation(operation: dict[str, Any]) -> bool:
+    path = operation["path"].split("?", 1)[0]
+    for prefix in ("/gms/rest", "/rest/json"):
+        path = path.removeprefix(prefix)
+    return (
+        operation["method"].upper() in {"GET", "HEAD"}
+        and operation.get("risk") not in {"write", "dangerous"}
+        and path not in SIDE_EFFECTING_GET_PATHS
+    )
 
 
 @dataclass(frozen=True)
@@ -50,9 +66,9 @@ class CompatibilityEngine:
         if operation is None:
             raise CompatibilityError(f"Operation '{operation_id}' is not available in API {version}")
         path = operation["path"]
-        for key, value in (path_params or {}).items():
-            path = path.replace("{" + key + "}", str(value))
         path = path.split("?", 1)[0]
+        if path_params is not None:
+            path = render_path(path, path_params)
         return ResolvedOperation(
             version=version,
             operation_id=operation_id,
@@ -73,9 +89,15 @@ def load_profiles(profiles_dir: Path) -> list[dict[str, Any]]:
 
 
 def render_path(path: str, params: dict[str, str]) -> str:
-    rendered = path
-    for key, value in params.items():
-        rendered = rendered.replace("{" + key + "}", str(value))
-    if re.search(r"\{[^}]+\}", rendered):
-        raise CompatibilityError(f"Missing path parameters in {rendered}")
-    return rendered
+    """Render OAS and Postman placeholders without allowing route injection."""
+
+    def replace(match: re.Match) -> str:
+        key = match.group(1) or match.group(2)
+        if key not in params or params[key] is None or str(params[key]) == "":
+            raise CompatibilityError(f"Missing path parameter '{key}'")
+        value = str(params[key])
+        if value in {".", ".."} or re.search(r"[/\\?#%\x00-\x1f\x7f]", value):
+            raise CompatibilityError(f"Unsafe path parameter '{key}'")
+        return quote(value, safe="")
+
+    return re.sub(r"\{([^}]+)\}|(?<=/):([A-Za-z_][A-Za-z0-9_]*)", replace, path)

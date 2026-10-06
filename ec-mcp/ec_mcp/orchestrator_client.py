@@ -9,8 +9,9 @@ from typing import Any
 
 import httpx
 
-from .compat import CompatibilityEngine, CompatibilityError, ResolvedOperation
+from .compat import CompatibilityEngine, CompatibilityError, ResolvedOperation, is_read_only_operation, render_path
 from .config import Settings
+from .security import redact_secrets, redact_sensitive_values
 
 logger = logging.getLogger("ec_mcp.orchestrator")
 
@@ -74,6 +75,11 @@ class OrchestratorClient:
         return f"{self._api_root}{path}"
 
     def get_raw(self, path: str, **query: Any) -> Any:
+        if not is_read_only_operation({"method": "GET", "path": path}):
+            raise CompatibilityError("Side-effecting GET requires the guarded write workflow")
+        if path.endswith("/appliance/rest") and query.get("url") and not is_read_only_operation({"method": "GET", "path": str(query["url"])}):
+            raise CompatibilityError("Side-effecting proxy GET requires the guarded write workflow")
+        path = render_path(path, {})
         key = self._cache_key(path, query)
         now = time.monotonic()
         cached = self._response_cache.get(key)
@@ -149,7 +155,7 @@ class OrchestratorClient:
         json_body: dict[str, Any] | list[Any] | None = None,
         **query: Any,
     ) -> dict[str, Any]:
-        resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params)
+        resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params or {})
         profile_api_root = self._profile_api_root(version)
         if resolved.path.startswith("/gms/"):
             api_root = ""
@@ -157,9 +163,9 @@ class OrchestratorClient:
             api_root = profile_api_root
         alt_api_root = "" if api_root else profile_api_root
         has_alt = api_root != alt_api_root
-        safe_read = resolved.method in {"GET", "HEAD"}
         label = f"{operation_id}"
         operation = self._engine._profiles[version]["operations"][operation_id]
+        safe_read = is_read_only_operation(operation)
         declared_query = set(operation.get("query_params") or [])
         allowed_query = {k: v for k, v in query.items() if v is not None and k in declared_query}
         dropped = sorted(set(query) - declared_query)
@@ -167,6 +173,9 @@ class OrchestratorClient:
             logger.debug("dropping undeclared query params for %s: %s", operation_id, dropped)
         started = time.monotonic()
         full_path = f"{api_root}{resolved.path}"
+        if not safe_read:
+            # A timeout may happen after the server applies a mutation.
+            self.invalidate_caches()
         response = self._client.request(
             resolved.method,
             full_path,
@@ -174,8 +183,6 @@ class OrchestratorClient:
             params=allowed_query,
             json=json_body,
         )
-        if not safe_read:
-            self.invalidate_caches()
         if response.status_code == 404 and has_alt and safe_read:
             retry_path = f"{alt_api_root}{resolved.path}"
             retry = self._client.request(
@@ -225,13 +232,14 @@ class OrchestratorClient:
         content_type = response.headers.get("content-type", "")
         if "json" in content_type:
             try:
-                body = response.json()
+                body = redact_sensitive_values(response.json())
                 detail = str(body.get("message") or body.get("error") or body)[:300]
             except Exception:
                 detail = response.text[:300]
         else:
             detail = re.sub(r"<[^>]+>", " ", response.text or "")
             detail = " ".join(detail.split())[:300]
+        detail = redact_secrets(detail, [self._api_key, getattr(getattr(self, "_settings", None), "orchestrator_password", "")])
         hint = ""
         if response.status_code == 400:
             hint = (" HTTP 400 = invalid or missing query parameters: check "
@@ -261,19 +269,13 @@ class OrchestratorClient:
             try:
                 data = self.get_raw(path)
                 if isinstance(data, dict):
-                    candidates = (
-                        data.get("appliances")
-                        or data.get("data")
-                        or data.get("result")
-                        or data.get("neStatus")
-                        or []
-                    )
+                    candidates = next((data[key] for key in ("appliances", "data", "result", "neStatus") if key in data), None)
                 else:
                     candidates = data
-                if isinstance(candidates, list) and candidates:
+                if isinstance(candidates, list):
                     data = candidates
                     break
-                last_error = RuntimeError(f"GET {path}: empty inventory response")
+                last_error = RuntimeError(f"GET {path}: unrecognized inventory response")
                 data = None
             except RuntimeError as error:
                 last_error = error
@@ -327,6 +329,10 @@ class OrchestratorClient:
         return appliances
 
     def appliance_api_get(self, ne_pk: str, appliance_path: str, **query: Any) -> dict[str, Any]:
+        if {"nePk", "url"} & query.keys():
+            raise CompatibilityError("Proxy routing parameters cannot be overridden")
+        if not is_read_only_operation({"method": "GET", "path": appliance_path}):
+            raise CompatibilityError("Side-effecting GET requires the guarded write workflow")
         if not appliance_path.startswith("/"):
             appliance_path = "/" + appliance_path
         return self.get_raw("/appliance/rest", nePk=ne_pk, url=appliance_path, **query)
@@ -341,9 +347,11 @@ class OrchestratorClient:
         **query: Any,
     ) -> Any:
         """Call an appliance-scoped API through the Orchestrator appliance proxy."""
-        resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params)
+        resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params or {})
         appliance_path = resolved.path if resolved.path.startswith("/") else f"/{resolved.path}"
         operation = self._engine._profiles[version]["operations"][operation_id]
+        if {"nePk", "url"} & query.keys():
+            raise CompatibilityError("Proxy routing parameters cannot be overridden")
         declared_query = set(operation.get("query_params") or [])
         allowed_query = {
             key: value
@@ -353,6 +361,8 @@ class OrchestratorClient:
         params = {"nePk": ne_pk, "url": appliance_path, **allowed_query}
         full_path = self._full_path("/appliance/rest")
         started = time.monotonic()
+        if not is_read_only_operation(operation):
+            self.invalidate_caches()
         response = self._client.request(
             resolved.method,
             full_path,
@@ -360,8 +370,6 @@ class OrchestratorClient:
             params=params,
             json=json_body,
         )
-        if resolved.method not in {"GET", "HEAD"}:
-            self.invalidate_caches()
         self._record_metric(operation_id, time.monotonic() - started, len(response.content), cache_hit=False)
         if response.status_code >= 400:
             raise RuntimeError(

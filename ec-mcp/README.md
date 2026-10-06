@@ -658,27 +658,33 @@ a reinicios del MCP. El rollback (deny + delete) requiere además
 `EC_ALLOW_DANGEROUS_WRITES=true`. No se permite adoptar un equipo ya
 aprobado ni enviar cuerpos vacíos.
 
-## Suite de seguridad y troubleshooting (4.0.0 estable)
+## Suite de seguridad y troubleshooting
 
-La versión `4.0.0` — ahora estable — añade herramientas curadas de solo lectura sobre el
-catálogo crudo, agrupadas por dominio:
+La referencia publicada sigue siendo **4.5.0 estable** en `release/4.5.0`. Los cambios de seguridad descritos aquí se implementan en `fix/operation-integrity-4.5` y se revisan en el [PR #38](https://github.com/Ryuz-crypto/APIIntegration/pull/38). El [informe y batería de seguridad](QA-SECURITY.md) incluye hallazgos, comandos de QA, procedimientos de remediación y la matriz pendiente de laboratorio.
 
-| Herramienta | Dominio | Descripción |
+| Herramienta | Dominio | Comportamiento de la rama de mejoras |
 |---|---|---|
-| `get_ids_ips_state(appliance_id)` | IDS/IPS | Postura IDS/IPS por equipo: modo (Off/IDS Only/IPS-Performant/IPS-Inline), perfil, activo o no. Acepta `all`. |
-| `get_ids_ips_events(appliance_id, start_time, end_time)` | IDS/IPS | Eventos de intrusión recientes para detección de incidentes. |
-| `get_zone_matrix(appliance_id)` | Zone matrix | Zonas, security maps con políticas zona↔zona por prioridad y **pares de zonas sin política explícita**. |
-| `get_ddos_status(appliance_id)` | DDoS | Threshold status y protection profiles por zona. |
-| `get_deployment_config(appliance_id)` | LAN/WAN | Modo de deployment, bandwidths e interfaces con addressing/labels/zones/firewall modes. |
-| `get_site_to_site_tunnels(appliance_id, include_third_party)` | Túneles | Estado de túneles site-to-site, bonded y de terceros/SSE (VGWs). |
-| `get_bgp_neighbors(appliance_id)` | Routing | Vecinos BGP con estado y sesiones BFD; acepta `all`. |
-| `get_sse_status(provider)` | SSE | Estado de integración SSE (Zscaler, Netskope, Axis Security/HPE SSE): conectividad y appliances asociados. `provider=all` o individual. |
-| `get_security_posture(appliance_id)` | Incidentes | Snapshot de una llamada: IDS/IPS + zone matrix + túneles por equipo, con lista priorizada de hallazgos (severidad high/medium/low). |
+| `get_ids_ips_state(appliance_id)` | IDS/IPS | Separa detección y prevención. Solo modos reconocidos; errores y contradicciones conservan evidencia desconocida. Acepta `all` y conserva resultados de los demás equipos ante un fallo. |
+| `get_ids_ips_events(appliance_id, start_time, end_time, limit)` | IDS/IPS | Eventos recientes; 1..1000 y truncación explícita. Los perfiles actuales no declaran ventanas temporales: si se proporcionan se rechazan antes del GET. |
+| `get_zone_matrix(appliance_id)` | NGFW/zonas | Matriz direccional, settings/acción por defecto, prioridades ambiguas, total de pares y truncación. Sin regla explícita requiere revisión, no demuestra un permiso. |
+| `get_ddos_status(appliance_id)` | DDoS | Thresholds y perfiles asignados; preserva zone 0, false y enable desconocido. No acredita mitigación efectiva. |
+| `get_security_log(appliance_id, log_type, date, lines)` | Firewall | Logs estructurados, acciones/Flow-ID/zonas/IPv6. Fecha validada y 1..1000 líneas. |
+| `get_deployment_config(appliance_id)` | LAN/WAN | Deployment, addressing/labels/zonas y firewall modes. |
+| `get_site_to_site_tunnels(appliance_id, include_third_party)` | Túneles | Túneles estándar, bonded y terceros/SSE; estados desconocidos se separan de down. |
+| `get_bgp_neighbors(appliance_id)` | Routing | Vecinos BGP/BFD; acepta `all`. |
+| `get_sse_status(provider)` | SSE | Conectividad y asociaciones Zscaler, Netskope y Axis; no observa la política URL/categoría. |
+| `get_web_filter_status(appliance_id, provider)` | Filtrado web, nueva | Asociación del target y conectividad del proveedor; política `not_observed` y `enforcement_verified=false`. |
+| `get_security_posture(appliance_id)` | Incidentes | IDS/IPS + DDoS + matriz/settings + túneles; fallos y huecos de evidencia generan hallazgos, nunca un cero que implique cobertura sana. |
+| `prepare_security_remediation(...)` | Remediación, nueva | Lee y conserva snapshots completos; IDS cambia un modo de un equipo, DDoS habilita un perfil existente asignado. Devuelve alcance, hashes y frases de confirmación. |
+| `apply_security_remediation(...)` | Remediación, nueva | Dry-run por defecto. Verifica snapshot fresco antes de escribir y compara la configuración completa después. Una respuesta perdida queda incierta y no se repite automáticamente. |
+| `verify_security_remediation(plan_id)` | Remediación, nueva | Vuelve a comprobar el estado completo; configuración coincidente no acredita enforcement en tráfico. |
+| `rollback_security_remediation(...)` | Remediación, nueva | Restaura el original solo si el estado actual aún coincide con el candidato; requiere frase exacta y ambos candados de escritura. |
 
-Todas son de solo lectura (`call_read_api`/`appliance_api_call`), sin
-dry-run ni confirmación. Para cambios de configuración de seguridad usa
-`apply_change` con las operaciones crudas (`orchestrator.idpsstateput`,
-`appliance.securitymapspost`, etc.) o los flujos transaccionales.
+Los helpers de lectura individual requieren un appliance explícito. Las escrituras rechazan `all`, selectores vacíos y nombres ambiguos. Los planes duran 10 minutos, son locales al proceso y no sobreviven a reinicios; conservar un backup externo antes de una prueba real. Los locks protegen las carreras dentro de ese proceso: la coordinación con otros operadores/instancias queda pendiente.
+
+`GET /ids/updateSignatureFromPortal` es una **escritura semántica**: se bloquea en rutas de lectura y verificadores; exige `apply_change(confirm=true)` y permisos de escritura. Los reemplazos IDS/DDoS soportados exigen el workflow. La escritura de políticas/settings NGFW y otros contratos de firmas/perfiles sin workflow validado queda bloqueada; el dry-run permite revisar el payload.
+
+La batería marcada `security` contiene **240 casos**; la suite completa contiene **440 pruebas**, con **223 nuevas** sobre la base de 217. Se ejecutan sin contactar dispositivos reales. No se ha comprobado aún bloqueo efectivo IDS/IPS/DDoS, filtrado web ni todos los contratos NGFW: ver [QA-SECURITY.md](QA-SECURITY.md).
 
 ## Mejoras de operación e inconsistencias en revisión
 
@@ -686,13 +692,13 @@ La base estable está en `release/4.5.0`. Los cambios de esta rama `fix/operatio
 
 | Corrección implementada | Comportamiento y validación |
 |---|---|
-| Una solicitud por escritura | POST/PUT/PATCH/DELETE no repiten una solicitud con respuesta 200/204 vacía ni prueban otra ruta ante 404. El fallback se conserva para GET/HEAD. |
+| Una solicitud por escritura | Las mutaciones POST/PUT/PATCH/DELETE y los GET con efectos de escritura no se repiten por respuesta vacía o 404. El fallback se conserva para lecturas seguras. |
 | Inventario actualizado | `refresh=True` evita ambas cachés; el inventario respeta el TTL y las escrituras invalidan las lecturas. Las respuestas se copian para impedir que el consumidor modifique la caché. |
 | Evidencia ZTP | `verified=true` exige tareas con `completionStatus=true` y `taskStatus=2`, inventario actualizado y salida de discovered. Errores, tareas vacías, fallidas o estados desconocidos conservan `verified=false`. |
 | Guardas CLI uniformes | SSH, `/cli`, `/cliMultiple` y broadcast validan caracteres y catálogo; comandos peligrosos requieren `EC_ALLOW_DANGEROUS_WRITES=true`. `run_show_api` conserva solo lectura. |
 | Preflight y cuota | `0` y `false` no desaparecen de los parámetros. Los dry-runs y verificadores rechazados no consumen cuota; solo las escrituras confirmadas la consumen en `apply_change`/CLI. |
 | Resultado posterior a escritura | El GET de comprobación se valida antes de escribir. Si falla después, la respuesta conserva `applied=true`, `read_after_write_status=error` y `read_after_write_error`; no repitas la escritura. Un GET exitoso es una observación, no una comparación con la configuración deseada. |
-| Auditoría y JSON | Secretos en campos y texto CLI se sanean antes de persistir o serializar. El JSON normal y truncado permanece válido. |
+| Auditoría y JSON | Secretos en campos, mensajes HTTP y texto CLI se sanean. En apply_change y remediaciones, la auditoría falla antes del intento de escritura o reporta audit_error después conservando el resultado real. El JSON normal y truncado permanece válido. |
 
 Los endpoints de escritura que antes dependían de fallback deben usar un contrato/ruta validado. Los estados ZTP desconocidos requieren comprobar el contrato del Orchestrator; no justifiquen repetir la adopción. Las nuevas pruebas usan transportes simulados y el flujo real de herramientas MCP; falta validar estos cambios en laboratorio antes de otra publicación estable.
 
@@ -729,12 +735,13 @@ Ejemplos de Nginx y systemd están en [`packaging/`](packaging/).
 ## Desarrollo y QA
 
 ```bash
-python -m pytest tests -q
+python -m pytest tests -m security -q
+python -m pytest tests -q --junitxml=reports/pytest.xml
 ruff check ec_mcp tests
 bandit -r ec_mcp -q
 ```
 
-CI ejecuta pruebas, smoke test MCP, Ruff, Bandit, pip-audit y gitleaks.
+CI ejecuta la suite completa con batería de seguridad, publica su informe JUnit y ejecuta smoke test MCP, Ruff, Bandit, pip-audit y gitleaks. La matriz de laboratorio y remediaciones está en [QA-SECURITY.md](QA-SECURITY.md).
 
 ## Licencia
 

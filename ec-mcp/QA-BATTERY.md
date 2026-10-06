@@ -1,5 +1,7 @@
 # Batería de QA y protocolo de diagnóstico — MCP `edgeconnect_mcp_6244`
 
+> Esta batería es histórica y contiene referencias de laboratorio de versiones anteriores. Para la revisión vigente de IDS/IPS, DDoS, filtrado web, NGFW y remediaciones usar [QA-SECURITY.md](QA-SECURITY.md); sus casos reales pendientes no se presentan como ejecutados.
+
 **Target**: rev. 8 (commit `35871af`, rama `vibe/edgeconnect-mcp-repairs-1fce9f`)
 **Orquestador**: HPE Aruba EdgeConnect 9.7.2.40591 · perfil API 9.6
 **Regla de oro**: los tests de datos se comparan contra el **valor vivo del endpoint directo**, nunca contra snapshots históricos (el "33" de Fase 1 es histórico; hoy el vivo manda).

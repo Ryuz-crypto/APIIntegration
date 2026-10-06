@@ -1,5 +1,7 @@
 # Protocolo completo de Q&A — EdgeConnect MCP (`edgeconnect_mcp_6244`)
 
+> Esta batería es histórica y contiene referencias de laboratorio de versiones anteriores. Para la revisión vigente de IDS/IPS, DDoS, filtrado web, NGFW y remediaciones usar [QA-SECURITY.md](QA-SECURITY.md); sus casos reales pendientes no se presentan como ejecutados.
+
 **Audiencia**: QA con acceso al conector MCP (sin acceso al repositorio).
 **Build esperada**: ec-mcp `2.0.0b1` — `orchestrator_info().build.package_version == 2.0.0b1` y `build.git_commit` presente y distinto de `unknown` (ver T0).
 **Orquestador de referencia**: HPE Aruba EdgeConnect 9.7.2.40591 · perfil 9.6 · 6 appliances (`1.NE, 0.NE, 2.NE, 3.NE, 14.NE, 4.NE`).

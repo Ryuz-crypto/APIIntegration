@@ -13,6 +13,8 @@ from ec_mcp.security_workflow import (
     validate_ids_mode,
 )
 
+pytestmark = pytest.mark.security
+
 IDS_STATE = {"data": {"mode": "IPS-Inline", "profile": "Default"}}
 
 ZONES = {"data": [{"name": "DATOS"}, {"name": "L2L1"}, {"name": "WAN_INET1"}]}
@@ -79,6 +81,8 @@ class FakeSecurityClient:
             return ZONES
         if operation_id == "appliance.securitymapsget832281":
             return SECURITY_MAPS
+        if operation_id == "appliance.securitymapssettingsget818893":
+            return {"defaultAction": "deny"}
         if operation_id == "appliance.thresholdstatusget574729":
             return DDOS_ROWS
         if operation_id == "appliance.protectionprofilesget574729":
