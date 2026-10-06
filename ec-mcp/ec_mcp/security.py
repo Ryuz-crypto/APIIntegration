@@ -106,7 +106,7 @@ ALLOWED_SHOW_PATTERNS = [
 SHELL_METACHARS = re.compile(r"[;&`|<>$\\]|\$\(|\|\||&&")
 CONTROL_OR_NON_ASCII = re.compile(r"[\x00-\x1f\x7f]|[^\x00-\x7f]")
 SECRET_PATTERNS = [
-    re.compile(r"(?i)(\b(?:password|passwd|md5password|secret|passphrase|psk)\s*[:=]\s*)\S+"),
+    re.compile(r"(?i)(\b(?:password|passwd|md5password|secret|passphrase|psk)\b(?:\s*[:=]\s*|\s+))(?:\"[^\"]*\"|'[^']*'|\S+)"),
     re.compile(r"(?i)(\bcommunity(?:\s+string)?\s+)(?!string\b)\S+"),
     re.compile(r"(?i)([\"'](?:password|passwd|md5Password|secret|passphrase|psk|userName)[\"']\s*:\s*[\"'])[^\"']*(?=[\"'])"),
 ]
@@ -149,6 +149,8 @@ def redact_sensitive_values(value):
         return redacted
     if isinstance(value, list):
         return [redact_sensitive_values(item) for item in value]
+    if isinstance(value, str):
+        return redact_secrets(value, [])
     return value
 
 DENIED_PATTERNS = [
@@ -183,6 +185,16 @@ def validate_show_command(command: str) -> str:
         if pattern.match(lowered):
             return normalized
     raise SecurityError(f"Command not in the read-only whitelist: {command}")
+
+
+def validate_cli_command(command: str) -> str:
+    """Validate one CLI command before catalog classification or transmission."""
+    normalized = command.strip()
+    if not normalized:
+        raise SecurityError("Empty command")
+    if CONTROL_OR_NON_ASCII.search(command) or SHELL_METACHARS.search(command):
+        raise SecurityError("Command contains forbidden characters")
+    return normalized
 
 
 def sanitize_output(text: str, max_chars: int) -> str:

@@ -154,7 +154,7 @@ No continúes si hay cambios locales sin respaldar. El instalador conserva `.env
 
 ### Mejoras de operación e inconsistencias
 
-La base estable integra las correcciones existentes del PR #37 y alinea paquete, README y CI en 4.5.0. Las siguientes mejoras se desarrollan por separado en `fix/operation-integrity-4.5`: evitar repetir escrituras ante respuestas vacías, verificar ZTP con evidencia completa e inventario fresco, aplicar los mismos controles CLI en todas las rutas y distinguir escritura aplicada de verificación fallida. El endurecimiento SSH/updater y las inconsistencias del dashboard continúan pendientes de esa línea de trabajo.
+La base estable integra las correcciones existentes del PR #37 y alinea paquete, README y CI en 4.5.0. Esta rama `fix/operation-integrity-4.5` implementa por separado las primeras mejoras: una sola solicitud por escritura, ZTP con evidencia completa e inventario fresco, controles CLI en todas las rutas, parámetros `0`/`false`, auditoría saneada y respuestas que distinguen escritura aplicada de verificación fallida. Estos cambios aún no forman parte de `release/4.5.0`. El endurecimiento SSH/updater y las inconsistencias del dashboard continúan pendientes de esa línea de trabajo.
 
 ### Validación y errores comunes
 

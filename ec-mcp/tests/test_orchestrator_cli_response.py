@@ -5,22 +5,21 @@ import pathlib
 import httpx
 
 from ec_mcp.compat import CompatibilityEngine, load_profiles
+from ec_mcp.config import Settings
 from ec_mcp.orchestrator_client import OrchestratorClient
 
 PROFILES = pathlib.Path(__file__).parent.parent / "ec_mcp" / "profiles"
 
 
 def _client_with_transport(handler) -> OrchestratorClient:
-    client = OrchestratorClient.__new__(OrchestratorClient)
-    client._engine = CompatibilityEngine(load_profiles(PROFILES))
-    client._api_root = "/gms/rest"
-    client._api_key = "test-token"
-    client._metrics = {}
-    client._client = httpx.Client(
+    http = httpx.Client(
         base_url="https://orchestrator.example",
         transport=httpx.MockTransport(handler),
     )
-    return client
+    return OrchestratorClient(
+        Settings(orchestrator_url="https://orchestrator.example", orchestrator_api_key="test-token"),
+        CompatibilityEngine(load_profiles(PROFILES)), http,
+    )
 
 
 def test_appliance_cli_proxy_returns_plain_text_without_json_decode_error():

@@ -30,7 +30,12 @@ from .overlay_workflow import (
     prepare_overlay_plan,
     select_overlay,
 )
-from .security import SecurityError, redact_secrets, redact_sensitive_values
+from .security import (
+    SecurityError,
+    redact_sensitive_values,
+    validate_cli_command,
+    validate_show_command,
+)
 from .security_workflow import (
     BFD_SESSIONS_READ,
     BGP_NEIGHBOR_READ,
@@ -140,11 +145,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return None
 
     DANGEROUS_OPERATION_PATTERN = re.compile(
-        r"(?i)reboot|suspend|delete|remove|wipe|factory|purge|halt|shutdown|decommission"
+        r"(?i)reboot|restart|reload|reset|erase|clear|suspend|delete|remove|wipe|factory|purge|halt|shutdown|decommission"
     )
     write_timestamps: deque[float] = deque()
 
-    def require_writes(operation: str = "") -> None:
+    def require_writes(operation: str = "", *, execute: bool = True) -> None:
         if not settings.allow_write_tools:
             raise SecurityError("Write tools are disabled (EC_ALLOW_WRITE_TOOLS != true)")
         if operation and DANGEROUS_OPERATION_PATTERN.search(operation):
@@ -153,6 +158,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     f"Operation '{operation}' is classified as dangerous and requires "
                     "EC_ALLOW_DANGEROUS_WRITES=true"
                 )
+        if not execute:
+            return
         now = time.monotonic()
         while write_timestamps and now - write_timestamps[0] > 60.0:
             write_timestamps.popleft()
@@ -174,7 +181,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         """
         text = json.dumps(redact_sensitive_values(payload), ensure_ascii=False, default=str)
         if len(text) <= max_chars:
-            return redact_secrets(text, []), False
+            return text, False
         budget = max_chars - 256
         if isinstance(payload.get("versions"), dict):
             shrunk = json.loads(text)
@@ -201,11 +208,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     body["page_size_adjusted"] = keep
                 trimmed_text = json.dumps(shrunk, ensure_ascii=False, default=str)
                 if len(trimmed_text) <= max_chars:
-                    return redact_secrets(trimmed_text, []), True
+                    return trimmed_text, True
         wrapper = {"truncated": True, "max_chars": max_chars}
         wrapper["hint"] = "Payload exceeded max_chars; reduce the result with fields/limit or raise max_chars."
-        wrapper["excerpt"] = redact_secrets(text, [])[: max(0, budget)]
-        return redact_secrets(json.dumps(wrapper, ensure_ascii=False, default=str), []), True
+        wrapper["excerpt"] = text[: max(0, budget)]
+        return json.dumps(wrapper, ensure_ascii=False, default=str), True
 
     def paginate_data(data: Any, offset: int, limit: int | None, fields: list[str]) -> tuple[dict, bool]:
         """Client-side pagination over a list payload, with explicit metadata."""
@@ -276,14 +283,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if alias not in source and source.get(canonical):
                 source[alias] = source[canonical]
         for name in operation.get("path_params", []):
-            value = source.get(name) or ""
-            if not value:
+            value = source.get(name)
+            if value is None or value == "":
                 raise SecurityError(f"Missing required path parameter '{name}' for operation '{operation_id}'")
-            path_params[name] = value
+            path_params[name] = str(value)
         for name in operation.get("query_params", []):
             value = source.get(name)
-            if value:
-                query_params[name] = str(value)
+            if value is not None and value != "":
+                query_params[name] = str(value).lower() if isinstance(value, bool) else str(value)
         return path_params, query_params
 
     def normalize_ne_pk(value: str) -> str:
@@ -603,7 +610,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         parsed = json.loads(raw)
         if not isinstance(parsed, dict):
             raise SecurityError(f"{name} must be a JSON object")
-        return {str(k): str(v) for k, v in parsed.items()}
+        return {str(k): v for k, v in parsed.items()}
 
     def classify_cli_command(command: str) -> str | None:
         lowered = command.strip().lower()
@@ -613,6 +620,27 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if lowered == entry or lowered.startswith(entry + " "):
                 return cli_risk_by_command[entry]
         return None
+
+    def validate_catalog_command(command: str) -> tuple[str, str]:
+        normalized = validate_cli_command(command)
+        risk = classify_cli_command(normalized)
+        if risk is None:
+            raise SecurityError("Command not in the official ECOS CLI catalog")
+        if risk == "read":
+            normalized = validate_show_command(normalized)
+        return normalized, risk
+
+    def guard_cli_body(path: str, body: Any) -> None:
+        if path not in {"/cli", "/cliMultiple", "/broadcastCli"}:
+            return
+        if not isinstance(body, dict):
+            raise SecurityError("CLI body must be a JSON object")
+        commands = body.get("commands") if path == "/cliMultiple" else [body.get("command")]
+        if not isinstance(commands, list) or not commands or not all(isinstance(c, str) for c in commands):
+            raise SecurityError("CLI body requires a non-empty command or commands list")
+        for command in commands:
+            normalized, _risk = validate_catalog_command(command)
+            require_writes(normalized, execute=False)
 
     @mcp.tool()
     def orchestrator_info() -> str:
@@ -1475,7 +1503,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     def run_show_api(command: str, appliance_id: str) -> str:
         """Run an official read-only ECOS show command through the Orchestrator appliance API."""
         try:
-            risk = classify_cli_command(command)
+            command, risk = validate_catalog_command(command)
             if risk != "read":
                 raise SecurityError(
                     "Only commands classified as read-only in the official ECOS CLI catalog are allowed"
@@ -1512,11 +1540,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         pool = ApplianceSshPool(settings)
         target = host or settings.ssh_host
         try:
-            risk = classify_cli_command(command)
-            if risk is None:
-                raise SecurityError(f"Command not in the official ECOS CLI catalog: {command}")
+            command, risk = validate_catalog_command(command)
             if risk == "write":
-                require_writes()
+                require_writes(command, execute=confirm)
                 if not confirm:
                     audit.record("run_cli_command", command, target, "dry-run", dry_run=True)
                     return json_result(
@@ -1820,6 +1846,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         break
         return rows
 
+    def _ztp_task_completed(task: dict[str, Any]) -> bool:
+        # taskStatus=2 is the completed state observed in the supported 9.6 contract.
+        return (
+            task.get("completionStatus") is True
+            and task.get("taskStatus") in (2, "2")
+            and not task.get("error")
+            and task.get("success") is not False
+        )
+
     @mcp.tool()
     def get_ztp_apply_status(preconfig_id: str) -> str:
         """Read the asynchronous preconfig apply task chain status (operation 254) for a ZTP adoption: per-task completion (Add Appliance, Appliance Info, Zones, license, deployment, Reboot, templates, overlays)."""
@@ -1833,7 +1868,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 preconfigId=preconfig_id,
             )
             tasks = _extract_status_tasks(payload)
-            pending = [t.get("name") for t in tasks if not t.get("completionStatus")]
+            pending = [t.get("name") for t in tasks if not _ztp_task_completed(t)]
             return json_result(
                 {
                     "preconfig_id": preconfig_id,
@@ -2056,7 +2091,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     )
                     tasks = _extract_status_tasks(tasks_payload)
                     if tasks:
-                        pending = [t.get("name") for t in tasks if not t.get("completionStatus")]
+                        pending = [t.get("name") for t in tasks if not _ztp_task_completed(t)]
                         tasks_summary = {
                             "checked": True,
                             "total": len(tasks),
@@ -2067,7 +2102,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     tasks_summary = {"checked": False, "error": str(error)}
             wanted = normalize_serial(plan.appliance_serial)
             inventory_match = None
-            for appliance in client.list_appliances():
+            for appliance in client.list_appliances(refresh=True):
                 if normalize_serial(appliance.get("serial_number", appliance.get("serial", ""))) == wanted:
                     inventory_match = {
                         "nePk": appliance.get("nePk"),
@@ -2081,9 +2116,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 for row in extract_discovered(_read_discovered(client, version))
             )
             tasks_done = bool(tasks_summary.get("checked") and not tasks_summary.get("pending"))
-            verified = bool(inventory_match and not still_discovered and (tasks_done or not tasks_summary.get("checked")))
+            verified = bool(
+                plan.status in {"applied", "verification_failed", "verified"}
+                and inventory_match and not still_discovered and tasks_done
+            )
             if verified and plan.status in {"applied", "verification_failed"}:
                 plan.status = "verified"
+                plan.health_check = {"inventory": inventory_match, "tasks": tasks_summary}
+                ztp_plans.put(plan)
+            elif not verified and plan.status == "verified":
+                plan.status = "verification_failed"
                 plan.health_check = {"inventory": inventory_match, "tasks": tasks_summary}
                 ztp_plans.put(plan)
             return json_result(
@@ -2657,9 +2699,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         verify_operation_id: str = "",
         confirm: bool = False,
     ) -> str:
-        """Apply a configuration change through the Orchestrator/Appliance API. Dry-run by default: without confirm=true it returns the exact method, path and body that would be executed. Effective permissions are those of the authenticated user. Use list_api_operations to discover available write operations and their required parameters. Some upstream endpoints accept array bodies declared as arrays in body_example; those are accepted here. Pass verify_operation_id (a GET operation) to read-after-write and fail loudly if the write left no trace. Upstream throttles writes (~10/min); on repeated write failures wait 60s before retrying."""
+        """Apply a configuration change through the Orchestrator/Appliance API. Dry-run by default: without confirm=true it returns the method, resolved path, query and body. Effective permissions are those of the authenticated user. Use list_api_operations to discover contracts. Catalog-declared array bodies are accepted. verify_operation_id must be a GET and is validated before writing; its result is a read-after-write observation, not a comparison with desired state. A failed read after a successful write returns applied=true plus read_after_write_error: do not repeat that write. Only confirmed writes consume the local write quota."""
         try:
-            require_writes(operation_id)
+            require_writes(operation_id, execute=False)
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
@@ -2667,17 +2709,29 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             operation = engine.resolve(version, operation_id)
             if operation.method == "GET":
                 raise SecurityError("Use call_read_api for GET operations")
+            extras = {
+                **_parse_json_object(extra_path_params_json, "extra_path_params_json"),
+                **_parse_json_object(extra_query_params_json, "extra_query_params_json"),
+            }
             path_params, query_params = build_params(
                 version,
                 operation_id,
                 appliance_id,
                 group_id,
                 interface_name,
-                {
-                    **_parse_json_object(extra_path_params_json, "extra_path_params_json"),
-                    **_parse_json_object(extra_query_params_json, "extra_query_params_json"),
-                },
+                extras,
             )
+            operation = engine.resolve(version, operation_id, path_params)
+            verify_op = None
+            verify_path_params, verify_query_params = {}, {}
+            if verify_operation_id:
+                verify_op = engine.resolve(version, verify_operation_id)
+                if verify_op.method != "GET":
+                    raise SecurityError("verify_operation_id must be a GET operation")
+                verify_path_params, verify_query_params = build_params(
+                    version, verify_operation_id, appliance_id, group_id, interface_name, extras,
+                )
+                verify_op = engine.resolve(version, verify_operation_id, verify_path_params)
             body: dict | list | None = None
             if body_json.strip():
                 parsed = json.loads(body_json)
@@ -2714,9 +2768,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 )
             if confirm and operation_id == "appliance.deploymentpost567554":
                 guard_partial_deployment_body(body)
+            guard_cli_body(operation.path, body)
+            ne_pk = None
+            if operation_id.startswith("appliance.") or verify_operation_id.startswith("appliance."):
+                ne_pk = resolve_ne_pk(client, appliance_id)
             audit_entry = {
                 **operation_details(version, operation_id),
                 "resolved_path": operation.path,
+                "query": query_params,
                 "body": body,
                 "confirmed": confirm,
             }
@@ -2730,8 +2789,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if not confirm:
                 audit.record("apply_change", operation_id, operation.path, "dry-run", dry_run=True, details=audit_public_entry)
                 return json_result({"dry_run": True, "would_execute": audit_entry}, settings.max_output_chars)
+            require_writes(operation_id)
             if operation_id.startswith("appliance."):
-                ne_pk = resolve_ne_pk(client, appliance_id)
                 payload = client.appliance_api_call(
                     version,
                     ne_pk,
@@ -2749,21 +2808,28 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     **query_params,
                 )
             audit.record("apply_change", operation_id, operation.path, "ok", dry_run=False, details=audit_public_entry)
-            verification = None
-            if verify_operation_id:
-                verify_op = engine.resolve(version, verify_operation_id)
-                if verify_op.method != "GET":
-                    raise SecurityError("verify_operation_id must be a GET operation")
-                if verify_operation_id.startswith("appliance."):
-                    verify_ne_pk = resolve_ne_pk(client, appliance_id)
-                    verification = client.appliance_api_call(
-                        version, verify_ne_pk, verify_operation_id,
-                        path_params={}, **{},
-                    )
-                else:
-                    verification = client.call(version, verify_operation_id, path_params={})
-                audit.record("apply_change", verify_operation_id, verify_op.path, "read-after-write", dry_run=False)
-            return json_result({"applied": True, "result": payload, "read_after_write": verification}, settings.max_output_chars)
+            result = {
+                "applied": True, "result": payload, "read_after_write": None,
+                "read_after_write_status": "not_requested",
+            }
+            if verify_op is not None:
+                try:
+                    if verify_operation_id.startswith("appliance."):
+                        result["read_after_write"] = client.appliance_api_call(
+                            version, ne_pk, verify_operation_id,
+                            path_params=verify_path_params, **verify_query_params,
+                        )
+                    else:
+                        result["read_after_write"] = client.call(
+                            version, verify_operation_id, path_params=verify_path_params, **verify_query_params,
+                        )
+                    result["read_after_write_status"] = "ok"
+                    audit.record("apply_change", verify_operation_id, verify_op.path, "read-after-write", dry_run=False)
+                except Exception as error:
+                    result["read_after_write_status"] = "error"
+                    result["read_after_write_error"] = str(error)
+                    audit.record("apply_change", verify_operation_id, verify_op.path, "verification-error", details={"error": str(error)})
+            return json_result(result, settings.max_output_chars)
         except json.JSONDecodeError as error:
             audit.record("apply_change", operation_id, "", f"invalid body JSON: {error}")
             return f"Invalid body_json: {error}"

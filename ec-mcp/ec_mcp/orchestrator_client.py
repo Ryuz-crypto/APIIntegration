@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import time
+from copy import deepcopy
 from typing import Any
 
 import httpx
@@ -22,6 +23,7 @@ class OrchestratorClient:
         self._engine = engine
         self._cached_profile: str | None = None
         self._appliances_cache: list[dict[str, Any]] | None = None
+        self._appliances_cached_at = 0.0
         self._response_cache: dict[tuple, tuple[float, Any]] = {}
         self._cache_ttl = float(getattr(settings, "api_cache_ttl", 30.0))
         self._cache_max_entries = 128
@@ -41,6 +43,11 @@ class OrchestratorClient:
 
     def close(self) -> None:
         self._client.close()
+
+    def invalidate_caches(self) -> None:
+        self._response_cache.clear()
+        self._appliances_cache = None
+        self._appliances_cached_at = 0.0
 
     def metrics(self) -> dict[str, dict[str, float]]:
         return self._metrics
@@ -72,7 +79,7 @@ class OrchestratorClient:
         cached = self._response_cache.get(key)
         if cached is not None and now - cached[0] < self._cache_ttl:
             self._record_metric(path, 0.0, 0, cache_hit=True)
-            return cached[1]
+            return deepcopy(cached[1])
         full_path = self._full_path(path)
         started = time.monotonic()
         response = self._client.get(full_path, headers=self._headers(), params={k: v for k, v in query.items() if v is not None})
@@ -94,7 +101,7 @@ class OrchestratorClient:
         if len(self._response_cache) >= self._cache_max_entries:
             oldest = min(self._response_cache, key=lambda k: self._response_cache[k][0])
             self._response_cache.pop(oldest, None)
-        self._response_cache[key] = (time.monotonic(), data)
+        self._response_cache[key] = (time.monotonic(), deepcopy(data))
         return data
 
     def _headers(self) -> dict[str, str]:
@@ -139,7 +146,7 @@ class OrchestratorClient:
         version: str,
         operation_id: str,
         path_params: dict[str, str] | None = None,
-        json_body: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | list[Any] | None = None,
         **query: Any,
     ) -> dict[str, Any]:
         resolved: ResolvedOperation = self._engine.resolve(version, operation_id, path_params)
@@ -150,6 +157,7 @@ class OrchestratorClient:
             api_root = profile_api_root
         alt_api_root = "" if api_root else profile_api_root
         has_alt = api_root != alt_api_root
+        safe_read = resolved.method in {"GET", "HEAD"}
         label = f"{operation_id}"
         operation = self._engine._profiles[version]["operations"][operation_id]
         declared_query = set(operation.get("query_params") or [])
@@ -166,7 +174,9 @@ class OrchestratorClient:
             params=allowed_query,
             json=json_body,
         )
-        if response.status_code == 404 and has_alt:
+        if not safe_read:
+            self.invalidate_caches()
+        if response.status_code == 404 and has_alt and safe_read:
             retry_path = f"{alt_api_root}{resolved.path}"
             retry = self._client.request(
                 resolved.method,
@@ -178,7 +188,7 @@ class OrchestratorClient:
             if retry.status_code < 400:
                 response = retry
                 full_path = retry_path
-        elif response.status_code < 400 and not response.content and has_alt:
+        elif response.status_code < 400 and not response.content and has_alt and safe_read:
             retry_path = f"{alt_api_root}{resolved.path}"
             retry = self._client.request(
                 resolved.method,
@@ -239,8 +249,12 @@ class OrchestratorClient:
         return f"Orchestrator returned HTTP {response.status_code} for {action}: {detail!r}.{hint}"
 
     def list_appliances(self, refresh: bool = False) -> list[dict[str, Any]]:
-        if self._appliances_cache is not None and not refresh:
-            return self._appliances_cache
+        fresh = time.monotonic() - getattr(self, "_appliances_cached_at", 0.0) < self._cache_ttl
+        if self._appliances_cache is not None and not refresh and fresh:
+            return deepcopy(self._appliances_cache)
+        self._appliances_cache = None
+        for path in ("/appliance", "/appliance/approved", "/neStatus"):
+            self._response_cache.pop(self._cache_key(path, {}), None)
         data: Any = None
         last_error: Exception | None = None
         for path in ("/appliance", "/appliance/approved", "/neStatus"):
@@ -291,8 +305,8 @@ class OrchestratorClient:
                     "software_version": item.get("softwareVersion") or item.get("currentSoftwareVersion"),
                     "ip": item.get("ipAddress") or item.get("managementIp") or item.get("ip"),
                     "site": item.get("site") or item.get("location") or item.get("siteName"),
-                    "state": item.get("state") or item.get("adminState"),
-                    "reachability": item.get("reachability") or item.get("neState"),
+                    "state": item.get("state") if item.get("state") is not None else item.get("adminState"),
+                    "reachability": item.get("reachability") if item.get("reachability") is not None else item.get("neState"),
                     "lan_ip": item.get("lanIp") or item.get("lanIPAddress") or item.get("dataIp"),
                     "wan_ips": [
                         value
@@ -308,7 +322,8 @@ class OrchestratorClient:
                     ],
                 }
             )
-        self._appliances_cache = appliances
+        self._appliances_cache = deepcopy(appliances)
+        self._appliances_cached_at = time.monotonic()
         return appliances
 
     def appliance_api_get(self, ne_pk: str, appliance_path: str, **query: Any) -> dict[str, Any]:
@@ -322,7 +337,7 @@ class OrchestratorClient:
         ne_pk: str,
         operation_id: str,
         path_params: dict[str, str] | None = None,
-        json_body: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | list[Any] | None = None,
         **query: Any,
     ) -> Any:
         """Call an appliance-scoped API through the Orchestrator appliance proxy."""
@@ -345,6 +360,8 @@ class OrchestratorClient:
             params=params,
             json=json_body,
         )
+        if resolved.method not in {"GET", "HEAD"}:
+            self.invalidate_caches()
         self._record_metric(operation_id, time.monotonic() - started, len(response.content), cache_hit=False)
         if response.status_code >= 400:
             raise RuntimeError(

@@ -680,15 +680,21 @@ dry-run ni confirmación. Para cambios de configuración de seguridad usa
 `apply_change` con las operaciones crudas (`orchestrator.idpsstateput`,
 `appliance.securitymapspost`, etc.) o los flujos transaccionales.
 
-## Mejoras de operación e inconsistencias en desarrollo
+## Mejoras de operación e inconsistencias en revisión
 
-La base estable 4.5.0 conserva los workflows MCP existentes. El roadmap ZTP de la UI administrativa sigue pendiente. La rama `fix/operation-integrity-4.5` inicia estas correcciones, con pruebas de regresión antes de integrarlas en otra publicación:
+La base estable está en `release/4.5.0`. Los cambios de esta rama `fix/operation-integrity-4.5` se revisan por separado y no forman parte de esa referencia. El roadmap ZTP de la UI administrativa sigue pendiente.
 
-- Evitar repetir POST/PUT/PATCH/DELETE ante una respuesta vacía o por fallback de rutas.
-- Verificar adopción ZTP solo con tareas confirmadas, inventario fresco y salida de discovered.
-- Aplicar validación de comandos y candado de operaciones peligrosas a SSH, `/cli`, `/cliMultiple` y broadcast.
-- Conservar valores de parámetros como `0`/`false` y distinguir una escritura aplicada de una comprobación posterior fallida.
-- Sanear el registro de auditoría antes de persistirlo.
+| Corrección implementada | Comportamiento y validación |
+|---|---|
+| Una solicitud por escritura | POST/PUT/PATCH/DELETE no repiten una solicitud con respuesta 200/204 vacía ni prueban otra ruta ante 404. El fallback se conserva para GET/HEAD. |
+| Inventario actualizado | `refresh=True` evita ambas cachés; el inventario respeta el TTL y las escrituras invalidan las lecturas. Las respuestas se copian para impedir que el consumidor modifique la caché. |
+| Evidencia ZTP | `verified=true` exige tareas con `completionStatus=true` y `taskStatus=2`, inventario actualizado y salida de discovered. Errores, tareas vacías, fallidas o estados desconocidos conservan `verified=false`. |
+| Guardas CLI uniformes | SSH, `/cli`, `/cliMultiple` y broadcast validan caracteres y catálogo; comandos peligrosos requieren `EC_ALLOW_DANGEROUS_WRITES=true`. `run_show_api` conserva solo lectura. |
+| Preflight y cuota | `0` y `false` no desaparecen de los parámetros. Los dry-runs y verificadores rechazados no consumen cuota; solo las escrituras confirmadas la consumen en `apply_change`/CLI. |
+| Resultado posterior a escritura | El GET de comprobación se valida antes de escribir. Si falla después, la respuesta conserva `applied=true`, `read_after_write_status=error` y `read_after_write_error`; no repitas la escritura. Un GET exitoso es una observación, no una comparación con la configuración deseada. |
+| Auditoría y JSON | Secretos en campos y texto CLI se sanean antes de persistir o serializar. El JSON normal y truncado permanece válido. |
+
+Los endpoints de escritura que antes dependían de fallback deben usar un contrato/ruta validado. Los estados ZTP desconocidos requieren comprobar el contrato del Orchestrator; no justifiquen repetir la adopción. Las nuevas pruebas usan transportes simulados y el flujo real de herramientas MCP; falta validar estos cambios en laboratorio antes de otra publicación estable.
 
 Pendientes posteriores: validación de host keys SSH, aislamiento del worker privilegiado de actualización, cobertura de contratos API y correcciones de unidades/riesgo por sitio y sesiones WebSocket del dashboard. 4.5.0 no declara resueltos estos hallazgos. La validación automatizada no sustituye una prueba de actualización en un servidor real ni certifica todos los endpoints del catálogo.
 
