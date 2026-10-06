@@ -273,7 +273,7 @@ Una variable ya presente en el proceso no es reemplazada por el archivo.
 
 | Variable | Predeterminado | Uso |
 |---|---|---|
-| `EC_HPE_SSE_API_TOKEN` | vacío | Token de solo lectura creado en Settings → Admin API de HPE SSE. Se configura por entorno o en el panel; nunca se envía en el resultado MCP. |
+| `EC_HPE_SSE_API_TOKEN` | vacío | Token creado en Settings → Admin API de HPE SSE; asigna los permisos mínimos disponibles en el tenant. Se configura por entorno o en el panel; nunca se envía en el resultado MCP. |
 | `EC_HPE_SSE_API_URL` | `https://admin-api.axissecurity.com` | Origen HTTPS del tenant, sin ruta ni credenciales. La verificación TLS está siempre activa e independiente de `EC_VERIFY_TLS`. |
 
 `get_hpe_sse_inventory(resource, page=1, page_size=50)` lee únicamente `web_categories`, `custom_ip_categories`, `ip_feed_categories`, `ssl_exclusions`, `locations`, `tunnels` y `health`. Requiere token SSE, pero no requiere acceso al Orchestrator. Para una primera lectura: `get_hpe_sse_inventory(resource="web_categories", page=1, page_size=50)`. El tamaño máximo por página es 100. El catálogo es global del tenant: una categoría configurada no demuestra que se aplique a un appliance ni que un bloqueo de navegación haya ocurrido. Ninguna herramienta SSE escribe o invoca `Commit`.

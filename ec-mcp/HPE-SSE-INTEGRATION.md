@@ -4,7 +4,7 @@ Fecha: 2026-10-06. Implementación de laboratorio en `fix/operation-integrity-4.
 
 La denominación “PyConnect” no identifica de forma unívoca el SDK. El paquete oficial [pyedgeconnect](https://github.com/aruba/pyedgeconnect) cubre Orchestrator y EdgeConnect SD-WAN, que este MCP ya consulta directamente. Para el componente HPE SSE/Axis, el SDK oficial es [pyhpesse](https://github.com/aruba/pyhpesse), versión 1.0.4 inspeccionada, [fuente de AdminApi](https://github.com/aruba/pyhpesse/blob/main/pyhpesse/adminapi.py) y [transporte](https://github.com/aruba/pyhpesse/blob/main/pyhpesse/common.py). Si el nombre alude a otro repositorio, verificarlo antes de extender este puente.
 
-`pyhpesse` usa un token bearer de Admin API y una URL base HTTPS (`https://admin-api.axissecurity.com` por defecto). Contiene operaciones de lectura y escritura para aplicaciones, conectores, categorías IP/web, exclusiones SSL, ubicaciones, túneles, usuarios y otros recursos, además de `Commit` para aplicar cambios. Algunas operaciones son de disponibilidad limitada. Una cuenta/rol SSE de solo lectura debe usarse para este puente; no se han añadido escrituras ni `Commit`.
+`pyhpesse` usa un token bearer de Admin API y una URL base HTTPS (`https://admin-api.axissecurity.com` por defecto). Contiene operaciones de lectura y escritura para aplicaciones, conectores, categorías IP/web, exclusiones SSL, ubicaciones, túneles, usuarios y otros recursos, además de `Commit` para aplicar cambios. Algunas operaciones son de disponibilidad limitada. Asignar al token los permisos mínimos que permita el tenant; confirmar si admite un rol de solo lectura. No se han añadido escrituras ni `Commit`.
 
 | Recurso MCP | Método `AdminApi` | GET admitido | Evidencia que entrega |
 |---|---|---|---|
