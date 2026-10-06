@@ -280,6 +280,8 @@ Una variable ya presente en el proceso no es reemplazada por el archivo.
 
 La referencia de operaciones es el SDK oficial [pyhpesse](https://github.com/aruba/pyhpesse) (v1.0.4 inspeccionada): sus métodos `AdminApi.get_webcategory`, `get_customipcategory`, `get_ipfeedcategory`, `get_sslexclusions`, `get_locations`, `get_tunnels` y `get_health` corresponden a las rutas GET permitidas. El adaptador usa el `httpx` existente en lugar de instalar el SDK: el helper de transporte del SDK desactiva avisos TLS globalmente y devuelve cuerpos sin elevar todos los errores HTTP. La integración valida código HTTP y errores de API, limita rutas/paginación, no sigue redirecciones y no registra tokens. Faltan lectura de políticas efectivas y logs de decisión de HPE SSE, correlación de appliance/location y validación con un tenant real. Si «PyConnect» se refiere a otra librería, confirmar el repositorio antes de ampliar el alcance.
 
+Para el plano SD-WAN, la [revisión de `pyedgeconnect`](PYEDGECONNECT-REVIEW.md) compara su API Orchestrator/ECOS con los perfiles y herramientas MCP. Prioriza una lectura unificada de Service Orchestration, detalle de flujos y estadísticas acotadas; documenta las validaciones necesarias antes de automatizar cambios de políticas o túneles.
+
 ### SSH opcional a appliances
 
 | Variable | Predeterminado | Uso |

@@ -6,7 +6,7 @@ La referencia estable sigue siendo **4.5.0**, rama `release/4.5.0`, commit `949b
 
 ## Resultado y límites
 
-La base de la rama tenía 217 pruebas. Se añadieron **238 pruebas**, para un total de **455**. El marcador `security` selecciona **255 casos**, incluyendo las 15 pruebas del puente HPE SSE. La batería usa herramientas MCP reales y `httpx.MockTransport`: inspecciona método, ruta, proxy, nePk, cabecera de autenticación, cuerpo y estado posterior. Los fixtures representan los contratos presentes en el catálogo y en el SDK SSE; todavía falta contrastarlos con respuestas reales del fabricante.
+La base de la rama tenía 217 pruebas. Se añadieron **242 pruebas**, para un total de **459**. El marcador `security` selecciona **259 casos**, incluyendo las 15 pruebas del puente HPE SSE y cuatro regresiones del catálogo de acciones de flujo. La batería usa herramientas MCP reales y `httpx.MockTransport`: inspecciona método, ruta, proxy, nePk, cabecera de autenticación, cuerpo y estado posterior. Los fixtures representan los contratos presentes en el catálogo y en las referencias SDK; todavía falta contrastarlos con respuestas reales del fabricante.
 
 | Campo | Interpretación |
 |---|---|

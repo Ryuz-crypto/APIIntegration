@@ -3875,10 +3875,9 @@
     "orchestrator.flowsreclassification240": {
       "method": "POST",
       "path": "/flow/flowReClassification",
-      "risk": "read",
+      "risk": "write",
       "source": "official-oas",
       "notes": [
-        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Reclassifies the flow(s)"
       ],
       "query_params": [
@@ -3895,10 +3894,9 @@
     "orchestrator.flowsreset241": {
       "method": "POST",
       "path": "/flow/flowReset",
-      "risk": "read",
+      "risk": "write",
       "source": "official-oas",
       "notes": [
-        "Read/query operation performed via POST with a JSON body (stats query, search or flow lookup). No configuration is changed \u2014 safe to execute without the write safeguard.",
         "Resets the flow(s)"
       ],
       "query_params": [
