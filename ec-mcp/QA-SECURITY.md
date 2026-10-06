@@ -6,7 +6,7 @@ La referencia estable sigue siendo **4.5.0**, rama `release/4.5.0`, commit `949b
 
 ## Resultado y límites
 
-La base de la rama tenía 217 pruebas. Se añadieron **223 pruebas**, para un total de **440**. El marcador `security` selecciona **240 casos**, incluyendo las 17 pruebas previas de workflows de seguridad. La batería usa herramientas MCP reales y `httpx.MockTransport`: inspecciona método, ruta, proxy, nePk, cabecera de autenticación, cuerpo y estado posterior. Los fixtures representan los contratos presentes en el catálogo; todavía falta contrastarlos con respuestas reales del fabricante.
+La base de la rama tenía 217 pruebas. Se añadieron **238 pruebas**, para un total de **455**. El marcador `security` selecciona **255 casos**, incluyendo las 15 pruebas del puente HPE SSE. La batería usa herramientas MCP reales y `httpx.MockTransport`: inspecciona método, ruta, proxy, nePk, cabecera de autenticación, cuerpo y estado posterior. Los fixtures representan los contratos presentes en el catálogo y en el SDK SSE; todavía falta contrastarlos con respuestas reales del fabricante.
 
 | Campo | Interpretación |
 |---|---|
@@ -142,7 +142,7 @@ Todos los casos siguientes están **pendientes de ejecución real**. Registrar c
 ## Trabajo restante
 
 1. Capturar contratos y evidencia de enforcement en laboratorio para IDS/IPS, DDoS y NGFW; contrastar los cuatro perfiles con versiones instaladas.
-2. Integrar lectura de políticas y decisiones del proveedor SSE. El catálogo cargado no expone contratos explícitos de filtrado URL/categoría; las cinco herramientas nuevas no certifican esa capacidad.
+2. Integrar lectura de políticas y decisiones del proveedor SSE. `get_hpe_sse_inventory` incorpora el inventario de categorías web/IP y exclusiones SSL del Admin API (contratos de `pyhpesse`), pero no observa qué política se aplica a un appliance ni los logs de decisión; el filtrado real sigue pendiente de laboratorio.
 3. Añadir workflows completos para políticas/settings NGFW, asignación de perfiles/firmas IDS y cambios DDoS distintos de habilitar un perfil existente. Se bloquea su escritura automática mientras falta esa validación.
 4. Resolver coordinación entre instancias/operadores y persistencia protegida de planes si se requieren remediaciones prolongadas.
 5. Continuar los hallazgos previos de host keys SSH, aislamiento del updater privilegiado e inconsistencias del dashboard. No se dan por cerrados por esta batería.

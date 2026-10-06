@@ -35,6 +35,8 @@ SETTINGS = (
     Setting("EC_ORCHESTRATOR_USER", "Orchestrator", "Usuario alternativo"),
     Setting("EC_ORCHESTRATOR_PASSWORD", "Orchestrator", "Password alternativo", "password", secret=True),
     Setting("EC_VERIFY_TLS", "Orchestrator", "Verificar TLS", "boolean", "true"),
+    Setting("EC_HPE_SSE_API_TOKEN", "HPE SSE", "API token SSE", "password", secret=True),
+    Setting("EC_HPE_SSE_API_URL", "HPE SSE", "Origen API SSE", "url", "https://admin-api.axissecurity.com"),
     Setting("EC_SSH_ENABLED", "SSH opcional", "Habilitar SSH", "boolean", "false", help="run_show_api no usa SSH."),
     Setting("EC_SSH_HOST", "SSH opcional", "Host SSH predeterminado"),
     Setting("EC_SSH_USER", "SSH opcional", "Usuario SSH"),
@@ -146,6 +148,10 @@ def _validate(setting: Setting, raw: object) -> str:
         value = value.rstrip("/")
     if setting.key == "EC_UPDATE_REPOSITORY" and not _REPOSITORY.fullmatch(value):
         raise ValueError("EC_UPDATE_REPOSITORY: usa owner/repository")
+    if setting.key == "EC_HPE_SSE_API_URL" and value:
+        parsed = urlparse(value)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment:
+            raise ValueError("EC_HPE_SSE_API_URL: usa un origen HTTPS sin ruta, credenciales ni query")
     if setting.key == "EC_UPDATE_BRANCH" and (not _BRANCH.fullmatch(value) or ".." in value):
         raise ValueError("EC_UPDATE_BRANCH: rama inválida")
     return value

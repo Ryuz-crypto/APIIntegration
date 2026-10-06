@@ -269,6 +269,17 @@ Una variable ya presente en el proceso no es reemplazada por el archivo.
 | `EC_ORCHESTRATOR_PASSWORD` | vacío | Con usuario | Contraseña del usuario del Orchestrator. |
 | `EC_VERIFY_TLS` | `true` | No | Verifica el certificado TLS. Usa `false` únicamente en un laboratorio controlado. |
 
+### HPE SSE Admin API (opcional)
+
+| Variable | Predeterminado | Uso |
+|---|---|---|
+| `EC_HPE_SSE_API_TOKEN` | vacío | Token de solo lectura creado en Settings → Admin API de HPE SSE. Se configura por entorno o en el panel; nunca se envía en el resultado MCP. |
+| `EC_HPE_SSE_API_URL` | `https://admin-api.axissecurity.com` | Origen HTTPS del tenant, sin ruta ni credenciales. La verificación TLS está siempre activa e independiente de `EC_VERIFY_TLS`. |
+
+`get_hpe_sse_inventory(resource, page=1, page_size=50)` lee únicamente `web_categories`, `custom_ip_categories`, `ip_feed_categories`, `ssl_exclusions`, `locations`, `tunnels` y `health`. Requiere token SSE, pero no requiere acceso al Orchestrator. Para una primera lectura: `get_hpe_sse_inventory(resource="web_categories", page=1, page_size=50)`. El tamaño máximo por página es 100. El catálogo es global del tenant: una categoría configurada no demuestra que se aplique a un appliance ni que un bloqueo de navegación haya ocurrido. Ninguna herramienta SSE escribe o invoca `Commit`.
+
+La referencia de operaciones es el SDK oficial [pyhpesse](https://github.com/aruba/pyhpesse) (v1.0.4 inspeccionada): sus métodos `AdminApi.get_webcategory`, `get_customipcategory`, `get_ipfeedcategory`, `get_sslexclusions`, `get_locations`, `get_tunnels` y `get_health` corresponden a las rutas GET permitidas. El adaptador usa el `httpx` existente en lugar de instalar el SDK: el helper de transporte del SDK desactiva avisos TLS globalmente y devuelve cuerpos sin elevar todos los errores HTTP. La integración valida código HTTP y errores de API, limita rutas/paginación, no sigue redirecciones y no registra tokens. Faltan lectura de políticas efectivas y logs de decisión de HPE SSE, correlación de appliance/location y validación con un tenant real. Si «PyConnect» se refiere a otra librería, confirmar el repositorio antes de ampliar el alcance.
+
 ### SSH opcional a appliances
 
 | Variable | Predeterminado | Uso |
@@ -673,6 +684,7 @@ La referencia publicada sigue siendo **4.5.0 estable** en `release/4.5.0`. Los c
 | `get_site_to_site_tunnels(appliance_id, include_third_party)` | Túneles | Túneles estándar, bonded y terceros/SSE; estados desconocidos se separan de down. |
 | `get_bgp_neighbors(appliance_id)` | Routing | Vecinos BGP/BFD; acepta `all`. |
 | `get_sse_status(provider)` | SSE | Conectividad y asociaciones Zscaler, Netskope y Axis; no observa la política URL/categoría. |
+| `get_hpe_sse_inventory(resource, page, page_size)` | HPE SSE Admin API | Inventario paginado de categorías web/IP, exclusiones SSL, ubicaciones, túneles y salud; independiente del Orchestrator. No observa decisiones ni enforcement. |
 | `get_web_filter_status(appliance_id, provider)` | Filtrado web, nueva | Asociación del target y conectividad del proveedor; política `not_observed` y `enforcement_verified=false`. |
 | `get_security_posture(appliance_id)` | Incidentes | IDS/IPS + DDoS + matriz/settings + túneles; fallos y huecos de evidencia generan hallazgos, nunca un cero que implique cobertura sana. |
 | `prepare_security_remediation(...)` | Remediación, nueva | Lee y conserva snapshots completos; IDS cambia un modo de un equipo, DDoS habilita un perfil existente asignado. Devuelve alcance, hashes y frases de confirmación. |

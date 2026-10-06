@@ -23,6 +23,7 @@ from .cli_catalog import (
 )
 from .compat import CompatibilityEngine, is_read_only_operation, load_profiles, render_path
 from .config import Settings
+from .hpe_sse import SSE_RESOURCES, SSEAdminClient
 from .orchestrator_client import OrchestratorClient
 from .overlay_workflow import (
     OverlayPlanStore,
@@ -2710,6 +2711,23 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except Exception as error:
             return f"Error: {error}"
 
+
+    @mcp.tool()
+    def get_hpe_sse_inventory(resource: str, page: int = 1, page_size: int = 50) -> str:
+        """Read HPE SSE Admin API inventory (web/IP categories, SSL exclusions, locations, tunnels, health). This does not establish applied web-filter policy or enforcement."""
+        try:
+            if resource not in SSE_RESOURCES:
+                raise ValueError(f"Unknown SSE resource; valid: {sorted(SSE_RESOURCES)}")
+            with SSEAdminClient(settings) as sse:
+                result = sse.read(resource, page, page_size)
+            audit.record("get_hpe_sse_inventory", "read", resource, "inventory_observed")
+            return json_result(result, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_hpe_sse_inventory", "read", resource, f"error: {error}")
+            return json_result(
+                {"resource": resource, "error": str(error), "evidence_scope": "not_observed", "enforcement_verified": False},
+                settings.max_output_chars,
+            )
 
     @mcp.tool()
     def get_web_filter_status(appliance_id: str, provider: str) -> str:
