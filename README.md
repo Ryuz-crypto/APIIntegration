@@ -8,6 +8,10 @@
 
 Plataforma para descubrir, consultar, visualizar y **conversar** con entornos **HPE Aruba Networking EdgeConnect SD-WAN** mediante sus APIs y su CLI ECOS.
 
+## Registro de bugs
+
+Todo bug detectado por personas o asistentes de IA se registra en [GitHub Issues](https://github.com/Ryuz-crypto/APIIntegration/issues), buscando duplicados primero. El número del issue (`#123`) es su **Bug ID** y se enlaza desde el PR de corrección. Usa la [plantilla de reporte](.github/ISSUE_TEMPLATE/bug_report.md), identifica si el hallazgo está reproducido o pendiente de validar y excluye secretos y datos sensibles. La regla provisional para cualquier IA que trabaje en el repositorio está en [AGENTS.md](AGENTS.md); el equipo podrá ampliarla con su criterio definitivo.
+
 | Componente | Qué hace | Documentación |
 | --- | --- | --- |
 | **DashboardAPI-EC** | Plataforma web: detecta la versión del Orchestrator, identifica capacidades y ensambla un dashboard con datos reales. Paquete `.deb` para Ubuntu, Python 3.12+. | [DashboardAPI-EC/README.md](DashboardAPI-EC/README.md) |
