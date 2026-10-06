@@ -698,7 +698,7 @@ Los helpers de lectura individual requieren un appliance explícito. Las escritu
 
 `GET /ids/updateSignatureFromPortal` es una **escritura semántica**: se bloquea en rutas de lectura y verificadores; exige `apply_change(confirm=true)` y permisos de escritura. Los reemplazos IDS/DDoS soportados exigen el workflow. La escritura de políticas/settings NGFW y otros contratos de firmas/perfiles sin workflow validado queda bloqueada; el dry-run permite revisar el payload.
 
-La batería marcada `security` contiene **240 casos**; la suite completa contiene **440 pruebas**, con **223 nuevas** sobre la base de 217. Se ejecutan sin contactar dispositivos reales. No se ha comprobado aún bloqueo efectivo IDS/IPS/DDoS, filtrado web ni todos los contratos NGFW: ver [QA-SECURITY.md](QA-SECURITY.md).
+El [CI de ec-mcp](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml) publica el conteo vigente de la suite completa. Las pruebas usan respuestas simuladas y no contactan dispositivos reales. No se ha comprobado aún bloqueo efectivo IDS/IPS/DDoS, filtrado web ni todos los contratos NGFW: ver [QA-SECURITY.md](QA-SECURITY.md).
 
 ## Mejoras de operación e inconsistencias en revisión
 
