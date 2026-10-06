@@ -5,13 +5,24 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PORT="${EC_MCP_PORT:-8000}"
-if [ "${1:-}" = "--port" ]; then
-  PORT="${2:-8000}"
-fi
-
 if [ ! -f .env ]; then
   echo "ERROR: no existe .env en $(pwd). Ejecuta primero ./scripts/install.sh" >&2
+  exit 1
+fi
+
+ENV_PORT="$(grep '^EC_MCP_PORT=' .env | tail -1 | cut -d= -f2- || true)"
+ENV_HOST="$(grep '^EC_MCP_HOST=' .env | tail -1 | cut -d= -f2- || true)"
+PORT="${EC_MCP_PORT:-${ENV_PORT:-8000}}"
+HOST="${EC_MCP_HOST:-${ENV_HOST:-0.0.0.0}}"
+if [ "${1:-}" = "--port" ]; then
+  PORT="${2:-}"
+fi
+if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+  echo "ERROR: el puerto MCP debe ser un número entre 1 y 65535." >&2
+  exit 1
+fi
+if ! [[ "$HOST" =~ ^[a-zA-Z0-9.:%-]+$ ]]; then
+  echo "ERROR: EC_MCP_HOST debe ser una dirección IP o un hostname sin espacios." >&2
   exit 1
 fi
 
@@ -33,7 +44,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=${PROJECT_DIR}
 Environment=EC_MCP_ENV_FILE=${PROJECT_DIR}/.env
-ExecStart=${PROJECT_DIR}/.venv/bin/ec-mcp http --host 0.0.0.0 --port ${PORT}
+ExecStart=${PROJECT_DIR}/.venv/bin/ec-mcp http --host ${HOST} --port ${PORT}
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

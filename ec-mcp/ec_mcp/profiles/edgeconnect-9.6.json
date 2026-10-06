@@ -27874,11 +27874,15 @@
       "risk": "write",
       "source": "postman",
       "notes": [
-        "Imported from Postman collection folder 'cluster'."
+        "Initialize an EdgeHA cluster from two approved appliances (primary + standby nePks). Live finding: EC-V scalar vrrpCompatible=false in 9.6; classic VRRP via POST /vrrp is the alternative when supported."
       ],
       "body_example": [
-        "string",
-        "string"
+        {
+          "nePk": "<primary-nePk>"
+        },
+        {
+          "nePk": "<standby-nePk>"
+        }
       ]
     },
     "get_all_roles_2": {

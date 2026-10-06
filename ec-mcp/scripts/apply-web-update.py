@@ -178,6 +178,15 @@ def restart_services(settings: dict[str, str]) -> None:
             run(["/usr/bin/systemctl", "restart", name], timeout=90)
 
 
+def install_package(project: Path, python: Path, owner: str) -> None:
+    command = [str(python), "-m", "pip", "install"]
+    lock = project / "requirements-stable.txt"
+    if lock.is_file():
+        command.extend(["-r", str(lock)])
+    command.extend(["-e", str(project)])
+    run_user(command, owner, timeout=600)
+
+
 def install_update(request: dict, settings: dict[str, str], state: Path) -> tuple[str, Path]:
     repository, branch, expected = validate_request(request, settings)
     project = Path(settings.get("EC_UPDATE_PROJECT_DIR") or Path.cwd()).resolve()
@@ -205,7 +214,7 @@ def install_update(request: dict, settings: dict[str, str], state: Path) -> tupl
         python = project / ".venv" / "bin" / "python"
         if not python.is_file():
             raise RuntimeError("No existe .venv/bin/python; ejecuta el instalador de ec-mcp.")
-        run_user([str(python), "-m", "pip", "install", "-e", str(project)], owner, timeout=600)
+        install_package(project, python, owner)
         run_user([str(python), "-m", "pytest", "tests", "-q"], owner, cwd=project, timeout=900)
         restart_services(settings)
     except Exception:
@@ -213,7 +222,7 @@ def install_update(request: dict, settings: dict[str, str], state: Path) -> tupl
             run_user(["/usr/bin/git", "-C", str(root), "reset", "--hard", previous], owner, timeout=90)  # nosec B607
             python = project / ".venv" / "bin" / "python"
             if python.is_file():
-                run_user([str(python), "-m", "pip", "install", "-e", str(project)], owner, timeout=600)
+                install_package(project, python, owner)
             restart_services(settings)
         raise
     finally:

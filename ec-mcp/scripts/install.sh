@@ -47,7 +47,7 @@ fi
 # shellcheck disable=SC1091
 source .venv/bin/activate
 pip install --upgrade pip >/dev/null
-pip install -e .
+pip install -r requirements-stable.txt -e .
 
 if [ -f .env ]; then
   echo "==> 3/5 .env ya existe: se conserva (borra .env para reconfigurar)"

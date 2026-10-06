@@ -1,7 +1,10 @@
 # ec-mcp — EdgeConnect SD-WAN MCP server
 
-**Versión estable: 4.0.0**  
-Línea de versiones: 2.0.0 → 3.0.0 → **4.0.0 (estable)**. La versión 4.0.0 consolida la suite de seguridad y troubleshooting, el catálogo de schemas de escritura (0 placeholders restantes) y las herramientas compuestas de diagnóstico. La línea 5.0 inicia en prebeta (`5.0.0b1`) sobre esta base.
+**Versión estable: 4.5.0**
+
+Línea de versiones: 2.0.0 → 3.0.0 → 4.0.0 → **4.5.0 (estable)**. Referencia fija: `release/4.5.0`; `main` contiene esta publicación. DashboardAPI-EC tiene versionado independiente (1.5.1).
+
+Esta entrega consolida lo existente, incluido el PR #37: creación ZTP con `preConfig`, denegación con el ID numérico descubierto y auditoría de cuerpos JSON tipo lista. Instala dependencias fijadas para runtime y QA; CI valida que la versión instalada, el código y `pyproject.toml` coincidan. Los esquemas del catálogo son referencias: algunos endpoints aún contienen placeholders y requieren validar el contrato antes de una escritura.
 
 `ec-mcp` conecta asistentes compatibles con Model Context Protocol (MCP) con
 HPE Aruba Networking EdgeConnect SD-WAN. Puede consultar el Orchestrator y los
@@ -23,7 +26,7 @@ catálogo ECOS por SSH.
 - Registro de auditoría JSONL y redacción de secretos.
 - Panel administrativo 3.0 para gestionar Orchestrators, editar todas las variables permitidas y aplicar cambios sin entrar por SSH.
 - Updater web con detección de GitHub público o privado, commit exacto, pruebas, respaldo y rollback.
-- Roadmap ZTP visible y bloqueado: `discover → template → adoptar → preview/diff → confirmar y aplicar`.
+- Workflows MCP transaccionales BIO/ZTP; la pestaña ZTP del panel aún muestra un roadmap y no implementa la adopción desde la UI.
 
 ## Herramientas MCP
 
@@ -57,14 +60,11 @@ usa SSH. `appliance_id` acepta nePk, nombre, IP o serial del appliance.
 ### 1. Clonar la versión estable
 
 ```bash
-git clone https://github.com/Ryuz-crypto/APIIntegration.git
-cd APIIntegration
-git checkout main
-cd ec-mcp
+git clone --branch release/4.5.0 https://github.com/Ryuz-crypto/APIIntegration.git
+cd APIIntegration/ec-mcp
 ```
 
-El checkout de `main` permite recibir futuras actualizaciones estables mediante
-`./scripts/update.sh --daemon`.
+La rama `release/4.5.0` identifica esta base estable. El updater web puede avanzar a `main` cuando apruebes un commit concreto; las mejoras en desarrollo usan una rama aparte.
 
 ### 2. Ejecutar el instalador
 
@@ -135,12 +135,12 @@ y la unidad sólo define `EC_MCP_ENV_FILE`.
 sudo apt update
 sudo apt install -y git python3-venv python3-pip
 
-git clone https://github.com/Ryuz-crypto/APIIntegration.git
+git clone --branch release/4.5.0 https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/ec-mcp
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-pip install -e .
+pip install -r requirements-stable.txt -e .
 
 cp .env.example .env
 chmod 600 .env
@@ -435,33 +435,100 @@ La última llamada debe devolver `applied: true`,
 
 ## Upgrade por terminal
 
-Usa este procedimiento si el panel no está disponible:
+Procedimiento para pasar de 2.x, 3.x, 4.0.0/betas anteriores a **4.5.0 estable**. Actualiza solamente el servidor MCP; no requiere cambiar firmware ni modificar configuración de red en los appliances. Sustituye `~/APIIntegration` por la ruta real de la instalación.
+
+### 1. Preparar y respaldar
+
+- Comprueba Python 3.12 o superior con `python3 --version`; si la `.venv` anterior usa una versión menor, crea una nueva con Python 3.12 antes de instalar.
+- Termina los planes BIO/ZTP pendientes. Los planes BIO y ZTP bulk viven en memoria y se pierden al reiniciar; los planes ZTP individuales solo persisten si configuraste `EC_ZTP_STATE_DIR`.
+- Si `git status --short` muestra cambios, respáldalos o haz un commit local antes de continuar. No uses `reset --hard` para resolverlos.
+- Mantén una ventana de mantenimiento. Guarda los puertos existentes y deja las escrituras deshabilitadas durante la validación.
 
 ```bash
 cd ~/APIIntegration
 git status --short
-git pull --ff-only origin main
-
-cd ec-mcp
-./scripts/install.sh --non-interactive
-./scripts/install_service.sh
-./scripts/install_admin_service.sh
-
-sudo systemctl daemon-reload
-sudo systemctl restart ec-mcp ec-mcp-admin
-./.venv/bin/python -c "import ec_mcp; print(ec_mcp.__version__)"
-git rev-parse HEAD
-sudo ss -lntp | grep -E ':(8000|9090)\\b'
+BACKUP_DIR="$HOME/ec-mcp-backups/$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
+git rev-parse HEAD > "$BACKUP_DIR/previous-commit.txt"
+git diff --binary > "$BACKUP_DIR/local-changes.patch"
+./ec-mcp/.venv/bin/python -m pip freeze --exclude-editable > "$BACKUP_DIR/requirements-before.txt"
+for item in .env .ec-admin.json .ec-admin-pass logs; do
+  if [ -e "ec-mcp/$item" ]; then cp -a "ec-mcp/$item" "$BACKUP_DIR/"; fi
+done
 ```
 
-No continúes con `git pull` si `git status --short` muestra cambios locales
-que todavía necesitas; respáldalos primero. Los instaladores preservan
-`.env`.
+Respalda además las rutas externas que uses para `EC_ADMIN_STORE`, `EC_ADMIN_PASSWORD_FILE`, `EC_MCP_AUDIT_LOG`, `EC_MCP_PROFILES_DIR`, `EC_ZTP_STATE_DIR` y `EC_UPDATE_STATE_DIR`. El respaldo contiene secretos: conserva permisos privados. Si usas systemd, guarda también las unidades y overrides locales en el respaldo.
+
+Para una instalación con ambos servicios, pausa el timer del updater y detén los servicios durante la instalación:
+
+```bash
+sudo systemctl stop ec-mcp-update.timer
+sudo systemctl stop ec-mcp ec-mcp-admin
+```
+
+Ejecuta únicamente los comandos de los servicios que ya existen. En stdio, cierra el cliente MCP; en instalaciones manuales, detén el proceso por su mecanismo habitual.
+
+### 2. Instalar la referencia estable
+
+```bash
+cd ~/APIIntegration
+git fetch origin
+git switch --detach origin/release/4.5.0
+cd ec-mcp
+./scripts/install.sh --non-interactive
+./.venv/bin/python -c "from ec_mcp import __version__; assert __version__ == '4.5.0'; print(__version__)"
+```
+
+El instalador conserva `.env` y usa `requirements-stable.txt` para instalar runtime y QA, incluido pytest. Revisa las claves nuevas de `.env.example` y añade solo las que falten; no reemplaces el archivo ni regeneres secretos, conexiones o puertos. La configuración del proceso/systemd prevalece sobre `.env`.
+
+| Instalación anterior | Revisión necesaria |
+|---|---|
+| 2.x o Python anterior a 3.12 | Actualizar Python/venv; comprobar `EC_MCP_ENV_FILE`, autenticación HTTP y variables actuales. |
+| 3.x y betas | Revisar overrides antiguos de systemd y claves duplicadas; el puerto del panel se toma de `EC_ADMIN_PORT`. |
+| 4.0.x | Mismo procedimiento; las pruebas y dependencias quedan instaladas y la identidad de versión deja de esperar `4.0.0b1`. |
+
+Las variables SSH vigentes son `EC_SSH_USER`, `EC_SSH_PASSWORD`, `EC_SSH_ENABLE_PASSWORD`, `EC_SSH_PORT` y `EC_SSH_AUTH_METHOD`. `EC_SSH_USERNAME`, `EC_SSH_PRIVATE_KEY`, `EC_SSH_STRICT_HOST_KEY`, `EC_SSH_KNOWN_HOSTS`, `EC_WRITE_DRY_RUN_DEFAULT` y `EC_WRITE_AUDIT_LOG` no son opciones implementadas; la ruta de auditoría es `EC_MCP_AUDIT_LOG`. SSH sigue deshabilitado por defecto.
+
+### 3. Reactivar y comprobar
+
+Si utilizas systemd, reinstala solo los servicios ya utilizados. Los scripts conservan los puertos de `.env`; `--port` cambia el puerto explícitamente.
+
+```bash
+./scripts/install_service.sh
+./scripts/install_admin_service.sh
+sudo systemctl daemon-reload
+sudo systemctl restart ec-mcp ec-mcp-admin
+systemctl --no-pager status ec-mcp ec-mcp-admin
+./.venv/bin/python -m pytest tests -q
+git rev-parse HEAD
+curl -fsS http://127.0.0.1:8000/health
+curl -I http://127.0.0.1:9090/login
+```
+
+Sustituye 8000/9090 por tus puertos. `/health` comprueba el transporte; valida también `orchestrator_info()`, `list_appliances()` y `run_show_api(command="show version", appliance_id="<nePk-real>")` desde el cliente. Confirma versión 4.5.0, inventario real, respuesta por API y funcionamiento del login del panel antes de habilitar escrituras. En stdio, reinicia el cliente MCP.
+
+### 4. Recuperar si falla
+
+Mantén los servicios detenidos si la instalación o sus pruebas fallan. Vuelve al commit guardado y reinstala sus dependencias. Usa el mismo `BACKUP_DIR` del primer paso:
+
+```bash
+cd ~/APIIntegration
+git switch --detach "$(cat "$BACKUP_DIR/previous-commit.txt")"
+cd ec-mcp
+./.venv/bin/python -m pip install -r "$BACKUP_DIR/requirements-before.txt" -e .
+# Restaura .env/configuración/estado únicamente si cambiaron durante la actualización.
+# Reinstala las unidades anteriores si ya reemplazaste los servicios systemd.
+sudo systemctl daemon-reload
+sudo systemctl restart ec-mcp ec-mcp-admin
+```
+
+Verifica de nuevo versión, transporte y conexión. Reactiva el timer del updater solo cuando el servidor esté validado. Para volver a seguir futuras publicaciones con Git, usa `git switch main` y avance rápido; el checkout separado de esta guía mantiene fija 4.5.0.
 
 ### Diagnóstico de acceso al panel
 
 ```bash
-grep -n '^EC_ADMIN_' .env
+grep -nE '^(EC_ADMIN_HOST|EC_ADMIN_PORT|EC_ADMIN_LOGIN_MAX_FAILURES|EC_ADMIN_LOGIN_WINDOW_SECONDS)=' .env
 sudo systemctl cat ec-mcp-admin
 sudo ss -lntp | grep -E ':(8080|9090)\\b'
 curl -I http://127.0.0.1:9090/login
@@ -613,18 +680,17 @@ dry-run ni confirmación. Para cambios de configuración de seguridad usa
 `apply_change` con las operaciones crudas (`orchestrator.idpsstateput`,
 `appliance.securitymapspost`, etc.) o los flujos transaccionales.
 
-## Objetivo ZTP de la línea 3.0
+## Mejoras de operación e inconsistencias en desarrollo
 
-La pestaña **ZTP** documenta el flujo que construiremos sobre esta base:
+La base estable 4.5.0 conserva los workflows MCP existentes. El roadmap ZTP de la UI administrativa sigue pendiente. La rama `fix/operation-integrity-4.5` inicia estas correcciones, con pruebas de regresión antes de integrarlas en otra publicación:
 
-```text
-discover → seleccionar template → validar parámetros → adoptar
-         → preview/diff → confirmar → aplicar → health check/rollback
-```
+- Evitar repetir POST/PUT/PATCH/DELETE ante una respuesta vacía o por fallback de rutas.
+- Verificar adopción ZTP solo con tareas confirmadas, inventario fresco y salida de discovered.
+- Aplicar validación de comandos y candado de operaciones peligrosas a SSH, `/cli`, `/cliMultiple` y broadcast.
+- Conservar valores de parámetros como `0`/`false` y distinguir una escritura aplicada de una comprobación posterior fallida.
+- Sanear el registro de auditoría antes de persistirlo.
 
-En `3.0.0b3` esas acciones están intencionalmente bloqueadas: esta entrega
-implementa la administración y el canal seguro de actualización, no activa aún
-la adopción ni el planchado de configuración.
+Pendientes posteriores: validación de host keys SSH, aislamiento del worker privilegiado de actualización, cobertura de contratos API y correcciones de unidades/riesgo por sitio y sesiones WebSocket del dashboard. 4.5.0 no declara resueltos estos hallazgos. La validación automatizada no sustituye una prueba de actualización en un servidor real ni certifica todos los endpoints del catálogo.
 
 ## Solución de problemas
 

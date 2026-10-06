@@ -21,7 +21,7 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-ENV_PORT="$(grep '^EC_ADMIN_PORT=' .env | tail -1 | cut -d= -f2-)"
+ENV_PORT="$(grep '^EC_ADMIN_PORT=' .env | tail -1 | cut -d= -f2- || true)"
 PORT="${CLI_PORT:-${EC_ADMIN_PORT:-${ENV_PORT:-8080}}}"
 if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
   echo "ERROR: EC_ADMIN_PORT debe ser un número entre 1 y 65535." >&2
@@ -43,7 +43,7 @@ fi
 PROJECT_DIR="$(pwd)"
 INSTALL_USER="$(stat -c %U "$PROJECT_DIR")"
 INSTALL_GROUP="$(id -gn "$INSTALL_USER")"
-STATE_DIR="$(grep '^EC_UPDATE_STATE_DIR=' .env | tail -1 | cut -d= -f2-)"
+STATE_DIR="$(grep '^EC_UPDATE_STATE_DIR=' .env | tail -1 | cut -d= -f2- || true)"
 STATE_DIR="${STATE_DIR:-/var/lib/ec-mcp-update}"
 set_env_value() {
   local key="$1" value="$2"

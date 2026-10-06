@@ -16,7 +16,7 @@ git pull --ff-only
 echo "==> Reinstalando"
 # shellcheck disable=SC1091
 source .venv/bin/activate
-pip install -e . >/dev/null
+pip install -r requirements-stable.txt -e . >/dev/null
 
 echo "==> Cargando .env y arrancando"
 pkill -f "ec-mcp http" 2>/dev/null || true

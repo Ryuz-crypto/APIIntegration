@@ -1,7 +1,7 @@
 # APIIntegration — EdgeConnect SD-WAN Platform
 
 [![DashboardAPI-EC](https://img.shields.io/badge/DashboardAPI--EC-1.5.1%20stable-2fbf9b)](DashboardAPI-EC/README.md)
-[![ec-mcp](https://img.shields.io/badge/ec--mcp-3.0.0b5%20MCP%20server-7B61FF)](ec-mcp/README.md)
+[![ec-mcp](https://img.shields.io/badge/ec--mcp-4.5.0%20stable-7B61FF)](ec-mcp/README.md)
 [![DashboardAPI-EC CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 [![ec-mcp CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
@@ -13,9 +13,9 @@ Plataforma para descubrir, consultar, visualizar y **conversar** con entornos **
 | **DashboardAPI-EC** | Plataforma web: detecta la versión del Orchestrator, identifica capacidades y ensambla un dashboard con datos reales. Paquete `.deb` para Ubuntu, Python 3.12+. | [DashboardAPI-EC/README.md](DashboardAPI-EC/README.md) |
 | **ec-mcp** | Servidor MCP (Model Context Protocol) para asistentes de IA (Claude Desktop, Le Chat, Cursor, ChatGPT): consulta la API REST del Orchestrator, ejecuta comandos `show ...` mediante la API del Orchestrator o SSH opcional, y aplica cambios con dry-run, whitelist y audit log. | [ec-mcp/README.md](ec-mcp/README.md) |
 
-## ec-mcp 3.0 — MCP y panel de administración web
+## ec-mcp 4.5 — MCP y panel de administración web
 
-Versión estable en `main`: **3.0.0b5**. Esta versión incorpora configuración web, updater desde GitHub y ejecución de comandos `show` mediante la API del Orchestrator. La referencia exhaustiva está en [ec-mcp/README.md](ec-mcp/README.md) y la plantilla completa en [ec-mcp/.env.example](ec-mcp/.env.example).
+Versión estable en `main`: **4.5.0**. La referencia fija de esta entrega es la rama `release/4.5.0`. Consolida configuración web, suite de seguridad y troubleshooting, workflows transaccionales BIO/ZTP y las correcciones del PR #37: `preConfig` al crear preconfiguraciones, ID numérico al denegar ZTP y auditoría de cuerpos JSON tipo lista. DashboardAPI-EC conserva su versión independiente **1.5.1**. La referencia exhaustiva está en [ec-mcp/README.md](ec-mcp/README.md) y la plantilla completa en [ec-mcp/.env.example](ec-mcp/.env.example).
 
 > **Regla principal:** `ec-mcp/.env` es la única fuente de configuración. No dupliques las credenciales del Orchestrator en el JSON del cliente MCP ni declares `EC_ADMIN_PORT` o `EC_ADMIN_PASSWORD` directamente en systemd. Cada variable debe aparecer una sola vez en `.env`.
 
@@ -27,7 +27,7 @@ Requiere Ubuntu/Debian con Python 3.12 o superior:
 sudo apt update
 sudo apt install -y git python3 python3-venv python3-pip curl
 
-git clone https://github.com/Ryuz-crypto/APIIntegration.git
+git clone --branch release/4.5.0 https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/ec-mcp
 ./scripts/install.sh --non-interactive
 
@@ -47,18 +47,14 @@ EC_VERIFY_TLS=true
 
 # SSH permanece deshabilitado si sólo usarás el API del Orchestrator.
 EC_SSH_ENABLED=false
-EC_SSH_USERNAME=
+EC_SSH_USER=
 EC_SSH_PASSWORD=  # gitleaks:allow
-EC_SSH_PRIVATE_KEY=
 EC_SSH_PORT=22
-EC_SSH_STRICT_HOST_KEY=true
-EC_SSH_KNOWN_HOSTS=
 
 # Escrituras deshabilitadas hasta habilitarlas expresamente.
 EC_ALLOW_WRITE_TOOLS=false
 EC_ALLOW_DANGEROUS_WRITES=false
-EC_WRITE_DRY_RUN_DEFAULT=true
-EC_WRITE_AUDIT_LOG=/var/log/ec-mcp/write-audit.jsonl
+EC_MCP_AUDIT_LOG=logs/mcp-audit.jsonl
 
 # Transporte MCP remoto. Genera un token aleatorio para producción.
 EC_MCP_AUTH_TOKEN=  # gitleaks:allow; genera un token aleatorio
@@ -132,25 +128,33 @@ No coloques `EC_ORCHESTRATOR_API_KEY`, contraseñas ni tokens directamente en es
 
 Para un conector remoto usa `https://TU-HOST/mcp` y el Bearer token definido en `EC_MCP_AUTH_TOKEN`. La publicación TLS/ZTNA/nginx está explicada en [ec-mcp/README.md](ec-mcp/README.md).
 
-### Upgrade por terminal
+### Actualizar servidores anteriores a 4.5.0
+
+Aplica a instalaciones 2.x, 3.x y 4.0.x. Usa Python 3.12+, termina las operaciones ZTP/BIO en curso y respalda `.env`, configuración administrativa, logs y estado ZTP antes de reiniciar. La guía con respaldo, comprobaciones y recuperación está en [Upgrade por terminal](ec-mcp/README.md#upgrade-por-terminal).
+
+Con el checkout limpio, actualiza a la referencia estable:
 
 ```bash
 cd ~/APIIntegration
 git status --short
-git pull --ff-only origin main
-
+git fetch origin
+git switch --detach origin/release/4.5.0
 cd ec-mcp
 ./scripts/install.sh --non-interactive
+# Solo si ya utilizas estos servicios; conserva los puertos de .env.
 ./scripts/install_service.sh
 ./scripts/install_admin_service.sh
-
 sudo systemctl daemon-reload
 sudo systemctl restart ec-mcp ec-mcp-admin
-./.venv/bin/python -c "import ec_mcp; print(ec_mcp.__version__)"
+./.venv/bin/python -c "import ec_mcp; assert ec_mcp.__version__ == '4.5.0'; print(ec_mcp.__version__)"
 git rev-parse HEAD
 ```
 
-Si `git status --short` muestra cambios locales, respáldalos antes del `pull`; no los descartes automáticamente.
+No continúes si hay cambios locales sin respaldar. El instalador conserva `.env` e instala las dependencias fijadas en `requirements-stable.txt`, incluidas las herramientas de QA; no copia encima la plantilla. Para instalaciones stdio, reinicia el cliente MCP al terminar. No se requiere actualizar firmware del Orchestrator ni de los appliances.
+
+### Mejoras de operación e inconsistencias
+
+La base estable integra las correcciones existentes del PR #37 y alinea paquete, README y CI en 4.5.0. Las siguientes mejoras se desarrollan por separado en `fix/operation-integrity-4.5`: evitar repetir escrituras ante respuestas vacías, verificar ZTP con evidencia completa e inventario fresco, aplicar los mismos controles CLI en todas las rutas y distinguir escritura aplicada de verificación fallida. El endurecimiento SSH/updater y las inconsistencias del dashboard continúan pendientes de esa línea de trabajo.
 
 ### Validación y errores comunes
 

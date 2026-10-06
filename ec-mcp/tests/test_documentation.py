@@ -1,4 +1,4 @@
-"""Regression tests for the public ec-mcp 3.0 installation documentation."""
+"""Regression tests for the public ec-mcp stable installation documentation."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ ENV_EXAMPLE = (REPO_ROOT / "ec-mcp" / ".env.example").read_text(encoding="utf-8"
 
 
 def _ec_mcp_root_section() -> str:
-    start = ROOT_README.index("## ec-mcp 3.0")
+    start = ROOT_README.index("## ec-mcp 4.5")
     end = ROOT_README.index("\n---\n\n## DashboardAPI-EC", start)
     return ROOT_README[start:end]
 
@@ -19,7 +19,7 @@ def _ec_mcp_root_section() -> str:
 def test_root_readme_uses_env_file_as_single_source() -> None:
     section = _ec_mcp_root_section()
 
-    assert "3.0.0b3" in section
+    assert "4.5.0" in section
     assert '"EC_MCP_ENV_FILE"' in section
     assert '"EC_ORCHESTRATOR_API_KEY"' not in section
     assert "./scripts/install_admin_service.sh --port 9090" in section

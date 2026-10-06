@@ -3,9 +3,13 @@ on:
   push:
     paths:
       - "ec-mcp/**"
+      - ".github/workflows/ec-mcp.yml"
+      - "README.md"
   pull_request:
     paths:
       - "ec-mcp/**"
+      - ".github/workflows/ec-mcp.yml"
+      - "README.md"
 
 jobs:
   test:
@@ -21,16 +25,24 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install package
-        run: pip install -e . pytest pytest-asyncio
+        run: pip install -r requirements-stable.txt -e .
       - name: Verify stable package identity
-        run: python -c "from ec_mcp import __version__; assert __version__ == \"4.0.0b1\""
+        run: |
+          python - <<'PY'
+          import tomllib
+          from importlib.metadata import version
+          from pathlib import Path
+          from packaging.version import Version
+          from ec_mcp import __version__
+          declared = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          assert version("ec-mcp") == __version__ == declared
+          assert not Version(declared).is_prerelease and not Version(declared).is_devrelease
+          PY
       - name: Lint (ruff)
         run: |
-          pip install ruff
           ruff check ec_mcp tests scripts/apply-web-update.py
       - name: Security lint (bandit)
         run: |
-          pip install bandit
           bandit -r ec_mcp scripts/apply-web-update.py -q
       - name: Run tests
         run: python -m pytest tests -q
@@ -63,5 +75,5 @@ jobs:
           python-version: "3.12"
       - name: Install and audit dependencies
         run: |
-          pip install -e . pip-audit
+          pip install -r requirements-stable.txt -e . pip-audit
           pip-audit --skip-editable
