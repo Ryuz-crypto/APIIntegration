@@ -188,18 +188,35 @@ def summarize_zone_matrix(zones_payload: Any, maps_payload: Any) -> dict[str, An
 
 
 def summarize_ddos(payload: Any) -> dict[str, Any]:
-    """Summarize DDoS protection/threshold status rows per zone."""
+    """Summarize DDoS protection/threshold status rows per zone.
+
+    Handles both the flat row shapes (zoneId/status) and the protectionProfile
+    payload (profiles[] + profileMaps[] with zone_id/profile_name), live-validated
+    on Orchestrator 9.7 where the POST/GET payloads use snake_case keys.
+    """
     rows = extract_rows(payload)
+    zones = [
+        {
+            "zoneId": row.get("zoneId") or row.get("zone"),
+            "status": row.get("status") or row.get("thresholdStatus"),
+            "profile": row.get("profileName") or row.get("protectionProfile"),
+        }
+        for row in rows
+    ]
+    profile_maps = []
+    if isinstance(payload, dict):
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+        for mapping in data.get("profileMaps") or []:
+            if isinstance(mapping, dict) and mapping.get("profile_name"):
+                profile_maps.append(
+                    {
+                        "zoneId": mapping.get("zone_id"),
+                        "profile": mapping.get("profile_name"),
+                    }
+                )
     return {
-        "zones_checked": len(rows),
-        "zones": [
-            {
-                "zoneId": row.get("zoneId") or row.get("zone"),
-                "status": row.get("status") or row.get("thresholdStatus"),
-                "profile": row.get("profileName") or row.get("protectionProfile"),
-            }
-            for row in rows
-        ],
+        "zones_checked": max(len(rows), len(profile_maps)),
+        "zones": zones or profile_maps,
     }
 
 
