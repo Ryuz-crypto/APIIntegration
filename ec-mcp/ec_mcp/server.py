@@ -32,6 +32,29 @@ from .overlay_workflow import (
     select_overlay,
 )
 from .security import SecurityError, redact_secrets, redact_sensitive_values
+from .telemetry_workflow import (
+    APPLIANCE_DISK_USAGE_READ,
+    APPLIANCE_DISKS_READ,
+    APPLIANCE_FLOW_BANDWIDTH_STATS_READ,
+    APPLIANCE_HEALTH_READ,
+    APPLIANCE_REALTIME_STATS_READ,
+    APPLIANCE_SYSTEM_INFO_READ,
+    ORCHESTRATOR_APPLIANCE_PERFORMANCE_READ,
+    ORCHESTRATOR_CPU_TIMESERIES_READ,
+    ORCHESTRATOR_DB_PARTITION_READ,
+    ORCHESTRATOR_DISK_SPACE_READ,
+    ORCHESTRATOR_GMS_SERVER_INFO_READ,
+    ORCHESTRATOR_INTERFACE_STATE_READ,
+    ORCHESTRATOR_STATS_COLLECTOR_STATUS_READ,
+    ORCHESTRATOR_STATS_RETENTION_READ,
+    ORCHESTRATOR_VERSIONS_READ,
+    build_realtime_stats_body,
+    summarize_cpu_timeseries,
+    summarize_disks,
+    summarize_interface_state,
+    summarize_performance_timeseries,
+    summarize_realtime_stats,
+)
 from .security_workflow import (
     BFD_SESSIONS_READ,
     BGP_NEIGHBOR_READ,
@@ -3250,6 +3273,171 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Invalid body_json: {error}"
         except Exception as error:
             audit.record("apply_change", operation_id, "", f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_orchestrator_infrastructure() -> str:
+        """Read Orchestrator-side infrastructure KPIs: platform info, hostname/IP, OS flavor, container status, GMS server info, software versions, approximate disk space, DB partitions, stats retention and stats-collector health. Use for Orchestrator self-health and capacity checks (data taken from the Orchestrator, not from the appliances)."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            def _safe_call(operation_id: str, **query: Any) -> Any:
+                try:
+                    return client.call(version, operation_id, **query)
+                except Exception as error:
+                    return {"error": str(error)}
+            platform: dict[str, Any] = {}
+            for label, op_id in (
+                ("platform_info", "get_platforminfo"),
+                ("host_name", "get_hostname"),
+                ("ip_address", "get_ipaddress"),
+                ("os_flavor_version", "get_osflavorversion"),
+                ("is_in_container", "validates_container"),
+            ):
+                result = None
+                if op_id in engine._profiles[version]["operations"]:
+                    result = _safe_call(op_id)
+                else:
+                    try:
+                        path = "/gms/rest/stats/infrastructure/" + {
+                            "platform_info": "platformInfo",
+                            "host_name": "hostName",
+                            "ip_address": "ipAddress",
+                            "os_flavor_version": "osFlavorVersion",
+                            "is_in_container": "isInContainer",
+                        }[label]
+                        result = client.get_raw(path)
+                    except Exception as error:
+                        result = {"error": str(error), "unavailable_in_version": version}
+                platform[label] = result
+            payload = {
+                "platform": platform,
+                "gms_server": _safe_call(ORCHESTRATOR_GMS_SERVER_INFO_READ),
+                "versions": _safe_call(ORCHESTRATOR_VERSIONS_READ),
+                "disk_space": _safe_call(ORCHESTRATOR_DISK_SPACE_READ),
+                "db_partitions": _safe_call(ORCHESTRATOR_DB_PARTITION_READ),
+                "stats_retention": _safe_call(ORCHESTRATOR_STATS_RETENTION_READ),
+                "stats_collectors": _safe_call(ORCHESTRATOR_STATS_COLLECTOR_STATUS_READ),
+            }
+            audit.record("get_orchestrator_infrastructure", "read", settings.orchestrator_url, "ok")
+            return json_result(payload, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_orchestrator_infrastructure", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_appliance_infrastructure(appliance_id: str = "all") -> str:
+        """Read per-appliance infrastructure KPIs from the Orchestrator: CPU timeseries, per-appliance performance/throughput timeseries and interface state. Supports 'all' or a single appliance (nePk, name, IP or serial). Statistics are read from the Orchestrator DB, so they cover historical/aggregate views rather than live per-second counters."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            results = []
+            for ne_pk in resolve_ne_pks(client, appliance_id):
+                entry: dict[str, Any] = {"nePk": ne_pk}
+                try:
+                    entry["cpu_timeseries"] = summarize_cpu_timeseries(
+                        client.call(version, ORCHESTRATOR_CPU_TIMESERIES_READ, nePk=ne_pk)
+                    )
+                except Exception as error:
+                    entry["cpu_timeseries"] = {"error": str(error)}
+                try:
+                    entry["performance_timeseries"] = summarize_performance_timeseries(
+                        client.call(version, ORCHESTRATOR_APPLIANCE_PERFORMANCE_READ, nePk=ne_pk)
+                    )
+                except Exception as error:
+                    entry["performance_timeseries"] = {"error": str(error)}
+                try:
+                    entry["interfaces"] = summarize_interface_state(
+                        client.call(version, ORCHESTRATOR_INTERFACE_STATE_READ, nePk=ne_pk, cached="false")
+                    )
+                except Exception as error:
+                    entry["interfaces"] = {"error": str(error)}
+                results.append(entry)
+            return json_result({"appliances": results}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_realtime_stats(
+        appliance_id: str,
+        target_type: str = "tunnel",
+        name: str = "",
+        filter_mode: str = "all",
+        count: int = 10,
+    ) -> str:
+        """Read REAL-TIME per-second statistics directly from an EdgeConnect appliance via POST /stats/realtimeStats through the Orchestrator appliance proxy (reached over the managed SD-WAN network; no direct WAN access to the appliance is required). target_type: tunnel | port | port_pair | boosted_tunnel | shaper; name filters the target (empty = all); filter_mode: all | average | peak; count = number of per-second samples."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            ne_pk = resolve_ne_pk(client, appliance_id)
+            body = build_realtime_stats_body(target_type, name, filter_mode, count)
+            payload = client.appliance_api_call(
+                version, ne_pk, APPLIANCE_REALTIME_STATS_READ, json_body=body
+            )
+            rows = summarize_realtime_stats(payload)
+            audit.record(
+                "get_realtime_stats",
+                f"{target_type}/{name or 'all'}",
+                ne_pk,
+                "ok",
+                details={"samples": len(rows)},
+            )
+            return json_result(
+                {"nePk": ne_pk, "type": target_type, "samples": rows},
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record("get_realtime_stats", target_type, appliance_id, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_appliance_health(appliance_id: str = "all", samples: int = 10) -> str:
+        """Read the live health summary and system state directly from EdgeConnect appliances: POST /health (loss/latency/jitter/MOS), system info, disk usage and disks — all fetched from the appliance itself through the Orchestrator appliance proxy over the SD-WAN network. Use for real-time device health; use get_orchestrator_infrastructure / get_appliance_infrastructure for Orchestrator-side historical KPIs."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            results = []
+            for ne_pk in resolve_ne_pks(client, appliance_id):
+                entry: dict[str, Any] = {"nePk": ne_pk}
+                try:
+                    entry["health"] = client.appliance_api_call(
+                        version, ne_pk, APPLIANCE_HEALTH_READ, json_body={}
+                    )
+                except Exception as error:
+                    entry["health"] = {"error": str(error)}
+                try:
+                    entry["system_info"] = client.appliance_api_call(
+                        version, ne_pk, APPLIANCE_SYSTEM_INFO_READ
+                    )
+                except Exception as error:
+                    entry["system_info"] = {"error": str(error)}
+                try:
+                    entry["disk_usage"] = client.appliance_api_call(
+                        version, ne_pk, APPLIANCE_DISK_USAGE_READ
+                    )
+                except Exception as error:
+                    entry["disk_usage"] = {"error": str(error)}
+                try:
+                    entry["disks"] = summarize_disks(
+                        client.appliance_api_call(version, ne_pk, APPLIANCE_DISKS_READ)
+                    )
+                except Exception as error:
+                    entry["disks"] = {"error": str(error)}
+                results.append(entry)
+            audit.record(
+                "get_appliance_health", "read", appliance_id, "ok", details={"appliances": len(results)}
+            )
+            return json_result({"appliances": results}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_appliance_health", "read", appliance_id, f"error: {error}")
             return f"Error: {error}"
 
     return mcp
