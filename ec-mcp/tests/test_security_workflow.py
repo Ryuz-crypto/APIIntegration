@@ -259,3 +259,57 @@ def test_get_ids_ips_events_tool(monkeypatch):
     payload = _parse(_run(_server(), "get_ids_ips_events", appliance_id="15.NE"))
     assert payload["total_events"] == 1
     assert payload["events"][0]["signature"] == "SQLi"
+
+
+class TestSecurityCorrelation:
+    def test_correlate_ids_inactive_with_drops(self):
+        from ec_mcp.security_workflow import correlate_security_signals
+
+        findings = correlate_security_signals(
+            "0.NE",
+            {"active": False, "mode": "disabled"},
+            [],
+            {"drop_reasons": {"implicit deny": 5, "policy deny": 1}},
+            None,
+        )
+        assert any(f["severity"] == "high" and "IDS/IPS inactive" in f["finding"] for f in findings)
+        assert any("implicit deny" in f["finding"] and f["severity"] == "medium" for f in findings)
+
+    def test_correlate_high_priority_ids_events(self):
+        from ec_mcp.security_workflow import correlate_security_signals
+
+        findings = correlate_security_signals(
+            "1.NE",
+            {"active": True, "mode": "ips_inline"},
+            [{"message": "[Inspect] ET ATTACK [Priority: 2] from 203.0.113.5"}],
+            {"drop_reasons": {}},
+            None,
+        )
+        assert any("high-priority IDS events" in f["finding"] for f in findings)
+        assert any(f["evidence"] for f in findings if "evidence" in f)
+
+    def test_correlate_no_false_positive_on_healthy(self):
+        from ec_mcp.security_workflow import correlate_security_signals
+
+        findings = correlate_security_signals(
+            "2.NE",
+            {"active": True, "mode": "ips_inline"},
+            [],
+            {"drop_reasons": {"policy deny": 2}},
+            {"blocked_by_category": {}},
+        )
+        assert findings == []
+
+    def test_summarize_web_filtering(self):
+        from ec_mcp.security_workflow import summarize_web_filtering
+
+        summary = summarize_web_filtering(
+            [
+                {"WebCategory": "Malware", "WebReputation": "5", "Action": "drop"},
+                {"WebCategory": "Malware", "WebReputation": "5", "Action": "drop"},
+                {"WebCategory": "News", "WebReputation": "70", "Action": "allow"},
+            ]
+        )
+        assert summary["blocked_by_category"]["Malware"] == 2
+        assert summary["top_web_categories"]["News"] == 1
+        assert summary["reputation_distribution"]["5"] == 2

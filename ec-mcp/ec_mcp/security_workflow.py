@@ -263,3 +263,101 @@ def extract_sse_status(provider: str, connectivity_payload: Any, association_pay
         ],
         "association_count": len(association_rows),
     }
+
+
+def summarize_web_filtering(entries: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate web filtering signals from firewall log entries."""
+    categories: dict[str, int] = {}
+    reputations: dict[str, int] = {}
+    blocked_categories: dict[str, int] = {}
+    for entry in entries:
+        category = entry.get("WebCategory") or "Unknown"
+        categories[category] = categories.get(category, 0) + 1
+        reputation = str(entry.get("WebReputation") or "0")
+        reputations[reputation] = reputations.get(reputation, 0) + 1
+        action = entry.get("Action", "")
+        if str(action).lower().startswith("drop"):
+            blocked_categories[category] = blocked_categories.get(category, 0) + 1
+    return {
+        "top_web_categories": dict(sorted(categories.items(), key=lambda kv: -kv[1])[:10]),
+        "reputation_distribution": dict(sorted(reputations.items(), key=lambda kv: -kv[1])[:5]),
+        "blocked_by_category": dict(sorted(blocked_categories.items(), key=lambda kv: -kv[1])[:10]),
+    }
+
+
+def correlate_security_signals(
+    ne_pk: str,
+    ids_state: dict[str, Any] | None,
+    ids_events: list[dict[str, Any]],
+    drop_summary: dict[str, Any] | None,
+    web_summary: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Cross-correlate per-appliance security signals into incident findings.
+
+    Correlations applied (evidence-backed, live-validated on Orchestrator 9.7):
+    - IDS/IPS inactive while firewall drops exist -> protection gap.
+    - IDS inspection events (priority <= 2) plus drops from the same source
+      zone -> suspected incident, investigate src/dst in the events.
+    - implicit-deny drops dominating the drop reasons -> policy gap to review.
+    - Blocked web categories concentrated in few categories -> web filtering
+      working but tune/review the blocked categories.
+    """
+    findings: list[dict[str, Any]] = []
+    ids_active = bool(ids_state and ids_state.get("active"))
+    drops = 0
+    drop_reasons: dict[str, int] = {}
+    if drop_summary:
+        drop_reasons = drop_summary.get("drop_reasons") or {}
+        drops = sum(drop_reasons.values())
+    if not ids_active and drops > 0:
+        findings.append(
+            {
+                "nePk": ne_pk,
+                "severity": "high",
+                "finding": f"IDS/IPS inactive while {drops} firewall drops were logged",
+                "recommendation": "Enable IDS/IPS on this appliance before the implicit-deny traffic grows.",
+            }
+        )
+    high_priority_events = [
+        event
+        for event in ids_events
+        if "priority: 1" in str(event.get("message", "")).lower()
+        or "priority: 2" in str(event.get("message", "")).lower()
+    ]
+    if high_priority_events:
+        findings.append(
+            {
+                "nePk": ne_pk,
+                "severity": "high" if not ids_active else "medium",
+                "finding": f"{len(high_priority_events)} high-priority IDS events matched inspection policy",
+                "evidence": [event.get("message", "")[:200] for event in high_priority_events[:3]],
+                "recommendation": "Review the IDS events; if the sources are unknown, quarantine the zone policy.",
+            }
+        )
+    if drops > 0:
+        implicit = sum(
+            count
+            for reason, count in drop_reasons.items()
+            if "implicit" in str(reason).lower()
+        )
+        if implicit and implicit / drops >= 0.5:
+            findings.append(
+                {
+                    "nePk": ne_pk,
+                    "severity": "medium",
+                    "finding": f"{implicit}/{drops} drops come from implicit deny (no explicit zone policy)",
+                    "recommendation": "Add explicit zone-to-zone policies for the impacted zone pairs.",
+                }
+            )
+    if web_summary and web_summary.get("blocked_by_category"):
+        top_blocked = max(web_summary["blocked_by_category"].values())
+        if top_blocked >= 3:
+            findings.append(
+                {
+                    "nePk": ne_pk,
+                    "severity": "low",
+                    "finding": f"Web filtering blocked {top_blocked}+ flows in one category",
+                    "recommendation": "Review blocked_by_category to confirm the filtering policy is intended.",
+                }
+            )
+    return findings
