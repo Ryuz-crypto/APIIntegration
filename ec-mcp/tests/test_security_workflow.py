@@ -436,3 +436,66 @@ class TestBlockThreatDryRun:
         )
         payload = json.loads(result.content[0].text)
         assert payload["error"] == "PARAM_REQUIRED"
+
+
+class TestListResponseOptions:
+    def test_options_for_ip_target(self, monkeypatch, tmp_path):
+        import asyncio
+
+        import ec_mcp.server as server_module
+
+        class FakeClient:
+            def resolve_active_profile(self):
+                return "9.6"
+
+        monkeypatch.setattr(server_module, "OrchestratorClient", lambda *a, **k: FakeClient())
+        server = create_server(
+            Settings(
+                orchestrator_url="https://orch.example",
+                allow_write_tools=True,
+                audit_log_path=tmp_path / "audit.jsonl",
+            )
+        )
+        result = asyncio.run(
+            server.call_tool(
+                "list_response_options",
+                {"target": "203.0.113.0/24", "context": "scan"},
+            )
+        )
+        payload = json.loads(result.content[0].text)
+        names = [o["option"] for o in payload["options"]]
+        assert "ip_intelligence_block" in names
+        assert "acl_deny_source" in names
+        assert "static_route_blackhole" in names
+        assert "ips_mode_inline" in names
+        assert "zone_policy_deny" in names
+        assert "ddos_profile_enable" in names
+        assert payload["total"] >= 6
+
+    def test_options_for_domain(self, monkeypatch, tmp_path):
+        import asyncio
+
+        import ec_mcp.server as server_module
+
+        class FakeClient:
+            def resolve_active_profile(self):
+                return "9.6"
+
+        monkeypatch.setattr(server_module, "OrchestratorClient", lambda *a, **k: FakeClient())
+        server = create_server(
+            Settings(
+                orchestrator_url="https://orch.example",
+                allow_write_tools=True,
+                audit_log_path=tmp_path / "audit.jsonl",
+            )
+        )
+        result = asyncio.run(
+            server.call_tool(
+                "list_response_options",
+                {"domain": "bad.example.com"},
+            )
+        )
+        payload = json.loads(result.content[0].text)
+        names = [o["option"] for o in payload["options"]]
+        assert "dns_classification_block" in names
+        assert payload["options"][0]["body"]["domainName"] == "bad.example.com"

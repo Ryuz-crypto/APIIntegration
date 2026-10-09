@@ -2782,6 +2782,137 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
+    def list_response_options(
+        target: str = "",
+        domain: str = "",
+        application: str = "",
+        context: str = "",
+    ) -> str:
+        """Enumerate EVERY blocking/response option EdgeConnect offers for a detected threat, with the exact operation (API or ECOS CLI) each one would execute. Read-only: nothing is applied. Covers IP/CIDR classification (ipIntelligence), domain/category filtering (dnsClassification2), application deny (ACL/policy CLI), service-port deny, zone-pair policy deny, interface shutdown, static-route blackhole, DDoS protection profile and IPS mode changes. Use it after correlate_incidents to choose the response, then apply via block_threat (API actions) or run_cli_command (config commands, dry-run + confirm)."""
+        options: list[dict[str, Any]] = []
+        if target:
+            ip_start, ip_end = target, target
+            if "/" in target:
+                try:
+                    import ipaddress
+
+                    net = ipaddress.ip_network(target.strip(), strict=False)
+                    ip_start = str(net.network_address)
+                    ip_end = str(net.broadcast_address)
+                except ValueError:
+                    pass
+            options.append(
+                {
+                    "option": "ip_intelligence_block",
+                    "fits": "hostile IP or CIDR range",
+                    "via": "apply_change orchestrator.ipintelligencepost105",
+                    "body": {"ipStart": ip_start, "ipEnd": ip_end, "category": "<blocking-category>"},
+                    "scope": "fleet-wide via Orchestrator application definition",
+                    "apply_with": "block_threat(target=..., category=..., confirm=true)",
+                }
+            )
+            options.append(
+                {
+                    "option": "acl_deny_source",
+                    "fits": "deny all traffic from a source IP in one appliance",
+                    "via": "run_cli_command (config write, dry-run + confirm)",
+                    "cli": f"access-list BlockThreat deny ip {ip_start} any",
+                    "note": "Exact ACL syntax per your ECOS version; verify with list_cli_commands(category=configuration).",
+                }
+            )
+            options.append(
+                {
+                    "option": "static_route_blackhole",
+                    "fits": "drop all traffic toward the target at routing level",
+                    "via": "run_cli_command (config write, dry-run + confirm)",
+                    "cli": f"ip route {ip_start} 255.255.255.255 blackhole",
+                    "note": "Blackholes the destination for every zone at once.",
+                }
+            )
+        if domain:
+            options.append(
+                {
+                    "option": "dns_classification_block",
+                    "fits": "domain or FQDN (e.g. adult content site)",
+                    "via": "apply_change orchestrator.dnspost102",
+                    "body": {
+                        "domainName": domain.strip(),
+                        "classification": "<blocking-category>",
+                        "comment": "<reason>",
+                    },
+                    "scope": "fleet-wide DNS classification",
+                    "apply_with": "block_threat(domain=..., category=..., confirm=true)",
+                }
+            )
+            options.append(
+                {
+                    "option": "dns_wildcard_hint",
+                    "fits": "whole domain tree (all subdomains)",
+                    "via": "dnsClassification2 supports domain entries; classify the registrable domain",
+                    "note": "Classifying example.com generally covers *.example.com depending on Orchestrator version; verify with your DNS policy.",
+                }
+            )
+        if application:
+            options.append(
+                {
+                    "option": "acl_application_deny",
+                    "fits": "block an application entirely (e.g. BitTorrent, adult apps)",
+                    "via": "run_cli_command (config write, dry-run + confirm)",
+                    "cli": f"policy from <from-zone> to <to-zone> deny application {application}",
+                    "note": "Also achievable via ACL entries with application match; verify exact syntax with list_cli_commands.",
+                }
+            )
+        if context.lower() in ("scan", "attack", "lateral", "infection", "compromise"):
+            options.append(
+                {
+                    "option": "ips_mode_inline",
+                    "fits": "force IPS inline to drop attack traffic instead of only alerting",
+                    "via": "run_cli_command (config write, dry-run + confirm)",
+                    "cli": "intrusion-service mode inline",
+                    "note": "Applies per appliance; check list_cli_commands for the exact intrusion-service commands of your version.",
+                }
+            )
+            options.append(
+                {
+                    "option": "zone_policy_deny",
+                    "fits": "deny the attacking zone pair entirely (containment)",
+                    "via": "run_cli_command (config write, dry-run + confirm)",
+                    "cli": "policy from <attacker-zone> to <victim-zone> deny",
+                    "note": "Strongest containment; impacts all traffic between the zones.",
+                }
+            )
+        options.append(
+            {
+                "option": "interface_shutdown",
+                "fits": "cut an interface used by the attack (last resort)",
+                "via": "run_cli_command (config write, dry-run + confirm)",
+                "cli": "interface <ifname> disable",
+                "note": "Disruptive; only when containment is more important than availability.",
+            }
+        )
+        options.append(
+            {
+                "option": "ddos_profile_enable",
+                "fits": "volumetric attack mitigation per zone",
+                "via": "apply_change appliance.protectionprofilespost168495",
+                "body": {
+                    "profiles": [{"profile_name": "<name>", "enable": True}],
+                    "profileMaps": [{"zone_id": "<zoneId>", "profile_name": "<name>"}],
+                },
+                "apply_with": "apply_change(operation_id=..., appliance_id=..., body_json=..., confirm=true)",
+            }
+        )
+        return json_result(
+            {
+                "requested": {"target": target, "domain": domain, "application": application, "context": context},
+                "options": options,
+                "total": len(options),
+                "hint": "All writes stay dry-run until confirm=true; API actions go through block_threat/apply_change, config commands through run_cli_command.",
+            },
+            settings.max_output_chars,
+        )
+
+    @mcp.tool()
     def block_threat(
         target: str = "",
         domain: str = "",
@@ -2968,6 +3099,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     "appliances_checked": len(incidents),
                     "appliances_with_findings": len(incidents),
                     "incidents": incidents,
+                    "next_step": "For any finding, call list_response_options(target=/domain=/context=) to see every EdgeConnect blocking option with its exact dry-run, then apply the chosen one with block_threat/apply_change/run_cli_command (confirm=true).",
                 },
                 settings.max_output_chars,
             )
