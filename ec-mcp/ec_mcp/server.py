@@ -7,6 +7,7 @@ import re
 import secrets
 import time
 from collections import deque
+from datetime import datetime
 from typing import Any
 
 try:
@@ -40,17 +41,23 @@ from .security_workflow import (
     DEPLOYMENT_CONFIG_READ,
     IDS_IPS_EVENTS_READ,
     IDS_IPS_STATE_READ,
+    LOG_VIEWER_FILE_READ,
+    LOG_VIEWER_TYPES,
     SECURITY_MAPS_READ,
     SSE_PROVIDERS,
     THIRD_PARTY_TUNNELS_STATE_READ,
     TUNNELS_CONFIG_AND_STATE_READ,
     ZONE_LIST_READ,
+    correlate_security_signals,
     extract_rows,
     extract_sse_status,
+    parse_firewall_log_entries,
     summarize_bgp_neighbors,
     summarize_ddos,
     summarize_ids_state,
+    summarize_security_log,
     summarize_tunnels,
+    summarize_web_filtering,
     summarize_zone_matrix,
 )
 from .ssh_ecos import ApplianceSshPool
@@ -2444,13 +2451,6 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         summarize: bool = True,
     ) -> str:
         """Read the appliance security log (Security Log Viewer equivalent): zone-based firewall entries with Action (allow/drop), Flow-ID, zones, application, NAT and reputation. log_type: Firewall|Alarm|Audit|Event. date: YYYY-MM-DD (defaults to today). Use it for incident detection and to correlate flow IDs with allow/drop decisions."""
-        from ec_mcp.security_workflow import (
-            LOG_VIEWER_FILE_READ,
-            LOG_VIEWER_TYPES,
-            parse_firewall_log_entries,
-            summarize_security_log,
-        )
-
         try:
             client = require_client()
             if client is None:
@@ -2477,6 +2477,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             }
             if summarize and entries:
                 result["summary"] = summarize_security_log(entries)
+                result["web_filtering"] = summarize_web_filtering(entries)
             return json_result(result, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
@@ -2674,6 +2675,64 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         )
                 except Exception as error:
                     entry["tunnels"] = {"error": str(error)}
+                ddos_thresholds = None
+                ddos_profiles = None
+                try:
+                    ddos_thresholds = summarize_ddos(
+                        client.appliance_api_call(version, ne_pk, DDOS_THRESHOLD_STATUS_READ)
+                    )
+                    ddos_profiles = summarize_ddos(
+                        client.appliance_api_call(version, ne_pk, DDOS_PROTECTION_PROFILE_READ)
+                    )
+                    entry["ddos"] = {
+                        "zones_checked": ddos_thresholds.get("zones_checked", 0)
+                        + ddos_profiles.get("zones_checked", 0),
+                        "threshold_zones": ddos_thresholds.get("zones", []),
+                        "profile_zones": ddos_profiles.get("zones", []),
+                    }
+                    configured_profiles = [
+                        zone
+                        for zone in (ddos_profiles.get("zones") or [])
+                        if zone.get("profile")
+                    ]
+                    if not configured_profiles:
+                        findings.append(
+                            {
+                                "nePk": ne_pk,
+                                "severity": "medium",
+                                "finding": "DDoS protection has no profiles configured on any zone",
+                                "recommendation": "Configure a DDoS protection profile per exposed zone.",
+                            }
+                        )
+                except Exception as error:
+                    entry["ddos"] = {"error": str(error)[:200]}
+                firewall_summary = None
+                try:
+                    today = datetime.now().strftime("%Y-%m-%d")
+                    log_payload = client.appliance_api_call(
+                        version,
+                        ne_pk,
+                        LOG_VIEWER_FILE_READ,
+                        path_params={"logType": "Firewall", "date": today, "lines": "100"},
+                    )
+                    entries = parse_firewall_log_entries(log_payload)
+                    firewall_summary = summarize_security_log(entries)
+                    entry["firewall_drops"] = sum(
+                        (firewall_summary.get("drop_reasons") or {}).values()
+                    )
+                except Exception as error:
+                    entry["firewall_drops"] = None
+                    entry["firewall_drops_error"] = str(error)[:200]
+                try:
+                    ids_events = extract_rows(
+                        client.appliance_api_call(version, ne_pk, IDS_IPS_EVENTS_READ, limit=20)
+                    )
+                except Exception:
+                    ids_events = []
+                entry["correlated_findings"] = correlate_security_signals(
+                    ne_pk, entry.get("ids_ips"), ids_events, firewall_summary, None
+                )
+                findings.extend(entry["correlated_findings"])
                 results.append(entry)
             severity_rank = {"high": 0, "medium": 1, "low": 2}
             findings.sort(key=lambda f: severity_rank.get(f["severity"], 3))
@@ -2682,6 +2741,97 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     "appliances": results,
                     "findings": findings,
                     "finding_count": len(findings),
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def correlate_incidents(appliance_id: str = "all", date: str = "") -> str:
+        """Detect and correlate security incidents across appliances: cross-references IDS/IPS state and events, today's firewall drops (implicit deny vs explicit), DDoS configuration and web-filtering blocks into a prioritized incident list per appliance. Read-only; pair with get_security_posture for the full posture snapshot and use apply_change/run_cli_command (dry-run first) to act on the recommendations."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            if not date:
+                date = datetime.now().strftime("%Y-%m-%d")
+            incidents: list[dict[str, Any]] = []
+            for ne_pk in resolve_ne_pks(client, appliance_id):
+                try:
+                    ids_state = summarize_ids_state(
+                        client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ)
+                    )
+                except Exception as error:
+                    ids_state = {"active": None, "error": str(error)[:200]}
+                try:
+                    ids_events = extract_rows(
+                        client.appliance_api_call(version, ne_pk, IDS_IPS_EVENTS_READ, limit=50)
+                    )
+                except Exception:
+                    ids_events = []
+                firewall_summary = None
+                web_summary = None
+                try:
+                    log_payload = client.appliance_api_call(
+                        version,
+                        ne_pk,
+                        LOG_VIEWER_FILE_READ,
+                        path_params={"logType": "Firewall", "date": date, "lines": "200"},
+                    )
+                    entries = parse_firewall_log_entries(log_payload)
+                    firewall_summary = summarize_security_log(entries)
+                    web_summary = summarize_web_filtering(entries)
+                except Exception as error:
+                    firewall_summary = {"error": str(error)[:200]}
+                try:
+                    ddos_profiles = summarize_ddos(
+                        client.appliance_api_call(version, ne_pk, DDOS_PROTECTION_PROFILE_READ)
+                    )
+                    ddos_unprotected = not any(
+                        zone.get("profile") for zone in (ddos_profiles.get("zones") or [])
+                    )
+                except Exception:
+                    ddos_unprotected = None
+                findings = correlate_security_signals(
+                    ne_pk, ids_state, ids_events, firewall_summary, web_summary
+                )
+                if ddos_unprotected:
+                    findings.append(
+                        {
+                            "nePk": ne_pk,
+                            "severity": "medium",
+                            "finding": "DDoS protection profiles not configured",
+                            "recommendation": "Configure a DDoS protection profile per exposed zone.",
+                        }
+                    )
+                if findings:
+                    incidents.append(
+                        {
+                            "nePk": ne_pk,
+                            "ids_ips_active": ids_state.get("active"),
+                            "firewall_drop_total": sum(
+                                (firewall_summary or {}).get("drop_reasons", {}).values()
+                            )
+                            if isinstance(firewall_summary, dict)
+                            else None,
+                            "findings": findings,
+                        }
+                    )
+            severity_rank = {"high": 0, "medium": 1, "low": 2}
+            incidents.sort(
+                key=lambda item: min(
+                    (severity_rank.get(f["severity"], 3) for f in item["findings"]),
+                    default=3,
+                )
+            )
+            return json_result(
+                {
+                    "date": date,
+                    "appliances_checked": len(incidents),
+                    "appliances_with_findings": len(incidents),
+                    "incidents": incidents,
                 },
                 settings.max_output_chars,
             )
