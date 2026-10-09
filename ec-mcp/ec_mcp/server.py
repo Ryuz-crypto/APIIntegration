@@ -2085,7 +2085,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     tasks_summary = {"checked": False, "error": str(error)}
             wanted = normalize_serial(plan.appliance_serial)
             inventory_match = None
-            for appliance in client.list_appliances():
+            for appliance in client.list_appliances(refresh=True):
                 if normalize_serial(appliance.get("serial_number", appliance.get("serial", ""))) == wanted:
                     inventory_match = {
                         "nePk": appliance.get("nePk"),
@@ -2099,23 +2099,32 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 for row in extract_discovered(_read_discovered(client, version))
             )
             tasks_done = bool(tasks_summary.get("checked") and not tasks_summary.get("pending"))
-            verified = bool(inventory_match and not still_discovered and (tasks_done or not tasks_summary.get("checked")))
+            if plan.created_preconfig_id and not tasks_summary.get("checked"):
+                verified = False
+                verification_note = (
+                    "Apply task status could not be confirmed ("
+                    + str(tasks_summary.get("error", "no tasks reported"))
+                    + "); adoption is NOT verified until every apply task is confirmed completed."
+                )
+            else:
+                verified = bool(inventory_match and not still_discovered and tasks_done)
+                verification_note = None
             if verified and plan.status in {"applied", "verification_failed"}:
                 plan.status = "verified"
                 plan.health_check = {"inventory": inventory_match, "tasks": tasks_summary}
                 ztp_plans.put(plan)
-            return json_result(
-                {
-                    "verified": verified,
-                    "inventory": inventory_match,
-                    "still_in_discovered": still_discovered,
-                    "apply_tasks": tasks_summary,
-                    "hostname": plan.appliance_hostname,
-                    "serial": plan.appliance_serial,
-                    "plan_status": plan.status,
-                },
-                settings.max_output_chars,
-            )
+            response = {
+                "verified": verified,
+                "inventory": inventory_match,
+                "still_in_discovered": still_discovered,
+                "apply_tasks": tasks_summary,
+                "hostname": plan.appliance_hostname,
+                "serial": plan.appliance_serial,
+                "plan_status": plan.status,
+            }
+            if verification_note:
+                response["verification_note"] = verification_note
+            return json_result(response, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
