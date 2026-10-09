@@ -8,8 +8,11 @@ Covers:
 """
 import asyncio
 import json
+
 import pytest
 
+from ec_mcp.compat import load_profiles
+from ec_mcp.config import Settings
 from ec_mcp.telemetry_workflow import (
     APPLIANCE_DISK_USAGE_READ,
     APPLIANCE_DISKS_READ,
@@ -32,8 +35,6 @@ from ec_mcp.telemetry_workflow import (
     summarize_performance_timeseries,
     summarize_realtime_stats,
 )
-from ec_mcp.compat import load_profiles
-from ec_mcp.config import Settings
 
 
 def test_realtime_stats_body_defaults():
