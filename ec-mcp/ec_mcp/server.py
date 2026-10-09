@@ -2583,8 +2583,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                             if isinstance(row, dict):
                                 row.setdefault("nePk", ne_pk)
                         bfd_rows.extend(rows)
-                except Exception:
-                    continue
+                except Exception as bfd_error:
+                    results[-1]["bfd_error"] = str(bfd_error)[:200]
             return json_result(
                 {
                     "bfd_sessions": bfd_rows,
