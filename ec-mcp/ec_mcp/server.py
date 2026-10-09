@@ -871,6 +871,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     }
                     for row in payload["appliances"]
                 ]
+                payload["mos"] = [
+                    {
+                        "nePk": row.get("nePk"),
+                        "data": _project_fields(row.get("data"), field_list),
+                        **({k: v for k, v in row.items() if k == "error"}),
+                    }
+                    for row in payload["mos"]
+                ]
             payload["total_count"] = len(payload["appliances"])
             payload["truncated"] = False
             audit.record("get_wan_health", "read", settings.orchestrator_url, "ok", details={"appliances": len(targets)})
@@ -2561,8 +2569,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
-            neighbor_payload = client.call(version, BGP_NEIGHBOR_READ, nePk="")
-            neighbors = summarize_bgp_neighbors(neighbor_payload)
+            orchestrator_neighbors = []
+            try:
+                neighbor_payload = client.call(version, BGP_NEIGHBOR_READ)
+                orchestrator_neighbors = summarize_bgp_neighbors(neighbor_payload)
+            except Exception:
+                orchestrator_neighbors = []
+            neighbors = orchestrator_neighbors
             bfd_payload = client.call(version, BFD_SESSIONS_READ)
             results = []
             for ne_pk in resolve_ne_pks(client, appliance_id):
