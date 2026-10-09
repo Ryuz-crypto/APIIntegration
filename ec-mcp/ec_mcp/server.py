@@ -48,6 +48,7 @@ from .security_workflow import (
     THIRD_PARTY_TUNNELS_STATE_READ,
     TUNNELS_CONFIG_AND_STATE_READ,
     ZONE_LIST_READ,
+    correlate_active_alarms,
     correlate_security_signals,
     extract_rows,
     extract_sse_status,
@@ -2473,11 +2474,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 "log_type": log_type,
                 "date": date,
                 "total_entries": len(entries),
-                "entries": entries,
             }
             if summarize and entries:
                 result["summary"] = summarize_security_log(entries)
                 result["web_filtering"] = summarize_web_filtering(entries)
+                result["entries"] = entries[:5]
+            else:
+                result["entries"] = entries
             return json_result(result, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
@@ -2797,6 +2800,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 findings = correlate_security_signals(
                     ne_pk, ids_state, ids_events, firewall_summary, web_summary
                 )
+                try:
+                    alarm_payload = kpi_alarm_counts(client, ne_pk)
+                    severity_counts: dict[str, int] = {}
+                    _collect_alarm_counts(alarm_payload, severity_counts)
+                    findings.extend(correlate_active_alarms(ne_pk, severity_counts))
+                except Exception as alarm_error:
+                    entry["alarm_correlation_error"] = str(alarm_error)[:200]
                 if ddos_unprotected:
                     findings.append(
                         {
