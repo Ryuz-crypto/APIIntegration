@@ -2667,6 +2667,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             operation = engine.resolve(version, operation_id)
             if operation.method == "GET":
                 raise SecurityError("Use call_read_api for GET operations")
+            if verify_operation_id:
+                verify_op = engine.resolve(version, verify_operation_id)
+                if verify_op.method != "GET":
+                    raise SecurityError("verify_operation_id must be a GET operation")
             path_params, query_params = build_params(
                 version,
                 operation_id,
@@ -2750,20 +2754,36 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 )
             audit.record("apply_change", operation_id, operation.path, "ok", dry_run=False, details=audit_public_entry)
             verification = None
+            verification_error = None
             if verify_operation_id:
-                verify_op = engine.resolve(version, verify_operation_id)
-                if verify_op.method != "GET":
-                    raise SecurityError("verify_operation_id must be a GET operation")
-                if verify_operation_id.startswith("appliance."):
-                    verify_ne_pk = resolve_ne_pk(client, appliance_id)
-                    verification = client.appliance_api_call(
-                        version, verify_ne_pk, verify_operation_id,
-                        path_params={}, **{},
+                try:
+                    if verify_operation_id.startswith("appliance."):
+                        verify_ne_pk = resolve_ne_pk(client, appliance_id)
+                        verification = client.appliance_api_call(
+                            version, verify_ne_pk, verify_operation_id,
+                            path_params={}, **{},
+                        )
+                    else:
+                        verification = client.call(version, verify_operation_id, path_params={})
+                    audit.record("apply_change", verify_operation_id, verify_op.path, "read-after-write", dry_run=False)
+                except Exception as error:
+                    verification_error = str(error)
+                    audit.record(
+                        "apply_change", verify_operation_id, verify_op.path,
+                        f"read-after-write failed (write was applied): {error}", dry_run=False,
                     )
-                else:
-                    verification = client.call(version, verify_operation_id, path_params={})
-                audit.record("apply_change", verify_operation_id, verify_op.path, "read-after-write", dry_run=False)
-            return json_result({"applied": True, "result": payload, "read_after_write": verification}, settings.max_output_chars)
+            response = {
+                "applied": True,
+                "result": payload,
+                "read_after_write": verification,
+            }
+            if verification_error is not None:
+                response["read_after_write_failed"] = True
+                response["read_after_write_error"] = verification_error
+                response[
+                    "warning"
+                ] = ("The write was APPLIED, but the read-after-write check failed. " "Do not retry the write blindly: re-run only the GET verification.")
+            return json_result(response, settings.max_output_chars)
         except json.JSONDecodeError as error:
             audit.record("apply_change", operation_id, "", f"invalid body JSON: {error}")
             return f"Invalid body_json: {error}"

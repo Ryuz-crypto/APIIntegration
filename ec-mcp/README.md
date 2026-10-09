@@ -73,9 +73,16 @@ La rama `release/4.5.0` identifica esta base estable. El updater web puede avanz
 ```
 
 El instalador crea `.venv`, instala el paquete, solicita la configuración y
-genera `.env`. Es idempotente y no reemplaza un `.env` existente.
+genera `.env`. Es idempotente y no reemplaza un `.env` existente. Desde 4.5.1,
+el paso final instala y habilita los servicios systemd (`ec-mcp` y, si
+`EC_ADMIN_PASSWORD` está configurado, `ec-mcp-admin`) con `systemctl enable --now`:
+arrancan automáticamente al reiniciar el servidor y se reinician solos ante
+fallos (`Restart=on-failure`).
 
 ### 3. Instalar el servicio MCP
+
+Este paso ya lo ejecuta `install.sh` automáticamente; queda documentado
+para reinstalaciones manuales.
 
 ```bash
 ./scripts/install_service.sh
