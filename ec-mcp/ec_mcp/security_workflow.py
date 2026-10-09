@@ -351,6 +351,22 @@ def correlate_security_signals(
                 "recommendation": "Review the IDS events; if the sources are unknown, quarantine the zone policy.",
             }
         )
+    scan_events = [
+        event
+        for event in ids_events
+        if "scan" in str(event.get("message", "")).lower()
+        or "infection" in str(event.get("message", "")).lower()
+    ]
+    if scan_events:
+        findings.append(
+            {
+                "nePk": ne_pk,
+                "severity": "high",
+                "finding": f"{len(scan_events)} IDS events classified as network scan or infection behavior",
+                "evidence": [event.get("message", "")[:200] for event in scan_events[:3]],
+                "recommendation": "Investigate the source/destination pairs in the evidence; scans targeting RDP/SMB usually precede lateral movement.",
+            }
+        )
     if drops > 0:
         implicit = sum(
             count
@@ -377,4 +393,39 @@ def correlate_security_signals(
                     "recommendation": "Review blocked_by_category to confirm the filtering policy is intended.",
                 }
             )
+    return findings
+
+
+def correlate_active_alarms(
+    ne_pk: str,
+    alarm_counts: dict[str, int] | None,
+) -> list[dict[str, Any]]:
+    """Correlate per-appliance active alarm counts into incident findings.
+
+    Live-validated against /alarm/count/appliance severity aggregates on
+    Orchestrator 9.7 (critical/major/minor/warning per appliance).
+    """
+    findings: list[dict[str, Any]] = []
+    if not alarm_counts:
+        return findings
+    critical = int(alarm_counts.get("critical") or 0)
+    major = int(alarm_counts.get("major") or 0)
+    if critical > 0:
+        findings.append(
+            {
+                "nePk": ne_pk,
+                "severity": "high",
+                "finding": f"{critical} critical alarms active right now",
+                "recommendation": "Triage critical alarms first; use get_active_alarms and the Alarm security log for details.",
+            }
+        )
+    if major >= 3:
+        findings.append(
+            {
+                "nePk": ne_pk,
+                "severity": "medium",
+                "finding": f"{major} major alarms active; multiple majors often share a root cause",
+                "recommendation": "Check whether the major alarms started at the same time (correlate with tunnel/WAN state).",
+            }
+        )
     return findings

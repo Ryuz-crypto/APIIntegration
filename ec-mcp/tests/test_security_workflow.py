@@ -313,3 +313,30 @@ class TestSecurityCorrelation:
         assert summary["blocked_by_category"]["Malware"] == 2
         assert summary["top_web_categories"]["News"] == 1
         assert summary["reputation_distribution"]["5"] == 2
+
+
+class TestScanAndAlarmCorrelation:
+    def test_detects_scan_events(self):
+        from ec_mcp.security_workflow import correlate_security_signals
+
+        findings = correlate_security_signals(
+            "3.NE",
+            {"active": True, "mode": "ips_inline"},
+            [{"message": "[Drop] ET SCAN Behavioral Unusually fast Terminal Server Traffic Potential Scan or Infection (Inbound) {TCP} 172.15.2.102:9490 -> 172.15.1.100:3389"}],
+            {"drop_reasons": {}},
+            None,
+        )
+        assert any("network scan or infection" in f["finding"] and f["severity"] == "high" for f in findings)
+
+    def test_correlate_active_alarms_critical(self):
+        from ec_mcp.security_workflow import correlate_active_alarms
+
+        findings = correlate_active_alarms("1.NE", {"critical": 1, "major": 3, "warning": 3})
+        assert any(f["severity"] == "high" and "1 critical alarms" in f["finding"] for f in findings)
+        assert any("3 major alarms" in f["finding"] for f in findings)
+
+    def test_correlate_active_alarms_no_false_positive(self):
+        from ec_mcp.security_workflow import correlate_active_alarms
+
+        assert correlate_active_alarms("2.NE", {"critical": 0, "major": 1, "warning": 2}) == []
+        assert correlate_active_alarms("3.NE", None) == []
