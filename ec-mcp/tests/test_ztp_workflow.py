@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import tempfile
 
 import pytest
 
@@ -661,3 +662,141 @@ def test_bulk_prepare_rejects_mismatched_hostnames(monkeypatch):
         assert prepared.content[0].text.startswith("Error:")
     finally:
         server_module.OrchestratorClient = original_create
+
+
+def test_verify_ztp_not_verified_when_task_status_unconfirmed(monkeypatch):
+    """Adoption must NOT verify when apply tasks cannot be confirmed."""
+    import asyncio
+
+    monkeypatch.setenv("EC_ALLOW_WRITE_TOOLS", "true")
+    state_dir = tempfile.mkdtemp()
+    monkeypatch.setenv("EC_ZTP_STATE_DIR", state_dir)
+
+    from ec_mcp.ztp_workflow import ZtpPlan
+
+    plan = ZtpPlan(
+        plan_id="ztp-plan-test-1",
+        appliance_uuid="11111111-2222-3333-4444-555555555555",
+        appliance_hostname="EC3",
+        appliance_serial="00-1B-BC-46-2C-04",
+        preconfig_name="ztp-ec3",
+        preconfig_yaml="hostname: EC3",
+        confirmation="CONFIRM",
+    )
+    plan.created_preconfig_id = "19"
+    plan.status = "applied"
+    from ec_mcp.ztp_workflow import ZtpPlanStore
+
+    ZtpPlanStore(state_dir=state_dir).put(plan)
+    server = create_server(
+        Settings(orchestrator_url="https://orch.example", allow_write_tools=True)
+    )
+
+    class UnconfirmedTasksClient:
+        def __init__(self):
+            self.calls = []
+
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def call(self, version, operation_id, path_params=None, json_body=None, **query):
+            self.calls.append(operation_id)
+            if operation_id == "orchestrator.getpreconfigurationapplystatus254":
+                raise RuntimeError("HTTP 503: orchestrator unavailable")
+            if operation_id == "orchestrator.getalldiscoveredappliances52":
+                return {"data": []}
+            raise AssertionError(f"unexpected operation {operation_id}")
+
+        def list_appliances(self, refresh=False):
+            return [
+                {
+                    "nePk": "15.NE",
+                    "name": "EC3",
+                    "serial_number": "00-1B-BC-46-2C-04",
+                    "state": 1,
+                }
+            ]
+
+        def appliance_api_call(self, *args, **kwargs):
+            raise AssertionError("unexpected appliance call")
+
+    client = UnconfirmedTasksClient()
+    _set_client(monkeypatch, client)
+
+    result = asyncio.run(server.call_tool("verify_ztp_plan", {"plan_id": plan.plan_id}))
+    payload = _parse(result)
+    assert payload["verified"] is False
+    assert payload["inventory"] is not None
+    assert payload["apply_tasks"]["checked"] is False
+    assert "NOT verified until every apply task is confirmed" in payload["verification_note"]
+
+
+def test_verify_ztp_confirmed_with_fresh_inventory(monkeypatch):
+    """verified=true requires confirmed tasks AND fresh inventory AND out of discovered."""
+    import asyncio
+
+    monkeypatch.setenv("EC_ALLOW_WRITE_TOOLS", "true")
+    state_dir = tempfile.mkdtemp()
+    monkeypatch.setenv("EC_ZTP_STATE_DIR", state_dir)
+
+    from ec_mcp.ztp_workflow import ZtpPlan
+
+    plan = ZtpPlan(
+        plan_id="ztp-plan-test-2",
+        appliance_uuid="11111111-2222-3333-4444-555555555555",
+        appliance_hostname="EC3",
+        appliance_serial="00-1B-BC-46-2C-04",
+        preconfig_name="ztp-ec3",
+        preconfig_yaml="hostname: EC3",
+        confirmation="CONFIRM",
+    )
+    plan.created_preconfig_id = "19"
+    plan.status = "applied"
+    from ec_mcp.ztp_workflow import ZtpPlanStore
+
+    ZtpPlanStore(state_dir=state_dir).put(plan)
+    server = create_server(
+        Settings(orchestrator_url="https://orch.example", allow_write_tools=True)
+    )
+
+    class ConfirmedClient:
+        def __init__(self):
+            self.refresh_seen = []
+
+        def resolve_active_profile(self):
+            return "9.6"
+
+        def call(self, version, operation_id, path_params=None, json_body=None, **query):
+            if operation_id == "orchestrator.getpreconfigurationapplystatus254":
+                return {
+                    "data": {
+                        "result": [
+                            {"name": "Add Appliance", "completionStatus": True},
+                        ]
+                    }
+                }
+            if operation_id == "orchestrator.getalldiscoveredappliances52":
+                return {"data": []}
+            raise AssertionError(f"unexpected operation {operation_id}")
+
+        def list_appliances(self, refresh=False):
+            self.refresh_seen.append(refresh)
+            return [
+                {
+                    "nePk": "15.NE",
+                    "name": "EC3",
+                    "serial_number": "00-1B-BC-46-2C-04",
+                    "state": 1,
+                }
+            ]
+
+        def appliance_api_call(self, *args, **kwargs):
+            raise AssertionError("unexpected appliance call")
+
+    client = ConfirmedClient()
+    _set_client(monkeypatch, client)
+
+    result = asyncio.run(server.call_tool("verify_ztp_plan", {"plan_id": plan.plan_id}))
+    payload = _parse(result)
+    assert payload["verified"] is True
+    assert client.refresh_seen == [True]
