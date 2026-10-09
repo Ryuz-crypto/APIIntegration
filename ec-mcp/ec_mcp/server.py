@@ -2569,22 +2569,25 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
-            orchestrator_neighbors = []
-            try:
-                neighbor_payload = client.call(version, BGP_NEIGHBOR_READ)
-                orchestrator_neighbors = summarize_bgp_neighbors(neighbor_payload)
-            except Exception:
-                orchestrator_neighbors = []
-            neighbors = orchestrator_neighbors
-            bfd_payload = client.call(version, BFD_SESSIONS_READ)
+            targets = resolve_ne_pks(client, appliance_id)
             results = []
-            for ne_pk in resolve_ne_pks(client, appliance_id):
+            bfd_rows = []
+            for ne_pk in targets:
                 per_appliance = client.appliance_api_call(version, ne_pk, BGP_NEIGHBOR_READ)
                 results.append({"nePk": ne_pk, "neighbors": summarize_bgp_neighbors(per_appliance)})
+                try:
+                    bfd_payload = client.call(version, BFD_SESSIONS_READ, nePk=ne_pk)
+                    rows = extract_rows(bfd_payload)
+                    if rows:
+                        for row in rows:
+                            if isinstance(row, dict):
+                                row.setdefault("nePk", ne_pk)
+                        bfd_rows.extend(rows)
+                except Exception:
+                    continue
             return json_result(
                 {
-                    "orchestrator_neighbors": neighbors,
-                    "bfd_sessions": extract_rows(bfd_payload),
+                    "bfd_sessions": bfd_rows,
                     "appliances": results,
                 },
                 settings.max_output_chars,
