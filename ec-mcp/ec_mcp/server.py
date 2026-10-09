@@ -1089,19 +1089,50 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             active_brownouts = [b for b in brownout_rows if isinstance(b, dict) and b.get("brownout")]
             if down_admin:
                 findings.append(f"{len(down_admin)} tunnel(s) are administratively down — verify intent before treating as failure")
+            remedies: list[dict[str, str]] = []
             if down_oper:
                 names = [str(t.get("tunnelName") or t.get("name") or t.get("tunnelId")) for t in down_oper[:5]]
                 findings.append(f"{len(down_oper)} tunnel(s) operationally DOWN ({', '.join(names)}) — check transport/NAT-D; use traceroute under the tunnel to find the failing hop")
+                remedies.append(
+                    {
+                        "situation": "tunnel operationally down",
+                        "diagnostic_cli": "show tunnel table all",
+                        "remedy": "Verify NAT-D keepalives and transport reachability; if the transport is dead, fail over to the healthy WAN path before touching config.",
+                    }
+                )
             if active_brownouts:
                 reasons = sorted({str(b.get("reason")) for b in active_brownouts if b.get("reason")})
                 findings.append(f"{len(active_brownouts)} tunnel(s) in brownout — reason: {'; '.join(reasons) if reasons else 'loss/latency/jitter threshold exceeded'}")
+                remedies.append(
+                    {
+                        "situation": "brownout active",
+                        "diagnostic_cli": "show stats WAN-ifs",
+                        "remedy": "Check loss/latency on the underlying WAN interfaces; consider steering traffic away from the degraded path via overlay policy (prepare_overlay_clone, never apply blindly).",
+                    }
+                )
             if not down_oper and not active_brownouts and tunnels_list:
                 findings.append("No tunnels down and no active brownouts — tunnel plane looks healthy")
             if not tunnels_list and "tunnel_state_error" not in result:
                 findings.append("No tunnel entities reported — appliance may have no tunnels configured or reachability issues")
+                remedies.append(
+                    {
+                        "situation": "no tunnel entities",
+                        "diagnostic_cli": "show tunnel table all",
+                        "remedy": "Confirm overlays/BIOs exist and reference this appliance; check appliance reachability before creating tunnels.",
+                    }
+                )
             if state and state.lower() not in ("", "ok", "reachable", "up"):
                 findings.append(f"Orchestrator reports reachability '{state}' for this appliance — errors may be reachability, not the endpoint")
+                remedies.append(
+                    {
+                        "situation": "appliance reachability degraded",
+                        "diagnostic_cli": "show system reachability",
+                        "remedy": "Fix appliance management reachability first; most KPI reads fail while the Orchestrator cannot reach the appliance.",
+                    }
+                )
             result["findings"] = findings
+            if remedies:
+                result["remedies"] = remedies
             audit.record("troubleshoot_tunnel", "read", settings.orchestrator_url, "ok", details={"findings": len(findings)})
             return json_result(result, settings.max_output_chars)
         except Exception as error:
@@ -2748,6 +2779,101 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 settings.max_output_chars,
             )
         except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def block_threat(
+        target: str = "",
+        domain: str = "",
+        category: str = "",
+        comment: str = "",
+        confirm: bool = False,
+    ) -> str:
+        """Prepare or apply a blocking response to a detected threat: classify a hostile IP/host range (ipIntelligence) or a domain (dnsClassification2) into a blocking category. Dry-run by default: without confirm=true it returns the exact operation, path and body that would be executed. Requires EC_ALLOW_WRITE_TOOLS=true. Use after correlate_incidents/get_ids_ips_events identify a hostile source; pick a blocking category (e.g. custom 'BLOCKED-SEC' or an existing deny category) — check with list_api_operations(search=dnsClassification) how categories are named on your Orchestrator."""
+        try:
+            require_writes("orchestrator.ipintelligencepost105")
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            if not category:
+                return json_result(
+                    {
+                        "error": "PARAM_REQUIRED",
+                        "required_params": ["category"],
+                        "hint": "Choose the blocking category name used by your policies (e.g. BLOCKED-SEC).",
+                    },
+                    settings.max_output_chars,
+                )
+            if not domain and not target:
+                return json_result(
+                    {
+                        "error": "PARAM_REQUIRED",
+                        "required_params": ["target or domain"],
+                        "hint": "Pass an IP/CIDR/host range in target, or a FQDN in domain.",
+                    },
+                    settings.max_output_chars,
+                )
+            if domain:
+                operation_id = "orchestrator.dnspost102"
+                body = {
+                    "domainName": domain.strip(),
+                    "classification": category.strip(),
+                    "comment": comment or "blocked via ec-mcp threat response",
+                }
+                verify_operation_id = "appliance.dnsget153562"
+            else:
+                operation_id = "orchestrator.ipintelligencepost105"
+                raw_target = target.strip()
+                ip_start = raw_target
+                ip_end = raw_target
+                if "/" in raw_target:
+                    try:
+                        import ipaddress
+
+                        net = ipaddress.ip_network(raw_target, strict=False)
+                        ip_start = str(net.network_address)
+                        ip_end = str(net.broadcast_address)
+                    except ValueError as error:
+                        return json_result({"error": f"Invalid CIDR: {error}"}, settings.max_output_chars)
+                body = {
+                    "ipStart": ip_start,
+                    "ipEnd": ip_end,
+                    "category": category.strip(),
+                }
+                verify_operation_id = "appliance.ipintelligenceinfoget512005"
+            if not confirm:
+                audit.record("block_threat", operation_id, domain or target, "dry-run", dry_run=True)
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {
+                            "operation_id": operation_id,
+                            "body": body,
+                            "verify_operation_id": verify_operation_id,
+                        },
+                        "hint": "Pass confirm=true to classify the threat into the blocking category. The firewall/zone policy for that category must deny it (verify your policy).",
+                    },
+                    settings.max_output_chars,
+                )
+            payload = client.call(version, operation_id, json_body=body)
+            audit.record("block_threat", operation_id, domain or target, "ok", dry_run=False)
+            verification = None
+            try:
+                verification = client.call(version, verify_operation_id)
+            except Exception as error:
+                verification = {"verify_error": str(error)[:200]}
+            return json_result(
+                {
+                    "applied": True,
+                    "result": payload,
+                    "read_after_write": verification,
+                    "note": "The threat is classified into the blocking category; confirm the zone/firewall policy denies that category.",
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record("block_threat", "", domain or target, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()

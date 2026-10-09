@@ -12,6 +12,7 @@ from ec_mcp.security_workflow import (
     summarize_zone_matrix,
     validate_ids_mode,
 )
+from ec_mcp.server import create_server
 
 IDS_STATE = {"data": {"mode": "IPS-Inline", "profile": "Default"}}
 
@@ -340,3 +341,98 @@ class TestScanAndAlarmCorrelation:
 
         assert correlate_active_alarms("2.NE", {"critical": 0, "major": 1, "warning": 2}) == []
         assert correlate_active_alarms("3.NE", None) == []
+
+
+class TestBlockThreatDryRun:
+    def test_block_threat_dry_run_domain(self, monkeypatch, tmp_path):
+        import asyncio
+
+        import ec_mcp.server as server_module
+
+        monkeypatch.setenv("EC_ALLOW_WRITE_TOOLS", "true")
+
+        class FakeClient:
+            def resolve_active_profile(self):
+                return "9.6"
+
+            def call(self, version, operation_id, path_params=None, json_body=None, **query):
+                raise AssertionError("dry-run must not call the Orchestrator")
+
+        monkeypatch.setattr(server_module, "OrchestratorClient", lambda *a, **k: FakeClient())
+        server = create_server(
+            Settings(
+                orchestrator_url="https://orch.example",
+                allow_write_tools=True,
+                audit_log_path=tmp_path / "audit.jsonl",
+            )
+        )
+        result = asyncio.run(
+            server.call_tool(
+                "block_threat",
+                {"domain": "evil.example.com", "category": "BLOCKED-SEC", "confirm": False},
+            )
+        )
+        payload = json.loads(result.content[0].text)
+        assert payload["dry_run"] is True
+        assert payload["would_execute"]["operation_id"] == "orchestrator.dnspost102"
+        assert payload["would_execute"]["body"]["domainName"] == "evil.example.com"
+        assert payload["would_execute"]["body"]["classification"] == "BLOCKED-SEC"
+
+    def test_block_threat_cidr_expansion(self, monkeypatch, tmp_path):
+        import asyncio
+
+        import ec_mcp.server as server_module
+
+        monkeypatch.setenv("EC_ALLOW_WRITE_TOOLS", "true")
+
+        class FakeClient:
+            def resolve_active_profile(self):
+                return "9.6"
+
+            def call(self, version, operation_id, path_params=None, json_body=None, **query):
+                raise AssertionError("dry-run must not call the Orchestrator")
+
+        monkeypatch.setattr(server_module, "OrchestratorClient", lambda *a, **k: FakeClient())
+        server = create_server(
+            Settings(
+                orchestrator_url="https://orch.example",
+                allow_write_tools=True,
+                audit_log_path=tmp_path / "audit.jsonl",
+            )
+        )
+        result = asyncio.run(
+            server.call_tool(
+                "block_threat",
+                {"target": "203.0.113.0/24", "category": "BLOCKED-SEC", "confirm": False},
+            )
+        )
+        payload = json.loads(result.content[0].text)
+        body = payload["would_execute"]["body"]
+        assert body["ipStart"] == "203.0.113.0"
+        assert body["ipEnd"] == "203.0.113.255"
+        assert body["category"] == "BLOCKED-SEC"
+
+    def test_block_threat_requires_category(self, monkeypatch, tmp_path):
+        import asyncio
+
+        import ec_mcp.server as server_module
+
+        monkeypatch.setenv("EC_ALLOW_WRITE_TOOLS", "true")
+
+        class FakeClient:
+            def resolve_active_profile(self):
+                return "9.6"
+
+        monkeypatch.setattr(server_module, "OrchestratorClient", lambda *a, **k: FakeClient())
+        server = create_server(
+            Settings(
+                orchestrator_url="https://orch.example",
+                allow_write_tools=True,
+                audit_log_path=tmp_path / "audit.jsonl",
+            )
+        )
+        result = asyncio.run(
+            server.call_tool("block_threat", {"target": "203.0.113.5", "confirm": False})
+        )
+        payload = json.loads(result.content[0].text)
+        assert payload["error"] == "PARAM_REQUIRED"
