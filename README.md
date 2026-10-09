@@ -1,7 +1,7 @@
 # APIIntegration — EdgeConnect SD-WAN Platform
 
 [![DashboardAPI-EC](https://img.shields.io/badge/DashboardAPI--EC-1.5.1%20stable-2fbf9b)](DashboardAPI-EC/README.md)
-[![ec-mcp](https://img.shields.io/badge/ec--mcp-4.5.0%20stable-7B61FF)](ec-mcp/README.md)
+[![ec-mcp](https://img.shields.io/badge/ec--mcp-5.0.0%20stable-7B61FF)](ec-mcp/README.md)
 [![DashboardAPI-EC CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/dashboardapi-ec.yml)
 [![ec-mcp CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
@@ -17,9 +17,9 @@ Todo bug detectado por personas o asistentes de IA se registra en [GitHub Issues
 | **DashboardAPI-EC** | Plataforma web: detecta la versión del Orchestrator, identifica capacidades y ensambla un dashboard con datos reales. Paquete `.deb` para Ubuntu, Python 3.12+. | [DashboardAPI-EC/README.md](DashboardAPI-EC/README.md) |
 | **ec-mcp** | Servidor MCP (Model Context Protocol) para asistentes de IA (Claude Desktop, Le Chat, Cursor, ChatGPT): consulta la API REST del Orchestrator, ejecuta comandos `show ...` mediante la API del Orchestrator o SSH opcional, y aplica cambios con dry-run, whitelist y audit log. | [ec-mcp/README.md](ec-mcp/README.md) |
 
-## ec-mcp 4.5 — MCP y panel de administración web
+## ec-mcp 5.0 — MCP y panel de administración web
 
-Versión estable en `main`: **4.5.0**. La referencia fija de esta entrega es la rama `release/4.5.0`. Consolida configuración web, suite de seguridad y troubleshooting, workflows transaccionales BIO/ZTP y las correcciones del PR #37: `preConfig` al crear preconfiguraciones, ID numérico al denegar ZTP y auditoría de cuerpos JSON tipo lista. DashboardAPI-EC conserva su versión independiente **1.5.1**. La referencia exhaustiva está en [ec-mcp/README.md](ec-mcp/README.md) y la plantilla completa en [ec-mcp/.env.example](ec-mcp/.env.example).
+Versión estable en `main`: **5.0.0**. Incorpora la capa de telemetría del PR #70: KPIs de infraestructura del Orchestrator (`get_orchestrator_infrastructure`, `get_appliance_infrastructure`) y estadísticas real-time del appliance vía el proxy SD-WAN (`get_realtime_stats`, `get_appliance_health`). La referencia fija de la base anterior es la rama `release/4.5.0`. DashboardAPI-EC conserva su versión independiente **1.5.1**. La referencia exhaustiva está en [ec-mcp/README.md](ec-mcp/README.md) y la plantilla completa en [ec-mcp/.env.example](ec-mcp/.env.example).
 
 > **Regla principal:** `ec-mcp/.env` es la única fuente de configuración. No dupliques las credenciales del Orchestrator en el JSON del cliente MCP ni declares `EC_ADMIN_PORT` o `EC_ADMIN_PASSWORD` directamente en systemd. Cada variable debe aparecer una sola vez en `.env`.
 

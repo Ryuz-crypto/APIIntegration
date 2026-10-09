@@ -1,8 +1,10 @@
 # ec-mcp — EdgeConnect SD-WAN MCP server
 
-**Versión estable: 4.5.0**
+**Versión estable: 5.0.0**
 
-Línea de versiones: 2.0.0 → 3.0.0 → 4.0.0 → **4.5.0 (estable)**. Referencia fija: `release/4.5.0`; `main` contiene esta publicación. DashboardAPI-EC tiene versionado independiente (1.5.1).
+Línea de versiones: 2.0.0 → 3.0.0 → 4.0.0 → 4.5.0 → **5.0.0 (estable)**. Referencia fija de la base anterior: `release/4.5.0`; `main` contiene esta publicación. DashboardAPI-EC tiene versionado independiente (1.5.1).
+
+Esta entrega añade la capa de telemetría (PR #70): KPIs de infraestructura del Orchestrator (platform info, GMS server, disco, particiones BD, stats collectors), KPIs por appliance desde el Orchestrator (CPU/performance timeseries, interface state) y estadísticas real-time del appliance (`POST /stats/realtimeStats`, `POST /health`, disk usage) a través del proxy `/appliance/rest`, que alcanza los equipos por la red gestionada SD-WAN sin acceso WAN directo.
 
 Esta entrega consolida lo existente, incluido el PR #37: creación ZTP con `preConfig`, denegación con el ID numérico descubierto y auditoría de cuerpos JSON tipo lista. Instala dependencias fijadas para runtime y QA; CI valida que la versión instalada, el código y `pyproject.toml` coincidan. Los esquemas del catálogo son referencias: algunos endpoints aún contienen placeholders y requieren validar el contrato antes de una escritura.
 
