@@ -116,7 +116,13 @@ WantedBy=timers.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now ec-mcp-admin ec-mcp-update.timer
+sudo systemctl enable ec-mcp-admin ec-mcp-update.timer
+if systemctl is-active --quiet ec-mcp-admin; then
+  sudo systemctl restart ec-mcp-admin
+else
+  sudo systemctl start ec-mcp-admin
+fi
+sudo systemctl start ec-mcp-update.timer
 sleep 2
 systemctl --no-pager --lines=5 status ec-mcp-admin || true
 

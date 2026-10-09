@@ -55,7 +55,12 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now ec-mcp
+sudo systemctl enable ec-mcp
+if systemctl is-active --quiet ec-mcp; then
+  sudo systemctl restart ec-mcp
+else
+  sudo systemctl start ec-mcp
+fi
 sleep 2
 systemctl --no-pager --lines=5 status ec-mcp || true
 
