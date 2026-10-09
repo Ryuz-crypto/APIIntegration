@@ -166,7 +166,7 @@ class OrchestratorClient:
             params=allowed_query,
             json=json_body,
         )
-        if response.status_code == 404 and has_alt:
+        if response.status_code == 404 and has_alt and resolved.method == "GET":
             retry_path = f"{alt_api_root}{resolved.path}"
             retry = self._client.request(
                 resolved.method,
@@ -178,7 +178,12 @@ class OrchestratorClient:
             if retry.status_code < 400:
                 response = retry
                 full_path = retry_path
-        elif response.status_code < 400 and not response.content and has_alt:
+        elif (
+            response.status_code < 400
+            and not response.content
+            and has_alt
+            and resolved.method == "GET"
+        ):
             retry_path = f"{alt_api_root}{resolved.path}"
             retry = self._client.request(
                 resolved.method,

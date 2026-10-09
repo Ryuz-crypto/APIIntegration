@@ -101,10 +101,22 @@ else
   echo "    (es el que pegas como Bearer en el conector de Mistral)"
 fi
 
-echo "==> 4/5 Verificación"
+echo "==> 4/6 Verificación"
 python -m pytest tests -q
 
-echo "==> 5/5 Listo"
+echo "==> 5/6 Servicios systemd (arranque automático en el boot)"
+if command -v systemctl >/dev/null; then
+  ./scripts/install_service.sh
+  if [ -n "$(grep '^EC_ADMIN_PASSWORD=' .env | cut -d= -f2)" ]; then
+    ./scripts/install_admin_service.sh
+  else
+    echo "    (ec-mcp-admin omitido: EC_ADMIN_PASSWORD no esta configurado en .env)"
+  fi
+else
+  echo "    (systemctl no disponible: arranca manualmente con ./scripts/update.sh)"
+fi
+
+echo "==> 6/6 Listo"
 if [ -f .env ]; then
   echo "    Credenciales en .env (permisos 600):"
   grep -E '^(EC_ORCHESTRATOR_URL|EC_SSH_ENABLED|EC_SSH_HOST|EC_MCP_HOST|EC_MCP_ALLOWED_HOSTS)=' .env | sed 's/^/      /'
@@ -115,9 +127,14 @@ cat <<'EOF'
 
 Instalación terminada.
 
-Arranque:
-  ./scripts/update.sh --daemon     # background, log en /tmp/ec-mcp.log
-  ./scripts/update.sh              # foreground
+Los servicios ec-mcp (y ec-mcp-admin, si aplica) quedan instalados con
+systemctl enable --now: arrancan automáticamente al reiniciar el servidor y
+se reinician solos ante fallos (Restart=on-failure).
+
+Comandos útiles:
+  systemctl status ec-mcp ec-mcp-admin
+  sudo systemctl restart ec-mcp ec-mcp-admin
+  journalctl -u ec-mcp -f
 
 Verificar:  curl http://localhost:8000/health
 EOF
