@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import httpx
 import json
 
+import httpx
 import pytest
 
 from ec_mcp.config import Settings
@@ -47,11 +47,13 @@ def test_apply_change_array_body_reaches_transport_and_audit(monkeypatch, tmp_pa
 
 
 def _make_client(handler):
+    from pathlib import Path
+
     import httpx
+
     from ec_mcp.compat import CompatibilityEngine, load_profiles
     from ec_mcp.config import Settings
     from ec_mcp.orchestrator_client import OrchestratorClient
-    from pathlib import Path
 
     engine = CompatibilityEngine(load_profiles(Path(__file__).parent.parent / "ec_mcp" / "profiles"))
     settings = Settings(orchestrator_url="https://orch.example", orchestrator_api_key="k")
