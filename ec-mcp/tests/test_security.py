@@ -1,6 +1,7 @@
 """Security tests for phases 1-2 of the hardening recommendations."""
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -8,12 +9,14 @@ from pathlib import Path
 
 import pytest
 
+from ec_mcp.config import Settings
 from ec_mcp.security import (
     ALLOWED_SHOW_COMMANDS,
     SecurityError,
     redact_secrets,
     validate_show_command,
 )
+from ec_mcp.server import create_server
 from ec_mcp.transport import BearerAuthMiddleware, validate_token_strength
 
 LONG_TOKEN = "x" * 40
@@ -280,3 +283,97 @@ def test_transport_security_allows_public_host():
         assert "https://mcp.example.com:*" in ts.allowed_origins
     finally:
         del os.environ["EC_MCP_ALLOWED_HOSTS"]
+
+
+class TestAuditRedaction:
+    def test_record_redacts_secrets_in_result_and_details(self, tmp_path):
+        from ec_mcp.audit import AuditLog
+
+        audit = AuditLog(tmp_path / "audit.jsonl")
+        audit.record(
+            "apply_change",
+            "orchestrator.apptagspost90",
+            "/gms/rest/applicationTags",
+            "error: login failed for user=admin password=SuperSecret123",
+            details={
+                "body_keys": ["password", "presharedkey_sha384"],
+                "body": {"password": "SuperSecret123", "presharedkey_sha384": "abc123", "name": "ok"},
+                "nested": [{"userName": "admin", "secret": "topsecret"}],
+            },
+        )
+        entry = json.loads((tmp_path / "audit.jsonl").read_text().splitlines()[-1])
+        serialized = json.dumps(entry)
+        assert "SuperSecret123" not in serialized
+        assert "topsecret" not in serialized
+        assert "REDACTED" in serialized
+
+    def test_record_redacts_compound_secret_keys(self, tmp_path):
+        from ec_mcp.audit import AuditLog
+
+        audit = AuditLog(tmp_path / "audit.jsonl")
+        audit.record(
+            "apply_change",
+            "op",
+            "/path",
+            "ok",
+            details={"body": {"presharedkey_sha384": "deadbeef", "tunnelName": "t1"}},
+        )
+        entry = json.loads((tmp_path / "audit.jsonl").read_text().splitlines()[-1])
+        assert entry["details"]["body"]["presharedkey_sha384"] == "***REDACTED***"
+        assert entry["details"]["body"]["tunnelName"] == "t1"
+
+
+class TestCliCommandGuards:
+    def test_run_show_command_rejects_non_catalog_command(self, monkeypatch, tmp_path):
+        import ec_mcp.server as server_module
+
+        class FakePool:
+            def __init__(self, settings):
+                self.get_calls = 0
+
+            def get(self, host=None):
+                raise AssertionError("SSH session must not be opened for a rejected command")
+
+            def close_all(self):
+                pass
+
+        monkeypatch.setattr(server_module, "ApplianceSshPool", FakePool)
+        settings = Settings(allow_write_tools=True, audit_log_path=tmp_path / "audit.jsonl")
+        settings.ssh_enabled = True
+        server = create_server(settings)
+        response = asyncio.run(server.call_tool("run_show_command", {
+            "command": "notARealEcosCommand arg1",
+        }))
+        text = response.content[0].text
+        assert "not in the official ECOS CLI catalog" in text
+
+    def test_run_show_command_rejects_write_command(self, monkeypatch, tmp_path):
+        import ec_mcp.server as server_module
+
+        class FakePool:
+            def __init__(self, settings):
+                pass
+
+            def get(self, host=None):
+                raise AssertionError("SSH session must not be opened for a write command")
+
+            def close_all(self):
+                pass
+
+        monkeypatch.setattr(server_module, "ApplianceSshPool", FakePool)
+        settings = Settings(allow_write_tools=True, audit_log_path=tmp_path / "audit.jsonl")
+        settings.ssh_enabled = True
+        server = create_server(settings)
+        write_cmd = next(
+            cmd for cmd, risk in _cli_risk_items() if risk == "write"
+        )
+        response = asyncio.run(server.call_tool("run_show_command", {
+            "command": write_cmd,
+        }))
+        text = response.content[0].text
+        assert "read-only" in text or "Only commands classified" in text
+
+
+def _cli_risk_items():
+    from ec_mcp.cli_catalog import catalog_entries
+    return [(e["command"], e["risk"]) for e in catalog_entries()]

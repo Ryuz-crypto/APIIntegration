@@ -1459,17 +1459,34 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     @mcp.tool()
     def run_show_command(command: str, host: str = "") -> str:
         """Run a whitelisted read-only ECOS 'show' command on an EdgeConnect appliance over SSH. Use list_cli_commands to discover the official monitoring commands."""
-        pool = ApplianceSshPool(settings)
+        target = host or settings.ssh_host
         try:
-            session = pool.get(host or None)
-            output = session.run_show(command)
-            audit.record("run_show_command", command, host or settings.ssh_host, "ok")
+            risk = classify_cli_command(command)
+            if risk is None:
+                raise SecurityError(f"Command not in the official ECOS CLI catalog: {command}")
+            if risk != "read":
+                raise SecurityError(
+                    "Only commands classified as read-only in the official ECOS CLI catalog "
+                    "are allowed in run_show_command; use run_cli_command with confirm=true "
+                    "for configuration changes."
+                )
+            pool = ApplianceSshPool(settings)
+            try:
+                session = pool.get(host or None)
+                output = session.run_show(command)
+            finally:
+                pool.close_all()
+            audit.record(
+                "run_show_command",
+                command,
+                target,
+                "ok",
+                details={"risk": risk, "transport": "ssh"},
+            )
             return output
         except Exception as error:
-            audit.record("run_show_command", command, host or settings.ssh_host, f"error: {error}")
+            audit.record("run_show_command", command, target, f"error: {error}")
             return f"Error: {error}"
-        finally:
-            pool.close_all()
 
     @mcp.tool()
     def run_show_api(command: str, appliance_id: str) -> str:
@@ -1509,8 +1526,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     @mcp.tool()
     def run_cli_command(command: str, host: str = "", confirm: bool = False) -> str:
         """Run any official ECOS CLI command from the CLI Reference on an appliance over SSH. Monitoring/troubleshooting commands execute directly; configuration/administration/negation commands are dry-run by default and require confirm=true plus EC_ALLOW_WRITE_TOOLS=true. Use list_cli_commands to discover the 1367 available commands."""
-        pool = ApplianceSshPool(settings)
         target = host or settings.ssh_host
+        pool = None
         try:
             risk = classify_cli_command(command)
             if risk is None:
@@ -1528,7 +1545,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         },
                         settings.max_output_chars,
                     )
-            session = pool.get(host or None)
+            session = (pool := ApplianceSshPool(settings)).get(host or None)
             if risk == "read":
                 output = session.run_show(command)
             else:
@@ -1539,7 +1556,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             audit.record("run_cli_command", command, target, f"error: {error}")
             return f"Error: {error}"
         finally:
-            pool.close_all()
+            if pool is not None:
+                pool.close_all()
 
     OVERLAY_GET_OPERATION = "orchestrator.getoverlay323"
     OVERLAY_CREATE_OPERATION = "orchestrator.addnewoverlay315"
