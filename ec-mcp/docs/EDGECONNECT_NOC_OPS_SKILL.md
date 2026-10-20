@@ -1,6 +1,6 @@
 # EdgeConnect NOC Ops Skill (ec-mcp v5.0.0)
 
-Guía operativa para NOC: cómo usar el MCP `ec-mcp` v5.0.0 para monitorear, diagnosticar y operar EdgeConnect + Axis Security (SSE). Actualizado con la capa de telemetría, respuesta a incidentes y plataforma Axis.
+Guía operativa para NOC: cómo usar el MCP `ec-mcp` v5.0.0 para monitorear, diagnosticar y operar EdgeConnect + Axis Security (SSE). Actualizado con la capa de telemetría, respuesta a incidentes, plataforma Axis y **guías por tarea de SSE (§1.7, G1–G9)**: cuando se pida una tarea de Axis (escritura, troubleshooting, configuración, despliegue de apps, activación/desactivación de reglas, políticas CASB, DEM, monitoreo), seguir la guía G correspondiente para estructurar la secuencia de tools.
 
 ---
 
@@ -96,6 +96,8 @@ EC_AXIS_TIMEOUT=30
 3. **Aplicar**: repetir con `confirm=true` (requiere `EC_ALLOW_WRITE_TOOLS=true`).
 4. **Persistir**: `axis_commit(confirm=true)` — **sin commit los cambios no se aplican**.
 
+> **Para estructurar una tarea específica de Axis, usar las guías por tarea de §1.7** (G1 escritura genérica, G2 troubleshooting, G3 habilitar/desactivar, G4 desplegar app, G5 activar reglas, G6 desactivar reglas, G7 política CASB, G8 DEM, G9 monitoreo).
+
 #### Tipos de Application (Axis)
 `Web`, `Rdp`, `RdpPool`, `Ssh`, `Database`, `NetworkRange`, `SshRange`, `Git`, `Saas`, `Vnc`, `ActiveDirectory`, `Saml`
 
@@ -150,6 +152,189 @@ axis_commit(confirm=True)
 | `list_appliances` / `list_discovered_appliances` | Inventario. |
 | `list_api_operations(search)` | Buscar operaciones del catálogo. |
 | `call_read_api` / `orchestrator_info` / `orchestrator_metrics` | API genérica e info. |
+
+### 1.7 Guías por tarea — Axis Security (SSE)
+
+Cómo estructurar cada tipo de tarea sobre los 55 tools `axis_*`. **Regla universal de escritura**:
+1. Dry-run: llamar sin `confirm` → muestra exactamente qué se ejecutaría.
+2. Aplicar: repetir con `confirm=true` (requiere `EC_ALLOW_WRITE_TOOLS=true`).
+3. **Persistir**: `axis_commit(confirm=true)` — sin commit, nada se aplica.
+
+Las listas `*_json` son **strings JSON** (p.ej. `'[{"id":"abc"}]'`). `included_ips`, `included_domains`, `excluded_domains`, `ip_ranges` son **strings separados por comas**.
+
+#### G1. Escritura genérica (crear / actualizar / borrar cualquier entidad)
+Patrón para cualquier recurso (Tags, Applications, Connectors, ConnectorZones, IpCategories, WebCategories, SslExclusions, Groups, Users, Locations, SubLocations, Tunnels):
+```python
+# 1. Verificar estado actual
+axis_list_applications()                 # o axis_get_application(app_id)
+# 2. Dry-run
+axis_create_application(name="...", app_type="Web", connector_zone_id="...", confirm=False)
+# 3. Aplicar
+axis_create_application(name="...", app_type="Web", connector_zone_id="...", confirm=True)
+# 4. Persistir
+axis_commit(confirm=True)
+```
+Para borrar: `axis_delete_*(id, confirm=True)` → `axis_commit(confirm=True)`.
+
+#### G2. Troubleshooting (diagnóstico)
+```python
+# ¿La plataforma Axis está sana?
+axis_health()                            # status: Healthy / Degraded / Unhealthy + componentes
+# ¿Qué connectors hay y cómo están?
+axis_list_connectors()                   # inventario
+axis_connector_status(connector_id="...")  # status + CPU/mem/disk/red por connector
+# ¿Los túneles IPSec están arriba?
+axis_list_tunnels()
+axis_tunnel_status(tunnel_id="...")      # status: Online / Offline / Error / Unknown
+# ¿Una app responde?
+axis_get_application(app_id="...")       # verificar enabled + connectorZoneId
+```
+**Interpretación de `ConnectorStatus`**: `Unavailable` (caído — revisar host/IP pública), `Pending` (regenerar comando de instalación con `axis_regenerate_connector`), `AvailableTcpOnly`/`AvailableUdpOnly` (conectividad parcial — revisar NAT/firewall), `Available` (sano), `AvailableAgentlessOnly` (sin agente — apps con agente no funcionarán).
+**Umbrales de alerta**: CPU/mem/disk ≥ 80% = warning, ≥ 90% = crítico.
+
+#### G3. Configuración — habilitar / desactivar entidades
+> ⚠️ **Trampa**: `axis_update_application` y `axis_update_connector` **siempre** envían `enabled` en el body, con default `True`. Para desactivar hay que pasar `enabled=False` explícito. Para cambiar solo el nombre/zona sin tocar el estado, leer primero con `axis_get_*` y pasar el `enabled` actual.
+```python
+# Desactivar una app
+axis_update_application(app_id="...", enabled=False, confirm=True)
+axis_commit(confirm=True)
+# Reactivar
+axis_update_application(app_id="...", enabled=True, confirm=True)
+axis_commit(confirm=True)
+# Desactivar un connector (saca el tráfico del pool)
+axis_update_connector(connector_id="...", enabled=False, confirm=True)
+axis_commit(confirm=True)
+# Renombrar SIN cambiar estado (este tool no toca enabled)
+axis_update_connector_zone(zone_id="...", name="nuevo-nombre", confirm=True)
+axis_commit(confirm=True)
+```
+
+#### G4. Despliegue de una aplicación
+Orden recomendado: **zona → tag (opcional) → aplicación → commit**.
+```python
+# 1. Verificar la zona destino
+axis_list_connector_zones()
+# 2. (Opcional) crear tag para agrupar
+axis_create_tag(name="apps-criticas", confirm=True)
+# 3. Dry-run de la app
+axis_create_application(
+    name="crm-interno",
+    app_type="Web",                      # Web|Rdp|RdpPool|Ssh|Database|NetworkRange|SshRange|Git|Saas|Vnc|ActiveDirectory|Saml
+    connector_zone_id="zone-id",
+    tags_json='[{"id":"tag-id"}]',       # opcional
+    confirm=False,
+)
+# 4. Aplicar
+axis_create_application(name="crm-interno", app_type="Web", connector_zone_id="zone-id",
+                        tags_json='[{"id":"tag-id"}]', confirm=True)
+# 5. App de tipo NetworkRange: pasar network_range_json
+axis_create_application(
+    name="red-servidores",
+    app_type="NetworkRange",
+    connector_zone_id="zone-id",
+    network_range_json='{"ipRangesOrCIDRs":["10.20.0.0/16"],"portsAndProtocols":["TCP/443","TCP/22"],"enableIcmp":true}',
+    confirm=True,
+)
+# 6. Persistir
+axis_commit(confirm=True)
+```
+
+#### G5. Activación de reglas (web filtering / SSL inspection)
+```python
+# 1. Crear categoría web (dominios a bloquear/permitir)
+axis_create_web_category(
+    name="bloqueo-redes-sociales",
+    included_domains="facebook.com,instagram.com,tiktok.com",
+    connector_zone_id="zone-id",
+    confirm=True,
+)
+# 2. Crear categoría IP custom
+axis_create_ip_category(
+    name="ips-maliciosas",
+    included_ips="203.0.113.10/32,198.51.100.0/24",
+    connector_zone_id="zone-id",
+    confirm=True,
+)
+# 3. Exclusión SSL (dominios que no se inspeccionan)
+axis_create_ssl_exclusion(
+    name="excepcion-banca",
+    exclusion_type="Custom",             # Predefined | Custom
+    excluded_domains="banco.com,visa.com",
+    confirm=True,
+)
+# 4. Persistir todo junto
+axis_commit(confirm=True)
+```
+
+#### G6. Desactivación de reglas
+```python
+# Desactivar una app (regla de acceso) — ver trampa en G3
+axis_update_application(app_id="...", enabled=False, confirm=True)
+# Borrar categoría web / IP / exclusión SSL
+axis_delete_web_category(category_id="...", confirm=True)
+axis_delete_ip_category(category_id="...", confirm=True)
+axis_delete_ssl_exclusion(exclusion_id="...", confirm=True)
+# Persistir
+axis_commit(confirm=True)
+```
+
+#### G7. Generación de política CASB
+Secuencia completa: **zona → categorías web/IP → tag → aplicaciones con tag → commit**.
+```python
+# 1. Zona destino (acceso de usuarios)
+axis_list_connector_zones()
+# 2. Categorías de la política (ver G5) — una por tema
+axis_create_web_category(name="casb-social", included_domains="facebook.com,twitter.com",
+                         connector_zone_id="zone-id", confirm=True)
+axis_create_web_category(name="casb-gambling", included_domains="bet365.com,poker.com",
+                         connector_zone_id="zone-id", confirm=True)
+axis_create_ip_category(name="casb-tor-exit", included_ips="185.220.101.0/24",
+                        connector_zone_id="zone-id", confirm=True)
+# 3. Tag que agrupa las apps sujetas a la política
+axis_create_tag(name="politica-casb-2026", confirm=True)
+# 4. Crear/actualizar apps asociando el tag
+axis_create_application(name="app-afectada", app_type="Web", connector_zone_id="zone-id",
+                        tags_json='[{"id":"tag-id"}]', confirm=True)
+# 5. Persistir
+axis_commit(confirm=True)
+```
+
+#### G8. DEM (Digital Experience Monitoring) — despliegue de medición
+Secuencia: **zona LogStreaming → location → sub-location (CIDRs) → túnel IPSec → connector → commit**.
+```python
+# 1. Zona dedicada a monitoreo (NO de acceso de usuarios)
+axis_create_connector_zone(name="dem-monitoring", zone_type="Regular",
+                           purpose="LogStreaming", confirm=True)   # purpose: Access|LogStreaming
+# 2. Location (sitio medido)
+axis_create_location(name="sede-monterrey", confirm=True)   # → devuelve id
+# 3. Sub-location con los rangos internos del sitio
+axis_create_sub_location(location_id="loc-id", name="lan-monterrey",
+                         ip_ranges="10.50.0.0/24,10.51.0.0/24", confirm=True)
+# 4. Túnel IPSec hacia el PoP (ver axis_list_ipsec_locations para PoPs)
+axis_create_tunnel(name="tun-monterrey", location_id="loc-id",
+                   auth_id="MONTERREY-POP", auth_psk="<psk-segura>", confirm=True)
+# 5. Connector dedicado al monitoreo en la zona DEM
+axis_create_connector(name="conn-dem-mty", connector_zone_id="zone-dem-id", confirm=True)
+# 6. Obtener el comando de instalación para el host del connector
+axis_regenerate_connector(connector_id="conn-id", confirm=True)  # → command
+# 7. Persistir
+axis_commit(confirm=True)
+```
+
+#### G9. Monitoreo (loop NOC por turno)
+```python
+# 1. Salud de plataforma
+axis_health()                            # Healthy?
+# 2. Estado de todos los connectors
+axis_list_connectors()                   # ids
+axis_connector_status(connector_id="...")  # repetir por connector: status, CPU, mem, disk, red
+# 3. Estado de túneles
+axis_list_tunnels()
+axis_tunnel_status(tunnel_id="...")      # repetir: Online?
+# 4. Inventario de apps habilitadas
+axis_list_applications()                 # enabled=true?
+# Alertas: status != Available, CPU/mem/disk ≥ 80%, túnel != Online → diagnosticar con G2
+```
 
 ---
 
@@ -209,6 +394,7 @@ run_show_command("show version", host="...")  # Verificar
 ```
 
 ### 3.5 Axis Security — onboarding de aplicación
+Ver guía **G4** (§1.7). Resumen:
 ```python
 axis_health()                              # Plataforma sana
 axis_list_connector_zones()                # Zonas disponibles
@@ -217,17 +403,38 @@ axis_commit(confirm=True)                  # Persistir
 ```
 
 ### 3.6 Axis Security — revisar connector
+Ver guía **G2** (§1.7). Resumen:
 ```python
 axis_list_connectors()
 axis_connector_status(connector_id="...")  # CPU/mem/disk/red
 ```
+
+### 3.7 Axis Security — onboarding de connector nuevo
+```python
+axis_health()                              # Plataforma sana
+axis_list_connector_zones()                # elegir zona
+# 1. Crear el connector (dry-run → confirm)
+axis_create_connector(name="conn-sede-x", connector_zone_id="zone-id", confirm=True)
+# 2. Obtener el comando de instalación para el host
+axis_regenerate_connector(connector_id="conn-id", confirm=True)  # → command (instalar en el host)
+# 3. Persistir
+axis_commit(confirm=True)
+# 4. Verificar que levantó
+axis_connector_status(connector_id="conn-id")   # status debe pasar a Available
+```
+
+### 3.8 Axis Security — desplegar política CASB / sitio DEM
+Ver guías **G7** (CASB) y **G8** (DEM) en §1.7. Ambas terminan con `axis_commit(confirm=True)`.
+
+### 3.9 Axis Security — loop de monitoreo por turno
+Ver guía **G9** (§1.7): `axis_health` → `axis_list_connectors` + `axis_connector_status` → `axis_list_tunnels` + `axis_tunnel_status` → `axis_list_applications`. Alertar si: status ≠ `Available`, CPU/mem/disk ≥ 80%, o túnel ≠ `Online`.
 
 ---
 
 ## 4. Reglas de oro
 
 1. **Dry-run primero**: todas las escrituras (`apply_change`, `block_threat`, `axis_create_*`, `run_cli_command`) son dry-run sin `confirm=true`.
-2. **Commit en Axis**: los cambios en Axis no persisten sin `axis_commit(confirm=true)`.
+2. **Commit en Axis**: los cambios en Axis no persisten sin `axis_commit(confirm=true)`. Para cualquier tarea de Axis, estructurar la secuencia según las **guías G1–G9 de §1.7** (escritura, troubleshooting, config, despliegue, reglas, CASB, DEM, monitoreo).
 3. **SSH WAN**: usar la IP de la interfaz WAN del appliance, nunca la pública/NAT. Si falla, crear inbound forwarding.
 4. **POST /deployment es REPLACE**: nunca enviar body parcial sin `modeIfs` (borra interfaces).
 5. **NO tocar `0.NE` (ECV-CALIMAYA)**: es la salida a internet del lab.
