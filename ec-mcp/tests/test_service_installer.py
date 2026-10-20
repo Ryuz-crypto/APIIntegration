@@ -39,3 +39,10 @@ def test_service_reinstall_preserves_bind_and_port(monkeypatch, tmp_path, overri
     subprocess.run(command, check=True, capture_output=True, timeout=10)  # noqa: S603
     assert f"--host 127.0.0.1 --port {expected}" in capture.read_text()
     assert (project / ".env").read_text() == environment
+
+
+def test_admin_worker_unit_has_no_readonly_protect_home():
+    script = Path(__file__).parents[1] / "scripts" / "install_admin_service.sh"
+    content = script.read_text(encoding="utf-8")
+    assert "ProtectHome=read-only" not in content
+    assert "apply-web-update.py" in content

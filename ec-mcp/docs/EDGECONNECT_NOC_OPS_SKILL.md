@@ -416,6 +416,13 @@ El MCP incluye un **panel web** (`ec-mcp admin`, puerto 8080 por defecto) que es
 3. Editar variables → Guardar
 4. "Reiniciar servicios" → el MCP recarga con la nueva config
 
+**Actualización desde el panel (worker web):**
+1. Pestaña **Actualizaciones** → "Detectar GitHub" → muestra commit instalado vs remoto.
+2. Si hay update, escribe la frase de confirmación exacta → "Aplicar actualización".
+3. El worker (`ec-mcp-update.service`, corre como **root**) hace `git fetch` + `merge --ff-only` + instala deps + corre tests + reinicia servicios. Si falla, hace rollback automático al commit anterior.
+
+**Requisito de permisos (fix conocido):** el worker hace `git fetch` como el **dueño del proyecto**. Si el checkout quedó con `.git` propiedad de root (o el FS es read-only para el usuario del servicio), `git fetch` falla con `cannot open '.git/FETCH_HEAD': Read-only file system`. El worker ahora corrige solo el propietario (`chown -R <owner>: .git`) antes de fetch; si no puede, el diagnóstico indica el `chown` exacto. Además el unit `ec-mcp-update.service` ya no usa `ProtectHome=read-only` (rompe proyectos bajo `/home`).
+
 ---
 
 ## 3. Runbooks NOC
