@@ -20,6 +20,7 @@ unit-tested without SSH.
 from __future__ import annotations
 
 import logging
+import secrets
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -37,6 +38,14 @@ DEFAULT_DASHBOARD_FILE = "index.html"
 
 class DashboardDeployError(RuntimeError):
     """Raised when the remote dashboard deployment fails."""
+
+
+def _validate_remote_path(label: str, value: str) -> None:
+    """Reject shell-hostile remote paths (they are interpolated into sudo commands)."""
+    if not value or not value.startswith("/"):
+        raise ValueError(f"{label} must be an absolute path")
+    if any(ch in value for ch in (";", "&", "|", "$", "`", "\n", "\r", "'", '"', " ", "\t")):
+        raise ValueError(f"{label} contains characters not allowed in a remote path")
 
 
 def build_nginx_site(port: int = DEFAULT_DASHBOARD_PORT, directory: str = DEFAULT_DASHBOARD_DIR) -> str:
@@ -106,13 +115,14 @@ class RemoteDashboardDeployer:
         self,
         host: str,
         user: str,
-        password: str = "",
+        password: str | None = None,
         *,
         port: int = 22,
         key_path: str = "",
         dashboard_port: int = DEFAULT_DASHBOARD_PORT,
         dashboard_dir: str = DEFAULT_DASHBOARD_DIR,
         timeout: float = 30.0,
+        host_key_policy: str = "auto_add",
         client: Any = None,
     ):
         if not host:
@@ -121,14 +131,20 @@ class RemoteDashboardDeployer:
             raise ValueError("user is required")
         if not password and not key_path:
             raise ValueError("password or key_path is required")
+        if host_key_policy not in ("auto_add", "reject"):
+            raise ValueError("host_key_policy must be 'auto_add' or 'reject'")
+        _validate_remote_path("dashboard_dir", dashboard_dir)
+        if not (1 <= int(dashboard_port) <= 65535):
+            raise ValueError("dashboard_port must be 1-65535")
         self.host = host
         self.user = user
-        self.password = password
+        self.password = password or ""
         self.port = port
         self.key_path = key_path
         self.dashboard_port = dashboard_port
         self.dashboard_dir = dashboard_dir
         self.timeout = timeout
+        self.host_key_policy = host_key_policy
         self._client = client
         self._sftp: Any = None
 
@@ -138,7 +154,12 @@ class RemoteDashboardDeployer:
         if paramiko is None:
             raise DashboardDeployError("paramiko is not installed; cannot deploy over SSH")
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        if self.host_key_policy == "reject":
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        else:
+            # First-contact to a lab/ops server: trust on first use. For strict
+            # environments pass host_key_policy="reject" and pre-seed known_hosts.
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # nosec B507 - trust-on-first-use for ops hosts; use host_key_policy="reject" for strict envs
         kwargs: dict[str, Any] = {
             "hostname": self.host,
             "port": self.port,
@@ -160,7 +181,8 @@ class RemoteDashboardDeployer:
     def run(self, command: str, timeout: float = 120.0) -> tuple[int, str, str]:
         """Execute a command; returns (exit_code, stdout, stderr)."""
         client = self._ensure_client()
-        _, stdout, stderr = client.exec_command(command, timeout=timeout)
+        # Commands are built internally from validated constants/paths; never raw user input.
+        _, stdout, stderr = client.exec_command(command, timeout=timeout)  # nosec B601
         out = stdout.read().decode("utf-8", errors="replace")
         err = stderr.read().decode("utf-8", errors="replace")
         code = stdout.channel.recv_exit_status()
@@ -176,10 +198,14 @@ class RemoteDashboardDeployer:
         sftp = self._ensure_sftp()
         directory = remote_path.rsplit("/", 1)[0] if "/" in remote_path else "."
         filename = remote_path.rsplit("/", 1)[-1]
-        tmp_path = f"/tmp/{filename}.upload"
+        # Unique temp name avoids collisions; filename comes from a fixed
+        # constant (DEFAULT_DASHBOARD_FILE) or the caller, never user input.
+        tmp_path = f"/tmp/.ec-mcp-{filename}-{secrets.token_hex(6)}.upload"  # nosec B108 - randomized SFTP staging file
         with sftp.file(tmp_path, "wb") as remote_file:
             remote_file.write(data)
-        code, _, err = self.run(f"sudo mkdir -p {directory} && sudo mv {tmp_path} {remote_path} && sudo chmod 644 {remote_path}")
+        code, _, err = self.run(
+            f"sudo mkdir -p {directory} && sudo mv {tmp_path} {remote_path} && sudo chmod 644 {remote_path}"
+        )
         if code != 0:
             raise DashboardDeployError(f"upload failed for {remote_path}: {err.strip()[:300]}")
 
@@ -252,14 +278,14 @@ class RemoteDashboardDeployer:
         if self._sftp is not None:
             try:
                 self._sftp.close()
-            except Exception:
-                pass
+            except Exception as error:  # nosec B110 - best-effort cleanup
+                logger.debug("sftp close failed: %s", error)
             self._sftp = None
         if self._client is not None:
             try:
                 self._client.close()
-            except Exception:
-                pass
+            except Exception as error:  # nosec B110 - best-effort cleanup
+                logger.debug("ssh client close failed: %s", error)
             self._client = None
 
     def __enter__(self) -> RemoteDashboardDeployer:

@@ -134,6 +134,31 @@ class TestDeployerValidation:
         with pytest.raises(ValueError):
             RemoteDashboardDeployer(host="h", user="u")
 
+    def test_rejects_bad_host_key_policy(self):
+        with pytest.raises(ValueError, match="host_key_policy"):
+            RemoteDashboardDeployer(host="h", user="u", password="p", host_key_policy="bogus")  # noqa: S106
+
+    def test_rejects_relative_dashboard_dir(self):
+        with pytest.raises(ValueError, match="absolute path"):
+            RemoteDashboardDeployer(host="h", user="u", password="p", dashboard_dir="relative/path")  # noqa: S106
+
+    def test_rejects_shell_hostile_dashboard_dir(self):
+        with pytest.raises(ValueError, match="not allowed"):
+            RemoteDashboardDeployer(host="h", user="u", password="p", dashboard_dir="/var/www/x; rm -rf /")  # noqa: S106
+
+    def test_rejects_bad_dashboard_port(self):
+        with pytest.raises(ValueError, match="dashboard_port"):
+            RemoteDashboardDeployer(host="h", user="u", password="p", dashboard_port=0)  # noqa: S106
+
+    def test_accepts_valid_config(self):
+        deployer = RemoteDashboardDeployer(
+            host="h", user="u", password="p",  # noqa: S106 - test fixture
+            dashboard_dir="/var/www/ok", dashboard_port=8090,
+        )
+        assert deployer.dashboard_dir == "/var/www/ok"
+        assert deployer.dashboard_port == 8090
+        assert deployer.host_key_policy == "auto_add"
+
     def test_url(self):
         deployer, _, _ = _make_deployer()
         assert deployer.url() == "http://10.0.0.5:8090/"
