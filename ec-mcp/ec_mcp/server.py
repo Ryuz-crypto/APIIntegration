@@ -43,6 +43,8 @@ from .cli_catalog import (
 )
 from .compat import CompatibilityEngine, load_profiles
 from .config import Settings
+from .dashboard import collect_dashboard_payload, render_dashboard_html
+from .dashboard_install import DashboardDeployError, RemoteDashboardDeployer
 from .orchestrator_client import OrchestratorClient
 from .overlay_workflow import (
     OverlayPlanStore,
@@ -3627,6 +3629,202 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             axis.commit_changes()
             audit.record("axis_commit", "commit", "axis", "ok", dry_run=False)
             return json_result({"applied": True, "committed": True}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    def require_axis_client() -> AxisSecurityClient | None:
+        if not settings.axis_enabled or not settings.axis_admin_token:
+            return None
+        return AxisSecurityClient(
+            token=settings.axis_admin_token,
+            base_url=settings.axis_base_url,
+            timeout=settings.axis_timeout,
+            verify_tls=settings.axis_verify_tls,
+        )
+
+    @mcp.tool()
+    def dashboard_snapshot() -> str:
+        """Collect a compact dashboard payload (EdgeConnect inventory/reachability/WAN/tunnels/alarms/HA + Axis health/connectors/tunnels). Read-only. Returns JSON ready to render or deploy."""
+        try:
+            client = require_client()
+            axis = require_axis_client()
+            payload = collect_dashboard_payload(client, axis)
+            audit.record("dashboard_snapshot", "read", settings.orchestrator_url, "ok")
+            return json_result(payload, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def dashboard_render(refresh_seconds: int = 30) -> str:
+        """Collect the snapshot and render a self-contained interactive HTML dashboard (inline CSS/JS, auto-refresh). Read-only. Returns the HTML (may be large; use dashboard_deploy_remote to serve it remotely instead)."""
+        try:
+            client = require_client()
+            axis = require_axis_client()
+            payload = collect_dashboard_payload(client, axis)
+            page = render_dashboard_html(payload, refresh_seconds=refresh_seconds)
+            audit.record("dashboard_render", "read", settings.orchestrator_url, "ok", details={"bytes": len(page)})
+            return json_result(
+                {
+                    "html": page,
+                    "bytes": len(page),
+                    "refresh_seconds": refresh_seconds,
+                    "title": payload.get("title"),
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def dashboard_remote_config() -> str:
+        """Show the remote dashboard (SSH/Ubuntu) configuration status: whether it is enabled and which fields are missing. Read-only; never returns the password."""
+        try:
+            missing = []
+            if not settings.dashboard_remote_enabled:
+                missing.append("EC_DASHBOARD_REMOTE_ENABLED (set to true)")
+            if not settings.dashboard_remote_host:
+                missing.append("EC_DASHBOARD_REMOTE_HOST")
+            if not settings.dashboard_remote_user:
+                missing.append("EC_DASHBOARD_REMOTE_USER")
+            if not settings.dashboard_remote_password and not settings.dashboard_remote_key_path:
+                missing.append("EC_DASHBOARD_REMOTE_PASSWORD or EC_DASHBOARD_REMOTE_KEY_PATH")
+            return json_result(
+                {
+                    "enabled": settings.dashboard_remote_enabled,
+                    "host": settings.dashboard_remote_host,
+                    "user": settings.dashboard_remote_user,
+                    "port": settings.dashboard_remote_port,
+                    "key_path_configured": bool(settings.dashboard_remote_key_path),
+                    "password_configured": bool(settings.dashboard_remote_password),
+                    "dashboard_port": settings.dashboard_port,
+                    "dashboard_dir": settings.dashboard_dir,
+                    "url": f"http://{settings.dashboard_remote_host}:{settings.dashboard_port}/" if settings.dashboard_remote_host else "",
+                    "missing": missing,
+                    "configured": not missing,
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            return f"Error: {error}"
+
+    def require_dashboard_remote() -> RemoteDashboardDeployer:
+        if not settings.dashboard_remote_enabled:
+            raise SecurityError("Remote dashboard is disabled. Set EC_DASHBOARD_REMOTE_ENABLED=true and configure host/user/credentials (panel web → Variables → Dashboard remoto).")
+        if not settings.dashboard_remote_host or not settings.dashboard_remote_user:
+            raise SecurityError("EC_DASHBOARD_REMOTE_HOST and EC_DASHBOARD_REMOTE_USER are required.")
+        if not settings.dashboard_remote_password and not settings.dashboard_remote_key_path:
+            raise SecurityError("EC_DASHBOARD_REMOTE_PASSWORD or EC_DASHBOARD_REMOTE_KEY_PATH is required.")
+        return RemoteDashboardDeployer(
+            host=settings.dashboard_remote_host,
+            user=settings.dashboard_remote_user,
+            password=settings.dashboard_remote_password,
+            port=settings.dashboard_remote_port,
+            key_path=settings.dashboard_remote_key_path,
+            dashboard_port=settings.dashboard_port,
+            dashboard_dir=settings.dashboard_dir,
+        )
+
+    @mcp.tool()
+    def dashboard_deploy_remote(install: bool = True, confirm: bool = False) -> str:
+        """Generate the dashboard and deploy it to the remote Ubuntu server over SSH (installs nginx + uploads index.html by default). Dry-run by default; requires confirm=true and EC_DASHBOARD_REMOTE_ENABLED=true. Returns the public URL on success."""
+        try:
+            require_writes("dashboard_deploy_remote")
+            if not confirm:
+                cfg = dashboard_remote_config()
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {
+                            "ssh_host": settings.dashboard_remote_host,
+                            "ssh_user": settings.dashboard_remote_user,
+                            "install_nginx": install,
+                            "remote_dir": settings.dashboard_dir,
+                            "url": f"http://{settings.dashboard_remote_host}:{settings.dashboard_port}/",
+                        },
+                        "config": json.loads(cfg) if isinstance(cfg, str) else cfg,
+                        "hint": "Pass confirm=true to install nginx on the remote and upload the dashboard.",
+                    },
+                    settings.max_output_chars,
+                )
+            client = require_client()
+            axis = require_axis_client()
+            payload = collect_dashboard_payload(client, axis)
+            page = render_dashboard_html(payload, refresh_seconds=settings.dashboard_refresh_seconds)
+            with require_dashboard_remote() as deployer:
+                if install:
+                    result = deployer.install_and_deploy(page.encode("utf-8"))
+                else:
+                    result = deployer.deploy(page.encode("utf-8"))
+                status = deployer.status()
+            audit.record(
+                "dashboard_deploy_remote",
+                settings.dashboard_remote_host,
+                "dashboard",
+                "ok" if result.ok else f"error: {result.detail[:200]}",
+                dry_run=False,
+            )
+            return json_result(
+                {
+                    "applied": result.ok,
+                    "url": result.url,
+                    "action": result.action,
+                    "detail": result.detail,
+                    "steps": result.steps,
+                    "remote_status": {"ok": status.ok, "detail": status.detail},
+                },
+                settings.max_output_chars,
+            )
+        except (SecurityError, DashboardDeployError, ValueError) as error:
+            return f"Error: {error}"
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def dashboard_remote_status() -> str:
+        """Check the remote dashboard over SSH: nginx active + index.html present + listening port. Read-only."""
+        try:
+            with require_dashboard_remote() as deployer:
+                status = deployer.status()
+            return json_result(
+                {"ok": status.ok, "url": status.url, "detail": status.detail, "steps": status.steps},
+                settings.max_output_chars,
+            )
+        except (SecurityError, DashboardDeployError, ValueError) as error:
+            return f"Error: {error}"
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def dashboard_refresh_remote(confirm: bool = False) -> str:
+        """Re-generate the dashboard from live data and upload it to the already-installed remote (no nginx install). Dry-run by default; requires confirm=true. Use for the cron-based auto-refresh."""
+        try:
+            require_writes("dashboard_refresh_remote")
+            if not confirm:
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {
+                            "ssh_host": settings.dashboard_remote_host,
+                            "remote_dir": settings.dashboard_dir,
+                            "url": f"http://{settings.dashboard_remote_host}:{settings.dashboard_port}/",
+                        },
+                        "hint": "Pass confirm=true to re-upload the dashboard with fresh data.",
+                    },
+                    settings.max_output_chars,
+                )
+            client = require_client()
+            axis = require_axis_client()
+            payload = collect_dashboard_payload(client, axis)
+            page = render_dashboard_html(payload, refresh_seconds=settings.dashboard_refresh_seconds)
+            with require_dashboard_remote() as deployer:
+                result = deployer.deploy(page.encode("utf-8"))
+            audit.record("dashboard_refresh_remote", settings.dashboard_remote_host, "dashboard", "ok" if result.ok else "error", dry_run=False)
+            return json_result(
+                {"applied": result.ok, "url": result.url, "detail": result.detail, "steps": result.steps},
+                settings.max_output_chars,
+            )
+        except (SecurityError, DashboardDeployError, ValueError) as error:
+            return f"Error: {error}"
         except Exception as error:
             return f"Error: {error}"
 

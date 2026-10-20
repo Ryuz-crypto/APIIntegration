@@ -383,6 +383,154 @@ async def api_restart(request):
         return JSONResponse({"error": str(exc)}, status_code=400)
 
 
+def _current_settings():
+    from .config import Settings
+
+    return Settings.from_env()
+
+
+def _orchestrator_client():
+    from .compat import CompatibilityEngine, load_profiles
+    from .config import Settings
+    from .orchestrator_client import OrchestratorClient
+
+    settings = Settings.from_env()
+    if not settings.orchestrator_url:
+        return None
+    try:
+        engine = CompatibilityEngine(load_profiles(settings.profiles_dir))
+        return OrchestratorClient(settings, engine)
+    except ValueError:
+        return None
+
+
+def _dashboard_settings() -> dict:
+    import os as _os
+
+    return {
+        "enabled": _os.environ.get("EC_DASHBOARD_REMOTE_ENABLED", "false").lower() == "true",
+        "host": _os.environ.get("EC_DASHBOARD_REMOTE_HOST", ""),
+        "user": _os.environ.get("EC_DASHBOARD_REMOTE_USER", ""),
+        "port": int(_os.environ.get("EC_DASHBOARD_REMOTE_PORT", "22")),
+        "password_configured": bool(_os.environ.get("EC_DASHBOARD_REMOTE_PASSWORD", "")),
+        "key_path_configured": bool(_os.environ.get("EC_DASHBOARD_REMOTE_KEY_PATH", "")),
+        "dashboard_port": int(_os.environ.get("EC_DASHBOARD_PORT", "8090")),
+        "dashboard_dir": _os.environ.get("EC_DASHBOARD_DIR", "/var/www/ec-mcp-dashboard"),
+        "refresh_seconds": int(_os.environ.get("EC_DASHBOARD_REFRESH_SECONDS", "30")),
+    }
+
+
+async def api_dashboard_config(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    cfg = _dashboard_settings()
+    missing = []
+    if not cfg["enabled"]:
+        missing.append("EC_DASHBOARD_REMOTE_ENABLED=true")
+    if not cfg["host"]:
+        missing.append("EC_DASHBOARD_REMOTE_HOST")
+    if not cfg["user"]:
+        missing.append("EC_DASHBOARD_REMOTE_USER")
+    if not cfg["password_configured"] and not cfg["key_path_configured"]:
+        missing.append("EC_DASHBOARD_REMOTE_PASSWORD o EC_DASHBOARD_REMOTE_KEY_PATH")
+    cfg["missing"] = missing
+    cfg["configured"] = not missing
+    cfg["url"] = f"http://{cfg['host']}:{cfg['dashboard_port']}/" if cfg["host"] else ""
+    return JSONResponse(cfg)
+
+
+async def api_dashboard_preview(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        from .dashboard import collect_dashboard_payload, render_dashboard_html
+        from .server import create_server
+
+        _mcp = create_server()
+        client = _orchestrator_client()
+        settings = _current_settings()
+        axis = None
+        if settings.axis_enabled and settings.axis_admin_token:
+            from .axis_client import AxisSecurityClient
+
+            axis = AxisSecurityClient(
+                token=settings.axis_admin_token,
+                base_url=settings.axis_base_url,
+                timeout=settings.axis_timeout,
+                verify_tls=settings.axis_verify_tls,
+            )
+        payload = collect_dashboard_payload(client, axis)
+        page = render_dashboard_html(payload, refresh_seconds=settings.dashboard_refresh_seconds)
+        return JSONResponse({"ok": True, "html": page, "bytes": len(page)})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)[:500]}, status_code=500)
+
+
+async def api_dashboard_action(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+        action = str(body.get("action") or "")
+        confirm = bool(body.get("confirm") or False)
+        cfg = _dashboard_settings()
+        if not cfg["enabled"] or not cfg["host"] or not cfg["user"]:
+            return JSONResponse({"ok": False, "error": "Dashboard remoto no configurado. Completa las variables en la pestaña Variables → Dashboard remoto (SSH)."}, status_code=400)
+        if not cfg["password_configured"] and not cfg["key_path_configured"]:
+            return JSONResponse({"ok": False, "error": "Falta EC_DASHBOARD_REMOTE_PASSWORD o EC_DASHBOARD_REMOTE_KEY_PATH."}, status_code=400)
+        if action not in ("install", "deploy", "status", "refresh"):
+            return JSONResponse({"ok": False, "error": f"Acción no válida: {action}"}, status_code=400)
+        if action in ("install", "deploy", "refresh") and not confirm:
+            return JSONResponse({"ok": False, "error": "Confirma la acción (confirm=true).", "needs_confirm": True}, status_code=400)
+
+        from .dashboard import collect_dashboard_payload, render_dashboard_html
+        from .dashboard_install import RemoteDashboardDeployer
+
+        client = _orchestrator_client()
+        settings = _current_settings()
+        axis = None
+        if settings.axis_enabled and settings.axis_admin_token:
+            from .axis_client import AxisSecurityClient
+
+            axis = AxisSecurityClient(
+                token=settings.axis_admin_token,
+                base_url=settings.axis_base_url,
+                timeout=settings.axis_timeout,
+                verify_tls=settings.axis_verify_tls,
+            )
+        payload = collect_dashboard_payload(client, axis)
+        page = render_dashboard_html(payload, refresh_seconds=cfg["refresh_seconds"]).encode("utf-8")
+
+        with RemoteDashboardDeployer(
+            host=cfg["host"],
+            user=cfg["user"],
+            password=os.environ.get("EC_DASHBOARD_REMOTE_PASSWORD", ""),
+            port=cfg["port"],
+            key_path=os.environ.get("EC_DASHBOARD_REMOTE_KEY_PATH", ""),
+            dashboard_port=cfg["dashboard_port"],
+            dashboard_dir=cfg["dashboard_dir"],
+        ) as deployer:
+            if action == "install":
+                result = deployer.install_and_deploy(page)
+            elif action == "deploy":
+                result = deployer.deploy(page)
+            elif action == "refresh":
+                result = deployer.deploy(page)
+            else:
+                result = deployer.status()
+        return JSONResponse(
+            {
+                "ok": result.ok,
+                "action": result.action,
+                "detail": result.detail,
+                "url": result.url,
+                "steps": result.steps,
+            }
+        )
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)[:500]}, status_code=500)
+
+
 from starlette.responses import Response
 
 
@@ -407,6 +555,9 @@ def build_admin_app() -> Starlette:
             Route("/api/update/status", api_update_status, methods=["GET"]),
             Route("/api/update/apply", api_update_apply, methods=["POST"]),
             Route("/api/restart", api_restart, methods=["POST"]),
+            Route("/api/dashboard/config", api_dashboard_config, methods=["GET"]),
+            Route("/api/dashboard/preview", api_dashboard_preview, methods=["GET"]),
+            Route("/api/dashboard/action", api_dashboard_action, methods=["POST"]),
         ]
     )
 

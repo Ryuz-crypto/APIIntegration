@@ -77,6 +77,15 @@ SETTINGS = (
     Setting("EC_UPDATE_STATE_DIR", "Actualizaciones", "Directorio de estado", default="/var/lib/ec-mcp-update"),
     Setting("EC_UPDATE_SERVICE_NAME", "Actualizaciones", "Servicio MCP", default="ec-mcp.service"),
     Setting("EC_UPDATE_ADMIN_SERVICE_NAME", "Actualizaciones", "Servicio del panel", default="ec-mcp-admin.service"),
+    Setting("EC_DASHBOARD_REMOTE_ENABLED", "Dashboard remoto (SSH)", "Habilitar despliegue remoto", "boolean", "false", help="Instala y publica el dashboard en un servidor Ubuntu vía SSH."),
+    Setting("EC_DASHBOARD_REMOTE_HOST", "Dashboard remoto (SSH)", "IP/host del servidor Ubuntu"),
+    Setting("EC_DASHBOARD_REMOTE_USER", "Dashboard remoto (SSH)", "Usuario SSH"),
+    Setting("EC_DASHBOARD_REMOTE_PASSWORD", "Dashboard remoto (SSH)", "Password SSH", "password", secret=True, help="Requiere sudo en el servidor remoto (instala nginx)."),
+    Setting("EC_DASHBOARD_REMOTE_PORT", "Dashboard remoto (SSH)", "Puerto SSH", "integer", "22", minimum=1, maximum=65535),
+    Setting("EC_DASHBOARD_REMOTE_KEY_PATH", "Dashboard remoto (SSH)", "Ruta de llave privada (opcional)", help="Si se configura, se usa en lugar del password."),
+    Setting("EC_DASHBOARD_PORT", "Dashboard remoto (SSH)", "Puerto HTTP del dashboard en el remoto", "integer", "8090", minimum=1, maximum=65535),
+    Setting("EC_DASHBOARD_DIR", "Dashboard remoto (SSH)", "Directorio del dashboard en el remoto", default="/var/www/ec-mcp-dashboard"),
+    Setting("EC_DASHBOARD_REFRESH_SECONDS", "Dashboard remoto (SSH)", "Auto-refresh del dashboard (segundos)", "integer", "30", minimum=5, maximum=3600),
 )
 
 BY_KEY = {setting.key: setting for setting in SETTINGS}
