@@ -16,6 +16,26 @@ except ModuleNotFoundError:
     from mcp.server.mcpserver import MCPServer as FastMCP
 
 from .audit import AuditLog
+from .axis_client import AxisSecurityClient
+from .axis_workflow import (
+    build_application_body,
+    build_connector_body,
+    build_connector_zone_body,
+    build_group_body,
+    build_ip_category_body,
+    build_location_body,
+    build_ssl_exclusion_body,
+    build_sub_location_body,
+    build_tag_body,
+    build_tunnel_body,
+    build_user_body,
+    build_web_category_body,
+    summarize_connector_status,
+    summarize_health,
+    summarize_ipsec_locations,
+    summarize_paged,
+    summarize_tunnel_status,
+)
 from .build import build_info
 from .cli_catalog import (
     catalog_entries,
@@ -2842,6 +2862,771 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 except Exception as error:
                     results.append({"provider": name, "error": str(error)})
             return json_result({"providers": results}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    def require_axis() -> AxisSecurityClient:
+        if not settings.axis_enabled:
+            raise SecurityError(
+                "Axis Security is disabled. Set EC_AXIS_ENABLED=true and EC_AXIS_ADMIN_TOKEN."
+            )
+        if not settings.axis_admin_token:
+            raise SecurityError("EC_AXIS_ADMIN_TOKEN is not configured.")
+        return AxisSecurityClient(
+            token=settings.axis_admin_token,
+            base_url=settings.axis_base_url,
+            timeout=settings.axis_timeout,
+            verify_tls=settings.axis_verify_tls,
+        )
+
+    @mcp.tool()
+    def axis_health() -> str:
+        """Axis Security (SSE) health check: service status and dependency components. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.health()
+            return json_result(summarize_health(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_tags(page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security application groups (Tags). Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_tags(page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_get_tag(tag_id: str) -> str:
+        """Get a single Axis Security application group (Tag) by id. Read-only."""
+        try:
+            axis = require_axis()
+            return json_result(axis.get_tag(tag_id), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_create_tag(name: str, applications_json: str = "", confirm: bool = False) -> str:
+        """Create an Axis Security application group (Tag). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true to apply. Remember to call axis_commit to persist."""
+        try:
+            require_writes("axis_create_tag")
+            body = build_tag_body(name, json.loads(applications_json) if applications_json else None)
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": "/Tags", "method": "POST", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.create_tag(body)
+            audit.record("axis_create_tag", name, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_update_tag(tag_id: str, name: str = "", applications_json: str = "", confirm: bool = False) -> str:
+        """Update an Axis Security application group (Tag). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_update_tag")
+            body: dict[str, Any] = {}
+            if name:
+                body["name"] = name
+            if applications_json:
+                body["applications"] = json.loads(applications_json)
+            if not body:
+                return json_result({"error": "nothing to update"}, settings.max_output_chars)
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Tags/{tag_id}", "method": "PUT", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.update_tag(tag_id, body)
+            audit.record("axis_update_tag", tag_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_delete_tag(tag_id: str, confirm: bool = False) -> str:
+        """Delete an Axis Security application group (Tag). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_delete_tag")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Tags/{tag_id}", "method": "DELETE"}}, settings.max_output_chars)
+            axis = require_axis()
+            axis.delete_tag(tag_id)
+            audit.record("axis_delete_tag", tag_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "deleted": tag_id}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_applications(page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security applications. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_applications(page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_get_application(app_id: str) -> str:
+        """Get a single Axis Security application by id. Read-only."""
+        try:
+            axis = require_axis()
+            return json_result(axis.get_application(app_id), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_create_application(
+        name: str,
+        app_type: str,
+        connector_zone_id: str,
+        enabled: bool = True,
+        tags_json: str = "",
+        identity_provider_id: str = "",
+        network_range_json: str = "",
+        confirm: bool = False,
+    ) -> str:
+        """Create an Axis Security application (Web/Rdp/Ssh/Database/NetworkRange/Saas/...). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_create_application")
+            body = build_application_body(
+                name, app_type, connector_zone_id,
+                enabled=enabled,
+                tags=json.loads(tags_json) if tags_json else None,
+                identity_provider_id=identity_provider_id,
+                network_range=json.loads(network_range_json) if network_range_json else None,
+            )
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": "/Applications", "method": "POST", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.create_application(body)
+            audit.record("axis_create_application", name, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_update_application(app_id: str, name: str = "", app_type: str = "", connector_zone_id: str = "", enabled: bool = True, confirm: bool = False) -> str:
+        """Update an Axis Security application. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_update_application")
+            body: dict[str, Any] = {}
+            if name:
+                body["name"] = name
+            if app_type:
+                body["type"] = app_type
+            if connector_zone_id:
+                body["connectorZoneId"] = connector_zone_id
+            body["enabled"] = enabled
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Applications/{app_id}", "method": "PUT", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.update_application(app_id, body)
+            audit.record("axis_update_application", app_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_delete_application(app_id: str, confirm: bool = False) -> str:
+        """Delete an Axis Security application. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_delete_application")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Applications/{app_id}", "method": "DELETE"}}, settings.max_output_chars)
+            axis = require_axis()
+            axis.delete_application(app_id)
+            audit.record("axis_delete_application", app_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "deleted": app_id}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_connectors(page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security connectors. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_connectors(page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_get_connector(connector_id: str) -> str:
+        """Get a single Axis Security connector by id. Read-only."""
+        try:
+            axis = require_axis()
+            return json_result(axis.get_connector(connector_id), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_connector_status(connector_id: str) -> str:
+        """Live Axis Security connector status: network/memory/disk/CPU/machine health. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.connector_status(connector_id)
+            return json_result(summarize_connector_status(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_create_connector(name: str, connector_zone_id: str, enabled: bool = True, primary_public_ip: str = "", confirm: bool = False) -> str:
+        """Create an Axis Security connector; the response includes the installation command. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_create_connector")
+            body = build_connector_body(name, connector_zone_id, enabled=enabled, primary_public_ip=primary_public_ip)
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": "/Connectors", "method": "POST", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.create_connector(body)
+            audit.record("axis_create_connector", name, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_update_connector(connector_id: str, name: str = "", connector_zone_id: str = "", enabled: bool = True, confirm: bool = False) -> str:
+        """Update an Axis Security connector. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_update_connector")
+            body: dict[str, Any] = {"enabled": enabled}
+            if name:
+                body["name"] = name
+            if connector_zone_id:
+                body["connectorZoneId"] = connector_zone_id
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Connectors/{connector_id}", "method": "PUT", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.update_connector(connector_id, body)
+            audit.record("axis_update_connector", connector_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_delete_connector(connector_id: str, confirm: bool = False) -> str:
+        """Delete an Axis Security connector. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_delete_connector")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Connectors/{connector_id}", "method": "DELETE"}}, settings.max_output_chars)
+            axis = require_axis()
+            axis.delete_connector(connector_id)
+            audit.record("axis_delete_connector", connector_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "deleted": connector_id}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_regenerate_connector(connector_id: str, confirm: bool = False) -> str:
+        """Regenerate the installation command for an existing Axis Security connector. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_regenerate_connector")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Connectors/{connector_id}/regenerate", "method": "POST"}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.regenerate_connector(connector_id)
+            audit.record("axis_regenerate_connector", connector_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_connector_zones(page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security connector zones. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_connector_zones(page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_get_connector_zone(zone_id: str) -> str:
+        """Get a single Axis Security connector zone by id. Read-only."""
+        try:
+            axis = require_axis()
+            return json_result(axis.get_connector_zone(zone_id), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_create_connector_zone(name: str, zone_type: str, purpose: str, description: str = "", confirm: bool = False) -> str:
+        """Create an Axis Security connector zone (Regular/InternetZone/ExternalPublicZone for Access/LogStreaming). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_create_connector_zone")
+            body = build_connector_zone_body(name, zone_type, purpose, description=description)
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": "/ConnectorZones", "method": "POST", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.create_connector_zone(body)
+            audit.record("axis_create_connector_zone", name, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_update_connector_zone(zone_id: str, name: str = "", zone_type: str = "", purpose: str = "", description: str = "", confirm: bool = False) -> str:
+        """Update an Axis Security connector zone. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_update_connector_zone")
+            body: dict[str, Any] = {}
+            if name:
+                body["name"] = name
+            if zone_type:
+                body["type"] = zone_type
+            if purpose:
+                body["purpose"] = purpose
+            if description:
+                body["description"] = description
+            if not body:
+                return json_result({"error": "nothing to update"}, settings.max_output_chars)
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/ConnectorZones/{zone_id}", "method": "PUT", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.update_connector_zone(zone_id, body)
+            audit.record("axis_update_connector_zone", zone_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_delete_connector_zone(zone_id: str, confirm: bool = False) -> str:
+        """Delete an Axis Security connector zone. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_delete_connector_zone")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/ConnectorZones/{zone_id}", "method": "DELETE"}}, settings.max_output_chars)
+            axis = require_axis()
+            axis.delete_connector_zone(zone_id)
+            audit.record("axis_delete_connector_zone", zone_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "deleted": zone_id}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_ip_categories(page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security custom IP categories. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_ip_categories(page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_get_ip_category(category_id: str) -> str:
+        """Get a single Axis Security custom IP category by id. Read-only."""
+        try:
+            axis = require_axis()
+            return json_result(axis.get_ip_category(category_id), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_create_ip_category(name: str, included_ips: str = "", excluded_ips: str = "", connector_zone_id: str = "", description: str = "", confirm: bool = False) -> str:
+        """Create an Axis Security custom IP category (comma-separated IPs/CIDRs). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_create_ip_category")
+            body = build_ip_category_body(
+                name,
+                included_ips=[ip.strip() for ip in included_ips.split(",") if ip.strip()] or None,
+                excluded_ips=[ip.strip() for ip in excluded_ips.split(",") if ip.strip()] or None,
+                connector_zone_id=connector_zone_id,
+                description=description,
+            )
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": "/IpCategories", "method": "POST", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.create_ip_category(body)
+            audit.record("axis_create_ip_category", name, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_delete_ip_category(category_id: str, confirm: bool = False) -> str:
+        """Delete an Axis Security custom IP category. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_delete_ip_category")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/IpCategories/{category_id}", "method": "DELETE"}}, settings.max_output_chars)
+            axis = require_axis()
+            axis.delete_ip_category(category_id)
+            audit.record("axis_delete_ip_category", category_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "deleted": category_id}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_web_categories(page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security web categories. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_web_categories(page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_get_web_category(category_id: str) -> str:
+        """Get a single Axis Security web category by id. Read-only."""
+        try:
+            axis = require_axis()
+            return json_result(axis.get_web_category(category_id), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_create_web_category(name: str, included_domains: str = "", excluded_domains: str = "", connector_zone_id: str = "", description: str = "", confirm: bool = False) -> str:
+        """Create an Axis Security web category (comma-separated domains/URLs). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_create_web_category")
+            body = build_web_category_body(
+                name,
+                included_domains=[d.strip() for d in included_domains.split(",") if d.strip()] or None,
+                excluded_domains=[d.strip() for d in excluded_domains.split(",") if d.strip()] or None,
+                connector_zone_id=connector_zone_id,
+                description=description,
+            )
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": "/WebCategories", "method": "POST", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.create_web_category(body)
+            audit.record("axis_create_web_category", name, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_delete_web_category(category_id: str, confirm: bool = False) -> str:
+        """Delete an Axis Security web category. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_delete_web_category")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/WebCategories/{category_id}", "method": "DELETE"}}, settings.max_output_chars)
+            axis = require_axis()
+            axis.delete_web_category(category_id)
+            audit.record("axis_delete_web_category", category_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "deleted": category_id}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_ssl_exclusions(page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security SSL exclusions. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_ssl_exclusions(page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_create_ssl_exclusion(name: str, exclusion_type: str, excluded_domains: str = "", enabled: bool = True, confirm: bool = False) -> str:
+        """Create an Axis Security SSL exclusion (Predefined/Custom). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_create_ssl_exclusion")
+            body = build_ssl_exclusion_body(
+                name, exclusion_type,
+                excluded_domains=[d.strip() for d in excluded_domains.split(",") if d.strip()] or None,
+                enabled=enabled,
+            )
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": "/SslExclusions", "method": "POST", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.create_ssl_exclusion(body)
+            audit.record("axis_create_ssl_exclusion", name, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_delete_ssl_exclusion(exclusion_id: str, confirm: bool = False) -> str:
+        """Delete an Axis Security SSL exclusion. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_delete_ssl_exclusion")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/SslExclusions/{exclusion_id}", "method": "DELETE"}}, settings.max_output_chars)
+            axis = require_axis()
+            axis.delete_ssl_exclusion(exclusion_id)
+            audit.record("axis_delete_ssl_exclusion", exclusion_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "deleted": exclusion_id}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_groups(page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security user groups. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_groups(page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_create_group(name: str, users_json: str = "", description: str = "", confirm: bool = False) -> str:
+        """Create an Axis Security user group. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_create_group")
+            body = build_group_body(name, users=json.loads(users_json) if users_json else None, description=description)
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": "/Groups", "method": "POST", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.create_group(body)
+            audit.record("axis_create_group", name, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_delete_group(group_id: str, confirm: bool = False) -> str:
+        """Delete an Axis Security user group. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_delete_group")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Groups/{group_id}", "method": "DELETE"}}, settings.max_output_chars)
+            axis = require_axis()
+            axis.delete_group(group_id)
+            audit.record("axis_delete_group", group_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "deleted": group_id}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_users(page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security users. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_users(page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_get_user(user_id: str) -> str:
+        """Get a single Axis Security user by id. Read-only."""
+        try:
+            axis = require_axis()
+            return json_result(axis.get_user(user_id), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_create_user(user_name: str, email: str, first_name: str, last_name: str, enabled: bool = True, groups_json: str = "", expiration: str = "", confirm: bool = False) -> str:
+        """Create an Axis Security user. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_create_user")
+            body = build_user_body(
+                user_name, email, first_name, last_name,
+                enabled=enabled,
+                groups=json.loads(groups_json) if groups_json else None,
+                expiration=expiration,
+            )
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": "/Users", "method": "POST", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.create_user(body)
+            audit.record("axis_create_user", user_name, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_delete_user(user_id: str, confirm: bool = False) -> str:
+        """Delete an Axis Security user. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_delete_user")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Users/{user_id}", "method": "DELETE"}}, settings.max_output_chars)
+            axis = require_axis()
+            axis.delete_user(user_id)
+            audit.record("axis_delete_user", user_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "deleted": user_id}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_locations(page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security locations. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_locations(page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_get_location(location_id: str) -> str:
+        """Get a single Axis Security location by id. Read-only."""
+        try:
+            axis = require_axis()
+            return json_result(axis.get_location(location_id), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_create_location(name: str, confirm: bool = False) -> str:
+        """Create an Axis Security location. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_create_location")
+            body = build_location_body(name)
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": "/Locations", "method": "POST", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.create_location(body)
+            audit.record("axis_create_location", name, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_delete_location(location_id: str, confirm: bool = False) -> str:
+        """Delete an Axis Security location. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_delete_location")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Locations/{location_id}", "method": "DELETE"}}, settings.max_output_chars)
+            axis = require_axis()
+            axis.delete_location(location_id)
+            audit.record("axis_delete_location", location_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "deleted": location_id}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_sub_locations(location_id: str, page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security sub-locations under a location. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_sub_locations(location_id, page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_create_sub_location(location_id: str, name: str, ip_ranges: str, confirm: bool = False) -> str:
+        """Create an Axis Security sub-location (comma-separated CIDRs). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_create_sub_location")
+            body = build_sub_location_body(
+                name, location_id,
+                [ip.strip() for ip in ip_ranges.split(",") if ip.strip()],
+            )
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Locations/{location_id}/SubLocations", "method": "POST", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.create_sub_location(location_id, body)
+            audit.record("axis_create_sub_location", name, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_delete_sub_location(location_id: str, sub_location_id: str, confirm: bool = False) -> str:
+        """Delete an Axis Security sub-location. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_delete_sub_location")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Locations/{location_id}/SubLocations/{sub_location_id}", "method": "DELETE"}}, settings.max_output_chars)
+            axis = require_axis()
+            axis.delete_sub_location(location_id, sub_location_id)
+            audit.record("axis_delete_sub_location", sub_location_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "deleted": sub_location_id}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_tunnels(page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security tunnels. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_tunnels(page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_tunnel_status(tunnel_id: str) -> str:
+        """Get the live status of an Axis Security tunnel. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.tunnel_status(tunnel_id)
+            return json_result(summarize_tunnel_status(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_create_tunnel(name: str, location_id: str, auth_id: str, auth_psk: str, confirm: bool = False) -> str:
+        """Create an Axis Security tunnel (IPSec). auth_psk is the pre-shared key. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_create_tunnel")
+            body = build_tunnel_body(name, location_id, auth_id, auth_psk)
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": "/Tunnels", "method": "POST", "body": body}}, settings.max_output_chars)
+            axis = require_axis()
+            payload = axis.create_tunnel(body)
+            audit.record("axis_create_tunnel", name, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "result": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_delete_tunnel(tunnel_id: str, confirm: bool = False) -> str:
+        """Delete an Axis Security tunnel. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
+        try:
+            require_writes("axis_delete_tunnel")
+            if not confirm:
+                return json_result({"dry_run": True, "would_execute": {"path": f"/Tunnels/{tunnel_id}", "method": "DELETE"}}, settings.max_output_chars)
+            axis = require_axis()
+            axis.delete_tunnel(tunnel_id)
+            audit.record("axis_delete_tunnel", tunnel_id, "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "deleted": tunnel_id}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_certificates(page: int = 1, page_size: int = 50) -> str:
+        """List Axis Security domain name certificates. Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_certificates(page_number=page, page_size=page_size)
+            return json_result(summarize_paged(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_list_ipsec_locations() -> str:
+        """List available Axis Security IPSec PoP locations (countries, cities, FQDNs, IPs). Read-only."""
+        try:
+            axis = require_axis()
+            payload = axis.list_ipsec_locations()
+            return json_result(summarize_ipsec_locations(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def axis_commit(confirm: bool = False) -> str:
+        """Commit all pending Axis Security changes. Without confirm=true returns a dry-run notice; with confirm=true (and EC_ALLOW_WRITE_TOOLS=true) commits the staged changes."""
+        try:
+            require_writes("axis_commit")
+            if not confirm:
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {"path": "/Commit", "method": "POST"},
+                        "hint": "Pass confirm=true to commit staged Axis Security changes.",
+                    },
+                    settings.max_output_chars,
+                )
+            axis = require_axis()
+            axis.commit_changes()
+            audit.record("axis_commit", "commit", "axis", "ok", dry_run=False)
+            return json_result({"applied": True, "committed": True}, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 

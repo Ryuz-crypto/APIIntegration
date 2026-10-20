@@ -1,0 +1,235 @@
+# EdgeConnect NOC Ops Skill (ec-mcp v5.0.0)
+
+Guía operativa para NOC: cómo usar el MCP `ec-mcp` v5.0.0 para monitorear, diagnosticar y operar EdgeConnect + Axis Security (SSE). Actualizado con la capa de telemetría, respuesta a incidentes y plataforma Axis.
+
+---
+
+## 1. Mapa de herramientas MCP (v5.0.0 — 112 tools)
+
+### 1.1 Telemetría (NUEVO v5.0.0)
+
+| Tool | Uso |
+|------|-----|
+| `get_orchestrator_infrastructure` | KPIs del Orchestrator: platform, GMS, disco, particiones BD, stats collectors. Salud propia del Orchestrator. |
+| `get_appliance_infrastructure(appliance_id)` | KPIs por appliance desde el Orchestrator: CPU timeseries, performance/throughput, interface state (histórico/agregado). |
+| `get_realtime_stats(appliance_id, type, name, filter, count)` | Stats **real-time** por segundo del appliance vía proxy SD-WAN (`POST /stats/realtimeStats`). Tipos: `tunnel`, `port`, `port_pair`, `boosted_tunnel`, `shaper`. Filtro: `all`/`average`/`peak`. |
+| `get_appliance_health(appliance_id)` | Salud viva del appliance: `POST /health` (loss/latency/jitter/MOS), system info, disk usage, discos. |
+
+**Flujo NOC recomendado:**
+1. `get_orchestrator_infrastructure` → ¿el Orchestrator está sano?
+2. `list_appliances` → ¿qué appliances hay y su reachability?
+3. `get_appliance_health` → salud viva por appliance
+4. `get_realtime_stats` → tráfico por túnel/puerto en tiempo real
+
+### 1.2 Seguridad y respuesta a incidentes
+
+| Tool | Uso |
+|------|-----|
+| `correlate_incidents(appliance_id, date)` | Correlaciona IDS/IPS + firewall drops + DDoS + web filtering + alarmas activas → lista priorizada de incidentes. |
+| `get_security_posture(appliance_id)` | Snapshot de posture: IDS/IPS, DDoS, zone matrix, túneles. |
+| `get_ids_ips_state` / `get_ids_ips_events` | Estado y eventos IDS/IPS por appliance. |
+| `get_active_alarms` | Alarmas activas por severidad. |
+| `get_security_log` | Firewall logs (con `summarize=true` incluye web filtering). |
+| `list_response_options(target, domain, application, context)` | Enumera TODAS las opciones de respuesta de EdgeConnect ante una amenaza (ipIntelligence, DNS, ACL, IPS inline, zona deny, interfaz shutdown, blackhole, DDoS). |
+| `block_threat(target/domain, category, confirm)` | Aplica bloqueo: clasifica IP/CIDR (ipIntelligence) o dominio (dnsClassification2) en categoría de bloqueo. Dry-run por defecto. |
+
+**Flujo de respuesta a incidentes:**
+1. `correlate_incidents` → detectar
+2. `list_response_options(target=..., context=...)` → ver opciones
+3. `block_threat(target=..., category=..., confirm=true)` → aplicar (requiere `EC_ALLOW_WRITE_TOOLS=true`)
+
+### 1.3 SSH — Rutas de red LAN/WAN (NUEVO v5.0.0)
+
+| Tool | Uso |
+|------|-----|
+| `get_ssh_network_path(appliance_id)` | Muestra cómo se alcanzaría el appliance por SSH: LAN (misma subred, directo) o WAN (IP de interfaz WAN, NO la pública/NAT). Incluye notas y diagnóstico. |
+| `ensure_ssh_inbound_forwarding(appliance_id, external_port, internal_port, source_ip, confirm)` | Crea una regla de port-forwarding (inbound) para SSH en la WAN del appliance. Dry-run por defecto. |
+| `run_show_command(command, host)` | Ejecuta `show ...` por SSH (whitelist). |
+| `run_cli_command(command, host, confirm)` | Ejecuta cualquier comando ECOS por SSH (config = dry-run + confirm). |
+| `run_show_api(command, appliance_id)` | Ejecuta `show ...` vía API del Orchestrator (sin SSH). |
+| `list_cli_commands(category)` | Catálogo de 1367 comandos ECOS. |
+
+**Reglas de red SSH:**
+- **LAN**: si la IP LAN del appliance está en la misma subred /24 que una interfaz local → SSH directo a la IP LAN.
+- **WAN**: si no → SSH a la **IP de la interfaz WAN** del appliance (la configurada en la interfaz, NO la IP pública/NAT de salida).
+- Si se rechaza en WAN → falta **inbound forwarding** (port-forward/DNAT para TCP/22). Usar `ensure_ssh_inbound_forwarding` para crearlo.
+
+### 1.4 Axis Security (SSE) — 55 tools (NUEVO v5.0.0)
+
+Plataforma SSE de Axis Security. Solo requiere **un token de administración** (`EC_AXIS_ADMIN_TOKEN`, Bearer JWT).
+
+#### Configuración (solo estas variables)
+```bash
+EC_AXIS_ENABLED=true
+EC_AXIS_ADMIN_TOKEN=eyJhbGciOi...   # Bearer JWT
+# Opcionales:
+EC_AXIS_BASE_URL=https://admin-api.axissecurity.com
+EC_AXIS_VERIFY_TLS=true
+EC_AXIS_TIMEOUT=30
+```
+
+#### Recursos y tools
+
+| Recurso | Tools |
+|---------|-------|
+| **Health** | `axis_health` |
+| **Tags** (Application Groups) | `axis_list_tags`, `axis_get_tag`, `axis_create_tag`, `axis_update_tag`, `axis_delete_tag` |
+| **Applications** | `axis_list_applications`, `axis_get_application`, `axis_create_application`, `axis_update_application`, `axis_delete_application` |
+| **Connectors** | `axis_list_connectors`, `axis_get_connector`, `axis_create_connector`, `axis_update_connector`, `axis_delete_connector`, `axis_regenerate_connector`, `axis_connector_status` |
+| **Connector Zones** | `axis_list_connector_zones`, `axis_get_connector_zone`, `axis_create_connector_zone`, `axis_update_connector_zone`, `axis_delete_connector_zone` |
+| **IP Categories** (custom) | `axis_list_ip_categories`, `axis_get_ip_category`, `axis_create_ip_category`, `axis_delete_ip_category` |
+| **Web Categories** | `axis_list_web_categories`, `axis_get_web_category`, `axis_create_web_category`, `axis_delete_web_category` |
+| **SSL Exclusions** | `axis_list_ssl_exclusions`, `axis_create_ssl_exclusion`, `axis_delete_ssl_exclusion` |
+| **Groups** | `axis_list_groups`, `axis_create_group`, `axis_delete_group` |
+| **Users** | `axis_list_users`, `axis_get_user`, `axis_create_user`, `axis_delete_user` |
+| **Locations** | `axis_list_locations`, `axis_get_location`, `axis_create_location`, `axis_delete_location` |
+| **SubLocations** | `axis_list_sub_locations`, `axis_create_sub_location`, `axis_delete_sub_location` |
+| **Tunnels** | `axis_list_tunnels`, `axis_tunnel_status`, `axis_create_tunnel`, `axis_delete_tunnel` |
+| **Certificates** | `axis_list_certificates` |
+| **IPSec PoP Locations** | `axis_list_ipsec_locations` |
+| **Commit** | `axis_commit(confirm=true)` — **persistir todos los cambios** |
+
+#### Flujo de trabajo Axis
+
+1. **Lectura**: `axis_health`, `axis_list_connectors`, `axis_connector_status(id)`, `axis_list_applications`, etc.
+2. **Escritura (dry-run primero)**: `axis_create_*` / `axis_update_*` / `axis_delete_*` → sin `confirm=true` muestra qué se ejecutaría.
+3. **Aplicar**: repetir con `confirm=true` (requiere `EC_ALLOW_WRITE_TOOLS=true`).
+4. **Persistir**: `axis_commit(confirm=true)` — **sin commit los cambios no se aplican**.
+
+#### Tipos de Application (Axis)
+`Web`, `Rdp`, `RdpPool`, `Ssh`, `Database`, `NetworkRange`, `SshRange`, `Git`, `Saas`, `Vnc`, `ActiveDirectory`, `Saml`
+
+#### Tipos de Connector Zone
+- **type**: `Regular`, `InternetZone`, `ExternalPublicZone`
+- **purpose**: `Access`, `LogStreaming`
+
+#### Ejemplo: crear una aplicación web en Axis
+```python
+# 1. Ver las zonas disponibles
+axis_list_connector_zones()
+
+# 2. Crear la aplicación (dry-run)
+axis_create_application(
+    name="mi-app-web",
+    app_type="Web",
+    connector_zone_id="zone-id-aqui",
+    confirm=False
+)
+
+# 3. Aplicar
+axis_create_application(
+    name="mi-app-web",
+    app_type="Web",
+    connector_zone_id="zone-id-aqui",
+    confirm=True
+)
+
+# 4. Persistir
+axis_commit(confirm=True)
+```
+
+### 1.5 Workflows (ZTP, Overlays)
+
+| Tool | Uso |
+|------|-----|
+| `prepare_ztp_adoption` / `apply_ztp_plan` / `verify_ztp_plan` / `rollback_ztp_plan` | ZTP transaccional (dry-run → apply → verify → rollback). |
+| `prepare_bulk_ztp_adoption` / `apply_bulk_ztp_plan` / `list_bulk_ztp_plans` | ZTP masivo por seriales. |
+| `prepare_overlay_clone` / `apply_overlay_plan` / `verify_overlay_plan` / `rollback_overlay_plan` | Clonar BIO/overlay. |
+| `apply_change(operation_id, body_json, confirm)` | Ejecutar cualquier operación del catálogo (dry-run por defecto). |
+
+### 1.6 Monitoreo y red
+
+| Tool | Uso |
+|------|-----|
+| `get_wan_health` | Latency/jitter/loss/MOS por túnel. |
+| `get_mos` / `get_availability` / `get_top_talkers` | KPIs de calidad. |
+| `get_brownout_state` / `get_ha_status` / `get_firmware_compliance` | Estado operacional. |
+| `get_tunnel_state` / `troubleshoot_tunnel` | Túneles site-to-site + remedios. |
+| `get_bgp_neighbors` / `get_sse_status` | BGP y SSE (Zscaler/Netskope/Axis vía Orchestrator). |
+| `get_ddos_status` / `get_zone_matrix` / `get_deployment_config` | Seguridad y config. |
+| `list_appliances` / `list_discovered_appliances` | Inventario. |
+| `list_api_operations(search)` | Buscar operaciones del catálogo. |
+| `call_read_api` / `orchestrator_info` / `orchestrator_metrics` | API genérica e info. |
+
+---
+
+## 2. Panel web de administración
+
+El MCP incluye un **panel web** (`ec-mcp admin`, puerto 8080 por defecto) para:
+- Editar **todas las variables** de `.env` (solo las necesarias son obligatorias, el resto opcionales)
+- Ver el estado de los servicios
+- **Reiniciar el MCP** para aplicar los cambios
+- Gestionar orquestadores (múltiples URLs/credenciales)
+
+**Variables ahora editables en el panel (incluye Axis):**
+- Orchestrator: URL, API key, user, password, verify TLS
+- SSH: enabled, host, user, password, enable password, port, auth method
+- **Axis Security: enabled, admin token (Bearer JWT), base URL, verify TLS, timeout**
+- Servidor MCP: host, port, auth token, admin password
+- Seguridad: write tools, dangerous writes, rate limits, output chars, cache TTL
+
+**Flujo:**
+1. Abrir `http://<host>:8080`
+2. Login con `EC_ADMIN_PASSWORD`
+3. Editar variables → Guardar
+4. "Reiniciar servicios" → el MCP recarga con la nueva config
+
+---
+
+## 3. Runbooks NOC
+
+### 3.1 Chequeo de salud general (cada turno)
+```python
+get_orchestrator_infrastructure()      # Orchestrator sano
+list_appliances()                      # Inventario + reachability
+get_security_posture(appliance_id="all")  # Posture de seguridad
+correlate_incidents()                  # Incidentes correlacionados
+```
+
+### 3.2 Túnel caído
+```python
+troubleshoot_tunnel(appliance_id="...")  # Diagnóstico + remedios
+get_tunnel_state(appliance_id="...")     # Estado de túneles
+get_wan_health(appliance_id="...")       # Calidad WAN
+```
+
+### 3.3 Sospecha de ataque
+```python
+correlate_incidents()                          # Detectar
+list_response_options(target="x.x.x.x", context="scan")  # Ver opciones
+block_threat(target="x.x.x.x", category="BLOCKED-SEC", confirm=True)  # Bloquear
+```
+
+### 3.4 SSH no conecta a un appliance
+```python
+get_ssh_network_path(appliance_id="...")   # ¿LAN o WAN?
+# Si WAN y falla:
+ensure_ssh_inbound_forwarding(appliance_id="...", confirm=True)  # Crear port-forward
+run_show_command("show version", host="...")  # Verificar
+```
+
+### 3.5 Axis Security — onboarding de aplicación
+```python
+axis_health()                              # Plataforma sana
+axis_list_connector_zones()                # Zonas disponibles
+axis_create_application(name="app", app_type="Web", connector_zone_id="...", confirm=True)
+axis_commit(confirm=True)                  # Persistir
+```
+
+### 3.6 Axis Security — revisar connector
+```python
+axis_list_connectors()
+axis_connector_status(connector_id="...")  # CPU/mem/disk/red
+```
+
+---
+
+## 4. Reglas de oro
+
+1. **Dry-run primero**: todas las escrituras (`apply_change`, `block_threat`, `axis_create_*`, `run_cli_command`) son dry-run sin `confirm=true`.
+2. **Commit en Axis**: los cambios en Axis no persisten sin `axis_commit(confirm=true)`.
+3. **SSH WAN**: usar la IP de la interfaz WAN del appliance, nunca la pública/NAT. Si falla, crear inbound forwarding.
+4. **POST /deployment es REPLACE**: nunca enviar body parcial sin `modeIfs` (borra interfaces).
+5. **NO tocar `0.NE` (ECV-CALIMAYA)**: es la salida a internet del lab.
+6. **Secretos**: el panel web enmascara valores secretos; nunca loguearlos.
+7. **Panel web**: solo exponer en localhost o detrás de reverse proxy con auth.

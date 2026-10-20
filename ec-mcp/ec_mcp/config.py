@@ -21,6 +21,12 @@ class Settings:
     ssh_port: int = 22
     ssh_auth_method: str = "auto"
 
+    axis_enabled: bool = False
+    axis_admin_token: str = ""
+    axis_base_url: str = "https://admin-api.axissecurity.com"
+    axis_verify_tls: bool = True
+    axis_timeout: float = 30.0
+
     allow_write_tools: bool = False
     allow_dangerous_writes: bool = False
     max_output_chars: int = 12000
@@ -48,6 +54,11 @@ class Settings:
             ssh_enable_password=os.environ.get("EC_SSH_ENABLE_PASSWORD", ""),
             ssh_port=int(os.environ.get("EC_SSH_PORT", "22")),
             ssh_auth_method=os.environ.get("EC_SSH_AUTH_METHOD", "auto").strip().lower(),
+            axis_enabled=os.environ.get("EC_AXIS_ENABLED", "false").lower() == "true",
+            axis_admin_token=os.environ.get("EC_AXIS_ADMIN_TOKEN", ""),
+            axis_base_url=os.environ.get("EC_AXIS_BASE_URL", "https://admin-api.axissecurity.com"),
+            axis_verify_tls=os.environ.get("EC_AXIS_VERIFY_TLS", "true").lower() != "false",
+            axis_timeout=float(os.environ.get("EC_AXIS_TIMEOUT", "30")),
             allow_write_tools=os.environ.get("EC_ALLOW_WRITE_TOOLS", "false").lower() == "true",
             allow_dangerous_writes=os.environ.get("EC_ALLOW_DANGEROUS_WRITES", "false").lower() == "true",
             max_writes_per_minute=int(os.environ.get("EC_MAX_WRITES_PER_MINUTE", "10")),
