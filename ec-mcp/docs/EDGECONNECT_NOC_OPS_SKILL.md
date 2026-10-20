@@ -153,7 +153,7 @@ axis_commit(confirm=True)
 | `list_api_operations(search)` | Buscar operaciones del catálogo. |
 | `call_read_api` / `orchestrator_info` / `orchestrator_metrics` | API genérica e info. |
 | `dashboard_snapshot` / `dashboard_render` | Dashboard NOC (EdgeConnect + Axis): JSON + HTML autocontenido. |
-| `dashboard_remote_config` / `dashboard_deploy_remote` / `dashboard_remote_status` / `dashboard_refresh_remote` | Dashboard remoto: despliegue vía SSH a Ubuntu (nginx). Ver **G10**. |
+| `dashboard_remote_config` / `dashboard_deploy_remote` / `dashboard_remote_status` / `dashboard_refresh_remote` | Dashboard remoto: despliegue vía SSH a Ubuntu (nginx). Variables SSH en el panel web. Ver **G10**. |
 
 ### 1.7 Guías por tarea — Axis Security (SSE)
 
@@ -380,11 +380,7 @@ dashboard_remote_status()
 dashboard_refresh_remote(confirm=True)
 ```
 
-**Flujo equivalente desde el panel web** (`http://<host>:8080` → pestaña **Dashboard**):
-1. Configura las variables en **Variables → Dashboard remoto (SSH)** → Guardar y reiniciar.
-2. Pestaña **Dashboard** → "Instalar en servidor remoto (nginx)" → confirmar.
-3. Abrir la URL mostrada. "Vista previa local" genera el HTML sin desplegar.
-4. "Refrescar datos" re-sube con datos vivos (equivalente al cron).
+**Panel web (`ec-mcp control plane`)**: solo administra **variables** y **actualizaciones**. Las variables de conexión SSH al servidor remoto se editan en **Variables → "Dashboard remoto (SSH)"** (usuario/contraseña/IP) → Guardar y reiniciar. El panel **no** despliega ni previsualiza el dashboard: eso se hace por los tools MCP de arriba.
 
 **Reglas:**
 - El despliegue remoto es una **escritura** (requiere `EC_ALLOW_WRITE_TOOLS=true` + `confirm=true`).
@@ -395,18 +391,22 @@ dashboard_refresh_remote(confirm=True)
 
 ---
 
-## 2. Panel web de administración
+## 2. Panel web de administración (`ec-mcp control plane`)
 
-El MCP incluye un **panel web** (`ec-mcp admin`, puerto 8080 por defecto) para:
+El MCP incluye un **panel web** (`ec-mcp admin`, puerto 8080 por defecto) que es **solo de administración**:
 - Editar **todas las variables** de `.env` (solo las necesarias son obligatorias, el resto opcionales)
 - Ver el estado de los servicios
 - **Reiniciar el MCP** para aplicar los cambios
 - Gestionar orquestadores (múltiples URLs/credenciales)
+- **Actualizaciones** desde GitHub (detectar, confirmar y aplicar)
 
-**Variables ahora editables en el panel (incluye Axis):**
+> El panel **no** ejecuta operaciones de red (no despliega dashboards ni conecta por SSH a otros servidores). Esas acciones se hacen por los **tools MCP**. El panel solo expone las variables para configurarlas.
+
+**Variables ahora editables en el panel (incluye Axis y Dashboard remoto):**
 - Orchestrator: URL, API key, user, password, verify TLS
 - SSH: enabled, host, user, password, enable password, port, auth method
 - **Axis Security: enabled, admin token (Bearer JWT), base URL, verify TLS, timeout**
+- **Dashboard remoto (SSH): enabled, host, user, password/key, puerto SSH, puerto dashboard, directorio, refresh**
 - Servidor MCP: host, port, auth token, admin password
 - Seguridad: write tools, dangerous writes, rate limits, output chars, cache TTL
 
@@ -498,7 +498,7 @@ dashboard_deploy_remote(install=True, confirm=True)   # -> http://<host>:8090/
 dashboard_remote_status()
 dashboard_refresh_remote(confirm=True)                 # para cron cada 5 min
 ```
-También desde el panel web: pestaña **Dashboard** → "Instalar en servidor remoto (nginx)".
+Las variables SSH del servidor remoto se configuran en el panel web: **Variables → "Dashboard remoto (SSH)"** → Guardar y reiniciar. El despliegue se ejecuta por MCP (arriba).
 
 ---
 

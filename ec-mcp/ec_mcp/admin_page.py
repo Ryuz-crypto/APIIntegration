@@ -42,7 +42,7 @@ async function login(){
 async function logout(){await api('/logout',{});AUTHED=false;renderLogin()}
 function renderShell(){
  q('#app').innerHTML='<header><div class="brand"><h1>ec-mcp control plane</h1><p>Configuración, operación y actualizaciones sin SSH</p></div><span class="badge">__EC_MCP_VERSION__</span></header>'+
- '<nav><button id="tab-orch" onclick="showTab(\'orch\')">Orquestadores</button><button id="tab-config" onclick="showTab(\'config\')">Variables</button><button id="tab-update" onclick="showTab(\'update\')">Actualizaciones</button><button id="tab-ztp" onclick="showTab(\'ztp\')">ZTP</button><button id="tab-dash" onclick="showTab(\'dash\')">Dashboard</button><button class="secondary" onclick="logout()">Salir</button></nav>'+
+ '<nav><button id="tab-orch" onclick="showTab(\'orch\')">Orquestadores</button><button id="tab-config" onclick="showTab(\'config\')">Variables</button><button id="tab-update" onclick="showTab(\'update\')">Actualizaciones</button><button id="tab-ztp" onclick="showTab(\'ztp\')">ZTP</button><button class="secondary" onclick="logout()">Salir</button></nav>'+
  '<div id="notice"></div><section id="workspace"></section>';
  showTab('config');
 }
@@ -53,7 +53,6 @@ function showTab(name){
  if(name==='config')renderConfig();
  if(name==='update')renderUpdate();
  if(name==='ztp')renderZtp();
- if(name==='dash')renderDashboard();
 }
 async function loadAll(){
  try{var results=await Promise.all([api('/api/state'),api('/api/config'),api('/api/update/status')]);STATE=results[0];CONFIG=results[1];UPDATE={status:results[2]};renderConfig();}
@@ -108,54 +107,6 @@ function renderZtp(){
  '<div class="step locked"><span class="num">3</span><div><strong>Adoptar</strong><p class="help">Vincular el equipo con identidad y autorización explícita.</p></div></div>'+
  '<div class="step locked"><span class="num">4</span><div><strong>Preview / diff</strong><p class="help">Mostrar exactamente qué configuración se aplicará.</p></div></div>'+
  '<div class="step locked"><span class="num">5</span><div><strong>Confirmar y planchar</strong><p class="help">Ejecución auditable con estado, health check y rollback.</p></div></div></section>';
-}
-function renderDashboard(){
- q('#workspace').innerHTML=`<section class="panel"><h2>Dashboard NOC (EdgeConnect + Axis SSE)</h2>`
- +`<p>Genera un dashboard interactivo autocontenido y, si configuraste un servidor Ubuntu en `
- +`<b>Variables &rarr; Dashboard remoto (SSH)</b>, lo instala y publica v&iacute;a SSH (nginx). Queda fijo y estable en el servidor remoto.</p>`
- +`<div id="dash-status"></div>`
- +`<div class="actions">`
- +`<button onclick="dashAction('status')">Ver estado remoto</button>`
- +`<button onclick="dashAction('install')">Instalar en servidor remoto (nginx)</button>`
- +`<button onclick="dashAction('deploy')">Subir dashboard</button>`
- +`<button onclick="dashAction('refresh')">Refrescar datos</button>`
- +`<button class="secondary" onclick="dashPreview()">Vista previa local</button>`
- +`</div><div id="dash-result"></div><div id="dash-preview" style="display:none"></div></section>`;
- dashLoadConfig();
-}
-async function dashLoadConfig(){
- try{
-  var c=await api('/api/dashboard/config');
-  var box=q('#dash-status'); if(!box) return;
-  var missing=(c.missing&&c.missing.length)
-   ?'<span class="msg err" style="display:block">Falta configurar: '+esc(c.missing.join(', '))+'</span>'
-   :'<span class="msg ok" style="display:block">Configurado &rarr; '+esc(c.url||'')+'</span>';
-  box.innerHTML=`<div class="group"><h3>Dashboard remoto (SSH)</h3>`
-   +`<p>Servidor: <span class="mono">${esc(c.host||'&mdash;')}</span> &middot; usuario <span class="mono">${esc(c.user||'&mdash;')}</span> &middot; puerto dashboard <span class="mono">${esc(c.dashboard_port)}</span></p>`
-   +missing+`</div>`;
- }catch(e){}
-}
-async function dashAction(action){
- try{
-  var confirmNeeded=(action==='install'||action==='deploy'||action==='refresh');
-  if(confirmNeeded && !confirm('Ejecutar "'+action+'" en el servidor remoto '+(action==='install'?'(instala nginx, requiere sudo)':''))+'?') return;
-  var r=await api('/api/dashboard/action',{action:action,confirm:confirmNeeded});
-  var box=q('#dash-result');
-  box.innerHTML=`<div class="msg ${r.ok?'ok':'err'}">${esc(r.detail||r.error||JSON.stringify(r))}</div>`
-   +(r.url?`<p>URL: <a href="${esc(r.url)}" target="_blank" style="color:#7dd3fc">${esc(r.url)}</a></p>`:'');
-  if(r.ok) dashLoadConfig();
- }catch(e){ notice(e.message,'err'); }
-}
-async function dashPreview(){
- try{
-  var box=q('#dash-preview'); box.style.display='block';
-  box.innerHTML='<p class="help">Generando vista previa...</p>';
-  var r=await api('/api/dashboard/preview');
-  if(!r.ok) throw new Error(r.error);
-  box.innerHTML='<iframe style="width:100%;height:70vh;border:1px solid var(--line);border-radius:10px;background:#07111f"></iframe>';
-  var doc=box.querySelector('iframe').contentWindow.document;
-  doc.open(); doc.write(r.html); doc.close();
- }catch(e){ notice(e.message,'err'); }
 }
 renderLogin();
 </script></body></html>"""
