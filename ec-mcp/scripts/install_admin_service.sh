@@ -98,7 +98,6 @@ WorkingDirectory=${PROJECT_DIR}
 Environment=EC_MCP_ENV_FILE=${PROJECT_DIR}/.env
 ExecStart=${PROJECT_DIR}/.venv/bin/python ${PROJECT_DIR}/scripts/apply-web-update.py
 PrivateTmp=true
-ProtectHome=read-only
 EOF
 
 sudo tee "$UPDATE_TIMER_FILE" >/dev/null <<EOF

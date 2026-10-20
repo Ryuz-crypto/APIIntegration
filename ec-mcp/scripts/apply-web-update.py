@@ -187,6 +187,48 @@ def install_package(project: Path, python: Path, owner: str) -> None:
     run_user(command, owner, timeout=600)
 
 
+def _ensure_writable_git_dir(root: Path, owner: str) -> None:
+    """Make the git metadata writable by the project owner.
+
+    Root-owned checkouts (clone/push done as root, or filesystems mounted
+    read-only for the service user) make `git fetch` fail with
+    "cannot open '.git/FETCH_HEAD': Read-only file system". Fix ownership of
+    the metadata tree so the unprivileged owner can update it. Best-effort:
+    if we lack permission to chown, raise a clear, actionable error.
+    """
+    git_dir = root / ".git"
+    if not git_dir.exists():
+        return
+    if os.access(git_dir, os.W_OK):
+        return
+    if os.geteuid() != 0:
+        raise RuntimeError(
+            f"El directorio git {git_dir} no es escribible por el usuario del "
+            "proyecto y el worker no corre como root; no se puede corregir. "
+            f"Ejecuta como root: chown -R {owner}: {root}"
+        )
+    result = subprocess.run(  # noqa: S603  # nosec B603
+        ["/usr/bin/chown", "-R", f"{owner}:", str(git_dir)],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        timeout=120,
+    )
+    if result.returncode:
+        raise RuntimeError(
+            f"No se pudo corregir el propietario de {git_dir}: {result.stdout.strip()[-300:]}"
+        )
+    if not os.access(git_dir, os.W_OK):
+        raise RuntimeError(
+            f"{git_dir} sigue sin ser escribible tras corregir el propietario. "
+            "Causa probable: el servicio ec-mcp-update tiene ProtectHome=read-only "
+            f"y el proyecto vive bajo /home (p.ej. {root}). Quita ProtectHome=read-only "
+            "de /etc/systemd/system/ec-mcp-update.service (reinstala con "
+            "scripts/install_admin_service.sh) o mueve el proyecto fuera de /home."
+        )
+
+
 def install_update(request: dict, settings: dict[str, str], state: Path) -> tuple[str, Path]:
     repository, branch, expected = validate_request(request, settings)
     project = Path(settings.get("EC_UPDATE_PROJECT_DIR") or Path.cwd()).resolve()
@@ -195,6 +237,7 @@ def install_update(request: dict, settings: dict[str, str], state: Path) -> tupl
     project_stat = project.stat()
     owner = pwd.getpwuid(project_stat.st_uid).pw_name
     root = Path(run_user(["/usr/bin/git", "-C", str(project), "rev-parse", "--show-toplevel"], owner, timeout=20)).resolve()
+    _ensure_writable_git_dir(root, owner)
     previous = run_user(["/usr/bin/git", "-C", str(root), "rev-parse", "HEAD"], owner, timeout=20).lower()
     dirty = run_user(["/usr/bin/git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"], owner, timeout=20)
     if dirty:
