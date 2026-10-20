@@ -1,6 +1,6 @@
 # EdgeConnect NOC Ops Skill (ec-mcp v5.0.0)
 
-Guía operativa para NOC: cómo usar el MCP `ec-mcp` v5.0.0 para monitorear, diagnosticar y operar EdgeConnect + Axis Security (SSE). Actualizado con la capa de telemetría, respuesta a incidentes, plataforma Axis y **guías por tarea de SSE (§1.7, G1–G9)**: cuando se pida una tarea de Axis (escritura, troubleshooting, configuración, despliegue de apps, activación/desactivación de reglas, políticas CASB, DEM, monitoreo), seguir la guía G correspondiente para estructurar la secuencia de tools.
+Guía operativa para NOC: cómo usar el MCP `ec-mcp` v5.0.0 para monitorear, diagnosticar y operar EdgeConnect + Axis Security (SSE). Actualizado con la capa de telemetría, respuesta a incidentes, plataforma Axis, **guías por tarea de SSE (§1.7, G1–G10)** y **dashboard NOC desplegable en servidor (G10)**: cuando se pida una tarea de Axis (escritura, troubleshooting, configuración, despliegue de apps, activación/desactivación de reglas, políticas CASB, DEM, monitoreo), seguir la guía G correspondiente para estructurar la secuencia de tools.
 
 ---
 
@@ -152,6 +152,8 @@ axis_commit(confirm=True)
 | `list_appliances` / `list_discovered_appliances` | Inventario. |
 | `list_api_operations(search)` | Buscar operaciones del catálogo. |
 | `call_read_api` / `orchestrator_info` / `orchestrator_metrics` | API genérica e info. |
+| `dashboard_snapshot` / `dashboard_render` | Dashboard NOC (EdgeConnect + Axis): JSON + HTML autocontenido. |
+| `dashboard_remote_config` / `dashboard_deploy_remote` / `dashboard_remote_status` / `dashboard_refresh_remote` | Dashboard remoto: despliegue vía SSH a Ubuntu (nginx). Ver **G10**. |
 
 ### 1.7 Guías por tarea — Axis Security (SSE)
 
@@ -336,6 +338,61 @@ axis_list_applications()                 # enabled=true?
 # Alertas: status != Available, CPU/mem/disk ≥ 80%, túnel != Online → diagnosticar con G2
 ```
 
+#### G10. Dashboard NOC (EdgeConnect + Axis) — generar, previsualizar y desplegar en servidor
+
+El dashboard es un **HTML autocontenido** (sin dependencias externas) que se puede previsualizar al momento o **desplegar fijo en un servidor Ubuntu vía SSH** (instala nginx y publica `index.html`). No queda solo en la respuesta: queda sirviendo en `http://<servidor>:8090/`.
+
+**Tools:**
+| Tool | Uso |
+|------|-----|
+| `dashboard_snapshot` | JSON compacto: inventario + reachability + WAN health + túneles + alarmas + HA (EdgeConnect) y health/connectors/túneles (Axis). Solo lectura. |
+| `dashboard_render(refresh_seconds)` | Genera el HTML interactivo autocontenido (auto-refresh). Solo lectura. |
+| `dashboard_remote_config` | Estado de la config remota (qué falta). Nunca devuelve el password. |
+| `dashboard_deploy_remote(install, confirm)` | **Instala en el Ubuntu remoto**: nginx + `index.html` vía SSH/SFTP. Dry-run por defecto; `confirm=true` para aplicar. |
+| `dashboard_remote_status` | Verifica en el remoto: nginx activo + archivo presente + puerto escuchando. Solo lectura. |
+| `dashboard_refresh_remote(confirm)` | Regenera con datos vivos y re-sube al remoto ya instalado (para cron). Dry-run por defecto. |
+
+**Variables (panel web → Variables → "Dashboard remoto (SSH)", o `.env`):**
+```bash
+EC_DASHBOARD_REMOTE_ENABLED=true
+EC_DASHBOARD_REMOTE_HOST=10.0.0.5        # IP del servidor Ubuntu
+EC_DASHBOARD_REMOTE_USER=ubuntu
+EC_DASHBOARD_REMOTE_PASSWORD=...         # o EC_DASHBOARD_REMOTE_KEY_PATH=/ruta/llave
+# EC_DASHBOARD_REMOTE_PORT=22
+# EC_DASHBOARD_PORT=8090                  # puerto HTTP del dashboard en el remoto
+# EC_DASHBOARD_DIR=/var/www/ec-mcp-dashboard
+# EC_DASHBOARD_REFRESH_SECONDS=30
+```
+El usuario remoto necesita **sudo** (el instalador hace `apt-get install nginx`).
+
+**Flujo de despliegue (vía MCP):**
+```python
+# 1. Verificar config remota
+dashboard_remote_config()                # -> configured: true/false + missing
+# 2. Dry-run del despliegue
+dashboard_deploy_remote(install=True, confirm=False)   # muestra qué hará
+# 3. Instalar (nginx + subir dashboard)
+dashboard_deploy_remote(install=True, confirm=True)
+# -> devuelve url: http://<host>:8090/
+# 4. Verificar
+dashboard_remote_status()
+# 5. Refrescar datos (cron cada 5 min recomendado)
+dashboard_refresh_remote(confirm=True)
+```
+
+**Flujo equivalente desde el panel web** (`http://<host>:8080` → pestaña **Dashboard**):
+1. Configura las variables en **Variables → Dashboard remoto (SSH)** → Guardar y reiniciar.
+2. Pestaña **Dashboard** → "Instalar en servidor remoto (nginx)" → confirmar.
+3. Abrir la URL mostrada. "Vista previa local" genera el HTML sin desplegar.
+4. "Refrescar datos" re-sube con datos vivos (equivalente al cron).
+
+**Reglas:**
+- El despliegue remoto es una **escritura** (requiere `EC_ALLOW_WRITE_TOOLS=true` + `confirm=true`).
+- El instalador es **idempotente**: reinstalar no rompe nginx ni el sitio.
+- El HTML generado incluye auto-refresh (`EC_DASHBOARD_REFRESH_SECONDS`); para datos vivos continuos usar `dashboard_refresh_remote` vía cron local.
+- El dashboard nunca expone secretos: el payload pasa por redacción antes de renderizar.
+
+
 ---
 
 ## 2. Panel web de administración
@@ -429,12 +486,26 @@ Ver guías **G7** (CASB) y **G8** (DEM) en §1.7. Ambas terminan con `axis_commi
 ### 3.9 Axis Security — loop de monitoreo por turno
 Ver guía **G9** (§1.7): `axis_health` → `axis_list_connectors` + `axis_connector_status` → `axis_list_tunnels` + `axis_tunnel_status` → `axis_list_applications`. Alertar si: status ≠ `Available`, CPU/mem/disk ≥ 80%, o túnel ≠ `Online`.
 
+### 3.10 Dashboard NOC — desplegar en servidor Ubuntu (fijo y estable)
+Ver guía **G10** (§1.7). Resumen:
+```python
+# 1. Configurar en panel web: Variables → Dashboard remoto (SSH) → guardar y reiniciar
+# 2. Verificar config
+dashboard_remote_config()
+# 3. Instalar (nginx + dashboard) en el remoto — dry-run primero
+dashboard_deploy_remote(install=True, confirm=True)   # -> http://<host>:8090/
+# 4. Verificar y refrescar
+dashboard_remote_status()
+dashboard_refresh_remote(confirm=True)                 # para cron cada 5 min
+```
+También desde el panel web: pestaña **Dashboard** → "Instalar en servidor remoto (nginx)".
+
 ---
 
 ## 4. Reglas de oro
 
 1. **Dry-run primero**: todas las escrituras (`apply_change`, `block_threat`, `axis_create_*`, `run_cli_command`) son dry-run sin `confirm=true`.
-2. **Commit en Axis**: los cambios en Axis no persisten sin `axis_commit(confirm=true)`. Para cualquier tarea de Axis, estructurar la secuencia según las **guías G1–G9 de §1.7** (escritura, troubleshooting, config, despliegue, reglas, CASB, DEM, monitoreo).
+2. **Commit en Axis**: los cambios en Axis no persisten sin `axis_commit(confirm=true)`. Para cualquier tarea de Axis, estructurar la secuencia según las **guías G1–G10 de §1.7** (escritura, troubleshooting, config, despliegue, reglas, CASB, DEM, monitoreo).
 3. **SSH WAN**: usar la IP de la interfaz WAN del appliance, nunca la pública/NAT. Si falla, crear inbound forwarding.
 4. **POST /deployment es REPLACE**: nunca enviar body parcial sin `modeIfs` (borra interfaces).
 5. **NO tocar `0.NE` (ECV-CALIMAYA)**: es la salida a internet del lab.

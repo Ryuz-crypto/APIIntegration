@@ -27,6 +27,16 @@ class Settings:
     axis_verify_tls: bool = True
     axis_timeout: float = 30.0
 
+    dashboard_remote_enabled: bool = False
+    dashboard_remote_host: str = ""
+    dashboard_remote_user: str = ""
+    dashboard_remote_password: str = ""
+    dashboard_remote_port: int = 22
+    dashboard_remote_key_path: str = ""
+    dashboard_port: int = 8090
+    dashboard_dir: str = "/var/www/ec-mcp-dashboard"
+    dashboard_refresh_seconds: int = 30
+
     allow_write_tools: bool = False
     allow_dangerous_writes: bool = False
     max_output_chars: int = 12000
@@ -59,6 +69,15 @@ class Settings:
             axis_base_url=os.environ.get("EC_AXIS_BASE_URL", "https://admin-api.axissecurity.com"),
             axis_verify_tls=os.environ.get("EC_AXIS_VERIFY_TLS", "true").lower() != "false",
             axis_timeout=float(os.environ.get("EC_AXIS_TIMEOUT", "30")),
+            dashboard_remote_enabled=os.environ.get("EC_DASHBOARD_REMOTE_ENABLED", "false").lower() == "true",
+            dashboard_remote_host=os.environ.get("EC_DASHBOARD_REMOTE_HOST", ""),
+            dashboard_remote_user=os.environ.get("EC_DASHBOARD_REMOTE_USER", ""),
+            dashboard_remote_password=os.environ.get("EC_DASHBOARD_REMOTE_PASSWORD", ""),
+            dashboard_remote_port=int(os.environ.get("EC_DASHBOARD_REMOTE_PORT", "22")),
+            dashboard_remote_key_path=os.environ.get("EC_DASHBOARD_REMOTE_KEY_PATH", ""),
+            dashboard_port=int(os.environ.get("EC_DASHBOARD_PORT", "8090")),
+            dashboard_dir=os.environ.get("EC_DASHBOARD_DIR", "/var/www/ec-mcp-dashboard"),
+            dashboard_refresh_seconds=int(os.environ.get("EC_DASHBOARD_REFRESH_SECONDS", "30")),
             allow_write_tools=os.environ.get("EC_ALLOW_WRITE_TOOLS", "false").lower() == "true",
             allow_dangerous_writes=os.environ.get("EC_ALLOW_DANGEROUS_WRITES", "false").lower() == "true",
             max_writes_per_minute=int(os.environ.get("EC_MAX_WRITES_PER_MINUTE", "10")),
