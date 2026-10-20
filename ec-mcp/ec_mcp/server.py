@@ -61,7 +61,11 @@ from .security_workflow import (
     summarize_web_filtering,
     summarize_zone_matrix,
 )
-from .ssh_ecos import ApplianceSshPool
+from .ssh_ecos import ApplianceSshPool, resolve_appliance_network_path
+from .ssh_network import (
+    build_inbound_forwarding_rule,
+    find_port_forwarding_operations,
+)
 from .telemetry_workflow import (
     APPLIANCE_DISK_USAGE_READ,
     APPLIANCE_DISKS_READ,
@@ -1627,6 +1631,170 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         finally:
             if pool is not None:
                 pool.close_all()
+
+    @mcp.tool()
+    def get_ssh_network_path(appliance_id: str = "") -> str:
+        """Show how the MCP server would reach an appliance over SSH: LAN (direct, same subnet) or WAN (via the appliance WAN interface IP, not the public/NAT egress IP). Read-only diagnostic; use before run_show_command/run_cli_command to confirm reachability. If the path is WAN, an inbound forwarding rule (port-forward/DNAT for TCP/22) is required on the appliance; use ensure_ssh_inbound_forwarding to create it."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            inventory = client.list_appliances()
+            from .ssh_ecos import find_appliance
+
+            appliance = find_appliance(appliance_id, inventory)
+            if appliance is None:
+                return json_result(
+                    {
+                        "error": "APPLIANCE_NOT_FOUND",
+                        "appliance_id": appliance_id,
+                        "hint": "Use list_appliances to discover the registered appliances.",
+                    },
+                    settings.max_output_chars,
+                )
+            path = resolve_appliance_network_path(appliance_id, settings, inventory)
+            payload = {
+                "appliance": {
+                    "nePk": appliance.get("nePk"),
+                    "name": appliance.get("name"),
+                    "lan_ip": appliance.get("lan_ip"),
+                    "wan_ips": appliance.get("wan_ips") or [],
+                    "mgmt_ip": appliance.get("ip"),
+                },
+                "network_path": {
+                    "target_ip": path.target_ip,
+                    "network": path.network,
+                    "via": path.via,
+                    "source_ip": path.source_ip,
+                    "notes": path.notes,
+                },
+                "ssh_port": settings.ssh_port,
+                "hint": (
+                    "LAN path: direct SSH to the appliance LAN IP (same subnet). "
+                    "WAN path: SSH to the appliance WAN interface IP; requires an inbound "
+                    "forwarding rule (port-forward/DNAT for TCP/22). If SSH is refused on a "
+                    "WAN path, call ensure_ssh_inbound_forwarding to create the rule."
+                ),
+            }
+            audit.record("get_ssh_network_path", "read", appliance_id, "ok")
+            return json_result(payload, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_ssh_network_path", "read", appliance_id, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def ensure_ssh_inbound_forwarding(
+        appliance_id: str = "",
+        external_port: int = 22,
+        internal_port: int = 22,
+        source_ip: str = "",
+        confirm: bool = False,
+    ) -> str:
+        """Ensure an inbound forwarding (port-forward/DNAT) rule exists on an appliance so SSH (TCP/22) from the WAN reaches the appliance's internal SSH port. Dry-run by default: returns the exact operation, path and body that would be executed. Requires EC_ALLOW_WRITE_TOOLS=true to apply. Use after get_ssh_network_path shows a WAN path and SSH is refused."""
+        try:
+            require_writes("orchestrator.portforwardingpost")
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            inventory = client.list_appliances()
+            from .compat import CompatibilityEngine, load_profiles
+            from .ssh_ecos import find_appliance
+
+            appliance = find_appliance(appliance_id, inventory)
+            if appliance is None:
+                return json_result(
+                    {
+                        "error": "APPLIANCE_NOT_FOUND",
+                        "appliance_id": appliance_id,
+                        "hint": "Use list_appliances to discover the registered appliances.",
+                    },
+                    settings.max_output_chars,
+                )
+            ne_pk = str(appliance.get("nePk") or "")
+            wan_ips = [str(v) for v in (appliance.get("wan_ips") or []) if v]
+            if not wan_ips:
+                return json_result(
+                    {
+                        "error": "NO_WAN_IP",
+                        "appliance": appliance.get("name"),
+                        "hint": "The appliance has no WAN interface IP in the Orchestrator inventory; "
+                        "inbound forwarding cannot be created without a WAN IP.",
+                    },
+                    settings.max_output_chars,
+                )
+            wan_ip = wan_ips[0]
+            rule = build_inbound_forwarding_rule(
+                ne_pk, wan_ip, external_port=external_port, internal_port=internal_port,
+                source_ip=source_ip,
+            )
+            engine = CompatibilityEngine(load_profiles(settings.profiles_dir))
+            version = client.resolve_active_profile()
+            pf_ops = find_port_forwarding_operations(engine._profiles)
+            post_ops = [op for op in pf_ops if op["method"].upper() in ("POST", "PUT")]
+            chosen = None
+            for op in post_ops:
+                if op["version"] == version:
+                    chosen = op
+                    break
+            if chosen is None and post_ops:
+                chosen = post_ops[0]
+            if not confirm:
+                audit.record(
+                    "ensure_ssh_inbound_forwarding", "dry-run", ne_pk, "dry-run", dry_run=True
+                )
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "appliance": {
+                            "nePk": ne_pk,
+                            "name": appliance.get("name"),
+                            "wan_ip": wan_ip,
+                            "lan_ip": appliance.get("lan_ip"),
+                        },
+                        "would_execute": {
+                            "operation_id": chosen["operation_id"] if chosen else None,
+                            "method": chosen["method"] if chosen else "POST",
+                            "path": chosen["path"] if chosen else "/portForwarding",
+                            "body": rule,
+                            "available_operations": pf_ops,
+                        },
+                        "hint": "Pass confirm=true to create the inbound forwarding rule. "
+                        "Requires EC_ALLOW_WRITE_TOOLS=true.",
+                    },
+                    settings.max_output_chars,
+                )
+            if chosen is None:
+                return json_result(
+                    {
+                        "error": "NO_OPERATION",
+                        "hint": "No port-forwarding POST/PUT operation found in the loaded "
+                        "profiles. Use apply_change with the correct operation id, or run "
+                        "the ECOS CLI: 'port-forwarding add <wan-if> tcp <ext-port> <int-ip> <int-port>'.",
+                        "available_operations": pf_ops,
+                    },
+                    settings.max_output_chars,
+                )
+            payload = client.call(version, chosen["operation_id"], json_body=rule)
+            audit.record(
+                "ensure_ssh_inbound_forwarding", chosen["operation_id"], ne_pk, "ok", dry_run=False
+            )
+            return json_result(
+                {
+                    "applied": True,
+                    "appliance": {"nePk": ne_pk, "name": appliance.get("name"), "wan_ip": wan_ip},
+                    "rule": rule,
+                    "result": payload,
+                    "note": "Inbound forwarding rule created. SSH to the WAN IP should now reach "
+                    "the appliance internal SSH port. Verify with get_ssh_network_path and "
+                    "run_show_command.",
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            audit.record(
+                "ensure_ssh_inbound_forwarding", "", appliance_id, f"error: {error}"
+            )
+            return f"Error: {error}"
 
     OVERLAY_GET_OPERATION = "orchestrator.getoverlay323"
     OVERLAY_CREATE_OPERATION = "orchestrator.addnewoverlay315"
