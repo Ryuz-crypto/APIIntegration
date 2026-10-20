@@ -3,8 +3,15 @@ from __future__ import annotations
 import re
 import socket
 import time
+from typing import Any
 
 from .security import SecurityError, redact_secrets, sanitize_output, validate_show_command
+from .ssh_network import (
+    NetworkPath,
+    classify_network_path,
+    is_connection_rejected,
+    summarize_inbound_forwarding_need,
+)
 
 try:
     from netmiko import ConnectHandler
@@ -181,11 +188,17 @@ def resolve_appliance_address(
     target: str,
     settings,
     inventory: list[dict] | None = None,
+    prefer_network: str = "auto",
 ) -> str:
     """Resolve an appliance reference (nePk, name, IP or serial) to a reachable IP.
 
     If the reference looks like a host/IP it is used directly; otherwise the
     Orchestrator inventory is consulted (name, nePk, serial, IP, LAN/WAN fields).
+
+    When prefer_network is "auto" (default) the LAN/WAN path is classified:
+    - Same subnet as a local interface -> LAN IP (direct).
+    - Otherwise -> WAN interface IP (the IP configured on the appliance WAN
+      interface, NOT the public/NAT egress IP). Requires inbound forwarding.
     """
     candidate = target.strip()
     if not candidate:
@@ -209,11 +222,6 @@ def resolve_appliance_address(
                 f"unavailable ({error}). Pass an IP or FQDN instead."
             ) from error
     lowered = candidate.lower()
-    address_fields = (
-        "ip",
-        "lan_ip",
-        "wan_ips",
-    )
     for appliance in inventory:
         identifiers = {
             str(appliance.get("nePk") or "").lower(),
@@ -221,23 +229,88 @@ def resolve_appliance_address(
             str(appliance.get("serial_number") or "").lower(),
         }
         if lowered in identifiers:
-            for field_name in address_fields:
-                value = appliance.get(field_name)
-                if value:
-                    if isinstance(value, list):
-                        for item in value:
-                            if item:
-                                return str(item)
-                    else:
+            if prefer_network == "lan":
+                for field in ("lan_ip", "ip"):
+                    value = appliance.get(field)
+                    if value:
                         return str(value)
-            raise SecurityError(
-                f"Appliance '{candidate}' has no reachable IP in the Orchestrator "
-                "inventory. SSH cannot reach it."
-            )
+            elif prefer_network == "wan":
+                wan_ips = appliance.get("wan_ips") or []
+                if wan_ips:
+                    return str(wan_ips[0])
+                raise SecurityError(
+                    f"Appliance '{candidate}' has no WAN interface IP in the Orchestrator "
+                    "inventory. SSH over WAN requires the appliance WAN interface IP "
+                    "(not the public/NAT egress IP)."
+                )
+            else:
+                path = classify_network_path(appliance, settings.orchestrator_url)
+                return path.target_ip
     raise SecurityError(
         f"Appliance '{target}' not found in the Orchestrator inventory. "
         "Use list_appliances to discover the registered appliances."
     )
+
+
+def resolve_appliance_network_path(
+    target: str,
+    settings,
+    inventory: list[dict] | None = None,
+) -> NetworkPath:
+    """Resolve an appliance reference to a full NetworkPath (IP + LAN/WAN + notes)."""
+    candidate = target.strip()
+    if not candidate:
+        raise SecurityError("No appliance host given for SSH")
+    if inventory is None:
+        from .compat import CompatibilityEngine, load_profiles
+        from .orchestrator_client import OrchestratorClient
+
+        try:
+            engine = CompatibilityEngine(load_profiles(settings.profiles_dir))
+            client = OrchestratorClient(settings, engine)
+            inventory = client.list_appliances()
+        except Exception as error:
+            raise SecurityError(
+                f"Could not resolve appliance '{target}': Orchestrator inventory "
+                f"unavailable ({error}). Pass an IP or FQDN instead."
+            ) from error
+    lowered = candidate.lower()
+    for appliance in inventory:
+        identifiers = {
+            str(appliance.get("nePk") or "").lower(),
+            str(appliance.get("name") or "").lower(),
+            str(appliance.get("serial_number") or "").lower(),
+        }
+        if lowered in identifiers:
+            return classify_network_path(appliance, settings.orchestrator_url)
+    raise SecurityError(
+        f"Appliance '{target}' not found in the Orchestrator inventory. "
+        "Use list_appliances to discover the registered appliances."
+    )
+
+
+def find_appliance(
+    target: str,
+    inventory: list[dict],
+) -> dict[str, Any] | None:
+    """Find an appliance dict in the inventory by nePk, name, serial, or IP."""
+    lowered = target.strip().lower()
+    if not lowered:
+        return None
+    for appliance in inventory:
+        identifiers = {
+            str(appliance.get("nePk") or "").lower(),
+            str(appliance.get("name") or "").lower(),
+            str(appliance.get("serial_number") or "").lower(),
+            str(appliance.get("ip") or "").lower(),
+            str(appliance.get("lan_ip") or "").lower(),
+        }
+        if lowered in identifiers:
+            return appliance
+        for wan_ip in appliance.get("wan_ips") or []:
+            if str(wan_ip).lower() == lowered:
+                return appliance
+    return None
 
 
 class ApplianceSshPool:
@@ -245,6 +318,17 @@ class ApplianceSshPool:
         self._settings = settings
         self._sessions: dict[str, ApplianceSession] = {}
         self._inventory: list[dict] | None = None
+        self._network_paths: dict[str, NetworkPath] = {}
+
+    def _load_inventory(self) -> list[dict]:
+        if self._inventory is None:
+            from .compat import CompatibilityEngine, load_profiles
+            from .orchestrator_client import OrchestratorClient
+
+            engine = CompatibilityEngine(load_profiles(self._settings.profiles_dir))
+            client = OrchestratorClient(self._settings, engine)
+            self._inventory = client.list_appliances()
+        return self._inventory
 
     def get(self, host: str | None = None) -> ApplianceSession:
         target = host or self._settings.ssh_host
@@ -255,20 +339,42 @@ class ApplianceSshPool:
                 "No appliance host configured for SSH. Pass a host/IP/nePk/name, or "
                 "set EC_SSH_HOST. Use list_appliances to discover the appliances."
             )
-        resolved = resolve_appliance_address(target, self._settings, self._inventory)
+        inventory = self._load_inventory()
+        path = resolve_appliance_network_path(target, self._settings, inventory)
+        self._network_paths[target] = path
+        resolved = path.target_ip
         if resolved not in self._sessions:
-            self._sessions[resolved] = ApplianceSession(
-                host=resolved,
-                username=self._settings.ssh_username,
-                password=self._settings.ssh_password,
-                port=self._settings.ssh_port,
-                max_output_chars=self._settings.max_output_chars,
-                enable_password=self._settings.ssh_enable_password,
-                auth_method=self._settings.ssh_auth_method,
-            )
+            try:
+                self._sessions[resolved] = ApplianceSession(
+                    host=resolved,
+                    username=self._settings.ssh_username,
+                    password=self._settings.ssh_password,
+                    port=self._settings.ssh_port,
+                    max_output_chars=self._settings.max_output_chars,
+                    enable_password=self._settings.ssh_enable_password,
+                    auth_method=self._settings.ssh_auth_method,
+                )
+            except Exception as error:
+                if is_connection_rejected(error):
+                    appliance = find_appliance(target, inventory)
+                    if appliance and path.network == "wan":
+                        diagnosis = summarize_inbound_forwarding_need(appliance, error)
+                        raise SecurityError(
+                            "SSH connection to the appliance WAN interface was rejected. "
+                            f"Diagnosis: {diagnosis['diagnosis']}. "
+                            f"WAN IP: {diagnosis['wan_ip']}, LAN IP: {diagnosis['lan_ip']}. "
+                            f"Remediation: {diagnosis['remediation']}"
+                        ) from error
+                raise
         return self._sessions[resolved]
+
+    def get_network_path(self, host: str | None = None) -> NetworkPath | None:
+        """Return the resolved NetworkPath for a host (if already resolved)."""
+        target = host or self._settings.ssh_host
+        return self._network_paths.get(target)
 
     def close_all(self) -> None:
         for session in self._sessions.values():
             session.close()
         self._sessions.clear()
+        self._network_paths.clear()
