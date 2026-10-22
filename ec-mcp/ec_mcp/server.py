@@ -438,6 +438,49 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return results if len(results) > 1 else results[0]
         raise last_error or RuntimeError(f"No endpoint available for KPI {kpi}")
 
+    def _extract_sdwan_ai_answer(payload: dict[str, Any]) -> dict[str, Any]:
+        """Flatten the SD-WAN AI SSE stream into an answer document."""
+        answer: dict[str, Any] = {"events": [], "answer": ""}
+        texts: list[str] = []
+        chat_id = ""
+        msg_id = ""
+        job_id = ""
+        for event in payload.get("events", []):
+            data = str(event.get("data", ""))
+            try:
+                parsed = json.loads(data)
+            except (json.JSONDecodeError, TypeError):
+                parsed = None
+            if isinstance(parsed, dict):
+                for key in ("chat_id", "chatId"):
+                    if parsed.get(key):
+                        chat_id = str(parsed[key])
+                for key in ("msg_id", "msgId", "message_id"):
+                    if parsed.get(key):
+                        msg_id = str(parsed[key])
+                if parsed.get("job_id") or parsed.get("jobId"):
+                    job_id = str(parsed.get("job_id") or parsed.get("jobId"))
+                for key in ("answer", "text", "content", "message", "response", "delta"):
+                    value = parsed.get(key)
+                    if isinstance(value, str) and value:
+                        texts.append(value)
+                if parsed.get("error"):
+                    answer["stream_error"] = parsed.get("error")
+                answer["events"].append(parsed)
+            elif data:
+                texts.append(data)
+        answer["answer"] = "".join(texts).strip() or (payload.get("data") or "").strip()
+        if chat_id:
+            answer["chat_id"] = chat_id
+        if msg_id:
+            answer["msg_id"] = msg_id
+        if job_id:
+            answer["job_id"] = job_id
+        answer["event_count"] = len(answer["events"])
+        if answer["event_count"] > 40:
+            answer["events"] = answer["events"][:40]
+        return answer
+
     def reachability_map(client: OrchestratorClient) -> dict[str, str]:
         try:
             data = kpi_get(client, "reachability")
@@ -4558,6 +4601,95 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
         except Exception as error:
             audit.record("get_realtime_stats", target_type, appliance_id, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def ask_sdwan_ai(question: str, chat_id: str = "", max_events: int = 2000) -> str:
+        """Ask the Orchestrator's built-in SD-WAN AI assistant (SASE Copilot) a natural-language question about the SD-WAN fabric (POST /sdwanai/search, streaming SSE consumed to completion). Returns the assistant's answer plus chat_id/msg_id for conversation continuity. Requires the SASE Copilot feature enabled on the Orchestrator (check get_sase_copilot_status) and a READ_WRITE API role."""
+        try:
+            if not question or not question.strip():
+                return json_result({"error": "PARAM_REQUIRED", "required_params": ["question"]}, settings.max_output_chars)
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            operation = engine._profiles[version]["operations"].get("orchestrator.sdwanaisearch")
+            if operation is None:
+                return json_result(
+                    {"error": "SD-WAN AI is not available in the active API profile", "active_profile": version},
+                    settings.max_output_chars,
+                )
+            body: dict[str, Any] = {"question": question.strip()}
+            if chat_id:
+                body["chat_id"] = chat_id
+            payload = client.stream_post_sse(
+                "/gms/rest/sdwanai/search", json_body=body, max_events=max(1, max_events)
+            )
+            answer = _extract_sdwan_ai_answer(payload)
+            audit.record("ask_sdwan_ai", "read", settings.orchestrator_url, "ok", details={"chat_id": answer.get("chat_id", "")})
+            return json_result(answer, settings.max_output_chars)
+        except Exception as error:
+            audit.record("ask_sdwan_ai", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_sdwan_ai_chat_logs() -> str:
+        """Retrieve the full conversation history of the current user's active SD-WAN AI chat session (questions, AI answers, timestamps, reference documents). The session must have been initiated via ask_sdwan_ai."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            if "orchestrator.sdwanaichatlogs" not in engine._profiles[version]["operations"]:
+                return json_result(
+                    {"error": "SD-WAN AI chat logs are not available in the active API profile", "active_profile": version},
+                    settings.max_output_chars,
+                )
+            payload = client.call(version, "orchestrator.sdwanaichatlogs")
+            audit.record("get_sdwan_ai_chat_logs", "read", settings.orchestrator_url, "ok")
+            return json_result({"chat_logs": payload}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_sdwan_ai_chat_logs", "read", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def clear_sdwan_ai_context() -> str:
+        """Clear the SD-WAN AI chat context and start a fresh conversation (POST /sdwanai/context/clear). The previous session is closed and a new one is created automatically."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            if "orchestrator.sdwanaiclearcontext" not in engine._profiles[version]["operations"]:
+                return json_result(
+                    {"error": "SD-WAN AI context clear is not available in the active API profile", "active_profile": version},
+                    settings.max_output_chars,
+                )
+            payload = client.call(version, "orchestrator.sdwanaiclearcontext", json_body={})
+            audit.record("clear_sdwan_ai_context", "write", settings.orchestrator_url, "ok")
+            return json_result({"cleared": True, "response": payload}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("clear_sdwan_ai_context", "write", settings.orchestrator_url, f"error: {error}")
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def get_sase_copilot_status() -> str:
+        """Check whether the SASE Copilot (SD-WAN AI assistant) feature is enabled on the Orchestrator (GET /sdwanai/enableSaseCopilot). The feature is stored as an advanced property and defaults to false; if disabled, ask_sdwan_ai will fail."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            version = client.resolve_active_profile()
+            if "orchestrator.getenablesasecopilot" not in engine._profiles[version]["operations"]:
+                return json_result(
+                    {"error": "SASE Copilot status is not available in the active API profile", "active_profile": version},
+                    settings.max_output_chars,
+                )
+            payload = client.call(version, "orchestrator.getenablesasecopilot")
+            audit.record("get_sase_copilot_status", "read", settings.orchestrator_url, "ok")
+            return json_result({"sase_copilot": payload}, settings.max_output_chars)
+        except Exception as error:
+            audit.record("get_sase_copilot_status", "read", settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()
