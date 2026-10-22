@@ -4665,6 +4665,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     {"error": "SD-WAN AI context clear is not available in the active API profile", "active_profile": version},
                     settings.max_output_chars,
                 )
+            require_writes("clear_sdwan_ai_context")
             payload = client.call(version, "orchestrator.sdwanaiclearcontext", json_body={})
             audit.record("clear_sdwan_ai_context", "write", settings.orchestrator_url, "ok")
             return json_result({"cleared": True, "response": payload}, settings.max_output_chars)
