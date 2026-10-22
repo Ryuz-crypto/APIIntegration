@@ -42,6 +42,10 @@ Regla: una versión detectada **mayor o igual** a un perfil cargado nunca bloque
 2. Verificar que los ids usados por el código (grep de `orchestrator.` / `appliance.` en `ec_mcp/*.py`) existen en el nuevo perfil.
 3. Correr `python3 -m pytest tests/` (los tests de `test_unit.py` validan el matching y las operaciones clave).
 
+## 4. SD-WAN AI / SASE Copilot (solo 10.0)
+
+El swagger 10.0 incluye la API de IA del Orchestrator (`POST /sdwanai/search` en streaming SSE, `GET /sdwanai/chat/logs`, `POST /sdwanai/context/clear`, `POST /sdwanai/feedback`, `POST /sdwanai/stop`, `GET /sdwanai/enableSaseCopilot`). El conector expone `ask_sdwan_ai`, `get_sdwan_ai_chat_logs`, `clear_sdwan_ai_context` y `get_sase_copilot_status`; en perfiles 9.x las tools responden con un error descriptivo en vez de fallar. El feature es un advanced property con default false y requiere rol READ_WRITE.
+
 ## 4. Notas de compatibilidad 9.6 → 10.0 verificadas contra el swagger 10.0
 
 - `GET /flow` (`orchestrator.flows242`) existe en 10.0; re-verificar índices del array de flujos (WAN bytes) en vivo antes de confiar en top talkers.

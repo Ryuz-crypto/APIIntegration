@@ -66,6 +66,71 @@ class OrchestratorClient:
             return path
         return f"{self._api_root}{path}"
 
+    def stream_post_sse(
+        self,
+        path: str,
+        json_body: dict[str, Any] | None = None,
+        max_events: int = 2000,
+        timeout: float = 120.0,
+    ) -> dict[str, Any]:
+        """POST and consume a Server-Sent Events stream into a single document.
+
+        Returns {"events": [...], "data": <concatenated data>, "raw": <full text>}.
+        """
+        full_path = self._full_path(path)
+        started = time.monotonic()
+        events: list[dict[str, Any]] = []
+        data_chunks: list[str] = []
+        raw_chunks: list[str] = []
+        event_name = ""
+        data_lines: list[str] = []
+        received = 0
+        try:
+            with self._client.stream(
+                "POST",
+                full_path,
+                headers=self._headers(),
+                json=json_body,
+                timeout=timeout,
+            ) as response:
+                if response.status_code >= 400:
+                    response.read()
+                    raise RuntimeError(
+                        self._error_message(response, f"POST {full_path}")
+                    )
+                def flush() -> None:
+                    nonlocal event_name, data_lines, received
+                    if data_lines or event_name:
+                        payload = "\n".join(data_lines)
+                        events.append({"event": event_name, "data": payload})
+                        data_chunks.append(payload)
+                        received += 1
+                    event_name = ""
+                    data_lines = []
+
+                for line in response.iter_lines():
+                    if received >= max_events:
+                        break
+                    raw_chunks.append(line)
+                    if isinstance(line, bytes):
+                        line = line.decode("utf-8", errors="replace")
+                    if line.startswith("event:"):
+                        flush()
+                        event_name = line.split(":", 1)[1].strip()
+                    elif line.startswith("data:"):
+                        data_lines.append(line.split(":", 1)[1].strip())
+                    elif line.strip() == "":
+                        flush()
+                flush()
+        except httpx.HTTPError as error:
+            raise RuntimeError(f"Streaming request to {full_path} failed: {error}") from error
+        self._record_metric(path, time.monotonic() - started, sum(len(c) for c in raw_chunks), cache_hit=False)
+        return {
+            "events": events,
+            "data": "\n".join(data_chunks),
+            "raw": "\n".join(raw_chunks),
+        }
+
     def get_raw(self, path: str, **query: Any) -> Any:
         key = self._cache_key(path, query)
         now = time.monotonic()
