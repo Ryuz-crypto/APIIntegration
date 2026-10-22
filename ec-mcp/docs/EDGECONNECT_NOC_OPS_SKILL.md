@@ -23,6 +23,7 @@ El MCP debe poder leer **cualquier Orchestrator**: perfiles cargados 9.3, 9.4, 9
 - BFD `GET /bfd/state/vrfs` requiere `nePk` en 10.0; sin vecinos BGP configurados devuelve listas vacías (normal).
 - `POST /health` vía proxy requiere `nePk` correcto; si el appliance responde 404, el resto de `get_appliance_health` (system info, disk usage, disks) sigue siendo válido.
 - SSH: el parámetro `host` se resuelve por **nombre de appliance o nePk**, nunca por IP (`Appliance not found in inventory` con IP).
+- **IA embebida (SD-WAN AI / SASE Copilot)**: `ask_sdwan_ai` conversa con el asistente del propio Orchestrator (10.0). Si responde error, verificar `get_sase_copilot_status` (default false) y el rol READ_WRITE. En perfiles sin `/sdwanai/*` (9.x) la tool lo indica sin romper.
 
 ---
 
@@ -36,6 +37,10 @@ El MCP debe poder leer **cualquier Orchestrator**: perfiles cargados 9.3, 9.4, 9
 | `get_appliance_infrastructure(appliance_id)` | KPIs por appliance desde el Orchestrator: CPU timeseries, performance/throughput, interface state (histórico/agregado). |
 | `get_realtime_stats(appliance_id, type, name, filter, count)` | Stats **real-time** por segundo del appliance vía proxy SD-WAN (`POST /stats/realtimeStats`). Tipos: `tunnel`, `port`, `port_pair`, `boosted_tunnel`, `shaper`, `traffic_type`, `traffic_class`, `dscp`, `flow`, `drops`, `interface`. Filtro: `all`/`average`/`peak` (los tipos `drops` no usan filter/count). El body se arma según los ejemplos oficiales de la versión detectada. |
 | `get_appliance_health(appliance_id)` | Salud viva del appliance: `POST /health` (loss/latency/jitter/MOS), system info, disk usage, discos. |
+| `ask_sdwan_ai(question, chat_id)` | **SD-WAN AI / SASE Copilot (10.0)**: pregunta en lenguaje natural al asistente de IA del Orchestrator (`POST /sdwanai/search`, streaming SSE consumido hasta el final). Devuelve `answer` + `chat_id`/`msg_id` para continuar la conversación. Requiere el feature habilitado (`get_sase_copilot_status`) y rol READ_WRITE. |
+| `get_sdwan_ai_chat_logs()` | Historial completo de la sesión de chat activa del SD-WAN AI (preguntas, respuestas, timestamps, documentos de referencia). |
+| `clear_sdwan_ai_context()` | Reinicia el contexto del chat de IA y crea una sesión nueva. |
+| `get_sase_copilot_status()` | Indica si el SASE Copilot está habilitado en el Orchestrator (advanced property, default false). |
 
 **Flujo NOC recomendado:**
 1. `get_orchestrator_infrastructure` → ¿el Orchestrator está sano?
