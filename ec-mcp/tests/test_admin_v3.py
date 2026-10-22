@@ -165,3 +165,47 @@ def test_admin_installer_preserves_port_from_dotenv():
     assert 'PORT="${CLI_PORT:-${EC_ADMIN_PORT:-${ENV_PORT:-8080}}}"' in script
     assert 'PORT="${EC_ADMIN_PORT:-8080}"' not in script
     assert script.index('ENV_PORT="$(grep') < script.index('set_env_value EC_ADMIN_PORT "$PORT"')
+
+
+def test_restart_result_reports_pending_request_and_status(monkeypatch):
+    from starlette.testclient import TestClient
+
+    from ec_mcp import admin
+
+    monkeypatch.setattr(admin, "queue_restart", lambda: {"state": "pending", "action": "restart", "message": "Reinicio programado."})
+    captured = {"pending": True, "status": {"state": "success", "action": "restart", "message": "Servicios reiniciados.", "completed_at": "2026-10-22T01:34:29Z"}}
+    monkeypatch.setattr(admin, "check_pending_request", lambda: captured["pending"])
+    monkeypatch.setattr(admin, "update_status", lambda: captured["status"])
+    monkeypatch.setattr(admin, "_verify_password", lambda candidate, allow_first_run=True: True)
+
+    client = TestClient(admin.build_admin_app())
+    assert client.post("/login", json={"password": "x"}).status_code == 200
+    restart = client.post("/api/restart")
+    assert restart.status_code == 200
+    assert restart.json()["state"] == "pending"
+
+    while_pending = client.get("/api/restart/result")
+    assert while_pending.status_code == 200
+    assert while_pending.json()["request_pending"] is True
+    assert while_pending.json()["state"] == "success"
+
+    captured["pending"] = False
+    finished = client.get("/api/restart/result")
+    assert finished.json()["request_pending"] is False
+    assert finished.json()["completed_at"] == "2026-10-22T01:34:29Z"
+
+
+def test_restart_result_requires_auth():
+    from starlette.testclient import TestClient
+
+    from ec_mcp import admin
+
+    client = TestClient(admin.build_admin_app())
+    assert client.get("/api/restart/result").status_code == 401
+
+
+def test_admin_page_polls_restart_result():
+    from ec_mcp.admin_page import PAGE
+
+    assert "/api/restart/result" in PAGE
+    assert "pollRestart" in PAGE

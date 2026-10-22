@@ -90,7 +90,14 @@ async function saveConfig(restart){
  try{var r=await api('/api/config',{values:values,clear_secrets:clear});notice(r.message||r.error,r.ok?'ok':'err');if(!r.ok)return;CONFIG=await api('/api/config');if(restart)await doRestart();else renderConfig()}catch(e){notice(e.message,'err')}
 }
 async function restartServices(){await saveConfig(true)}
-async function doRestart(){try{var r=await api('/api/restart',{});notice(r.message||r.error,r.state==='pending'?'ok':'err')}catch(e){notice(e.message,'err')}}
+async function doRestart(){try{var r=await api('/api/restart',{});notice(r.message||r.error,r.state==='pending'?'ok':'err');if(r.state==='pending')pollRestart(0)}catch(e){notice(e.message,'err')}}
+async function pollRestart(attempt){
+ try{var s=await api('/api/restart/result');
+  if(s.request_pending){if(attempt<15){setTimeout(function(){pollRestart(attempt+1)},4000)}else{notice('El reinicio sigue pendiente. Verifica ec-mcp-update.timer con: systemctl status ec-mcp-update.timer','err')}return}
+  if(s.state==='success'){notice('Servicios reiniciados correctamente'+(s.completed_at?' ('+s.completed_at.replace('T',' ').split('.')[0]+' UTC)':'')+'. La configuración guardada ya está activa.','ok')}
+  else if(s.state==='error'){notice('El reinicio falló: '+(s.message||'sin detalle')+(s.diagnostic?'\n'+s.diagnostic:''),'err')}
+ }catch(e){if(attempt<15)setTimeout(function(){pollRestart(attempt+1)},4000)}
+}
 function renderUpdate(){
  var s=UPDATE&&UPDATE.status?UPDATE.status:{state:'idle'};
  q('#workspace').innerHTML='<section class="panel"><h2>Actualizaciones desde GitHub</h2><p>Detecta la rama configurada, fija el commit exacto y delega la instalación a un worker separado. Para repositorios privados configura usuario y token en <b>Variables → Actualizaciones</b>.</p><div class="group"><h3>Estado del worker</h3><p><span class="badge">'+esc(s.state||'idle')+'</span> '+esc(s.message||'Sin operaciones pendientes')+'</p>'+(s.diagnostic?'<pre class="mono">'+esc(s.diagnostic)+'</pre>':'')+'</div><div id="update-detail"></div><div class="actions"><button onclick="checkUpdate()">Detectar GitHub</button></div></section>';
