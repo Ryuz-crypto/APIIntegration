@@ -22,6 +22,20 @@ def slugify(value: str) -> str:
     return re.sub(r"_+", "_", slug)
 
 
+def resolve_ref(ref: Any, components: dict[str, Any], document: dict[str, Any]) -> Any:
+    if not isinstance(ref, dict) or "$ref" not in ref:
+        return ref
+    pointer = str(ref["$ref"])
+    if not pointer.startswith("#/"):
+        return ref
+    target: Any = document
+    for part in pointer[2:].split("/"):
+        if not isinstance(target, dict):
+            return ref
+        target = target.get(part)
+    return target if isinstance(target, dict) else ref
+
+
 def sanitize_path(path: str) -> str:
     return path if path.startswith("/") else "/" + path
 
@@ -67,7 +81,12 @@ def body_example_of(operation: dict[str, Any], components: dict[str, Any]) -> An
         request_body = components.get("requestBodies", {}).get(ref, {})
     content = request_body.get("content", {})
     json_content = content.get("application/json", {})
-    return schema_to_example(json_content.get("schema"), components)
+    example = schema_to_example(json_content.get("schema"), components)
+    if example is None and isinstance(json_content.get("examples"), dict):
+        first = next(iter(json_content["examples"].values()), None)
+        if isinstance(first, dict):
+            return first.get("value")
+    return example
 
 
 def operation_id_for(method: str, path: str, operation: dict[str, Any], used: dict[str, int]) -> str:
@@ -105,13 +124,17 @@ def oas_to_profile(document: dict[str, Any], version: str, prefix: str = "") -> 
             }
             if params_in_path:
                 entry["path_params"] = params_in_path
-            query_params = sorted(
-                {
-                    str(param.get("name"))
-                    for param in operation.get("parameters", [])
-                    if isinstance(param, dict) and param.get("in") == "query" and param.get("name")
-                }
-            )
+            query_names: set[str] = set()
+            inherited_params = path_item.get("parameters", [])
+            for param in [*inherited_params, *operation.get("parameters", [])]:
+                param = resolve_ref(param, components, document)
+                if not isinstance(param, dict):
+                    continue
+                if param.get("in") == "path" and param.get("name"):
+                    params_in_path = sorted(set(params_in_path) | {str(param["name"])})
+                elif param.get("in") == "query" and param.get("name"):
+                    query_names.add(str(param["name"]))
+            query_params = sorted(query_names)
             if query_params:
                 entry["query_params"] = query_params
             body_example = body_example_of(operation, components)

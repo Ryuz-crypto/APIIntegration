@@ -1055,6 +1055,20 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 result["flows"] = client.call(version, "orchestrator.flows242", query_params=None, json_body=None, **query)
             except Exception as error:
                 result["flows_error"] = str(error)[:200]
+                if "appliance.flows263831" in engine._profiles[version]["operations"]:
+                    try:
+                        proxy_query = {k: v for k, v in query.items() if k != "nePk"}
+                        if "maxFlows" in proxy_query:
+                            proxy_query.pop("maxFlows")
+                        if "ipEitherFlag" in proxy_query:
+                            proxy_query.pop("ipEitherFlag")
+                        result["flows"] = client.appliance_api_call(
+                            version, ne_pk, "appliance.flows263831", **proxy_query
+                        )
+                        result["flows_source"] = "appliance_proxy:/flows"
+                        result.pop("flows_error", None)
+                    except Exception as proxy_error:
+                        result["flows_proxy_error"] = str(proxy_error)[:200]
             try:
                 from ec_mcp.security_workflow import (
                     LOG_VIEWER_FILE_READ,

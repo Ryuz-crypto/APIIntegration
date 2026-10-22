@@ -48,7 +48,10 @@ APPLIANCE_SYSTEM_INFO_READ = "appliance.systeminfo841729"
 APPLIANCE_SYSTEM_READ = "appliance.system506453"
 APPLIANCE_FLOW_BANDWIDTH_STATS_READ = "appliance.flowbandwidthstats59434"
 
-REALTIME_STATS_TYPES = ("tunnel", "port", "port_pair", "boosted_tunnel", "shaper")
+REALTIME_STATS_TYPES = (
+    "tunnel", "port", "port_pair", "boosted_tunnel", "shaper",
+    "traffic_type", "traffic_class", "dscp", "flow", "drops", "interface",
+)
 REALTIME_STAT_FILTERS = {
     "all": 0,
     "average": 1,
@@ -81,7 +84,8 @@ def build_realtime_stats_body(
 ) -> dict[str, Any]:
     """Build the POST /stats/realtimeStats body (per-second live appliance stats).
 
-    The appliance expects ``{"filter": <0|1|2>, "name": <str>, "type": <str>, "count": <int>}``.
+    The appliance expects ``{"type": <str>, "name": <str>}`` plus ``filter``/``count``
+    for the categories that support them (per the 10.0 official examples).
     """
     normalized_type = (target_type or "tunnel").strip().lower() or "tunnel"
     if normalized_type not in REALTIME_STATS_TYPES:
@@ -95,12 +99,16 @@ def build_realtime_stats_body(
             f"Invalid realtime stats filter {filter_mode!r}; accepted: "
             + ", ".join(sorted(REALTIME_STAT_FILTERS))
         )
-    return {
-        "filter": REALTIME_STAT_FILTERS[normalized_filter],
-        "name": name or "",
+    body: dict[str, Any] = {
         "type": normalized_type,
-        "count": max(1, count),
+        "name": name or "",
     }
+    if normalized_type in ("drops",):
+        return body
+    body["filter"] = REALTIME_STAT_FILTERS[normalized_filter]
+    body["count"] = max(1, count)
+    return body
+    return body
 
 
 def summarize_realtime_stats(payload: Any) -> list[dict[str, Any]]:

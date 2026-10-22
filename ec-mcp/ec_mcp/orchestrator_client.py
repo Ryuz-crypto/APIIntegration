@@ -227,7 +227,10 @@ class OrchestratorClient:
         if "json" in content_type:
             try:
                 body = response.json()
-                detail = str(body.get("message") or body.get("error") or body)[:300]
+                if isinstance(body, dict):
+                    detail = str(body.get("message") or body.get("error") or body)[:300]
+                else:
+                    detail = str(body)[:300]
             except Exception:
                 detail = response.text[:300]
         else:

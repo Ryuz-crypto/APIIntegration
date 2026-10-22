@@ -50,7 +50,7 @@ def test_realtime_stats_body_normalization():
     assert body["count"] == 3
 
 
-@pytest.mark.parametrize("bad_type", ["flow", "tunnels"])
+@pytest.mark.parametrize("bad_type", ["bogus", "tunnels"])
 def test_realtime_stats_body_rejects_invalid_type(bad_type):
     with pytest.raises(ValueError):
         build_realtime_stats_body(bad_type, "", "all", 5)
@@ -231,7 +231,7 @@ def test_get_realtime_stats_tool_end_to_end():
 
 def test_get_realtime_stats_tool_rejects_invalid_type():
     fake = FakeTelemetryClient()
-    text = _run_tool("get_realtime_stats", {"appliance_id": "EC1", "target_type": "flow"}, fake)
+    text = _run_tool("get_realtime_stats", {"appliance_id": "EC1", "target_type": "bogus"}, fake)
     assert text.startswith("Error")
     assert fake.appliance_calls == []
 

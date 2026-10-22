@@ -386,6 +386,19 @@
       "notes": [
         "Update HA cluster reachability configuration"
       ],
+      "body_example": {
+        "customDefaultReachability": [
+          {
+            "instanceId": "orch-001",
+            "ipOrDNS": "192.168.1.10"
+          },
+          {
+            "instanceId": "orch-002",
+            "ipOrDNS": "192.168.1.11"
+          }
+        ],
+        "reachabilityForLabel": []
+      },
       "tags": [
         "Orchestrator High Availability"
       ]
@@ -658,6 +671,9 @@
       "notes": [
         "Get Orchestration Task Statistics for a Specific Appliance"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "StatsDebug"
       ]
@@ -683,7 +699,8 @@
         "Retrieve Access Control Lists"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "acls"
@@ -794,7 +811,8 @@
         "Get Admin Distance Configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "adminDistance"
@@ -873,6 +891,7 @@
         "groupByNE",
         "groupPk",
         "lastHour",
+        "nePk",
         "startTime",
         "top"
       ],
@@ -917,7 +936,8 @@
       ],
       "query_params": [
         "date",
-        "granularity"
+        "granularity",
+        "nePk"
       ],
       "tags": [
         "aggregateStats"
@@ -933,7 +953,8 @@
       ],
       "query_params": [
         "date",
-        "granularity"
+        "granularity",
+        "nePk"
       ],
       "tags": [
         "aggregateStats"
@@ -951,6 +972,7 @@
         "date",
         "granularity",
         "isGroupByNe",
+        "nePk",
         "overlayId"
       ],
       "tags": [
@@ -968,6 +990,7 @@
       "query_params": [
         "date",
         "granularity",
+        "nePk",
         "overlayId"
       ],
       "tags": [
@@ -985,6 +1008,7 @@
       "query_params": [
         "date",
         "granularity",
+        "nePk",
         "overlayId",
         "serviceName",
         "tunType"
@@ -1006,6 +1030,7 @@
         "format",
         "granularity",
         "groupByNE",
+        "nePk",
         "startTime"
       ],
       "tags": [
@@ -1050,6 +1075,7 @@
         "groupBy",
         "groupBySubDomains",
         "isSource",
+        "nePk",
         "splitByNe",
         "splitType",
         "startTime",
@@ -1105,6 +1131,7 @@
         "groupPk",
         "ip",
         "metric",
+        "nePk",
         "startTime",
         "top",
         "trafficType"
@@ -1159,6 +1186,7 @@
         "groupByNE",
         "groupPk",
         "ip",
+        "nePk",
         "startTime",
         "trafficType"
       ],
@@ -1311,6 +1339,7 @@
         "groupByNE",
         "groupPk",
         "ip",
+        "nePk",
         "overlay",
         "startTime",
         "top",
@@ -1333,6 +1362,7 @@
         "format",
         "granularity",
         "groupByNE",
+        "nePk",
         "overlay",
         "startTime",
         "top",
@@ -1383,6 +1413,7 @@
         "isKnown",
         "isSource",
         "lastHour",
+        "nePk",
         "port",
         "protocol",
         "splitByNe",
@@ -1436,6 +1467,7 @@
         "fromZone",
         "granularity",
         "groupByNE",
+        "nePk",
         "startTime",
         "toZone",
         "top"
@@ -1481,6 +1513,7 @@
       "query_params": [
         "endTime",
         "lastHour",
+        "nePk",
         "splitByNe",
         "startTime",
         "top"
@@ -1549,6 +1582,7 @@
       ],
       "query_params": [
         "endTime",
+        "nePk",
         "sourceIp",
         "startTime"
       ],
@@ -1573,6 +1607,7 @@
         "groupPk",
         "isAggregated",
         "lastHour",
+        "nePk",
         "startTime",
         "top"
       ],
@@ -1625,6 +1660,7 @@
         "groupPk",
         "ip",
         "metric",
+        "nePk",
         "startTime",
         "top",
         "trafficClass",
@@ -1680,6 +1716,7 @@
         "groupPk",
         "ip",
         "metric",
+        "nePk",
         "overlay",
         "startTime",
         "top",
@@ -2196,6 +2233,9 @@
       "notes": [
         "Acknowledge or unacknowledge appliance alarms"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "body_example": {
         "acknowledge": false
       },
@@ -2296,7 +2336,8 @@
         "Get appliance sub-alarms for a parent alarm instance"
       ],
       "query_params": [
-        "instanceId"
+        "instanceId",
+        "nePk"
       ],
       "tags": [
         "alarm"
@@ -2309,6 +2350,9 @@
       "source": "official-oas",
       "notes": [
         "Clear appliance alarms"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "actions": [
@@ -2426,6 +2470,9 @@
       "source": "official-oas",
       "notes": [
         "Get active alarm counts for appliances"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "alarm"
@@ -2593,6 +2640,9 @@
       "source": "official-oas",
       "notes": [
         "Capture comments for appliance alarms"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "note": "Investigating root cause of connectivity issue"
@@ -2816,7 +2866,8 @@
         "Get Appliance System Deployment Information"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "appSystemDeployInfo"
@@ -2833,6 +2884,7 @@
       "query_params": [
         "cached",
         "discoveredId",
+        "nePk",
         "url"
       ],
       "tags": [
@@ -2847,6 +2899,9 @@
       "notes": [
         "Queue an appliance for deletion from the network."
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "appliance"
       ]
@@ -2859,6 +2914,9 @@
       "notes": [
         "Retrieve appliance information by nePk or list all accessible appliances"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "appliance"
       ]
@@ -2870,6 +2928,9 @@
       "source": "official-oas",
       "notes": [
         "Update an appliance's IP, credentials, network role, site, and web protocol"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "IP": "192.168.1.100",
@@ -2925,6 +2986,7 @@
         "Change a user's password on an appliance"
       ],
       "query_params": [
+        "nePk",
         "username"
       ],
       "body_example": {
@@ -2942,6 +3004,9 @@
       "notes": [
         "Get custom tag metadata for appliances"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "appliance"
       ]
@@ -2953,6 +3018,9 @@
       "source": "official-oas",
       "notes": [
         "Queue appliance for deletion from Orchestrator for rediscovery"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "appliance"
@@ -3096,7 +3164,8 @@
         "Get DNS Cache Configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "appliance"
@@ -3110,6 +3179,9 @@
       "notes": [
         "Retrieve HA peer metadata for appliances"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "appliance"
       ]
@@ -3121,6 +3193,9 @@
       "source": "official-oas",
       "notes": [
         "Get interface labels for appliances"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "appliance"
@@ -3135,6 +3210,7 @@
         "Delete a PPPoE virtual interface configuration from an appliance"
       ],
       "query_params": [
+        "nePk",
         "pppoeName"
       ],
       "tags": [
@@ -3150,7 +3226,8 @@
         "Get PPPoE configuration list from appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "appliance"
@@ -3192,6 +3269,7 @@
         "Delete appliance resource via passthrough API"
       ],
       "query_params": [
+        "nePk",
         "url"
       ],
       "tags": [
@@ -3207,6 +3285,7 @@
         "Retrieve appliance data via passthrough API"
       ],
       "query_params": [
+        "nePk",
         "url"
       ],
       "tags": [
@@ -3222,8 +3301,13 @@
         "Modify appliance settings via passthrough API"
       ],
       "query_params": [
+        "nePk",
         "url"
       ],
+      "body_example": {
+        "inbound_max_bandwidth": 100000,
+        "outbound_max_bandwidth": 100000
+      },
       "tags": [
         "appliance"
       ]
@@ -3237,7 +3321,8 @@
         "Get scalar data of an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "appliance"
@@ -3252,7 +3337,8 @@
         "Get shell access setting of appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "appliance"
@@ -3307,6 +3393,9 @@
       "notes": [
         "Get cached zone list metadata for appliances"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "appliance"
       ]
@@ -3355,6 +3444,7 @@
       ],
       "query_params": [
         "id",
+        "nePk",
         "runningConfig"
       ],
       "tags": [
@@ -3368,6 +3458,9 @@
       "source": "official-oas",
       "notes": [
         "Restore appliance configuration from a backup"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "backupFilePk": 12345
@@ -3406,6 +3499,9 @@
       "notes": [
         "Get appliance restore status (active and recent)"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "applianceBackup"
       ]
@@ -3417,6 +3513,9 @@
       "source": "official-oas",
       "notes": [
         "Cancel an in-progress CPU statistics fetch operation"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "applianceCPUstats"
@@ -3430,6 +3529,9 @@
       "notes": [
         "Fetch CPU historical statistics from appliance and store in Orchestrator database"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "applianceCPUstats"
       ]
@@ -3442,6 +3544,9 @@
       "notes": [
         "Check CPU statistics fetch operation status"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "applianceCPUstats"
       ]
@@ -3453,6 +3558,9 @@
       "source": "official-oas",
       "notes": [
         "Get the most recent CPU statistics timestamp for an appliance"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "applianceCPUstats"
@@ -3467,7 +3575,8 @@
         "Retrieve CPU timeseries statistics for an appliance"
       ],
       "query_params": [
-        "cpuid"
+        "cpuid",
+        "nePk"
       ],
       "tags": [
         "applianceCPUstats"
@@ -3496,6 +3605,9 @@
       "notes": [
         "Delete appliance extra information"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "applianceExtraInfo"
       ]
@@ -3508,6 +3620,9 @@
       "notes": [
         "Get appliance extra information"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "applianceExtraInfo"
       ]
@@ -3519,6 +3634,9 @@
       "source": "official-oas",
       "notes": [
         "Save appliance extra information"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "contact": {
@@ -3626,6 +3744,9 @@
       "notes": [
         "Get appliance info for preconfiguration matching"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "appliancePreconfig"
       ]
@@ -3654,6 +3775,7 @@
         "Apply preconfiguration to a managed appliance"
       ],
       "query_params": [
+        "nePk",
         "preconfigId"
       ],
       "tags": [
@@ -3778,6 +3900,9 @@
       "notes": [
         "Check wizard apply operation status for an appliance."
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "applianceWizard"
       ]
@@ -3789,6 +3914,9 @@
       "source": "official-oas",
       "notes": [
         "Apply wizard configuration to an appliance asynchronously."
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "preConfigId": "",
@@ -3818,7 +3946,8 @@
         "Get ECOS Software Versions"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "appliancesSoftwareVersions"
@@ -3836,6 +3965,7 @@
         "bound",
         "customRangeUsed",
         "endDate",
+        "nePk",
         "previousStatType",
         "startDate",
         "traffic"
@@ -4472,7 +4602,8 @@
         "Get authentication order, RADIUS, and TACACS+ configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "authentication"
@@ -4581,6 +4712,9 @@
       "source": "official-oas",
       "notes": [
         "Get AVC Mode Status"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "avcMode"
@@ -5400,7 +5534,8 @@
         "Retrieve banner messages from an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "banners"
@@ -5416,6 +5551,7 @@
       ],
       "query_params": [
         "cached",
+        "nePk",
         "vrfId"
       ],
       "tags": [
@@ -5431,7 +5567,8 @@
         "Retrieve BFD session state for all VRFs"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "bfd"
@@ -5446,7 +5583,8 @@
         "Get BGP neighbor configuration for all VRFs"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "bgp"
@@ -5461,7 +5599,8 @@
         "Get BGP system configuration for all VRFs"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "bgp"
@@ -5476,7 +5615,8 @@
         "Get BGP neighbor configuration for default VRF"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "bgp"
@@ -5491,7 +5631,8 @@
         "Get BGP system configuration for default VRF"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "bgp"
@@ -5507,6 +5648,7 @@
       ],
       "query_params": [
         "cached",
+        "nePk",
         "vrfId"
       ],
       "tags": [
@@ -5522,7 +5664,8 @@
         "Get BGP state details for all VRFs"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "bgp"
@@ -5537,7 +5680,8 @@
         "Retrieve batch of bonded tunnel configurations"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "body_example": [
         ""
@@ -5576,7 +5720,8 @@
         "Retrieve bonded tunnel states in batch"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "body_example": [
         "tunnel_10.0.0.1_10.0.0.2",
@@ -5606,6 +5751,7 @@
         "id",
         "limit",
         "matchingAlias",
+        "nePk",
         "operStatus",
         "overlayId",
         "remoteIdState",
@@ -5627,6 +5773,7 @@
         "Get bonded tunnels containing a specific physical tunnel"
       ],
       "query_params": [
+        "nePk",
         "physicalTunnelId",
         "state"
       ],
@@ -5773,7 +5920,8 @@
         "Get bridge groups configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "bridgeGroups"
@@ -5788,7 +5936,8 @@
         "Get Bridge Interface State"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "bridgeInterfaceState"
@@ -5824,6 +5973,9 @@
       "notes": [
         "Get built-in policy information"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "builtInPolicies"
       ]
@@ -5837,7 +5989,8 @@
         "Get bypass mode settings for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "bypass"
@@ -6049,6 +6202,9 @@
       "notes": [
         "Validate cipher profile against appliance certificate settings"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "body_example": {
         "id": 0,
         "profile": "",
@@ -6259,6 +6415,9 @@
       "notes": [
         "Get appliance configuration limits"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "configurationLimit"
       ]
@@ -6271,6 +6430,9 @@
       "notes": [
         "Retrieve SSE connector details for an appliance"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "sse connector"
       ]
@@ -6282,6 +6444,9 @@
       "source": "official-oas",
       "notes": [
         "Install or upgrade SSE connector on an appliance"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "options": [
@@ -6302,6 +6467,9 @@
       "notes": [
         "Uninstall SSE connector from an appliance"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "sse connector"
       ]
@@ -6313,6 +6481,9 @@
       "source": "official-oas",
       "notes": [
         "Retrieve SSE connector installation/uninstallation status"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "sse connector"
@@ -6433,7 +6604,8 @@
         "Retrieve SSE connector loopback interface configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "sse connector"
@@ -6478,7 +6650,8 @@
         "Retrieve custom appliance tags"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "customApplianceTags"
@@ -6713,6 +6886,9 @@
       "notes": [
         "Retrieve debug files from an appliance"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "debugFiles"
       ]
@@ -6736,6 +6912,9 @@
       "source": "official-oas",
       "notes": [
         "Delete debug file from Orchestrator or appliance"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "fileName": "gms_sysdump_2024-01-15.tgz",
@@ -6854,7 +7033,8 @@
         "Get deployment configuration for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "deployment"
@@ -6867,6 +7047,9 @@
       "source": "official-oas",
       "notes": [
         "Validate deployment configuration"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "sysConfig": {
@@ -6922,6 +7105,9 @@
       "source": "official-oas",
       "notes": [
         "Get tunnel-related deployment information for appliances"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "deployment"
@@ -6991,7 +7177,8 @@
         "Get DHCP settings for a specific appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "dhcpConfig"
@@ -7004,6 +7191,9 @@
       "source": "official-oas",
       "notes": [
         "Update DHCP settings on a specific appliance"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "<interface_name>": {
@@ -7024,7 +7214,8 @@
       ],
       "query_params": [
         "cached",
-        "maxLease"
+        "maxLease",
+        "nePk"
       ],
       "tags": [
         "dhcpConfig"
@@ -7039,7 +7230,8 @@
         "Get DHCP profiler configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "dhcpConfig"
@@ -7052,6 +7244,9 @@
       "source": "official-oas",
       "notes": [
         "Update DHCP profiler configuration"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "ipHelper1": {
@@ -7078,7 +7273,8 @@
         "Get DHCP relay configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "dhcpConfig"
@@ -7093,7 +7289,8 @@
         "Get DHCP remote subnets (address pools)"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "dhcpConfig"
@@ -7106,6 +7303,9 @@
       "source": "official-oas",
       "notes": [
         "Update DHCP remote subnets (address pools)"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "<subnet_with_mask>": {
@@ -7176,6 +7376,9 @@
       "source": "official-oas",
       "notes": [
         "Reserve a subnet in the DHCP pool"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "ifName": "lan0",
@@ -7262,7 +7465,8 @@
         "Get DHCP failover state information for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "dhcpConfig"
@@ -7344,6 +7548,9 @@
       "notes": [
         "Get disk and storage controller information for an appliance."
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "disks"
       ]
@@ -7357,7 +7564,8 @@
         "Get DNS resolver configuration for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "dns"
@@ -7389,7 +7597,8 @@
         "Get DNS proxy configuration for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "dnsProxy"
@@ -7595,6 +7804,7 @@
         "mask1",
         "mask2",
         "maxFlows",
+        "nePk",
         "overlays",
         "port1",
         "port2",
@@ -7625,6 +7835,7 @@
       ],
       "query_params": [
         "id",
+        "nePk",
         "seq"
       ],
       "tags": [
@@ -7641,6 +7852,7 @@
       ],
       "query_params": [
         "id",
+        "nePk",
         "seq"
       ],
       "tags": [
@@ -7657,6 +7869,7 @@
       ],
       "query_params": [
         "id",
+        "nePk",
         "seq"
       ],
       "tags": [
@@ -7674,6 +7887,7 @@
       "query_params": [
         "id",
         "ignore",
+        "nePk",
         "seq"
       ],
       "tags": [
@@ -7687,6 +7901,9 @@
       "source": "official-oas",
       "notes": [
         "Reclassify network flows"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "spIds": [
@@ -7706,6 +7923,9 @@
       "notes": [
         "Reset flows on an appliance"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "body_example": {
         "spIds": [
           12345,
@@ -7723,6 +7943,9 @@
       "source": "official-oas",
       "notes": [
         "Enable or disable flow warning alerts"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "op": 1,
@@ -8283,6 +8506,9 @@
       "notes": [
         "Get GMS registration settings for appliance connectivity (deprecated)"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "gmsRegistration"
       ]
@@ -8319,6 +8545,9 @@
       "source": "official-oas",
       "notes": [
         "Get GMS registration settings for appliance connectivity"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "gmsRegistration"
@@ -9116,6 +9345,9 @@
       "notes": [
         "Update appliance GRNode position by nePk"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "body_example": {
         "wx": 0,
         "wy": 0,
@@ -9442,7 +9674,8 @@
         "Retrieve the HTTPS certificate configuration from an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "httpsCertificate"
@@ -9783,7 +10016,8 @@
         "Get IPSec UDP key material status for a specific appliance"
       ],
       "query_params": [
-        "fromCache"
+        "fromCache",
+        "nePk"
       ],
       "tags": [
         "ikeless"
@@ -9798,7 +10032,8 @@
         "Get inbound shaper settings for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "inboundShaper"
@@ -9859,6 +10094,9 @@
       "notes": [
         "Push interface labels to appliance"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "interfaceLabels"
       ]
@@ -9872,7 +10110,8 @@
         "Retrieve network interface state and configuration data"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "interfaceState"
@@ -10182,7 +10421,8 @@
         "Get current IP SLA Manager Rules"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ipSla"
@@ -10197,7 +10437,8 @@
         "Gets IP SLA Managers state details"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ipSla"
@@ -10250,6 +10491,9 @@
       "notes": [
         "Retrieve portal-registered account for an appliance"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "license"
       ]
@@ -10276,6 +10520,9 @@
       "source": "official-oas",
       "notes": [
         "Update EC appliance account and license settings"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "account": {
@@ -10304,6 +10551,9 @@
       "notes": [
         "Grant an appliance a base license via HPE Aruba Networking EdgeConnect Cloud Portal"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "license"
       ]
@@ -10316,6 +10566,9 @@
       "notes": [
         "Remove license token from appliance"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "license"
       ]
@@ -10327,6 +10580,9 @@
       "source": "official-oas",
       "notes": [
         "Revoke appliance base license via Cloud Portal"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "license"
@@ -10355,6 +10611,33 @@
       "notes": [
         "Configure EC appliance license settings"
       ],
+      "query_params": [
+        "nePk"
+      ],
+      "body_example": {
+        "license": {
+          "tier": {
+            "display": "200 Mbps",
+            "bandwidth": 200000
+          },
+          "boost": {
+            "enable": true,
+            "bandwidth": 50000
+          },
+          "mini": {
+            "enable": false
+          },
+          "plus": {
+            "enable": true
+          },
+          "feature": {
+            "feature_001": {
+              "display": "Advanced Analytics",
+              "reqValue": 1
+            }
+          }
+        }
+      },
       "tags": [
         "license"
       ]
@@ -10410,7 +10693,8 @@
         "Get link aggregation configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "linkAggregation"
@@ -10445,6 +10729,9 @@
       "source": "official-oas",
       "notes": [
         "Retrieve link integrity test status for an appliance"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "linkIntegrity"
@@ -10489,7 +10776,8 @@
         "Get logging settings from appliance or Orchestrator database"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "logging"
@@ -10720,7 +11008,8 @@
         "Get loopback interface configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "loopback"
@@ -11009,7 +11298,8 @@
         "Get Management Services Configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "mgmtServices"
@@ -11106,7 +11396,8 @@
         "Get Multicast Configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "multicast"
@@ -11121,7 +11412,8 @@
         "Get Multicast Enable Status"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "multicast"
@@ -11135,6 +11427,9 @@
       "notes": [
         "Get Multicast Interface State"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "multicast"
       ]
@@ -11147,6 +11442,9 @@
       "notes": [
         "Get PIM Neighbor State"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "multicast"
       ]
@@ -11158,6 +11456,9 @@
       "source": "official-oas",
       "notes": [
         "Get Multicast Route State"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "multicast"
@@ -11172,7 +11473,8 @@
         "Get NAC Security Configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "nac"
@@ -11187,7 +11489,8 @@
         "Get complete NAT configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "nat"
@@ -11202,7 +11505,8 @@
         "Get NAT maps configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "nat"
@@ -11217,7 +11521,8 @@
         "Get NAT pools configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "nat"
@@ -11232,7 +11537,8 @@
         "Get NAT all inbound/outbound settings"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "natPolicy"
@@ -11247,7 +11553,8 @@
         "Get NAT policy maps and rules"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "natPolicy"
@@ -11262,7 +11569,8 @@
         "Get dynamic NAT maps configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "natPolicy"
@@ -11277,7 +11585,8 @@
         "Get neighbor (ARP/NDP) table entries from an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "neighborList"
@@ -11290,6 +11599,9 @@
       "source": "official-oas",
       "notes": [
         "Create a static neighbor entry on an appliance"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "name": "wan0",
@@ -11311,7 +11623,8 @@
       "query_params": [
         "deleteAll",
         "ipAddress",
-        "name"
+        "name",
+        "nePk"
       ],
       "tags": [
         "neighborList"
@@ -11326,7 +11639,8 @@
         "Get NetFlow/IPFIX export configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "netFlow"
@@ -11359,6 +11673,9 @@
       "notes": [
         "Retrieve appliance network role and site information"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "networkRoleAndSite"
       ]
@@ -11370,6 +11687,9 @@
       "source": "official-oas",
       "notes": [
         "Update appliance network role and site assignment"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "networkRole": "1",
@@ -11389,7 +11709,8 @@
         "Retrieve optimization maps configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "optimizationPolicy"
@@ -11404,7 +11725,8 @@
         "Get OSPF interface configurations for all VRF segments"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ospf"
@@ -11419,7 +11741,8 @@
         "Get OSPF system configuration for all VRFs/segments"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ospf"
@@ -11434,7 +11757,8 @@
         "Get OSPF areas configuration"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ospf"
@@ -11449,7 +11773,8 @@
         "Get OSPF interfaces configuration"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ospf"
@@ -11464,7 +11789,8 @@
         "Get appliance OSPF system-level configuration"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ospf"
@@ -11479,7 +11805,8 @@
         "Get OSPF interface state for all VRFs"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ospf"
@@ -11494,7 +11821,8 @@
         "Get OSPF neighbors state for all VRF segments"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ospf"
@@ -11509,7 +11837,8 @@
         "Get OSPF system state for all VRFs"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ospf"
@@ -11524,7 +11853,8 @@
         "Get OSPF interface state details"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ospf"
@@ -11539,7 +11869,8 @@
         "Get OSPF Neighbor State"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ospf"
@@ -11554,7 +11885,8 @@
         "Get OSPF system state"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "ospf"
@@ -11606,6 +11938,7 @@
         "Remove an appliance from an overlay"
       ],
       "query_params": [
+        "nePk",
         "overlayId"
       ],
       "tags": [
@@ -11854,6 +12187,49 @@
       "notes": [
         "Create batch regional overlay configurations"
       ],
+      "body_example": [
+        {
+          "0": {
+            "name": "Business",
+            "bondingPolicy": 1,
+            "topology": {
+              "topologyType": 2,
+              "useRegions": false,
+              "hubs": [],
+              "externalHubs": []
+            },
+            "brownoutThresholds": {
+              "loss": 5,
+              "latency": 150,
+              "jitter": 50
+            },
+            "wanPorts": {
+              "primary": [
+                "1",
+                "2"
+              ],
+              "secondary": [],
+              "backup": [],
+              "crossConnect": []
+            },
+            "overlayFallbackOption": "1",
+            "match": {
+              "overlayAcl": "{\"data\":{\"Overlay_Business\":{\"entry\":{\"1\":{\"match_acl_all\":\"\"}}}}}"
+            },
+            "internetPolicy": {
+              "policyList": [
+                "backhaul_via_overlay"
+              ],
+              "localBreakout": {
+                "primary": [],
+                "backup": []
+              },
+              "pathLoad": 1,
+              "serviceLevelObjective": 1
+            }
+          }
+        }
+      ],
       "tags": [
         "overlays"
       ]
@@ -11882,6 +12258,52 @@
       "notes": [
         "Update regional overlay configurations"
       ],
+      "body_example": {
+        "1": {
+          "0": {
+            "id": 1,
+            "name": "Business",
+            "bondingPolicy": 2,
+            "topology": {
+              "topologyType": 2,
+              "useRegions": false,
+              "hubs": [
+                "10.NE"
+              ],
+              "externalHubs": []
+            },
+            "brownoutThresholds": {
+              "loss": 5,
+              "latency": 150,
+              "jitter": 50
+            },
+            "wanPorts": {
+              "primary": [
+                "1",
+                "2"
+              ],
+              "secondary": [],
+              "backup": [],
+              "crossConnect": []
+            },
+            "overlayFallbackOption": "1",
+            "match": {
+              "overlayAcl": "{\"data\":{\"Overlay_Business\":{\"entry\":{\"1\":{\"match_acl_all\":\"\"}}}}}"
+            },
+            "internetPolicy": {
+              "policyList": [
+                "backhaul_via_overlay"
+              ],
+              "localBreakout": {
+                "primary": [],
+                "backup": []
+              },
+              "pathLoad": 1,
+              "serviceLevelObjective": 1
+            }
+          }
+        }
+      },
       "tags": [
         "overlays"
       ]
@@ -11952,7 +12374,8 @@
         "Retrieve peer priority configuration for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "peerPriority"
@@ -11967,7 +12390,8 @@
         "Retrieve port forwarding rules"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "portForwarding"
@@ -12060,7 +12484,8 @@
         "Retrieve QoS policy settings for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "qosPolicy"
@@ -12327,6 +12752,9 @@
       "notes": [
         "Get appliance connectivity status"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "reachability"
       ]
@@ -12339,6 +12767,9 @@
       "notes": [
         "Get appliance reachability status from Orchestrator"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "reachability"
       ]
@@ -12350,6 +12781,9 @@
       "source": "official-oas",
       "notes": [
         "Get detailed WebSocket reachability status from Orchestrator"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "reachability"
@@ -12374,6 +12808,9 @@
       "source": "official-oas",
       "notes": [
         "Retrieve real-time tunnel stats, flow stats, packet drop stats (with reason codes), DSCP stats, traffic class stats, shaper stats, and interface stats from an EdgeConnect appliance for monitoring scri"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "type": "tunnel",
@@ -12455,6 +12892,9 @@
       "notes": [
         "Get region associations for appliances"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "regions"
       ]
@@ -12488,6 +12928,9 @@
       "source": "official-oas",
       "notes": [
         "Update region association for a single appliance"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "regionId": 1
@@ -12591,6 +13034,21 @@
       "notes": [
         "Create one or more remote log receivers"
       ],
+      "body_example": [
+        {
+          "receiverType": 0,
+          "enabled": true,
+          "name": "HTTP_RECEIVER_01",
+          "logType": 0,
+          "url": "http://example.com/logs",
+          "username": "admin",
+          "password": "secret123",
+          "repeatPassword": "secret123",
+          "headerName": "X-API-Key",
+          "headerValue": "my-api-key",
+          "customDataWrapper": "logs"
+        }
+      ],
       "tags": [
         "remoteLogReceiver"
       ]
@@ -12602,6 +13060,22 @@
       "source": "official-oas",
       "notes": [
         "Update existing remote log receiver configurations"
+      ],
+      "body_example": [
+        {
+          "id": 1,
+          "receiverType": 0,
+          "enabled": true,
+          "name": "HTTP_RECEIVER_UPDATED",
+          "logType": 0,
+          "url": "http://updated-example.com/logs",
+          "username": "admin",
+          "password": "newpassword",
+          "repeatPassword": "newpassword",
+          "headerName": "X-API-Key",
+          "headerValue": "updated-api-key",
+          "customDataWrapper": "logs"
+        }
       ],
       "tags": [
         "remoteLogReceiver"
@@ -12710,6 +13184,7 @@
       "query_params": [
         "from",
         "method",
+        "nePk",
         "portalWS",
         "resource",
         "to"
@@ -12728,6 +13203,7 @@
       ],
       "query_params": [
         "from",
+        "nePk",
         "portalWS",
         "resource",
         "timedout",
@@ -12744,6 +13220,9 @@
       "source": "official-oas",
       "notes": [
         "Apply RMA wizard to replace an existing appliance"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "existingAppliance": {
@@ -12947,7 +13426,8 @@
         "Get route policy settings"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "routePolicy"
@@ -12962,7 +13442,8 @@
         "Get SaaS Optimization configuration for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "saasOptimization"
@@ -12977,7 +13458,8 @@
         "Get SaaS application subnet monitoring data including RTT and reachability status"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "saasOptimization"
@@ -12990,6 +13472,9 @@
       "source": "official-oas",
       "notes": [
         "Persist in-memory configuration changes to persistent storage on appliances"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "nePks": [
@@ -13361,7 +13846,8 @@
         "Get Secure Web Services configuration for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "secureWebServicesConfig"
@@ -13403,7 +13889,8 @@
         "Retrieve Security Policies (Zone-Based Firewall Rules)"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "securityMaps"
@@ -13448,7 +13935,8 @@
         "Retrieve DDoS protection profiles for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "securitySettings"
@@ -13548,7 +14036,8 @@
         "Get shaper settings for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "shaper"
@@ -13590,7 +14079,8 @@
         "Get SNMP configuration for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "snmp"
@@ -13649,6 +14139,14 @@
       "notes": [
         "Assign EC-SP licenses to appliances on Portal"
       ],
+      "body_example": {
+        "licenses": [
+          {
+            "applianceId": "507f1f77bcf86cd799439011",
+            "licenseId": "507f1f77bcf86cd799439012"
+          }
+        ]
+      },
       "tags": [
         "spPortal"
       ]
@@ -13676,6 +14174,13 @@
       "notes": [
         "Unassign EC-SP licenses on Portal"
       ],
+      "body_example": {
+        "licenses": [
+          {
+            "licenseId": "507f1f77bcf86cd799439011"
+          }
+        ]
+      },
       "tags": [
         "spPortal"
       ]
@@ -13762,6 +14267,9 @@
       "source": "official-oas",
       "notes": [
         "Check appliance WebSocket reachability"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "spPortal"
@@ -14322,7 +14830,8 @@
         "Get all SSL certificates on the appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "ssl"
@@ -14337,7 +14846,8 @@
         "Get all CA SSL certificates from an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "sslCACertificate"
@@ -14425,7 +14935,8 @@
         "Get SSL Substitute Certificate Configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "sslSubstituteCert"
@@ -14750,6 +15261,7 @@
       ],
       "query_params": [
         "cached",
+        "nePk",
         "subnet"
       ],
       "tags": [
@@ -14764,6 +15276,9 @@
       "notes": [
         "Get appliance subnet information for all VRF segments"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "subnets"
       ]
@@ -14775,6 +15290,9 @@
       "source": "official-oas",
       "notes": [
         "Configure subnets on a legacy appliance (pre-8.1.7)"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "ipv4": {
@@ -14812,6 +15330,9 @@
       "source": "official-oas",
       "notes": [
         "Configure appliance subnet sharing options"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "auto_subnet": {
@@ -14861,7 +15382,8 @@
         "Get system threshold crossing alerts configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "tca"
@@ -14901,6 +15423,9 @@
       "notes": [
         "Get packet capture status for an appliance"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "tcpdump"
       ]
@@ -14925,6 +15450,9 @@
       "notes": [
         "Get template group associations for appliances"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "template"
       ]
@@ -14936,6 +15464,9 @@
       "source": "official-oas",
       "notes": [
         "Associate template groups with an appliance"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "templateIds": [
@@ -14953,6 +15484,28 @@
       "source": "official-oas",
       "notes": [
         "Bulk update template associations for multiple appliances"
+      ],
+      "body_example": [
+        {
+          "nePk": "0.NE",
+          "templateIds": [
+            "Default Template Group",
+            "Branch Office Template"
+          ]
+        },
+        {
+          "nePk": "1.NE",
+          "templateIds": [
+            "Default Template Group"
+          ]
+        },
+        {
+          "nePk": "2.NE",
+          "templateIds": [
+            "QoS Custom Template",
+            "Default Template Group"
+          ]
+        }
       ],
       "tags": [
         "template"
@@ -14983,7 +15536,8 @@
         "Get template application history for an appliance"
       ],
       "query_params": [
-        "latestOnly"
+        "latestOnly",
+        "nePk"
       ],
       "tags": [
         "template"
@@ -14996,6 +15550,9 @@
       "source": "official-oas",
       "notes": [
         "Get distinct template group names applied to an appliance"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "template"
@@ -15217,6 +15774,9 @@
       "notes": [
         "Assign appliance to HPE ANW Central site"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "body_example": {
         "origin": "12345",
         "siteId": "67890",
@@ -15351,6 +15911,7 @@
       ],
       "query_params": [
         "interfaceLabel",
+        "nePk",
         "tgwId"
       ],
       "tags": [
@@ -15634,6 +16195,37 @@
       "notes": [
         "Update AWS TGNM tunnel settings per interface label"
       ],
+      "body_example": {
+        "1": {
+          "admin": "up",
+          "mode": "ipsec_ip",
+          "autoMaxBandwidthEnabled": true,
+          "ipSecSuiteB": "none",
+          "presharedKey": "mySecretKey123",
+          "ikeAuthenticationAlgorithm": "sha256",
+          "ikeEncryptionAlgorithm": "aes256",
+          "ikePrf": "auto",
+          "dhgroup": "14",
+          "ikeLifetime": 480,
+          "dpdDelay": 10,
+          "dpdRetry": 3,
+          "idType": "address",
+          "idStr": "",
+          "exchangeMode": "aggressive",
+          "ikeVersion": 2,
+          "authenticationAlgorithm": "sha256",
+          "encryptionAlgorithm": "aes256",
+          "ipsecAntiReplayWindow": "1024",
+          "lifebytes": 102400,
+          "lifetime": 60,
+          "pfs": true,
+          "pfsgroup": "14",
+          "edgeConnectSegments": [
+            0,
+            1
+          ]
+        }
+      },
       "tags": [
         "thirdPartyServices"
       ]
@@ -15969,7 +16561,8 @@
         "Delete HPE SSE POP override configuration"
       ],
       "query_params": [
-        "labelId"
+        "labelId",
+        "nePk"
       ],
       "tags": [
         "thirdPartyServices"
@@ -15984,7 +16577,8 @@
         "Add or update HPE SSE POP override configuration"
       ],
       "query_params": [
-        "labelId"
+        "labelId",
+        "nePk"
       ],
       "body_example": {
         "pop1": "192.168.1.100",
@@ -16163,6 +16757,7 @@
       ],
       "query_params": [
         "interfaceLabel",
+        "nePk",
         "siteId"
       ],
       "tags": [
@@ -16318,6 +16913,9 @@
       "source": "official-oas",
       "notes": [
         "Retrieve Azure LAN-side BGP connection status for an appliance"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "tags": [
         "thirdPartyServices"
@@ -16944,6 +17542,15 @@
       "notes": [
         "Save Netskope appliance associations"
       ],
+      "body_example": {
+        "enabled": [
+          {
+            "nePk": "192.168.1.10_headquarters",
+            "priority": 1,
+            "lastUpdateTime": 1704067200000
+          }
+        ]
+      },
       "tags": [
         "thirdPartyServices"
       ]
@@ -16957,7 +17564,8 @@
         "Get Netskope tunnel connection status for an appliance"
       ],
       "query_params": [
-        "interfaceLabel"
+        "interfaceLabel",
+        "nePk"
       ],
       "tags": [
         "thirdPartyServices"
@@ -17235,7 +17843,8 @@
         "Create or update Netskope service edge POP override"
       ],
       "query_params": [
-        "labelId"
+        "labelId",
+        "nePk"
       ],
       "body_example": {
         "pop1": "192.168.1.100",
@@ -17254,7 +17863,8 @@
         "Delete Netskope service edge POP override"
       ],
       "query_params": [
-        "labelId"
+        "labelId",
+        "nePk"
       ],
       "tags": [
         "thirdPartyServices"
@@ -17344,6 +17954,7 @@
       ],
       "query_params": [
         "interfaceLabel",
+        "nePk",
         "remoteId",
         "serviceId"
       ],
@@ -17581,6 +18192,13 @@
       "query_params": [
         "serviceId"
       ],
+      "body_example": {
+        "remoteEndpoints": [
+          {
+            "remoteEndpointId": 101
+          }
+        ]
+      },
       "tags": [
         "thirdPartyServices"
       ]
@@ -17611,6 +18229,18 @@
       "query_params": [
         "serviceId"
       ],
+      "body_example": {
+        "remoteEndpoints": [
+          {
+            "remoteEndpointName": "Zscaler-DC1",
+            "ipAddress": "203.0.113.50",
+            "labelId": "Internet|MPLS",
+            "preSharedKey": "mySecretKey123",
+            "probeIpAddress": "10.0.0.1",
+            "backupEndpointId": ""
+          }
+        ]
+      },
       "tags": [
         "thirdPartyServices"
       ]
@@ -17626,6 +18256,16 @@
       "query_params": [
         "serviceId"
       ],
+      "body_example": {
+        "remoteEndpoints": [
+          {
+            "remoteEndpointName": "AWS-US-East-1",
+            "ipAddress": "203.0.113.50",
+            "labelId": "MPLS",
+            "preSharedKey": "mySecureKey123"
+          }
+        ]
+      },
       "tags": [
         "thirdPartyServices"
       ]
@@ -17859,7 +18499,8 @@
         "Gets all Zscaler Tunnels with IP SLA's status of the appliance. The response contains <nePk_labelId>, <connectionStatus> map."
       ],
       "query_params": [
-        "interfaceLabel"
+        "interfaceLabel",
+        "nePk"
       ],
       "tags": [
         "thirdPartyServices"
@@ -17945,6 +18586,9 @@
       "notes": [
         "Get computed Zscaler locations and gateway options for an appliance"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "thirdPartyServices"
       ]
@@ -17999,6 +18643,23 @@
       "notes": [
         "Save Zscaler IP SLA rule destination configuration"
       ],
+      "body_example": {
+        "sourceInterface": "wan0",
+        "enableIpslaRuleOrchestration": true,
+        "type": "ip-monitor",
+        "destination": "8.8.8.8,8.8.4.4",
+        "keepAliveInterval": 1,
+        "upThreshold": 3,
+        "downThreshold": 30,
+        "interval": 30,
+        "samplingWindow": 60,
+        "upLoss": 5,
+        "downLoss": 20,
+        "upLatency": 100,
+        "downLatency": 300,
+        "metricCombination": "Loss OR Latency",
+        "routeLabelId": 0
+      },
       "tags": [
         "thirdPartyServices"
       ]
@@ -18154,7 +18815,8 @@
         "Delete Zscaler ZEN override configuration"
       ],
       "query_params": [
-        "labelId"
+        "labelId",
+        "nePk"
       ],
       "tags": [
         "thirdPartyServices"
@@ -18169,7 +18831,8 @@
         "Create or update Zscaler ZEN override configuration"
       ],
       "query_params": [
-        "labelId"
+        "labelId",
+        "nePk"
       ],
       "body_example": {
         "ip1": "165.225.76.32",
@@ -18269,6 +18932,9 @@
       "notes": [
         "Get Zscaler ZDX VPN locations for appliances"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "thirdPartyServices"
       ]
@@ -18297,7 +18963,8 @@
         "Retrieve batch of pass-through tunnel configurations"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "body_example": [
         ""
@@ -18315,7 +18982,8 @@
         "Retrieve batch of pass-through tunnel states"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "body_example": [
         ""
@@ -18365,6 +19033,7 @@
         "limit",
         "matchingAlias",
         "matchingService",
+        "nePk",
         "operStatus",
         "remoteIdState",
         "srcNePk",
@@ -18622,6 +19291,7 @@
         "ip",
         "latest",
         "limit",
+        "nePk",
         "startTime",
         "trafficType"
       ],
@@ -18667,6 +19337,7 @@
       ],
       "query_params": [
         "endTime",
+        "nePk",
         "startTime"
       ],
       "tags": [
@@ -18688,6 +19359,7 @@
         "groupPk",
         "latest",
         "limit",
+        "nePk",
         "startTime",
         "total"
       ],
@@ -18763,7 +19435,8 @@
       ],
       "query_params": [
         "date",
-        "granularity"
+        "granularity",
+        "nePk"
       ],
       "tags": [
         "timeseriesStats"
@@ -18780,7 +19453,8 @@
       "query_params": [
         "date",
         "granularity",
-        "ifName"
+        "ifName",
+        "nePk"
       ],
       "tags": [
         "timeseriesStats"
@@ -18798,6 +19472,7 @@
         "date",
         "granularity",
         "label",
+        "nePk",
         "overlayId",
         "serviceName",
         "tunType",
@@ -18819,6 +19494,7 @@
         "endTime",
         "granularity",
         "limit",
+        "nePk",
         "startTime"
       ],
       "tags": [
@@ -18940,6 +19616,7 @@
         "ip",
         "latest",
         "limit",
+        "nePk",
         "startTime",
         "trafficType"
       ],
@@ -18993,6 +19670,7 @@
         "ip",
         "latest",
         "limit",
+        "nePk",
         "startTime",
         "trafficType"
       ],
@@ -19041,6 +19719,7 @@
         "endTime",
         "granularity",
         "limit",
+        "nePk",
         "startTime",
         "trafficType"
       ],
@@ -19061,6 +19740,7 @@
         "granularity",
         "interfaceName",
         "limit",
+        "nePk",
         "startTime",
         "trafficType"
       ],
@@ -19083,6 +19763,7 @@
         "isWanSide",
         "labelId",
         "limit",
+        "nePk",
         "overlay",
         "startTime",
         "tunnelType"
@@ -19103,6 +19784,7 @@
         "endTime",
         "granularity",
         "limit",
+        "nePk",
         "startTime"
       ],
       "tags": [
@@ -19123,6 +19805,7 @@
         "granularity",
         "ifName",
         "limit",
+        "nePk",
         "overlayName",
         "startTime"
       ],
@@ -19144,6 +19827,7 @@
         "format",
         "granularity",
         "limit",
+        "nePk",
         "startTime",
         "target"
       ],
@@ -19164,6 +19848,7 @@
         "format",
         "granularity",
         "limit",
+        "nePk",
         "startTime",
         "tunnel",
         "tunnelAlias"
@@ -19223,6 +19908,7 @@
         "endTime",
         "granularity",
         "limit",
+        "nePk",
         "startTime",
         "tunnel",
         "tunnelAlias"
@@ -19243,6 +19929,7 @@
         "endTime",
         "granularity",
         "limit",
+        "nePk",
         "startTime"
       ],
       "tags": [
@@ -19441,6 +20128,7 @@
         "endTime",
         "fromZone",
         "granularity",
+        "nePk",
         "startTime",
         "toZone"
       ],
@@ -19464,6 +20152,7 @@
         "groupPk",
         "ip",
         "limit",
+        "nePk",
         "startTime",
         "trafficClass"
       ],
@@ -19534,6 +20223,7 @@
         "groupPk",
         "latest",
         "limit",
+        "nePk",
         "startTime",
         "total"
       ],
@@ -19557,6 +20247,7 @@
         "ip",
         "latest",
         "limit",
+        "nePk",
         "startTime",
         "trafficClass",
         "trafficType"
@@ -19608,6 +20299,7 @@
         "granularity",
         "ip",
         "limit",
+        "nePk",
         "startTime",
         "tunnelAlias",
         "tunnelName"
@@ -19659,6 +20351,7 @@
         "ip",
         "latest",
         "limit",
+        "nePk",
         "startTime",
         "trafficType"
       ],
@@ -19711,6 +20404,7 @@
         "ip",
         "latest",
         "limit",
+        "nePk",
         "startTime",
         "trafficType"
       ],
@@ -19762,6 +20456,7 @@
         "ip",
         "limit",
         "metric",
+        "nePk",
         "overlay",
         "startTime",
         "tunnelAlias"
@@ -19803,6 +20498,7 @@
         "Export topology tunnel details as CSV file"
       ],
       "query_params": [
+        "nePk",
         "tunnelType"
       ],
       "tags": [
@@ -19940,6 +20636,9 @@
       "notes": [
         "Get traffic behavior mode status"
       ],
+      "query_params": [
+        "nePk"
+      ],
       "tags": [
         "trafficBehaviorMode"
       ]
@@ -19953,7 +20652,8 @@
         "Retrieve batch of physical tunnel configurations"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "body_example": [
         ""
@@ -19992,7 +20692,8 @@
         "Retrieve batch of physical tunnel states"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "body_example": [
         ""
@@ -20051,6 +20752,7 @@
         "Get physical tunnel IDs for an appliance"
       ],
       "query_params": [
+        "nePk",
         "state"
       ],
       "tags": [
@@ -20116,6 +20818,7 @@
         "id",
         "limit",
         "matchingAlias",
+        "nePk",
         "operStatus",
         "remoteIdState",
         "srcNePk",
@@ -20378,7 +21081,8 @@
         "Get user accounts and active sessions for an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "userAccount"
@@ -20393,7 +21097,8 @@
         "Retrieve appliance password policy settings"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "userAccount"
@@ -20467,6 +21172,24 @@
       "query_params": [
         "srcSegmentId"
       ],
+      "body_example": {
+        "20000": {
+          "match": {
+            "acl": "",
+            "matchstr": {
+              "dst_ip": "10.0.0.1-10"
+            }
+          },
+          "set": {
+            "dst_vrf": 1,
+            "trans_dst_ip": "192.168.1.1-10"
+          },
+          "comment": "Route to segment 1",
+          "enable": true,
+          "gms_marked": true,
+          "misc": ""
+        }
+      },
       "tags": [
         "vrf"
       ]
@@ -20629,7 +21352,8 @@
         "Get Inter-Segment DNAT policies from appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "vrf"
@@ -20644,7 +21368,8 @@
         "Gets Inter-Segment DNAT configurations of selected appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "vrfDnatMaps"
@@ -20659,7 +21384,8 @@
         "Get Inter-Segment SNAT Configurations"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "vrfSnatMaps"
@@ -20674,7 +21400,8 @@
         "Get VRRP instances configured on an appliance"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "vrrp"
@@ -20689,7 +21416,8 @@
         "Get VTI interface configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "vti"
@@ -20704,7 +21432,8 @@
         "Get VXLAN Configuration"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "vxlan"
@@ -20719,7 +21448,8 @@
         "Get VRF to VNI Segment Mappings"
       ],
       "query_params": [
-        "fromGms"
+        "fromGms",
+        "nePk"
       ],
       "tags": [
         "vxlan"
@@ -20734,7 +21464,8 @@
         "Get VXLAN State Details"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "vxlan"
@@ -20747,6 +21478,9 @@
       "source": "official-oas",
       "notes": [
         "Change appliance hostname"
+      ],
+      "query_params": [
+        "nePk"
       ],
       "body_example": {
         "hostname": "edge-router-01"
@@ -20764,7 +21498,8 @@
         "Get WCCP service groups configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "wccp"
@@ -20779,7 +21514,8 @@
         "Get WCCP system configuration"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "wccp"
@@ -20794,7 +21530,8 @@
         "Get WCCP operational state"
       ],
       "query_params": [
-        "cached"
+        "cached",
+        "nePk"
       ],
       "tags": [
         "wccp"
@@ -42192,6 +42929,6 @@
   "reference": "https://developer.arubanetworks.com/edgeconnect/reference",
   "carried_over_operations": 1305,
   "notes": [
-    "1305 operations carried over from the 9.6 profile to keep operation ids stable; 1227 operations imported from the official 10.0 OpenAPI document."
+    "1305 operations carried over from the 9.6 profile to keep operation ids stable; 1227 operations imported from the official 10.0 OpenAPI document (with $ref parameter resolution)."
   ]
 }
