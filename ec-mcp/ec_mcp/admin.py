@@ -39,6 +39,7 @@ def _render_page() -> str:
         "__EC_MCP_VERSION__", __version__
     )
 from .web_update import check as check_update
+from .web_update import check_pending_request
 from .web_update import queue_restart, queue_update
 from .web_update import status as update_status
 
@@ -383,6 +384,15 @@ async def api_restart(request):
         return JSONResponse({"error": str(exc)}, status_code=400)
 
 
+async def api_restart_result(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    state = update_status()
+    state.setdefault("state", "idle")
+    state["request_pending"] = check_pending_request()
+    return JSONResponse(state)
+
+
 from starlette.responses import Response
 
 
@@ -407,6 +417,7 @@ def build_admin_app() -> Starlette:
             Route("/api/update/status", api_update_status, methods=["GET"]),
             Route("/api/update/apply", api_update_apply, methods=["POST"]),
             Route("/api/restart", api_restart, methods=["POST"]),
+            Route("/api/restart/result", api_restart_result, methods=["GET"]),
         ]
     )
 

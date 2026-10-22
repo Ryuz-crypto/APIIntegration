@@ -9,6 +9,7 @@ import subprocess  # nosec B404
 import tempfile
 import urllib.error
 import urllib.request
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .admin_config import read_env
@@ -125,6 +126,7 @@ def _write_request(payload: dict) -> None:
     target = directory / "request.json"
     if target.exists():
         raise ValueError("Ya existe una operación pendiente.")
+    payload = {**payload, "requested_at": datetime.now(UTC).isoformat()}
     descriptor, temporary_name = tempfile.mkstemp(prefix=".request.", dir=directory)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
@@ -158,6 +160,12 @@ def queue_update(remote_sha: str, confirmation: str, opener=None) -> dict:
         }
     )
     return {"state": "pending", "commit": expected, "message": "Actualización validada y programada."}
+
+
+def check_pending_request() -> bool:
+    settings = _settings()
+    target = Path(settings["state_dir"]) / "request.json"
+    return target.is_file()
 
 
 def queue_restart() -> dict:
