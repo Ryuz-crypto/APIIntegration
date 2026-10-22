@@ -170,7 +170,7 @@ def test_admin_installer_preserves_port_from_dotenv():
 def test_restart_result_reports_pending_request_and_status(monkeypatch):
     from starlette.testclient import TestClient
 
-    from ec_mcp import admin, web_update
+    from ec_mcp import admin
 
     monkeypatch.setattr(admin, "queue_restart", lambda: {"state": "pending", "action": "restart", "message": "Reinicio programado."})
     captured = {"pending": True, "status": {"state": "success", "action": "restart", "message": "Servicios reiniciados.", "completed_at": "2026-10-22T01:34:29Z"}}

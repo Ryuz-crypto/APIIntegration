@@ -39,8 +39,7 @@ def _render_page() -> str:
         "__EC_MCP_VERSION__", __version__
     )
 from .web_update import check as check_update
-from .web_update import check_pending_request
-from .web_update import queue_restart, queue_update
+from .web_update import check_pending_request, queue_restart, queue_update
 from .web_update import status as update_status
 
 SESSIONS: dict[str, float] = {}
