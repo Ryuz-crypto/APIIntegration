@@ -78,6 +78,11 @@ class OrchestratorClient:
         Returns {"events": [...], "data": <concatenated data>, "raw": <full text>}.
         """
         full_path = self._full_path(path)
+        # A tool caller controls max_events, so enforce a process-wide ceiling too.
+        max_events = max(1, min(int(max_events), 2_000))
+        max_bytes = 2_000_000
+        captured_bytes = 0
+        truncated = False
         started = time.monotonic()
         events: list[dict[str, Any]] = []
         data_chunks: list[str] = []
@@ -110,10 +115,16 @@ class OrchestratorClient:
 
                 for line in response.iter_lines():
                     if received >= max_events:
+                        truncated = True
                         break
-                    raw_chunks.append(line)
                     if isinstance(line, bytes):
                         line = line.decode("utf-8", errors="replace")
+                    line_bytes = len(line.encode("utf-8", errors="replace"))
+                    if captured_bytes + line_bytes > max_bytes:
+                        truncated = True
+                        break
+                    captured_bytes += line_bytes
+                    raw_chunks.append(line)
                     if line.startswith("event:"):
                         flush()
                         event_name = line.split(":", 1)[1].strip()
@@ -129,6 +140,7 @@ class OrchestratorClient:
             "events": events,
             "data": "\n".join(data_chunks),
             "raw": "\n".join(raw_chunks),
+            "truncated": truncated,
         }
 
     def get_raw(self, path: str, **query: Any) -> Any:
