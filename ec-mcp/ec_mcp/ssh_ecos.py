@@ -24,27 +24,37 @@ except ImportError:
     paramiko = None
 
 FORBIDDEN_CHARS = re.compile(r"[;&`]|\|\||&&|\$\(")
+_TRANSIENT_SSH_ERROR_RE = re.compile(
+    r"(?i)timeout|timed out|temporarily unavailable|connection reset|"
+    r"ssh protocol banner|channel closed|socket is closed"
+)
+
+
+def is_transient_ssh_error(error: BaseException) -> bool:
+    """Return true only for connection failures that are safe to retry once."""
+    return bool(_TRANSIENT_SSH_ERROR_RE.search(str(error)))
 
 
 class _KeyboardInteractiveConnection:
     """Small command-timing adapter for appliances that only allow keyboard-interactive."""
 
-    def __init__(self, host: str, username: str, password: str, port: int = 22):
+    def __init__(self, host: str, username: str, password: str, port: int = 22, connect_timeout: int = 30, command_timeout: int = 30):
         if paramiko is None:
             raise RuntimeError("paramiko is required for keyboard-interactive SSH")
 
-        sock = socket.create_connection((host, port), timeout=30)
+        sock = socket.create_connection((host, port), timeout=connect_timeout)
         self._transport = paramiko.Transport(sock)
-        self._transport.banner_timeout = 30
-        self._transport.auth_timeout = 30
-        self._transport.start_client(timeout=30)
+        self._transport.banner_timeout = connect_timeout
+        self._transport.auth_timeout = connect_timeout
+        self._command_timeout = command_timeout
+        self._transport.start_client(timeout=connect_timeout)
         self._transport.auth_interactive(username, _keyboard_interactive_handler(password))
         if not self._transport.is_authenticated():
             raise RuntimeError("Keyboard-interactive SSH authentication failed")
         self._channel = self._transport.open_session()
         self._channel.get_pty(term="vt100", width=200, height=50)
         self._channel.invoke_shell()
-        self._read_until_quiet(2)
+        self._read_until_quiet(min(2, self._command_timeout))
 
     def _read_until_quiet(self, read_timeout: float, quiet_period: float = 0.4) -> str:
         deadline = time.monotonic() + read_timeout
@@ -103,6 +113,8 @@ class ApplianceSession:
         max_output_chars: int = 12000,
         enable_password: str = "",
         auth_method: str = "auto",
+        connect_timeout: int = 30,
+        command_timeout: int = 30,
     ):  # nosec B107
         auth_method = auth_method.strip().lower()
         if auth_method not in {"auto", "password", "keyboard-interactive"}:
@@ -115,6 +127,8 @@ class ApplianceSession:
             password=password,
             port=port,
             auth_method=auth_method,
+            connect_timeout=connect_timeout,
+            command_timeout=command_timeout,
         )
         if enable_password:
             enable_result = self._connection.send_command_timing("enable", read_timeout=10)
@@ -136,16 +150,17 @@ class ApplianceSession:
                     f"{probe_text[-500:]!r}"
                 )
         self._max_output_chars = max_output_chars
+        self._command_timeout = command_timeout
 
     @staticmethod
-    def _connect(host: str, username: str, password: str, port: int, auth_method: str):
+    def _connect(host: str, username: str, password: str, port: int, auth_method: str, connect_timeout: int, command_timeout: int):
         if auth_method == "keyboard-interactive":
-            return _KeyboardInteractiveConnection(host, username, password, port)
+            return _KeyboardInteractiveConnection(host, username, password, port, connect_timeout, command_timeout)
 
         if ConnectHandler is None:
             if auth_method == "password":
                 raise RuntimeError("netmiko is not installed; SSH tools are unavailable")
-            return _KeyboardInteractiveConnection(host, username, password, port)
+            return _KeyboardInteractiveConnection(host, username, password, port, connect_timeout, command_timeout)
 
         try:
             return ConnectHandler(
@@ -155,8 +170,9 @@ class ApplianceSession:
                 password=password,
                 port=port,
                 ssh_strict=False,
-                banner_timeout=30,
-                auth_timeout=30,
+                banner_timeout=connect_timeout,
+                auth_timeout=connect_timeout,
+                conn_timeout=connect_timeout,
             )
         except Exception as error:
             if auth_method != "auto" or not _AUTH_METHOD_ERROR_RE.search(str(error)):
@@ -165,8 +181,8 @@ class ApplianceSession:
 
     def run_show(self, command: str) -> str:
         validated = validate_show_command(command)
-        self._connection.send_command_timing("page off", read_timeout=10)
-        raw = self._connection.send_command_timing(validated, read_timeout=30)
+        self._connection.send_command_timing("page off", read_timeout=min(10, self._command_timeout))
+        raw = self._connection.send_command_timing(validated, read_timeout=self._command_timeout)
         return redact_secrets(sanitize_output(raw, self._max_output_chars), [])
 
     def run_raw(self, command: str) -> str:
@@ -177,7 +193,7 @@ class ApplianceSession:
             raise SecurityError("Command contains forbidden characters")
         if re.search(r"[\x00-\x1f\x7f]|[^\x00-\x7f]", normalized):
             raise SecurityError("Command contains forbidden characters")
-        raw = self._connection.send_command_timing(normalized, read_timeout=60)
+        raw = self._connection.send_command_timing(normalized, read_timeout=max(60, self._command_timeout))
         return redact_secrets(sanitize_output(raw, self._max_output_chars), [])
 
     def close(self) -> None:
@@ -344,28 +360,36 @@ class ApplianceSshPool:
         self._network_paths[target] = path
         resolved = path.target_ip
         if resolved not in self._sessions:
-            try:
-                self._sessions[resolved] = ApplianceSession(
-                    host=resolved,
-                    username=self._settings.ssh_username,
-                    password=self._settings.ssh_password,
-                    port=self._settings.ssh_port,
-                    max_output_chars=self._settings.max_output_chars,
-                    enable_password=self._settings.ssh_enable_password,
-                    auth_method=self._settings.ssh_auth_method,
-                )
-            except Exception as error:
-                if is_connection_rejected(error):
-                    appliance = find_appliance(target, inventory)
-                    if appliance and path.network == "wan":
-                        diagnosis = summarize_inbound_forwarding_need(appliance, error)
-                        raise SecurityError(
-                            "SSH connection to the appliance WAN interface was rejected. "
-                            f"Diagnosis: {diagnosis['diagnosis']}. "
-                            f"WAN IP: {diagnosis['wan_ip']}, LAN IP: {diagnosis['lan_ip']}. "
-                            f"Remediation: {diagnosis['remediation']}"
-                        ) from error
-                raise
+            retries = max(0, int(self._settings.ssh_retries))
+            for attempt in range(retries + 1):
+                try:
+                    self._sessions[resolved] = ApplianceSession(
+                        host=resolved,
+                        username=self._settings.ssh_username,
+                        password=self._settings.ssh_password,
+                        port=self._settings.ssh_port,
+                        max_output_chars=self._settings.max_output_chars,
+                        enable_password=self._settings.ssh_enable_password,
+                        auth_method=self._settings.ssh_auth_method,
+                        connect_timeout=self._settings.ssh_connect_timeout,
+                        command_timeout=self._settings.ssh_command_timeout,
+                    )
+                    break
+                except Exception as error:
+                    if attempt < retries and is_transient_ssh_error(error):
+                        time.sleep(min(0.25 * (2**attempt), 1.0))
+                        continue
+                    if is_connection_rejected(error):
+                        appliance = find_appliance(target, inventory)
+                        if appliance and path.network == "wan":
+                            diagnosis = summarize_inbound_forwarding_need(appliance, error)
+                            raise SecurityError(
+                                "SSH connection to the appliance WAN interface was rejected. "
+                                f"Diagnosis: {diagnosis['diagnosis']}. "
+                                f"WAN IP: {diagnosis['wan_ip']}, LAN IP: {diagnosis['lan_ip']}. "
+                                f"Remediation: {diagnosis['remediation']}"
+                            ) from error
+                    raise
         return self._sessions[resolved]
 
     def get_network_path(self, host: str | None = None) -> NetworkPath | None:

@@ -20,6 +20,9 @@ class Settings:
     ssh_enable_password: str = ""
     ssh_port: int = 22
     ssh_auth_method: str = "auto"
+    ssh_connect_timeout: int = 30
+    ssh_command_timeout: int = 30
+    ssh_retries: int = 1
 
     axis_enabled: bool = False
     axis_admin_token: str = ""
@@ -64,6 +67,9 @@ class Settings:
             ssh_enable_password=os.environ.get("EC_SSH_ENABLE_PASSWORD", ""),
             ssh_port=int(os.environ.get("EC_SSH_PORT", "22")),
             ssh_auth_method=os.environ.get("EC_SSH_AUTH_METHOD", "auto").strip().lower(),
+            ssh_connect_timeout=int(os.environ.get("EC_SSH_CONNECT_TIMEOUT", "30")),
+            ssh_command_timeout=int(os.environ.get("EC_SSH_COMMAND_TIMEOUT", "30")),
+            ssh_retries=max(0, int(os.environ.get("EC_SSH_RETRIES", "1"))),
             axis_enabled=os.environ.get("EC_AXIS_ENABLED", "false").lower() == "true",
             axis_admin_token=os.environ.get("EC_AXIS_ADMIN_TOKEN", ""),
             axis_base_url=os.environ.get("EC_AXIS_BASE_URL", "https://admin-api.axissecurity.com"),
