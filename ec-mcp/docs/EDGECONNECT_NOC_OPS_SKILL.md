@@ -1,6 +1,14 @@
-# EdgeConnect NOC Ops Skill (ec-mcp v6.0.0)
+# EdgeConnect NOC Ops Skill (ec-mcp v7.0.1)
 
-Guía operativa para NOC: cómo usar el MCP `ec-mcp` v6.0.0 para monitorear, diagnosticar y operar EdgeConnect + Axis Security (SSE). Actualizado con la capa de telemetría, respuesta a incidentes, plataforma Axis, **guías por tarea de SSE (§1.7, G1–G10)** y **dashboard NOC desplegable en servidor (G10)**: cuando se pida una tarea de Axis (escritura, troubleshooting, configuración, despliegue de apps, activación/desactivación de reglas, políticas CASB, DEM, monitoreo), seguir la guía G correspondiente para estructurar la secuencia de tools.
+Guía operativa para NOC: cómo usar el MCP `ec-mcp` v7.0.1 para monitorear, diagnosticar y operar EdgeConnect + Axis Security (SSE). Actualizado con la capa de telemetría, respuesta a incidentes, plataforma Axis, **guías por tarea de SSE (§1.7, G1–G10)**, **dashboard NOC desplegable en servidor (G10)**, **SD-WAN AI / SASE Copilot** y **resiliencia SSH (timeouts + reintentos)**.
+
+**Novedades 7.0.0 / 7.0.1 (ver §0.1):**
+- Perfil EdgeConnect **10.0** con fallback de versión mayor (PR #80)
+- Resolución de `$ref` OAS y correcciones 10.0 verificadas en vivo (PR #81)
+- **SD-WAN AI / SASE Copilot** expuesto como 4 tools MCP (PR #82)
+- Endurecimiento: SSE con techo de 2000 eventos / 2 MB, `clear_sdwan_ai_context` exige guardas de escritura (PR #86)
+- **SSH resiliente**: `EC_SSH_CONNECT_TIMEOUT`, `EC_SSH_COMMAND_TIMEOUT`, `EC_SSH_RETRIES` con backoff exponencial limitado (PR #89)
+- Hoja de ruta de operaciones seguras: `docs/MCP_OPERATIONS.md` (Fases 1–3, políticas, prohibiciones)
 
 ---
 
@@ -27,9 +35,77 @@ El MCP debe poder leer **cualquier Orchestrator**: perfiles cargados 9.3, 9.4, 9
 
 ---
 
-## 1. Mapa de herramientas MCP (v6.0.0 — 112 tools)
+### 0.1 Cambios operativos en 7.0.0 / 7.0.1
 
-### 1.1 Telemetría (v5.0.0; perfiles 10.0 en v6.0.0)
+#### 7.0.0 — Endurecimiento MCP (PR #86, refs #83 #84 #85 #87)
+
+| Cambio | Impacto NOC |
+|--------|-------------|
+| `clear_sdwan_ai_context` ahora llama `require_writes()` | La tool exige `EC_ALLOW_WRITE_TOOLS=true` antes de ejecutarse (era una omisión de la guarda global, issue #83). |
+| `stream_post_sse` con techo duro | El consumidor SSE se limita a **2000 eventos** y **2 MB** aunque el caller pida más. Devuelve `truncated: true` si se alcanza el límite. |
+| `opentelemetry-api` 1.45.1 | Actualización de dependencia (PYSEC). |
+| `SECURITY.md` + redacción en `apiDocs.json` | Playbook de respuesta ante exposición de secretos; ejemplos OpenAPI ya no contienen valores sensibles. |
+
+#### 7.0.1 — Resiliencia SSH (PR #89, refs #88)
+
+**Nuevas variables de entorno (añadir a `.env` o panel web):**
+```bash
+EC_SSH_CONNECT_TIMEOUT=30   # timeout de conexión TCP/banner/auth (segundos)
+EC_SSH_COMMAND_TIMEOUT=30   # timeout de lectura por comando show (segundos)
+EC_SSH_RETRIES=1            # reintentos ante fallos transitorios (0 = sin reintento)
+```
+
+**Comportamiento:**
+- Los reintentos solo aplican a **errores transitorios** detectados por `is_transient_ssh_error()`: `timeout`, `timed out`, `temporarily unavailable`, `connection reset`, `ssh protocol banner`, `channel closed`, `socket is closed`.
+- Backoff exponencial limitado: `0.25s`, `0.5s`, `1.0s` (máximo entre intentos).
+- Los errores de autenticación (`Authentication failed`) **no** se reintentan.
+- Los errores de conexión rechazada en WAN mantienen el diagnóstico de `ensure_ssh_inbound_forwarding`.
+- `run_show` usa `min(10, command_timeout)` para `page off` y `command_timeout` para el comando.
+- `run_raw` usa `max(60, command_timeout)`.
+
+**Rutina NOC ante fallos SSH intermitentes:**
+1. Si un `run_show_command` falla con timeout esporádico → el MCP ya reintentó `EC_SSH_RETRIES` veces. Si persiste, subir `EC_SSH_COMMAND_TIMEOUT` (ej. 60).
+2. Si la conexión se cae a mitad de sesión → el pool descarta la sesión y reconecta en la siguiente llamada.
+3. Nunca subir `EC_SSH_RETRIES` por encima de 2: más reintentos enmascaran problemas de red reales.
+4. Verificar `get_ssh_network_path(appliance_id)` para confirmar LAN vs WAN antes de diagnosticar.
+
+---
+
+## 0.2 Rutina de operaciones seguras (MCP_OPERATIONS — refs #88)
+
+Fuente: `docs/MCP_OPERATIONS.md`. Define cómo debe comportarse el MCP en operación real: rápido, predecible y seguro. **La IA detecta, correlaciona y propone; nunca aplica cambios sin aprobación explícita.**
+
+### Fases
+
+| Fase | Estado | Qué cubre |
+|------|--------|-----------|
+| **Fase 1** | Parcial (7.0.1) | Consultas y SSH fiables: contrato de respuesta común, límites de consulta, reintentos SSH limitados, timeout configurable, diagnóstico LAN/WAN, métricas y auditoría sin secretos. |
+| **Fase 2** | Planificada | Panel de administración con estado real de servicios, reinicios como solicitudes con confirmación escrita, allowlist de servicios, auditoría. |
+| **Fase 3** | Planificada | Detección y remediación asistida: correlación IDS/IPS + DDoS + alarmas + firewall + túneles, propuestas de remediación con evidencia y reversión, todo en `dry_run` hasta aprobación humana. |
+
+### Plantillas de política (aplicar al operar)
+
+1. **Observación**: solo recopila y correlaciona señales. Sin escrituras.
+2. **Contención propuesta**: sugiere clasificación/bloqueo temporal, **nunca aplica**.
+3. **Cambio controlado**: permite una operación preaprobada para un alcance definido, con ventana, confirmación y reversión.
+4. **Emergencia**: reservada a operadores autorizados; registra justificación, evidencia y revisión posterior.
+
+### Prohibiciones absolutas
+
+- No habilitar SSH expuesto a WAN automáticamente.
+- No aceptar comandos arbitrarios desde el panel o una herramienta MCP.
+- No desactivar ni reducir validaciones de seguridad para acelerar una acción.
+- No guardar tokens, contraseñas o datos de producción en ejemplos, auditorías o respuestas.
+
+### Contrato de respuesta esperado (Fase 1)
+
+Toda respuesta operativa debe incluir: **resultado, fuente, tiempo, truncamiento y error normalizado**. Si una respuesta no tiene estos campos, tratarla como incompleta.
+
+---
+
+## 1. Mapa de herramientas MCP (v7.0.1 — 122 tools)
+
+### 1.1 Telemetría (v5.0.0; perfiles 10.0 en v6.0.0; SD-WAN AI en 7.0.0)
 
 | Tool | Uso |
 |------|-----|
@@ -37,9 +113,9 @@ El MCP debe poder leer **cualquier Orchestrator**: perfiles cargados 9.3, 9.4, 9
 | `get_appliance_infrastructure(appliance_id)` | KPIs por appliance desde el Orchestrator: CPU timeseries, performance/throughput, interface state (histórico/agregado). |
 | `get_realtime_stats(appliance_id, type, name, filter, count)` | Stats **real-time** por segundo del appliance vía proxy SD-WAN (`POST /stats/realtimeStats`). Tipos: `tunnel`, `port`, `port_pair`, `boosted_tunnel`, `shaper`, `traffic_type`, `traffic_class`, `dscp`, `flow`, `drops`, `interface`. Filtro: `all`/`average`/`peak` (los tipos `drops` no usan filter/count). El body se arma según los ejemplos oficiales de la versión detectada. |
 | `get_appliance_health(appliance_id)` | Salud viva del appliance: `POST /health` (loss/latency/jitter/MOS), system info, disk usage, discos. |
-| `ask_sdwan_ai(question, chat_id)` | **SD-WAN AI / SASE Copilot (10.0)**: pregunta en lenguaje natural al asistente de IA del Orchestrator (`POST /sdwanai/search`, streaming SSE consumido hasta el final). Devuelve `answer` + `chat_id`/`msg_id` para continuar la conversación. Requiere el feature habilitado (`get_sase_copilot_status`) y rol READ_WRITE. |
+| `ask_sdwan_ai(question, chat_id, max_events)` | **SD-WAN AI / SASE Copilot (10.0)**: pregunta en lenguaje natural al asistente de IA del Orchestrator (`POST /sdwanai/search`, streaming SSE consumido hasta el final). Devuelve `answer` + `chat_id`/`msg_id` para continuar la conversación. `max_events` tiene **techo duro de 2000** (7.0.0). Requiere el feature habilitado (`get_sase_copilot_status`) y rol READ_WRITE. |
 | `get_sdwan_ai_chat_logs()` | Historial completo de la sesión de chat activa del SD-WAN AI (preguntas, respuestas, timestamps, documentos de referencia). |
-| `clear_sdwan_ai_context()` | Reinicia el contexto del chat de IA y crea una sesión nueva. |
+| `clear_sdwan_ai_context()` | Reinicia el contexto del chat de IA y crea una sesión nueva. **Desde 7.0.0 exige `EC_ALLOW_WRITE_TOOLS=true`** (guarda de escritura, issue #83). |
 | `get_sase_copilot_status()` | Indica si el SASE Copilot está habilitado en el Orchestrator (advanced property, default false). |
 
 **Flujo NOC recomendado:**
@@ -47,6 +123,12 @@ El MCP debe poder leer **cualquier Orchestrator**: perfiles cargados 9.3, 9.4, 9
 2. `list_appliances` → ¿qué appliances hay y su reachability?
 3. `get_appliance_health` → salud viva por appliance
 4. `get_realtime_stats` → tráfico por túnel/puerto en tiempo real
+
+**Troubleshooting SD-WAN AI:**
+1. Si `ask_sdwan_ai` devuelve error → llamar `get_sase_copilot_status()`. Si `enabled: false`, el feature está apagado en el Orchestrator.
+2. Si el feature está on pero falla → verificar que la API key tenga rol **READ_WRITE** (el endpoint `/sdwanai/search` lo exige).
+3. Si la respuesta viene truncada (`truncated: true`) → bajar `max_events` (default 2000, techo 2000 eventos / 2 MB en 7.0.0).
+4. Si el Orchestrator es 9.x → las tools devuelven `"SD-WAN AI is not available in the active API profile"` sin romper.
 
 ### 1.2 Seguridad y respuesta a incidentes
 
@@ -65,7 +147,7 @@ El MCP debe poder leer **cualquier Orchestrator**: perfiles cargados 9.3, 9.4, 9
 2. `list_response_options(target=..., context=...)` → ver opciones
 3. `block_threat(target=..., category=..., confirm=true)` → aplicar (requiere `EC_ALLOW_WRITE_TOOLS=true`)
 
-### 1.3 SSH — Rutas de red LAN/WAN (v5.0.0)
+### 1.3 SSH — Rutas de red LAN/WAN + resiliencia (v5.0.0, endurecido en 7.0.1)
 
 | Tool | Uso |
 |------|-----|
@@ -80,6 +162,20 @@ El MCP debe poder leer **cualquier Orchestrator**: perfiles cargados 9.3, 9.4, 9
 - **LAN**: si la IP LAN del appliance está en la misma subred /24 que una interfaz local → SSH directo a la IP LAN.
 - **WAN**: si no → SSH a la **IP de la interfaz WAN** del appliance (la configurada en la interfaz, NO la IP pública/NAT de salida).
 - Si se rechaza en WAN → falta **inbound forwarding** (port-forward/DNAT para TCP/22). Usar `ensure_ssh_inbound_forwarding` para crearlo.
+
+**Resiliencia SSH (7.0.1 — PR #89):**
+
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `EC_SSH_CONNECT_TIMEOUT` | 30 | Timeout de conexión TCP + banner + auth (segundos). Aplica a netmiko (`conn_timeout`, `banner_timeout`, `auth_timeout`) y paramiko. |
+| `EC_SSH_COMMAND_TIMEOUT` | 30 | Timeout de lectura por comando `show` (segundos). `run_show` usa este valor; `page off` usa `min(10, command_timeout)`. `run_raw` usa `max(60, command_timeout)`. |
+| `EC_SSH_RETRIES` | 1 | Reintentos ante **fallos transitorios** (0 = desactivado). Backoff: 0.25s, 0.5s, 1.0s (máx). |
+
+**Errores transitorios que se reintentan:** `timeout`, `timed out`, `temporarily unavailable`, `connection reset`, `ssh protocol banner`, `channel closed`, `socket is closed`.
+
+**Errores que NO se reintentan:** `Authentication failed` (credenciales malas), conexión rechazada en WAN (diagnóstico de inbound forwarding), comandos prohibidos.
+
+**Configurar en el panel web:** Variables → SSH → `EC_SSH_CONNECT_TIMEOUT`, `EC_SSH_COMMAND_TIMEOUT`, `EC_SSH_RETRIES` → Guardar y reiniciar.
 
 ### 1.4 Axis Security (SSE) — 55 tools (v5.0.0)
 
@@ -484,6 +580,35 @@ ensure_ssh_inbound_forwarding(appliance_id="...", confirm=True)  # Crear port-fo
 run_show_command("show version", host="...")  # Verificar
 ```
 
+### 3.4b SSH intermitente / timeouts esporádicos (7.0.1)
+```python
+# 1. Verificar la ruta de red primero
+get_ssh_network_path(appliance_id="...")     # LAN o WAN, IP esperada
+# 2. Si falla con timeout transitorio, el MCP ya reintentó EC_SSH_RETRIES veces.
+#    Ajustar timeouts en el panel web (Variables → SSH) o .env:
+#    EC_SSH_CONNECT_TIMEOUT=45
+#    EC_SSH_COMMAND_TIMEOUT=60
+#    EC_SSH_RETRIES=2                          # máximo recomendado
+# 3. Guardar y reiniciar el servicio.
+# 4. Si persiste: probar conectividad manual
+run_show_command("show version", host="<nombre-appliance>")  # host = nombre o nePk, NUNCA IP
+# 5. Si auth falla: revisar EC_SSH_USER / EC_SSH_PASSWORD / EC_SSH_AUTH_METHOD en el panel.
+```
+
+### 3.4c SD-WAN AI no responde (SASE Copilot)
+```python
+# 1. ¿Está habilitado el feature?
+get_sase_copilot_status()                    # -> {"sase_copilot": {"enabled": true/false}}
+# 2. Si enabled=false -> habilitar en el Orchestrator (advanced property) o no usar ask_sdwan_ai.
+# 3. Si enabled=true pero ask_sdwan_ai falla:
+ask_sdwan_ai(question="¿Cuál es el estado del túnel principal?")   # ver el error exacto
+# 4. Verificar rol de la API key: /sdwanai/search requiere READ_WRITE.
+# 5. Si la respuesta está truncada:
+ask_sdwan_ai(question="...", max_events=500)  # bajar max_events (techo duro: 2000)
+# 6. Limpiar contexto si la conversación se desvirtuó (requiere EC_ALLOW_WRITE_TOOLS=true):
+clear_sdwan_ai_context()
+```
+
 ### 3.5 Axis Security — onboarding de aplicación
 Ver guía **G4** (§1.7). Resumen:
 ```python
@@ -538,10 +663,14 @@ Las variables SSH del servidor remoto se configuran en el panel web: **Variables
 
 ## 4. Reglas de oro
 
-1. **Dry-run primero**: todas las escrituras (`apply_change`, `block_threat`, `axis_create_*`, `run_cli_command`) son dry-run sin `confirm=true`.
+1. **Dry-run primero**: todas las escrituras (`apply_change`, `block_threat`, `axis_create_*`, `run_cli_command`, `clear_sdwan_ai_context`, `dashboard_deploy_remote`) son dry-run sin `confirm=true`.
 2. **Commit en Axis**: los cambios en Axis no persisten sin `axis_commit(confirm=true)`. Para cualquier tarea de Axis, estructurar la secuencia según las **guías G1–G10 de §1.7** (escritura, troubleshooting, config, despliegue, reglas, CASB, DEM, monitoreo).
 3. **SSH WAN**: usar la IP de la interfaz WAN del appliance, nunca la pública/NAT. Si falla, crear inbound forwarding.
-4. **POST /deployment es REPLACE**: nunca enviar body parcial sin `modeIfs` (borra interfaces).
-5. **NO tocar `0.NE` (ECV-CALIMAYA)**: es la salida a internet del lab.
-6. **Secretos**: el panel web enmascara valores secretos; nunca loguearlos.
-7. **Panel web**: solo exponer en localhost o detrás de reverse proxy con auth.
+4. **SSH resiliente (7.0.1)**: ante timeouts esporádicos, el MCP reintenta automáticamente (`EC_SSH_RETRIES`). Ajustar `EC_SSH_CONNECT_TIMEOUT` / `EC_SSH_COMMAND_TIMEOUT` antes de escalar. Nunca subir `EC_SSH_RETRIES` por encima de 2.
+5. **SD-WAN AI (7.0.0)**: `ask_sdwan_ai` requiere SASE Copilot habilitado + rol READ_WRITE. `clear_sdwan_ai_context` exige `EC_ALLOW_WRITE_TOOLS=true`. El SSE tiene techo de 2000 eventos / 2 MB.
+6. **Operar por fases (MCP_OPERATIONS)**: la IA detecta y propone; **nunca aplica** sin aprobación explícita. Respetar las 4 plantillas de política (Observación, Contenición propuesta, Cambio controlado, Emergencia).
+7. **POST /deployment es REPLACE**: nunca enviar body parcial sin `modeIfs` (borra interfaces).
+8. **NO tocar `0.NE` (ECV-CALIMAYA)**: es la salida a internet del lab.
+9. **Secretos**: el panel web enmascara valores secretos; nunca loguearlos. Si un secreto se expone, seguir `SECURITY.md` (rotar inmediatamente).
+10. **Panel web**: solo exponer en localhost o detrás de reverse proxy con auth.
+11. **Contrato de respuesta**: toda respuesta operativa debe traer resultado, fuente, tiempo, truncamiento y error normalizado. Si falta alguno, tratarla como incompleta.
