@@ -155,13 +155,22 @@ Toda respuesta operativa debe incluir: **resultado, fuente, tiempo, truncamiento
 | `ensure_ssh_inbound_forwarding(appliance_id, external_port, internal_port, source_ip, confirm)` | Crea una regla de port-forwarding (inbound) para SSH en la WAN del appliance. Dry-run por defecto. |
 | `run_show_command(command, host)` | Ejecuta `show ...` por SSH (whitelist). |
 | `run_cli_command(command, host, confirm)` | Ejecuta cualquier comando ECOS por SSH (config = dry-run + confirm). |
-| `run_show_api(command, appliance_id)` | Ejecuta `show ...` vía API del Orchestrator (sin SSH). |
+| `run_show_api(command, appliance_id)` | Ejecuta `show ...` vía API del Orchestrator (sin SSH). ⭐ **Vía por defecto cuando SSH falla** — usa `appliance.clipost13533` (POST `/cli`) y NO requiere credenciales SSH. |
 | `list_cli_commands(category)` | Catálogo de 1367 comandos ECOS. |
 
 **Reglas de red SSH:**
 - **LAN**: si la IP LAN del appliance está en la misma subred /24 que una interfaz local → SSH directo a la IP LAN.
 - **WAN**: si no → SSH a la **IP de la interfaz WAN** del appliance (la configurada en la interfaz, NO la IP pública/NAT de salida).
 - Si se rechaza en WAN → falta **inbound forwarding** (port-forward/DNAT para TCP/22). Usar `ensure_ssh_inbound_forwarding` para crearlo.
+
+**Diferencia clave SSH vs API (verificada en vivo 2026-10-22):**
+- `run_show_command` (SSH) → conecta directo al appliance por TCP/22 desde el servidor MCP. **No funciona si el Orchestrator tiene `shellAccessSetting=lockdown_ssa`** (el appliance cierra la sesión SSH tras el banner; el tool devuelve SOLO el eco del comando, ej. `{"result": "show version\r\n"}` sin salida ni error).
+- `run_show_api` (API) → el Orchestrator ejecuta el comando por su canal de gestión (WebSocket TLS) → **funciona aunque el shell esté en lockdown_ssa**. Es la vía operativa mientras SSH está bloqueado.
+- Misma whitelist read-only en ambas: comandos fuera del catálogo ECOS oficial se rechazan igual.
+- Comandos verificados vía `run_show_api` (1.NE–4.NE): `show arp`, `show tunnel`, `show tunnel all`, `show interfaces`, `show system`, `show version`, `show users`, `show zone`, `show subnet`, `show running-config`, `show tacacs`.
+- Comandos rechazados por el catálogo (no read-only): `show neighbors`, `show interface <if>`, `show system reachability`, `show mgmt services`, `show shell access`, `show login`, `show authentication`, `show acl`, `show policy`, `show log <x>`, `show ip route` (deprecated).
+- `show running-config` expone usuarios locales (`username mcp capability admin`, `no username mcp disable`) — útil para auditar cuentas con shell.
+- `show arp` vía API es la forma de **descubrir la IP del propio servidor MCP** en la red de gestión: buscar en `dev mgmt0` la MAC con OUI VMware `00:0c:29` que no sea appliance (caso real: `172.17.201.141 dev mgmt0 lladdr 00:0c:29:0c:c4:89`).
 
 **Resiliencia SSH (7.0.1 — PR #89):**
 
@@ -579,6 +588,29 @@ get_ssh_network_path(appliance_id="...")   # ¿LAN o WAN?
 ensure_ssh_inbound_forwarding(appliance_id="...", confirm=True)  # Crear port-forward
 run_show_command("show version", host="...")  # Verificar
 ```
+
+### 3.4d SSH devuelve solo el eco del comando (shell en lockdown_ssa)
+Síntoma: `run_show_command("show version", host="EC1-CLOUD")` responde `{"result": "show version\r\n"}` — sólo el eco, sin salida y sin error. Causa raíz: el Orchestrator tiene **shell access en `lockdown_ssa`** (Secure Shell Access) y el appliance cierra la sesión SSH tras el banner. TCP/22 abre (nc tiene éxito) pero el handshake SSH se resetea/cierra — es la política del appliance, no un firewall de red.
+
+Diagnóstico:
+```python
+# 1. Leer el setting global y por appliance (ambos devuelven lockdown_ssa):
+call_read_api(operation_id="orchestrator.getshellaccesssetting556")                 # GET /shell/shellAccessSetting
+call_read_api(operation_id="orchestrator.getshellaccesssetting", appliance_id="1.NE", params={"cached": false})
+
+# 2. Mientras tanto, operar SIN SSH (vía probada):
+run_show_api("show arp", appliance_id="1.NE")             # vía Orchestrator, inmune a lockdown
+run_show_api("show running-config", appliance_id="1.NE")  # auditar usuarios shell
+```
+
+**Contrato oficial del setting** (de la colección Postman del repo): solo existen dos valores, `lockdown` (shell deshabilitado) y `lockdown_ssa` (Secure Shell Access). El orden de seguridad es `open` < `lockdown_ssa` < `lockdown` y **no es revertible por API**: todo intento de relajar desde `lockdown_ssa` responde HTTP 500 "Update is not permitted, check shell access setting and allowed order". Para bajar a `open` hace falta cambiarlo en la UI del Orchestrator o un caso de soporte HPE TAC (en Orchestrator OaaS `*.silverpeak.cloud` algunos cambios requieren TAC).
+
+**Checklist para habilitar SSH directo desde el servidor MCP:**
+1. En el servidor MCP (`~/APIIntegration/ec-mcp/.env`, modo 600) falta `EC_SSH_PASSWORD` — añadirlo (el usuario `mcp` ya existe en los appliances, gid 0, habilitado). Vía rápida: panel web en **puerto 9090** → Variables → SSH → Password SSH → Guardar y reiniciar servicios. Vía manual: añadir `EC_SSH_PASSWORD=<clave>` al `.env` y `sudo systemctl restart ec-mcp`.
+2. Verificar que el appliance acepte shell: el setting debe bajar de `lockdown_ssa` (UI del Orchestrator o TAC). Con `lockdown_ssa` activo, aunque las credenciales sean correctas, la sesión se cierra tras el banner.
+3. Probar desde el servidor MCP (NO por IP — la resolución de inventario rechaza IPs; usar nombre o nePk):
+   `run_show_command("show version", host="EC1-CLOUD")` o `host="1.NE"`.
+4. Si aún devuelve sólo el eco → el lockdown sigue activo; si devuelve "Authentication failed" → la contraseña de `EC_SSH_PASSWORD` no coincide con la del usuario `mcp` del appliance.
 
 ### 3.4b SSH intermitente / timeouts esporádicos (7.0.1)
 ```python
