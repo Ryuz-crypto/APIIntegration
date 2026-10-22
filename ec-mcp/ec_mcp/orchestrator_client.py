@@ -131,6 +131,12 @@ class OrchestratorClient:
             raise CompatibilityError(
                 f"Orchestrator version {detected!r} does not match any loaded profile {self._engine.versions}"
             )
+        if matched != detected and not detected.startswith(matched):
+            logger.warning(
+                "Orchestrator version %r has no exact profile; falling back to profile %r",
+                detected,
+                matched,
+            )
         self._cached_profile = matched
         return matched
 
