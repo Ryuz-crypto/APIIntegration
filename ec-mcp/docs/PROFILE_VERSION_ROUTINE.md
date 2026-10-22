@@ -3,6 +3,8 @@
 **Perfiles cargados**: 9.3, 9.4, 9.5, 9.6 y 10.0 (desde la rev. con soporte 10.0).
 **Fuente del perfil 10.0**: `api-collections/apiDocs.json` (OpenAPI oficial del Orchestrator 10.0, 1227 operaciones) fusionado con las operaciones curadas del perfil 9.6 para mantener los ids de operación estables (p. ej. `orchestrator.searchallbondedtunnels889`, `orchestrator.flows242`, `orchestrator.appliancegetapi70`).
 
+El importador OAS resuelve los parámetros por `$ref` (p. ej. `nePkRequired`), por lo que operaciones como `orchestrator.flows242`, `orchestrator.bfdsessions139` y `orchestrator.appliancegetapi70` conservan su parámetro `nePk`. Los perfiles futuros se importan igual y heredan las operaciones curadas del perfil anterior para mantener los ids estables.
+
 ---
 
 ## 1. Matching de versión

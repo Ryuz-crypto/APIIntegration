@@ -1,18 +1,40 @@
-# EdgeConnect NOC Ops Skill (ec-mcp v5.0.0)
+# EdgeConnect NOC Ops Skill (ec-mcp v6.0.0)
 
-Guía operativa para NOC: cómo usar el MCP `ec-mcp` v5.0.0 para monitorear, diagnosticar y operar EdgeConnect + Axis Security (SSE). Actualizado con la capa de telemetría, respuesta a incidentes, plataforma Axis, **guías por tarea de SSE (§1.7, G1–G10)** y **dashboard NOC desplegable en servidor (G10)**: cuando se pida una tarea de Axis (escritura, troubleshooting, configuración, despliegue de apps, activación/desactivación de reglas, políticas CASB, DEM, monitoreo), seguir la guía G correspondiente para estructurar la secuencia de tools.
+Guía operativa para NOC: cómo usar el MCP `ec-mcp` v6.0.0 para monitorear, diagnosticar y operar EdgeConnect + Axis Security (SSE). Actualizado con la capa de telemetría, respuesta a incidentes, plataforma Axis, **guías por tarea de SSE (§1.7, G1–G10)** y **dashboard NOC desplegable en servidor (G10)**: cuando se pida una tarea de Axis (escritura, troubleshooting, configuración, despliegue de apps, activación/desactivación de reglas, políticas CASB, DEM, monitoreo), seguir la guía G correspondiente para estructurar la secuencia de tools.
 
 ---
 
-## 1. Mapa de herramientas MCP (v5.0.0 — 112 tools)
+## 0. Perfiles de versión del Orchestrator (NUEVO v6.0.0)
 
-### 1.1 Telemetría (NUEVO v5.0.0)
+El MCP debe poder leer **cualquier Orchestrator**: perfiles cargados 9.3, 9.4, 9.5, 9.6 y **10.0** (desde `api-collections/apiDocs.json`, el OpenAPI oficial 10.0 con parámetros `$ref` resueltos).
+
+**Resolución de versión (automática, en este orden):**
+1. Igualdad exacta → 2. coincidencia `major.minor` (`10.0.0.40204` → `10.0`) → 3. **fallback al perfil mayor disponible ≤ versión detectada** + warning en el log (`9.7.2.40591` → `9.6`; un futuro `10.1`/`11.0` → `10.0`).
+
+**Rutina NOC al conectar a un Orchestrator nuevo o tras un upgrade:**
+1. `orchestrator_info` → verificar `active_profile` no nulo y `package_version` del conector.
+2. Si `active_profile` es null → solo sondear funciones nativas (telemetría básica, alarmas, ZTP) y asumir bloqueadas las de perfil (`call_read_api`, SOC, flujos, proxy).
+3. Si hay fallback (perfil menor que la versión detectada) → catálogo disponible, pero validar shapes en vivo antes de confiar en extractores.
+4. Registrar (fecha, versión, perfil, sondas OK/bloqueadas) en el Knowledge; tras cualquier upgrade, re-ejecutar la batería completa (`QA-BATTERY.md`). Detalle en `docs/PROFILE_VERSION_ROUTINE.md`.
+
+**Notas 10.0 conocidas (verificadas en vivo):**
+- `GET /flow` del Orchestrator requiere `nePk` (validado); si la versión del appliance rechaza la consulta, `troubleshoot_flows` hace fallback automático al proxy del appliance `GET /flows` (`appliance.flows263831`).
+- `POST /stats/realtimeStats` cambió de body en 10.0: `{"type", "name"}` (+`filter`/`count` según categoría); los tipos válidos incluyen `traffic_type`, `traffic_class`, `dscp`, `flow`, `drops`, `interface`.
+- BFD `GET /bfd/state/vrfs` requiere `nePk` en 10.0; sin vecinos BGP configurados devuelve listas vacías (normal).
+- `POST /health` vía proxy requiere `nePk` correcto; si el appliance responde 404, el resto de `get_appliance_health` (system info, disk usage, disks) sigue siendo válido.
+- SSH: el parámetro `host` se resuelve por **nombre de appliance o nePk**, nunca por IP (`Appliance not found in inventory` con IP).
+
+---
+
+## 1. Mapa de herramientas MCP (v6.0.0 — 112 tools)
+
+### 1.1 Telemetría (v5.0.0; perfiles 10.0 en v6.0.0)
 
 | Tool | Uso |
 |------|-----|
 | `get_orchestrator_infrastructure` | KPIs del Orchestrator: platform, GMS, disco, particiones BD, stats collectors. Salud propia del Orchestrator. |
 | `get_appliance_infrastructure(appliance_id)` | KPIs por appliance desde el Orchestrator: CPU timeseries, performance/throughput, interface state (histórico/agregado). |
-| `get_realtime_stats(appliance_id, type, name, filter, count)` | Stats **real-time** por segundo del appliance vía proxy SD-WAN (`POST /stats/realtimeStats`). Tipos: `tunnel`, `port`, `port_pair`, `boosted_tunnel`, `shaper`. Filtro: `all`/`average`/`peak`. |
+| `get_realtime_stats(appliance_id, type, name, filter, count)` | Stats **real-time** por segundo del appliance vía proxy SD-WAN (`POST /stats/realtimeStats`). Tipos: `tunnel`, `port`, `port_pair`, `boosted_tunnel`, `shaper`, `traffic_type`, `traffic_class`, `dscp`, `flow`, `drops`, `interface`. Filtro: `all`/`average`/`peak` (los tipos `drops` no usan filter/count). El body se arma según los ejemplos oficiales de la versión detectada. |
 | `get_appliance_health(appliance_id)` | Salud viva del appliance: `POST /health` (loss/latency/jitter/MOS), system info, disk usage, discos. |
 
 **Flujo NOC recomendado:**
@@ -38,7 +60,7 @@ Guía operativa para NOC: cómo usar el MCP `ec-mcp` v5.0.0 para monitorear, dia
 2. `list_response_options(target=..., context=...)` → ver opciones
 3. `block_threat(target=..., category=..., confirm=true)` → aplicar (requiere `EC_ALLOW_WRITE_TOOLS=true`)
 
-### 1.3 SSH — Rutas de red LAN/WAN (NUEVO v5.0.0)
+### 1.3 SSH — Rutas de red LAN/WAN (v5.0.0)
 
 | Tool | Uso |
 |------|-----|
@@ -54,7 +76,7 @@ Guía operativa para NOC: cómo usar el MCP `ec-mcp` v5.0.0 para monitorear, dia
 - **WAN**: si no → SSH a la **IP de la interfaz WAN** del appliance (la configurada en la interfaz, NO la IP pública/NAT de salida).
 - Si se rechaza en WAN → falta **inbound forwarding** (port-forward/DNAT para TCP/22). Usar `ensure_ssh_inbound_forwarding` para crearlo.
 
-### 1.4 Axis Security (SSE) — 55 tools (NUEVO v5.0.0)
+### 1.4 Axis Security (SSE) — 55 tools (v5.0.0)
 
 Plataforma SSE de Axis Security. Solo requiere **un token de administración** (`EC_AXIS_ADMIN_TOKEN`, Bearer JWT).
 
