@@ -1396,7 +1396,7 @@ def test_orchestrator_info_exposes_build_for_deployment_verification():
 def test_stable_package_version_is_consistent():
     from ec_mcp import __version__
 
-    assert __version__ == "6.0.0"
+    assert __version__ == "7.0.0"
 
 
 def test_large_helper_response_is_closed_valid_json():
@@ -1786,8 +1786,6 @@ def test_realtime_stats_body_matches_10_0_examples():
 
 
 def test_error_message_tolerates_list_json_body():
-    import json as jsonlib
-
     import httpx
 
     from ec_mcp.config import Settings
@@ -1852,6 +1850,45 @@ def test_stream_post_sse_consumes_events():
     payload = client.stream_post_sse("/gms/rest/sdwanai/search", json_body={"question": "hi"})
     assert len(payload["events"]) == 2
     assert "Hello " in payload["data"] and "world" in payload["data"]
+
+
+def test_stream_post_sse_enforces_event_ceiling():
+    import httpx
+
+    from ec_mcp.config import Settings
+    from ec_mcp.orchestrator_client import OrchestratorClient
+
+    client = OrchestratorClient(
+        Settings(orchestrator_url="https://orch.example", orchestrator_api_key="k"),
+        CompatibilityEngine(load_profiles(PROFILES)),
+        client=httpx.Client(
+            base_url="https://orch.example",
+            transport=_sse_transport([("message", "one"), ("message", "two")]),
+        ),
+    )
+    payload = client.stream_post_sse("/gms/rest/sdwanai/search", max_events=1)
+    assert len(payload["events"]) == 1
+    assert payload["truncated"] is True
+
+
+def test_clear_sdwan_ai_context_requires_write_permission(monkeypatch):
+    import asyncio
+
+    import ec_mcp.server as server_module
+    from ec_mcp.config import Settings
+    from ec_mcp.server import create_server
+
+    class FakeClient:
+        def resolve_active_profile(self):
+            return "10.0"
+
+        def call(self, *args, **kwargs):
+            raise AssertionError("write must not reach the Orchestrator")
+
+    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args: FakeClient())
+    server = create_server(Settings(orchestrator_url="https://orch.example", allow_write_tools=False))
+    response = asyncio.run(server.call_tool("clear_sdwan_ai_context", {}))
+    assert "Write tools are disabled" in response.content[0].text
 
 
 def test_ask_sdwan_ai_tool_end_to_end(monkeypatch):

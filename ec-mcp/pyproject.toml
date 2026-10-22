@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ec-mcp"
-version = "6.0.0"
+version = "7.0.0"
 description = "MCP server for HPE Aruba EdgeConnect SD-WAN (Orchestrator REST + ECOS SSH)"
 requires-python = ">=3.12"
 dependencies = [
