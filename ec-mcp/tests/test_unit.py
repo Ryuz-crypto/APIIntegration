@@ -1810,3 +1810,91 @@ def test_error_message_tolerates_list_json_body():
         assert "Invalid nePk" in str(error)
     else:
         raise AssertionError("expected RuntimeError")
+
+
+def _sse_transport(events: list[tuple[str, str]]):
+    import httpx
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body_lines = []
+        for name, data in events:
+            body_lines.append(f"event: {name}")
+            body_lines.append(f"data: {data}")
+            body_lines.append("")
+        content = "\n".join(body_lines)
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=content.encode("utf-8"),
+        )
+
+    return httpx.MockTransport(handler)
+
+
+def test_stream_post_sse_consumes_events():
+    import httpx
+
+    from ec_mcp.config import Settings
+    from ec_mcp.orchestrator_client import OrchestratorClient
+
+    events = [
+        ("message", jsonlib.dumps({"chat_id": "chat_1", "delta": "Hello "})),
+        ("message", jsonlib.dumps({"delta": "world", "msg_id": "msg_9"})),
+    ]
+    client = OrchestratorClient(
+        Settings(orchestrator_url="https://orch.example", orchestrator_api_key="k"),
+        CompatibilityEngine(load_profiles(PROFILES)),
+        client=httpx.Client(
+            base_url="https://orch.example",
+            transport=_sse_transport(events),
+        ),
+    )
+    payload = client.stream_post_sse("/gms/rest/sdwanai/search", json_body={"question": "hi"})
+    assert len(payload["events"]) == 2
+    assert "Hello " in payload["data"] and "world" in payload["data"]
+
+
+def test_ask_sdwan_ai_tool_end_to_end(monkeypatch):
+    import asyncio
+
+    import ec_mcp.server as server_module
+    from ec_mcp.config import Settings
+    from ec_mcp.server import create_server
+
+    events = [
+        ("message", jsonlib.dumps({"chat_id": "chat_abc", "delta": "BGP is configured on 3 neighbors."})),
+        ("done", jsonlib.dumps({"msg_id": "msg_1", "status": "done"})),
+    ]
+
+    class FakeClient:
+        def resolve_active_profile(self):
+            return "10.0"
+
+        def stream_post_sse(self, path, json_body=None, max_events=2000, timeout=120.0):
+            return {
+                "events": [
+                    {"event": name, "data": data} for name, data in events
+                ],
+                "data": "\n".join(data for _, data in events),
+                "raw": "",
+            }
+
+    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args: FakeClient())
+    server = create_server(Settings())
+    response = asyncio.run(server.call_tool("ask_sdwan_ai", {"question": "how is BGP?"}))
+    payload = jsonlib.loads(response.content[0].text)
+    assert payload["chat_id"] == "chat_abc"
+    assert "BGP is configured" in payload["answer"]
+    assert payload["msg_id"] == "msg_1"
+
+
+def test_ask_sdwan_ai_requires_question():
+    import asyncio
+
+    from ec_mcp.config import Settings
+    from ec_mcp.server import create_server
+
+    server = create_server(Settings())
+    response = asyncio.run(server.call_tool("ask_sdwan_ai", {"question": ""}))
+    payload = jsonlib.loads(response.content[0].text)
+    assert payload["error"] == "PARAM_REQUIRED"
