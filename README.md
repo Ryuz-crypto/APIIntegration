@@ -10,7 +10,7 @@ Plataforma para descubrir, consultar, visualizar y **conversar** con entornos **
 
 ## Registro de bugs
 
-Todo bug detectado por personas o asistentes de IA se registra en [GitHub Issues](https://github.com/Ryuz-crypto/APIIntegration/issues), buscando duplicados primero. El número del issue (`#123`) es su **Bug ID** y se enlaza desde el PR de corrección. Usa la [plantilla de reporte](.github/ISSUE_TEMPLATE/bug_report.md), identifica si el hallazgo está reproducido o pendiente de validar y excluye secretos y datos sensibles. La regla provisional para cualquier IA que trabaje en el repositorio está en [AGENTS.md](AGENTS.md); el equipo podrá ampliarla con su criterio definitivo.
+Todo bug detectado por personas o asistentes de IA se registra en [GitHub Issues](https://github.com/Ryuz-crypto/APIIntegration/issues), buscando duplicados primero. El número del issue (`#123`) es su **Bug ID** y se enlaza desde el PR de corrección. Usa la [plantilla de reporte](.github/ISSUE_TEMPLATE/bug_report.md), identifica si el hallazgo está reproducido o pendiente de validar y excluye secretos y datos sensibles. La regla provisional para cualquier IA que trabaje en el repositorio está en [AGENTS.md](AGENTS.md); el equipo podrá ampliarla con su criterio definitivo. La bitácora histórica de bugs con sus Bug IDs y PRs de corrección está en [BITACORA.md](BITACORA.md).
 
 | Componente | Qué hace | Documentación |
 | --- | --- | --- |
