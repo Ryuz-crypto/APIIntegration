@@ -129,3 +129,42 @@ def test_auto_auth_falls_back_after_generic_authentication_failure(monkeypatch):
         auth_method="auto",
     )
     session.close()
+
+
+
+def test_pool_retries_transient_connection_errors(monkeypatch):
+    class Settings:
+        ssh_enabled = True
+        ssh_host = "edge-1"
+        ssh_username = "admin"
+        ssh_password = "secret"
+        ssh_port = 22
+        ssh_enable_password = ""
+        ssh_auth_method = "auto"
+        ssh_connect_timeout = 5
+        ssh_command_timeout = 10
+        ssh_retries = 1
+        max_output_chars = 1000
+        profiles_dir = "."
+
+    class Path:
+        target_ip = "192.0.2.10"
+        network = "lan"
+
+    attempts = []
+    session = object()
+
+    def connect(**_kwargs):
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise RuntimeError("SSH protocol banner timeout")
+        return session
+
+    pool = ssh_ecos.ApplianceSshPool(Settings())
+    monkeypatch.setattr(pool, "_load_inventory", lambda: [])
+    monkeypatch.setattr(ssh_ecos, "resolve_appliance_network_path", lambda *_args: Path())
+    monkeypatch.setattr(ssh_ecos, "ApplianceSession", connect)
+    monkeypatch.setattr(ssh_ecos.time, "sleep", lambda _seconds: None)
+
+    assert pool.get() is session
+    assert len(attempts) == 2
