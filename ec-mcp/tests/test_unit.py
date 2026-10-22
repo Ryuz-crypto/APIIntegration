@@ -1763,3 +1763,50 @@ def test_guard_partial_deployment_body_refuses_partial():
         assert "full REPLACE" in str(error)
     else:
         raise AssertionError("expected SecurityError for partial deployment body")
+
+
+def test_profile_10_0_resolves_ref_parameters():
+    engine = CompatibilityEngine(load_profiles(PROFILES))
+    operations = engine._profiles["10.0"]["operations"]
+    assert "nePk" in operations["orchestrator.flows242"]["query_params"]
+    assert "nePk" in operations["orchestrator.bfdsessions139"]["query_params"]
+    assert set(operations["orchestrator.appliancegetapi70"]["query_params"]) == {"nePk", "url"}
+    assert operations["appliance.realtimestats885790"].get("body_example")
+
+
+def test_realtime_stats_body_matches_10_0_examples():
+    from ec_mcp.telemetry_workflow import build_realtime_stats_body
+
+    tunnel = build_realtime_stats_body("tunnel", "", "all", 10)
+    assert tunnel == {"type": "tunnel", "name": "", "filter": 0, "count": 10}
+    drops = build_realtime_stats_body("drops", "", "all", 10)
+    assert drops == {"type": "drops", "name": ""}
+    dscp = build_realtime_stats_body("dscp", "46", "all", 10)
+    assert dscp == {"type": "dscp", "name": "46", "filter": 0, "count": 10}
+
+
+def test_error_message_tolerates_list_json_body():
+    import json as jsonlib
+
+    import httpx
+
+    from ec_mcp.config import Settings
+    from ec_mcp.orchestrator_client import OrchestratorClient
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json=[{"message": "Invalid nePk"}])
+
+    client = OrchestratorClient(
+        Settings(orchestrator_url="https://orch.example", orchestrator_api_key="k"),
+        CompatibilityEngine(load_profiles(PROFILES)),
+        client=httpx.Client(
+            base_url="https://orch.example",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    try:
+        client.call("10.0", "orchestrator.flows242", nePk="4.NE")
+    except RuntimeError as error:
+        assert "Invalid nePk" in str(error)
+    else:
+        raise AssertionError("expected RuntimeError")
