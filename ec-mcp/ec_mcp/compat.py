@@ -28,6 +28,19 @@ class CompatibilityEngine:
     def versions(self) -> list[str]:
         return sorted(self._profiles)
 
+    @staticmethod
+    def _version_key(version: str) -> tuple[int, ...]:
+        parts: list[int] = []
+        for part in version.split("."):
+            if part.isdigit():
+                parts.append(int(part))
+            else:
+                match = re.match(r"^(\d+)", part)
+                if match:
+                    parts.append(int(match.group(1)))
+                break
+        return tuple(parts)
+
     def match_version(self, detected: str | None) -> str | None:
         if not detected:
             return None
@@ -38,8 +51,16 @@ class CompatibilityEngine:
             major_minor = ".".join(parts[:2])
             if major_minor in self._profiles:
                 return major_minor
-            if major_minor == "9.7" and "9.6" in self._profiles:
-                return "9.6"
+        detected_key = self._version_key(detected)
+        if not detected_key:
+            return None
+        candidates = [
+            version
+            for version in self._profiles
+            if self._version_key(version) and self._version_key(version) <= detected_key
+        ]
+        if candidates:
+            return max(candidates, key=self._version_key)
         return None
 
     def resolve(self, version: str, operation_id: str, path_params: dict[str, str] | None = None) -> ResolvedOperation:

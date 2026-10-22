@@ -12,17 +12,43 @@ PROFILES = pathlib.Path(__file__).parent.parent / "ec_mcp" / "profiles"
 def test_load_profiles():
     profiles = load_profiles(PROFILES)
     versions = {p["version"] for p in profiles}
-    assert {"9.3", "9.4", "9.5", "9.6"} <= versions
+    assert {"9.3", "9.4", "9.5", "9.6", "10.0"} <= versions
 
 
 def test_resolve_and_version_match():
     engine = CompatibilityEngine(load_profiles(PROFILES))
     assert engine.match_version("9.6.4") == "9.6"
     assert engine.match_version("9.7.1") == "9.6"
+    assert engine.match_version("10.0.0.40204") == "10.0"
+    assert engine.match_version("10.1.2.3") == "10.0"
+    assert engine.match_version("11.0.0") == "10.0"
+    assert engine.match_version("9.2.1") is None
+    assert engine.match_version("garbage") is None
     resolved = engine.resolve("9.6", "orchestrator.topology")
     assert resolved.method == "GET"
     resolved_interface = engine.resolve("9.6", "appliance.interfaces", {"appliance_id": "1.NE"})
     assert resolved_interface.path == "/interfaceState/1.NE"
+
+
+def test_profile_10_0_operations():
+    engine = CompatibilityEngine(load_profiles(PROFILES))
+    profile = engine._profiles["10.0"]
+    operations = profile["operations"]
+    expected = [
+        ("orchestrator.searchallbondedtunnels889", "GET", "/tunnels2/bonded"),
+        ("orchestrator.flows242", "GET", "/flow"),
+        ("orchestrator.appliancegetapi70", "GET", "/appliance/rest"),
+        ("appliance.health", "POST", "/health"),
+        ("orchestrator.getalldiscoveredappliances52", None, None),
+    ]
+    for operation_id, method, path in expected:
+        assert operation_id in operations, operation_id
+        if method:
+            entry = operations[operation_id]
+            assert entry["method"] == method
+            assert entry["path"] == path
+    resolved = engine.resolve("10.0", "orchestrator.flows242")
+    assert resolved.path == "/flow"
 
 
 def test_path_rendering():
@@ -1370,7 +1396,7 @@ def test_orchestrator_info_exposes_build_for_deployment_verification():
 def test_stable_package_version_is_consistent():
     from ec_mcp import __version__
 
-    assert __version__ == "5.0.0"
+    assert __version__ == "6.0.0"
 
 
 def test_large_helper_response_is_closed_valid_json():

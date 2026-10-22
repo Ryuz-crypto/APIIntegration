@@ -5,4 +5,4 @@ Orchestrator REST operations (multi-version profiles), whitelisted ECOS show
 commands over SSH, dry-run-by-default changes, and an append-only audit log.
 """
 
-__version__ = "5.0.0"
+__version__ = "6.0.0"
