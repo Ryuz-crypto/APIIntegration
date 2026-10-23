@@ -1,8 +1,0 @@
-#!/bin/sh
-set -eu
-
-if [ "${1:-}" = "remove" ]; then
-    systemctl disable --now dashboardapi-ec-update.timer dashboardapi-ec-update.service dashboardapi-ec-tls.timer dashboardapi-ec-tls.service dashboardapi-ec-worker dashboardapi-ec 2>/dev/null || true
-fi
-
-exit 0

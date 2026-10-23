@@ -11,8 +11,8 @@ ENV_EXAMPLE = (REPO_ROOT / "ec-mcp" / ".env.example").read_text(encoding="utf-8"
 
 
 def _ec_mcp_root_section() -> str:
-    start = ROOT_README.index("## ec-mcp 5.0")
-    end = ROOT_README.index("\n---\n\n## DashboardAPI-EC", start)
+    start = ROOT_README.index("## ec-mcp — MCP y panel de administración web")
+    end = ROOT_README.index("\n## Licencia", start)
     return ROOT_README[start:end]
 
 

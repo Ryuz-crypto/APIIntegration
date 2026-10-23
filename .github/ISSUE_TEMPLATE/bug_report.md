@@ -8,7 +8,7 @@ title: "bug: "
 
 ## Componente y versión
 
-- Componente (`ec-mcp`, `DashboardAPI-EC`, instalador, documentación u otro):
+- Componente (`ec-mcp`, instalador, documentación u otro):
 - Versión/commit afectado y versión de Orchestrator/ECOS si aplica:
 - Entorno (laboratorio, producción o simulación; sin identificadores sensibles):
 

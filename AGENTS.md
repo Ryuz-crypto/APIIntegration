@@ -8,4 +8,4 @@ Esta regla aplica a cualquier asistente de IA que revise o modifique este reposi
 4. En cada PR o commit que corrija un bug, enlaza el issue (`Fixes #123` si el PR cierra el problema; `Refs #123` si solo avanza la investigación). Actualiza el issue con la prueba de corrección y los límites pendientes antes de cerrarlo. Los hallazgos sin resolver permanecen abiertos.
 5. Si la IA no tiene permisos o acceso para crear/actualizar el issue, prepara el texto con la plantilla, informa que el registro en GitHub **sigue pendiente** y entrega el enlace solo cuando realmente exista. No afirmes que se reportó ni inventes un Bug ID.
 
-Documentar y corregir un fallo urgente puede hacerse en el mismo trabajo, pero el issue debe quedar vinculado al PR antes de considerarlo cerrado. Esta regla incluye bugs de `ec-mcp`, `DashboardAPI-EC`, instaladores, documentación y pruebas.
+Documentar y corregir un fallo urgente puede hacerse en el mismo trabajo, pero el issue debe quedar vinculado al PR antes de considerarlo cerrado. Esta regla incluye bugs de `ec-mcp`, instaladores, documentación y pruebas.

@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-cd "$(dirname "$0")/.."
-
-python -m compileall backend/app
-echo "Backend syntax check passed"
