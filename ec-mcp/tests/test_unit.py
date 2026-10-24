@@ -1885,7 +1885,7 @@ def test_clear_sdwan_ai_context_requires_write_permission(monkeypatch):
         def call(self, *args, **kwargs):
             raise AssertionError("write must not reach the Orchestrator")
 
-    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args: FakeClient())
+    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args, **kwargs: FakeClient())
     server = create_server(Settings(orchestrator_url="https://orch.example", allow_write_tools=False))
     response = asyncio.run(server.call_tool("clear_sdwan_ai_context", {}))
     assert "Write tools are disabled" in response.content[0].text
@@ -1916,7 +1916,7 @@ def test_ask_sdwan_ai_tool_end_to_end(monkeypatch):
                 "raw": "",
             }
 
-    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args: FakeClient())
+    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args, **kwargs: FakeClient())
     server = create_server(Settings())
     response = asyncio.run(server.call_tool("ask_sdwan_ai", {"question": "how is BGP?"}))
     payload = jsonlib.loads(response.content[0].text)

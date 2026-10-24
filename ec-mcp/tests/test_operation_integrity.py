@@ -24,7 +24,7 @@ def test_apply_change_array_body_reaches_transport_and_audit(monkeypatch, tmp_pa
             calls.append((operation_id, json_body))
             return {"saved": True}
 
-    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args: FakeClient())
+    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args, **kwargs: FakeClient())
     audit_path = tmp_path / "audit.jsonl"
     server = create_server(Settings(allow_write_tools=True, audit_log_path=audit_path))
     body = [{"id": 7, "name": "Application", "services": ["HTTPS"], "dscpTags": []}]
@@ -104,7 +104,7 @@ def test_apply_change_reports_applied_when_read_after_write_fails(monkeypatch, t
                 raise RuntimeError("GET apptags: transient 503")
             return {"saved": True}
 
-    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args: FakeClient())
+    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args, **kwargs: FakeClient())
     audit_path = tmp_path / "audit.jsonl"
     server = create_server(Settings(allow_write_tools=True, audit_log_path=audit_path))
     response = asyncio.run(server.call_tool("apply_change", {
@@ -136,7 +136,7 @@ def test_apply_change_rejects_non_get_verify_before_write(monkeypatch, tmp_path)
             calls.append(operation_id)
             return {"saved": True}
 
-    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args: FakeClient())
+    monkeypatch.setattr(server_module, "OrchestratorClient", lambda *args, **kwargs: FakeClient())
     audit_path = tmp_path / "audit.jsonl"
     server = create_server(Settings(allow_write_tools=True, audit_log_path=audit_path))
     response = asyncio.run(server.call_tool("apply_change", {

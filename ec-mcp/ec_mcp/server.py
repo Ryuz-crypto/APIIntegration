@@ -45,6 +45,7 @@ from .compat import CompatibilityEngine, load_profiles
 from .config import Settings
 from .dashboard import collect_dashboard_payload, render_dashboard_html
 from .dashboard_install import DashboardDeployError, RemoteDashboardDeployer
+from .multi_target import load_orchestrators_from_env, load_sse_from_env
 from .orchestrator_client import OrchestratorClient
 from .overlay_workflow import (
     OverlayPlanStore,
@@ -174,26 +175,113 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     for entry in catalog_entries():
         cli_risk_by_command[entry["command"]] = entry["risk"]
 
-    shared_client: OrchestratorClient | None = None
     overlay_plans = OverlayPlanStore()
     ztp_plans = ZtpPlanStore(state_dir=os.environ.get("EC_ZTP_STATE_DIR", ""))
     ztp_bulk_plans: dict[str, ZtpBulkPlan] = {}
 
-    def require_client() -> OrchestratorClient | None:
-        nonlocal shared_client
-        if shared_client is not None:
-            return shared_client
+    # --- Multi-target: pool de clientes Orchestrator por nombre ---
+    # Carga desde EC_ORCHESTRATORS_JSON si existe; si no, usa el target "default"
+    # derivado de las variables EC_ORCHESTRATOR_* (backwards compatible).
+    orchestrator_targets: dict[str, Settings] = {}
+    if settings.orchestrators_json.strip():
+        for name, target in load_orchestrators_from_env(settings.orchestrators_json).items():
+            orchestrator_targets[name] = Settings(
+                orchestrator_url=target.url,
+                orchestrator_api_key=target.api_key,
+                orchestrator_username=target.username,
+                orchestrator_password=target.password,
+                verify_tls=target.verify_tls,
+                ssh_enabled=bool(target.ssh_user),
+                ssh_host=target.ssh_host,
+                ssh_username=target.ssh_user,
+                ssh_password=target.ssh_password,
+                ssh_enable_password=target.ssh_enable_password,
+                allow_write_tools=settings.allow_write_tools,
+                allow_dangerous_writes=settings.allow_dangerous_writes,
+                max_output_chars=settings.max_output_chars,
+                api_cache_ttl=settings.api_cache_ttl,
+                max_writes_per_minute=settings.max_writes_per_minute,
+                audit_log_path=settings.audit_log_path,
+                profiles_dir=settings.profiles_dir,
+            )
+    if not orchestrator_targets:
+        orchestrator_targets["default"] = settings
+
+    shared_clients: dict[str, OrchestratorClient] = {}
+
+    def require_client(target: str = "") -> OrchestratorClient | None:
+        name = target.strip() or "default"
+        if name in shared_clients:
+            return shared_clients[name]
+        target_settings = orchestrator_targets.get(name)
+        if target_settings is None:
+            available = ", ".join(sorted(orchestrator_targets)) or "(ninguno)"
+            raise SecurityError(
+                f"Orchestrator target '{name}' is not configured. Available targets: {available}"
+            )
         try:
-            shared_client = OrchestratorClient(settings, engine)
-            return shared_client
+            client = OrchestratorClient(target_settings, engine, target_name=name)
+            shared_clients[name] = client
+            return client
         except ValueError as error:
             audit.record(
                 "orchestrator_client",
                 "init",
-                settings.orchestrator_url or "(unset)",
+                target_settings.orchestrator_url or "(unset)",
                 f"not configured: {error}",
             )
             return None
+
+    def require_client_or_raise(target: str = "") -> OrchestratorClient:
+        client = require_client(target)
+        if client is None:
+            name = target.strip() or "default"
+            raise SecurityError(f"Orchestrator target '{name}' is not configured or missing credentials.")
+        return client
+
+    def list_orchestrator_targets() -> list[str]:
+        return sorted(orchestrator_targets)
+
+    # --- Multi-target: pool de clientes SSE (Axis) por nombre ---
+    sse_targets: dict[str, Any] = {}
+    if settings.sse_platforms_json.strip():
+        for name, target in load_sse_from_env(settings.sse_platforms_json).items():
+            sse_targets[name] = target
+    if not sse_targets and settings.axis_enabled and settings.axis_admin_token:
+        from .multi_target import SseTarget
+        sse_targets["default"] = SseTarget(
+            name="default",
+            provider="axis",
+            base_url=settings.axis_base_url,
+            admin_token=settings.axis_admin_token,
+            verify_tls=settings.axis_verify_tls,
+            timeout=settings.axis_timeout,
+        )
+
+    shared_axis: dict[str, AxisSecurityClient] = {}
+
+    def require_axis(target: str = "") -> AxisSecurityClient:
+        name = target.strip() or "default"
+        if name in shared_axis:
+            return shared_axis[name]
+        if not sse_targets:
+            raise SecurityError(
+                "No SSE platform is configured. Set EC_SSE_PLATFORMS_JSON or EC_AXIS_ENABLED + EC_AXIS_ADMIN_TOKEN."
+            )
+        sse = sse_targets.get(name)
+        if sse is None:
+            available = ", ".join(sorted(sse_targets)) or "(ninguno)"
+            raise SecurityError(
+                f"SSE platform target '{name}' is not configured. Available targets: {available}"
+            )
+        client = AxisSecurityClient(
+            token=sse.admin_token,
+            base_url=sse.base_url,
+            timeout=sse.timeout,
+            verify_tls=sse.verify_tls,
+        )
+        shared_axis[name] = client
+        return client
 
     DANGEROUS_OPERATION_PATTERN = re.compile(
         r"(?i)reboot|suspend|delete|remove|wipe|factory|purge|halt|shutdown|decommission"
@@ -714,10 +802,44 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         return None
 
     @mcp.tool()
-    def orchestrator_info() -> str:
+    def list_orchestrator_targets_tool() -> str:
+        """List the configured EdgeConnect Orchestrator targets (multi-Orchestrator support). Read-only. Use the returned names as the 'target' parameter of tools that accept one."""
+        targets = list_orchestrator_targets()
+        rows = []
+        for name in targets:
+            ts = orchestrator_targets[name]
+            rows.append({
+                "name": name,
+                "url": ts.orchestrator_url,
+                "verify_tls": ts.verify_tls,
+                "has_api_key": bool(ts.orchestrator_api_key),
+                "has_password": bool(ts.orchestrator_password),
+                "is_default": name == "default",
+            })
+        return json_result({"targets": rows, "count": len(rows)}, settings.max_output_chars)
+
+    @mcp.tool()
+    def list_sse_targets_tool() -> str:
+        """List the configured SSE platform targets (multi-SSE support, e.g. several Axis Security tenants). Read-only. Use the returned names as the 'target' parameter of axis_* tools."""
+        rows = []
+        for name in sorted(sse_targets):
+            sse = sse_targets[name]
+            rows.append({
+                "name": name,
+                "provider": sse.provider,
+                "base_url": sse.base_url,
+                "verify_tls": sse.verify_tls,
+                "timeout": sse.timeout,
+                "has_admin_token": bool(sse.admin_token),
+                "is_default": name == "default",
+            })
+        return json_result({"targets": rows, "count": len(rows)}, settings.max_output_chars)
+
+    @mcp.tool()
+    def orchestrator_info(target: str = "") -> str:
         """Detect the Orchestrator version and the matching API compatibility profile."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             detected = client.detect_version()
@@ -777,7 +899,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def list_api_operations(version: str = "", prefix: str = "", search: str = "", method: str = "",
-                             page: int = 0, page_size: int = 200, include_examples: bool = False, mode: str = "") -> str:
+                             page: int = 0, page_size: int = 200, include_examples: bool = False, mode: str = "",
+        target: str = "") -> str:
         """List the stable API operation IDs, paginated and filterable. Defaults to the ACTIVE profile only (pass version='all' for every profile). Filters: search (substring on operation id AND path), prefix, method (GET/POST/PUT/DELETE). mode='index' returns a compact id -> path map (smallest payload). By default body_example is omitted; include_examples=true adds it. Response is always valid JSON with total_operations, page, has_more_page; call with page+1 for the next chunk."""
         try:
             if version and version != "all" and version not in engine._profiles:
@@ -788,7 +911,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 versions = [version]
             else:
                 try:
-                    client = require_client()
+                    client = require_client(target)
                     versions = [client.resolve_active_profile()] if client else list(engine.versions)
                 except Exception:
                     versions = list(engine.versions)
@@ -884,10 +1007,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def list_appliances() -> str:
+    def list_appliances(target: str = "") -> str:
         """List every appliance registered in the EdgeConnect Orchestrator (nePk, name, IP, model, software version, state). Use this first to discover the nePk/device names needed for per-appliance API calls and SSH commands."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             appliances = client.list_appliances(refresh=True)
@@ -898,10 +1021,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def orchestrator_metrics() -> str:
+    def orchestrator_metrics(target: str = "") -> str:
         """Return per-operation API performance metrics: calls, total/max latency seconds, bytes transferred and cache hits. Use it to spot slow operations and tune offset/limit/max_chars."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             rows = []
@@ -921,10 +1044,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_wan_health(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "", fields: str = "") -> str:
+    def get_wan_health(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "", fields: str = "",
+        target: str = "") -> str:
         """One-call WAN health snapshot: latency, jitter, loss and MOS per tunnel (already aggregated, no raw 70-column rows). appliance_id accepts comma-separated nePks/names/IPs; empty = all appliances. Pass fields to project only some columns."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             targets = resolve_ne_pks(client, appliance_id)
@@ -987,10 +1111,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_mos(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "") -> str:
+    def get_mos(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "",
+        target: str = "") -> str:
         """Voice MOS score per tunnel/appliance from GET /stats/aggregate/mos (values are typically scaled x100: 440 = MOS 4.40). Use start_time/end_time (epoch ms) and granularity to bound the window."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if appliance_id.strip().lower() in ("", "all"):
@@ -1019,10 +1144,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_tunnel_state(appliance_id: str = "") -> str:
+    def get_tunnel_state(appliance_id: str = "",
+        target: str = "") -> str:
         """Tunnel state per appliance from /tunnelsConfigAndState (proxied via the Orchestrator)."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if not appliance_id:
@@ -1041,10 +1167,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_brownout_state(appliance_id: str = "") -> str:
+    def get_brownout_state(appliance_id: str = "",
+        target: str = "") -> str:
         """Brownout/blackout detection per tunnel with reason."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if not appliance_id:
@@ -1245,10 +1372,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_availability(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "") -> str:
+    def get_availability(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "",
+        target: str = "") -> str:
         """Availability per appliance/site from GET /stats/aggregate/availability/appliance (fallback /availability/appliance)."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
@@ -1266,10 +1394,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_top_talkers(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "", limit: int = 20) -> str:
+    def get_top_talkers(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "", limit: int = 20,
+        target: str = "") -> str:
         """Top talker applications/hosts from GET /stats/aggregate/topTalkers. Use it instead of pulling raw /flow rows."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
@@ -1283,10 +1412,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_active_alarms(appliance_id: str = "") -> str:
+    def get_active_alarms(appliance_id: str = "",
+        target: str = "") -> str:
         """Active alarm counts per appliance from /alarm/count/appliance (the /alarm/gms detail endpoint rejects view/severity filters — known upstream contract). appliance_id accepts 'all' (or empty) for every appliance, or a single nePk/name/IP; with 'all' the counts are aggregated per appliance and by severity. Use it for 'how many alarms are active right now' instead of alarm/gms."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if appliance_id.strip().lower() == "all":
@@ -1302,10 +1432,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_ha_status(appliance_id: str = "") -> str:
+    def get_ha_status(appliance_id: str = "",
+        target: str = "") -> str:
         """High-availability status per appliance; missing HA is reported explicitly."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             targets = resolve_ne_pks(client, appliance_id) if appliance_id else [""]
@@ -1322,10 +1453,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_firmware_compliance() -> str:
+    def get_firmware_compliance(target: str = "") -> str:
         """Firmware compliance per appliance from appliance-scoped software partitions."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             targets = resolve_ne_pks(client, "all")
@@ -1342,10 +1473,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_ztp_status(offset: int = 0, limit: int = 20, fields: str = "") -> str:
+    def get_ztp_status(offset: int = 0, limit: int = 20, fields: str = "",
+        target: str = "") -> str:
         """Zero-Touch Provisioning status with paginated, credential-free discovery rows."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             payload = kpi_get(client, "ztp")
@@ -2924,58 +3056,49 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except Exception as error:
             return f"Error: {error}"
 
-    def require_axis() -> AxisSecurityClient:
-        if not settings.axis_enabled:
-            raise SecurityError(
-                "Axis Security is disabled. Set EC_AXIS_ENABLED=true and EC_AXIS_ADMIN_TOKEN."
-            )
-        if not settings.axis_admin_token:
-            raise SecurityError("EC_AXIS_ADMIN_TOKEN is not configured.")
-        return AxisSecurityClient(
-            token=settings.axis_admin_token,
-            base_url=settings.axis_base_url,
-            timeout=settings.axis_timeout,
-            verify_tls=settings.axis_verify_tls,
-        )
+
 
     @mcp.tool()
-    def axis_health() -> str:
+    def axis_health(target: str = "") -> str:
         """Axis Security (SSE) health check: service status and dependency components. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.health()
             return json_result(summarize_health(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_tags(page: int = 1, page_size: int = 50) -> str:
+    def axis_list_tags(page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security application groups (Tags). Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_tags(page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_tag(tag_id: str) -> str:
+    def axis_get_tag(tag_id: str,
+        target: str = "") -> str:
         """Get a single Axis Security application group (Tag) by id. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             return json_result(axis.get_tag(tag_id), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_tag(name: str, applications_json: str = "", confirm: bool = False) -> str:
+    def axis_create_tag(name: str, applications_json: str = "", confirm: bool = False,
+        target: str = "") -> str:
         """Create an Axis Security application group (Tag). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true to apply. Remember to call axis_commit to persist."""
         try:
             require_writes("axis_create_tag")
             body = build_tag_body(name, json.loads(applications_json) if applications_json else None)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/Tags", "method": "POST", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.create_tag(body)
             audit.record("axis_create_tag", name, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -2983,7 +3106,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_update_tag(tag_id: str, name: str = "", applications_json: str = "", confirm: bool = False) -> str:
+    def axis_update_tag(tag_id: str, name: str = "", applications_json: str = "", confirm: bool = False,
+        target: str = "") -> str:
         """Update an Axis Security application group (Tag). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_update_tag")
@@ -2996,7 +3120,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 return json_result({"error": "nothing to update"}, settings.max_output_chars)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Tags/{tag_id}", "method": "PUT", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.update_tag(tag_id, body)
             audit.record("axis_update_tag", tag_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3004,13 +3128,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_tag(tag_id: str, confirm: bool = False) -> str:
+    def axis_delete_tag(tag_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Delete an Axis Security application group (Tag). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_delete_tag")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Tags/{tag_id}", "method": "DELETE"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             axis.delete_tag(tag_id)
             audit.record("axis_delete_tag", tag_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "deleted": tag_id}, settings.max_output_chars)
@@ -3018,20 +3143,22 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_applications(page: int = 1, page_size: int = 50) -> str:
+    def axis_list_applications(page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security applications. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_applications(page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_application(app_id: str) -> str:
+    def axis_get_application(app_id: str,
+        target: str = "") -> str:
         """Get a single Axis Security application by id. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             return json_result(axis.get_application(app_id), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
@@ -3046,7 +3173,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         identity_provider_id: str = "",
         network_range_json: str = "",
         confirm: bool = False,
-    ) -> str:
+
+        target: str = "") -> str:
         """Create an Axis Security application (Web/Rdp/Ssh/Database/NetworkRange/Saas/...). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_create_application")
@@ -3059,7 +3187,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/Applications", "method": "POST", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.create_application(body)
             audit.record("axis_create_application", name, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3067,7 +3195,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_update_application(app_id: str, name: str = "", app_type: str = "", connector_zone_id: str = "", enabled: bool = True, confirm: bool = False) -> str:
+    def axis_update_application(app_id: str, name: str = "", app_type: str = "", connector_zone_id: str = "", enabled: bool = True, confirm: bool = False,
+        target: str = "") -> str:
         """Update an Axis Security application. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_update_application")
@@ -3081,7 +3210,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             body["enabled"] = enabled
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Applications/{app_id}", "method": "PUT", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.update_application(app_id, body)
             audit.record("axis_update_application", app_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3089,13 +3218,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_application(app_id: str, confirm: bool = False) -> str:
+    def axis_delete_application(app_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Delete an Axis Security application. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_delete_application")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Applications/{app_id}", "method": "DELETE"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             axis.delete_application(app_id)
             audit.record("axis_delete_application", app_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "deleted": app_id}, settings.max_output_chars)
@@ -3103,43 +3233,47 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_connectors(page: int = 1, page_size: int = 50) -> str:
+    def axis_list_connectors(page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security connectors. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_connectors(page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_connector(connector_id: str) -> str:
+    def axis_get_connector(connector_id: str,
+        target: str = "") -> str:
         """Get a single Axis Security connector by id. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             return json_result(axis.get_connector(connector_id), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_connector_status(connector_id: str) -> str:
+    def axis_connector_status(connector_id: str,
+        target: str = "") -> str:
         """Live Axis Security connector status: network/memory/disk/CPU/machine health. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.connector_status(connector_id)
             return json_result(summarize_connector_status(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_connector(name: str, connector_zone_id: str, enabled: bool = True, primary_public_ip: str = "", confirm: bool = False) -> str:
+    def axis_create_connector(name: str, connector_zone_id: str, enabled: bool = True, primary_public_ip: str = "", confirm: bool = False,
+        target: str = "") -> str:
         """Create an Axis Security connector; the response includes the installation command. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_create_connector")
             body = build_connector_body(name, connector_zone_id, enabled=enabled, primary_public_ip=primary_public_ip)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/Connectors", "method": "POST", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.create_connector(body)
             audit.record("axis_create_connector", name, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3147,7 +3281,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_update_connector(connector_id: str, name: str = "", connector_zone_id: str = "", enabled: bool = True, confirm: bool = False) -> str:
+    def axis_update_connector(connector_id: str, name: str = "", connector_zone_id: str = "", enabled: bool = True, confirm: bool = False,
+        target: str = "") -> str:
         """Update an Axis Security connector. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_update_connector")
@@ -3158,7 +3293,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 body["connectorZoneId"] = connector_zone_id
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Connectors/{connector_id}", "method": "PUT", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.update_connector(connector_id, body)
             audit.record("axis_update_connector", connector_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3166,13 +3301,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_connector(connector_id: str, confirm: bool = False) -> str:
+    def axis_delete_connector(connector_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Delete an Axis Security connector. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_delete_connector")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Connectors/{connector_id}", "method": "DELETE"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             axis.delete_connector(connector_id)
             audit.record("axis_delete_connector", connector_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "deleted": connector_id}, settings.max_output_chars)
@@ -3180,13 +3316,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_regenerate_connector(connector_id: str, confirm: bool = False) -> str:
+    def axis_regenerate_connector(connector_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Regenerate the installation command for an existing Axis Security connector. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_regenerate_connector")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Connectors/{connector_id}/regenerate", "method": "POST"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.regenerate_connector(connector_id)
             audit.record("axis_regenerate_connector", connector_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3194,33 +3331,36 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_connector_zones(page: int = 1, page_size: int = 50) -> str:
+    def axis_list_connector_zones(page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security connector zones. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_connector_zones(page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_connector_zone(zone_id: str) -> str:
+    def axis_get_connector_zone(zone_id: str,
+        target: str = "") -> str:
         """Get a single Axis Security connector zone by id. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             return json_result(axis.get_connector_zone(zone_id), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_connector_zone(name: str, zone_type: str, purpose: str, description: str = "", confirm: bool = False) -> str:
+    def axis_create_connector_zone(name: str, zone_type: str, purpose: str, description: str = "", confirm: bool = False,
+        target: str = "") -> str:
         """Create an Axis Security connector zone (Regular/InternetZone/ExternalPublicZone for Access/LogStreaming). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_create_connector_zone")
             body = build_connector_zone_body(name, zone_type, purpose, description=description)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/ConnectorZones", "method": "POST", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.create_connector_zone(body)
             audit.record("axis_create_connector_zone", name, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3228,7 +3368,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_update_connector_zone(zone_id: str, name: str = "", zone_type: str = "", purpose: str = "", description: str = "", confirm: bool = False) -> str:
+    def axis_update_connector_zone(zone_id: str, name: str = "", zone_type: str = "", purpose: str = "", description: str = "", confirm: bool = False,
+        target: str = "") -> str:
         """Update an Axis Security connector zone. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_update_connector_zone")
@@ -3245,7 +3386,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 return json_result({"error": "nothing to update"}, settings.max_output_chars)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/ConnectorZones/{zone_id}", "method": "PUT", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.update_connector_zone(zone_id, body)
             audit.record("axis_update_connector_zone", zone_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3253,13 +3394,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_connector_zone(zone_id: str, confirm: bool = False) -> str:
+    def axis_delete_connector_zone(zone_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Delete an Axis Security connector zone. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_delete_connector_zone")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/ConnectorZones/{zone_id}", "method": "DELETE"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             axis.delete_connector_zone(zone_id)
             audit.record("axis_delete_connector_zone", zone_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "deleted": zone_id}, settings.max_output_chars)
@@ -3267,26 +3409,29 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_ip_categories(page: int = 1, page_size: int = 50) -> str:
+    def axis_list_ip_categories(page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security custom IP categories. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_ip_categories(page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_ip_category(category_id: str) -> str:
+    def axis_get_ip_category(category_id: str,
+        target: str = "") -> str:
         """Get a single Axis Security custom IP category by id. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             return json_result(axis.get_ip_category(category_id), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_ip_category(name: str, included_ips: str = "", excluded_ips: str = "", connector_zone_id: str = "", description: str = "", confirm: bool = False) -> str:
+    def axis_create_ip_category(name: str, included_ips: str = "", excluded_ips: str = "", connector_zone_id: str = "", description: str = "", confirm: bool = False,
+        target: str = "") -> str:
         """Create an Axis Security custom IP category (comma-separated IPs/CIDRs). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_create_ip_category")
@@ -3299,7 +3444,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/IpCategories", "method": "POST", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.create_ip_category(body)
             audit.record("axis_create_ip_category", name, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3307,13 +3452,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_ip_category(category_id: str, confirm: bool = False) -> str:
+    def axis_delete_ip_category(category_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Delete an Axis Security custom IP category. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_delete_ip_category")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/IpCategories/{category_id}", "method": "DELETE"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             axis.delete_ip_category(category_id)
             audit.record("axis_delete_ip_category", category_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "deleted": category_id}, settings.max_output_chars)
@@ -3321,26 +3467,29 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_web_categories(page: int = 1, page_size: int = 50) -> str:
+    def axis_list_web_categories(page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security web categories. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_web_categories(page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_web_category(category_id: str) -> str:
+    def axis_get_web_category(category_id: str,
+        target: str = "") -> str:
         """Get a single Axis Security web category by id. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             return json_result(axis.get_web_category(category_id), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_web_category(name: str, included_domains: str = "", excluded_domains: str = "", connector_zone_id: str = "", description: str = "", confirm: bool = False) -> str:
+    def axis_create_web_category(name: str, included_domains: str = "", excluded_domains: str = "", connector_zone_id: str = "", description: str = "", confirm: bool = False,
+        target: str = "") -> str:
         """Create an Axis Security web category (comma-separated domains/URLs). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_create_web_category")
@@ -3353,7 +3502,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/WebCategories", "method": "POST", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.create_web_category(body)
             audit.record("axis_create_web_category", name, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3361,13 +3510,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_web_category(category_id: str, confirm: bool = False) -> str:
+    def axis_delete_web_category(category_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Delete an Axis Security web category. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_delete_web_category")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/WebCategories/{category_id}", "method": "DELETE"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             axis.delete_web_category(category_id)
             audit.record("axis_delete_web_category", category_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "deleted": category_id}, settings.max_output_chars)
@@ -3375,17 +3525,19 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_ssl_exclusions(page: int = 1, page_size: int = 50) -> str:
+    def axis_list_ssl_exclusions(page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security SSL exclusions. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_ssl_exclusions(page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_ssl_exclusion(name: str, exclusion_type: str, excluded_domains: str = "", enabled: bool = True, confirm: bool = False) -> str:
+    def axis_create_ssl_exclusion(name: str, exclusion_type: str, excluded_domains: str = "", enabled: bool = True, confirm: bool = False,
+        target: str = "") -> str:
         """Create an Axis Security SSL exclusion (Predefined/Custom). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_create_ssl_exclusion")
@@ -3396,7 +3548,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/SslExclusions", "method": "POST", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.create_ssl_exclusion(body)
             audit.record("axis_create_ssl_exclusion", name, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3404,13 +3556,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_ssl_exclusion(exclusion_id: str, confirm: bool = False) -> str:
+    def axis_delete_ssl_exclusion(exclusion_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Delete an Axis Security SSL exclusion. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_delete_ssl_exclusion")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/SslExclusions/{exclusion_id}", "method": "DELETE"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             axis.delete_ssl_exclusion(exclusion_id)
             audit.record("axis_delete_ssl_exclusion", exclusion_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "deleted": exclusion_id}, settings.max_output_chars)
@@ -3418,24 +3571,26 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_groups(page: int = 1, page_size: int = 50) -> str:
+    def axis_list_groups(page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security user groups. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_groups(page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_group(name: str, users_json: str = "", description: str = "", confirm: bool = False) -> str:
+    def axis_create_group(name: str, users_json: str = "", description: str = "", confirm: bool = False,
+        target: str = "") -> str:
         """Create an Axis Security user group. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_create_group")
             body = build_group_body(name, users=json.loads(users_json) if users_json else None, description=description)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/Groups", "method": "POST", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.create_group(body)
             audit.record("axis_create_group", name, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3443,13 +3598,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_group(group_id: str, confirm: bool = False) -> str:
+    def axis_delete_group(group_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Delete an Axis Security user group. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_delete_group")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Groups/{group_id}", "method": "DELETE"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             axis.delete_group(group_id)
             audit.record("axis_delete_group", group_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "deleted": group_id}, settings.max_output_chars)
@@ -3457,26 +3613,29 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_users(page: int = 1, page_size: int = 50) -> str:
+    def axis_list_users(page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security users. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_users(page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_user(user_id: str) -> str:
+    def axis_get_user(user_id: str,
+        target: str = "") -> str:
         """Get a single Axis Security user by id. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             return json_result(axis.get_user(user_id), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_user(user_name: str, email: str, first_name: str, last_name: str, enabled: bool = True, groups_json: str = "", expiration: str = "", confirm: bool = False) -> str:
+    def axis_create_user(user_name: str, email: str, first_name: str, last_name: str, enabled: bool = True, groups_json: str = "", expiration: str = "", confirm: bool = False,
+        target: str = "") -> str:
         """Create an Axis Security user. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_create_user")
@@ -3488,7 +3647,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/Users", "method": "POST", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.create_user(body)
             audit.record("axis_create_user", user_name, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3496,13 +3655,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_user(user_id: str, confirm: bool = False) -> str:
+    def axis_delete_user(user_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Delete an Axis Security user. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_delete_user")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Users/{user_id}", "method": "DELETE"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             axis.delete_user(user_id)
             audit.record("axis_delete_user", user_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "deleted": user_id}, settings.max_output_chars)
@@ -3510,33 +3670,36 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_locations(page: int = 1, page_size: int = 50) -> str:
+    def axis_list_locations(page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security locations. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_locations(page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_location(location_id: str) -> str:
+    def axis_get_location(location_id: str,
+        target: str = "") -> str:
         """Get a single Axis Security location by id. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             return json_result(axis.get_location(location_id), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_location(name: str, confirm: bool = False) -> str:
+    def axis_create_location(name: str, confirm: bool = False,
+        target: str = "") -> str:
         """Create an Axis Security location. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_create_location")
             body = build_location_body(name)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/Locations", "method": "POST", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.create_location(body)
             audit.record("axis_create_location", name, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3544,13 +3707,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_location(location_id: str, confirm: bool = False) -> str:
+    def axis_delete_location(location_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Delete an Axis Security location. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_delete_location")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Locations/{location_id}", "method": "DELETE"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             axis.delete_location(location_id)
             audit.record("axis_delete_location", location_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "deleted": location_id}, settings.max_output_chars)
@@ -3558,17 +3722,19 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_sub_locations(location_id: str, page: int = 1, page_size: int = 50) -> str:
+    def axis_list_sub_locations(location_id: str, page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security sub-locations under a location. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_sub_locations(location_id, page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_sub_location(location_id: str, name: str, ip_ranges: str, confirm: bool = False) -> str:
+    def axis_create_sub_location(location_id: str, name: str, ip_ranges: str, confirm: bool = False,
+        target: str = "") -> str:
         """Create an Axis Security sub-location (comma-separated CIDRs). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_create_sub_location")
@@ -3578,7 +3744,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Locations/{location_id}/SubLocations", "method": "POST", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.create_sub_location(location_id, body)
             audit.record("axis_create_sub_location", name, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3586,13 +3752,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_sub_location(location_id: str, sub_location_id: str, confirm: bool = False) -> str:
+    def axis_delete_sub_location(location_id: str, sub_location_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Delete an Axis Security sub-location. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_delete_sub_location")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Locations/{location_id}/SubLocations/{sub_location_id}", "method": "DELETE"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             axis.delete_sub_location(location_id, sub_location_id)
             audit.record("axis_delete_sub_location", sub_location_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "deleted": sub_location_id}, settings.max_output_chars)
@@ -3600,34 +3767,37 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_tunnels(page: int = 1, page_size: int = 50) -> str:
+    def axis_list_tunnels(page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security tunnels. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_tunnels(page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_tunnel_status(tunnel_id: str) -> str:
+    def axis_tunnel_status(tunnel_id: str,
+        target: str = "") -> str:
         """Get the live status of an Axis Security tunnel. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.tunnel_status(tunnel_id)
             return json_result(summarize_tunnel_status(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_tunnel(name: str, location_id: str, auth_id: str, auth_psk: str, confirm: bool = False) -> str:
+    def axis_create_tunnel(name: str, location_id: str, auth_id: str, auth_psk: str, confirm: bool = False,
+        target: str = "") -> str:
         """Create an Axis Security tunnel (IPSec). auth_psk is the pre-shared key. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_create_tunnel")
             body = build_tunnel_body(name, location_id, auth_id, auth_psk)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/Tunnels", "method": "POST", "body": body}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.create_tunnel(body)
             audit.record("axis_create_tunnel", name, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "result": payload}, settings.max_output_chars)
@@ -3635,13 +3805,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_tunnel(tunnel_id: str, confirm: bool = False) -> str:
+    def axis_delete_tunnel(tunnel_id: str, confirm: bool = False,
+        target: str = "") -> str:
         """Delete an Axis Security tunnel. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_writes("axis_delete_tunnel")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Tunnels/{tunnel_id}", "method": "DELETE"}}, settings.max_output_chars)
-            axis = require_axis()
+            axis = require_axis(target)
             axis.delete_tunnel(tunnel_id)
             audit.record("axis_delete_tunnel", tunnel_id, "axis", "ok", dry_run=False)
             return json_result({"applied": True, "deleted": tunnel_id}, settings.max_output_chars)
@@ -3649,27 +3820,29 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_certificates(page: int = 1, page_size: int = 50) -> str:
+    def axis_list_certificates(page: int = 1, page_size: int = 50,
+        target: str = "") -> str:
         """List Axis Security domain name certificates. Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_certificates(page_number=page, page_size=page_size)
             return json_result(summarize_paged(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_ipsec_locations() -> str:
+    def axis_list_ipsec_locations(target: str = "") -> str:
         """List available Axis Security IPSec PoP locations (countries, cities, FQDNs, IPs). Read-only."""
         try:
-            axis = require_axis()
+            axis = require_axis(target)
             payload = axis.list_ipsec_locations()
             return json_result(summarize_ipsec_locations(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_commit(confirm: bool = False) -> str:
+    def axis_commit(confirm: bool = False,
+        target: str = "") -> str:
         """Commit all pending Axis Security changes. Without confirm=true returns a dry-run notice; with confirm=true (and EC_ALLOW_WRITE_TOOLS=true) commits the staged changes."""
         try:
             require_writes("axis_commit")
@@ -3682,22 +3855,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     },
                     settings.max_output_chars,
                 )
-            axis = require_axis()
+            axis = require_axis(target)
             axis.commit_changes()
             audit.record("axis_commit", "commit", "axis", "ok", dry_run=False)
             return json_result({"applied": True, "committed": True}, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
-    def require_axis_client() -> AxisSecurityClient | None:
-        if not settings.axis_enabled or not settings.axis_admin_token:
+    def require_axis_client(target: str = "") -> AxisSecurityClient | None:
+        try:
+            return require_axis(target)
+        except SecurityError:
             return None
-        return AxisSecurityClient(
-            token=settings.axis_admin_token,
-            base_url=settings.axis_base_url,
-            timeout=settings.axis_timeout,
-            verify_tls=settings.axis_verify_tls,
-        )
 
     @mcp.tool()
     def dashboard_snapshot() -> str:
@@ -4483,10 +4652,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_orchestrator_infrastructure() -> str:
+    def get_orchestrator_infrastructure(target: str = "") -> str:
         """Read Orchestrator-side infrastructure KPIs: platform info, hostname/IP, OS flavor, container status, GMS server info, software versions, approximate disk space, DB partitions, stats retention and stats-collector health. Use for Orchestrator self-health and capacity checks (data taken from the Orchestrator, not from the appliances)."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
@@ -4535,10 +4704,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_appliance_infrastructure(appliance_id: str = "all") -> str:
+    def get_appliance_infrastructure(appliance_id: str = "all",
+        target: str = "") -> str:
         """Read per-appliance infrastructure KPIs from the Orchestrator: CPU timeseries, per-appliance performance/throughput timeseries and interface state. Supports 'all' or a single appliance (nePk, name, IP or serial). Statistics are read from the Orchestrator DB, so they cover historical/aggregate views rather than live per-second counters."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
@@ -4694,10 +4864,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_appliance_health(appliance_id: str = "all", samples: int = 10) -> str:
+    def get_appliance_health(appliance_id: str = "all", samples: int = 10,
+        target: str = "") -> str:
         """Read the live health summary and system state directly from EdgeConnect appliances: POST /health (loss/latency/jitter/MOS), system info, disk usage and disks — all fetched from the appliance itself through the Orchestrator appliance proxy over the SD-WAN network. Use for real-time device health; use get_orchestrator_infrastructure / get_appliance_infrastructure for Orchestrator-side historical KPIs."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()

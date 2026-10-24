@@ -70,6 +70,8 @@ def test_critical_v3_variables_are_in_template_and_documentation() -> None:
         "EC_UPDATE_STATE_DIR",
         "EC_UPDATE_SERVICE_NAME",
         "EC_UPDATE_ADMIN_SERVICE_NAME",
+        "EC_ORCHESTRATORS_JSON",
+        "EC_SSE_PLATFORMS_JSON",
     }
 
     for key in required:

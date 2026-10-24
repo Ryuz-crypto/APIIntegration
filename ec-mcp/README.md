@@ -255,6 +255,29 @@ como “configurado” y un campo secreto vacío conserva el valor existente.
 servicios** crea una solicitud que procesa el worker privilegiado; el proceso
 web nunca ejecuta Git, pip ni systemctl directamente.
 
+#### Multi-Orchestrator y multi-SSE (multi-tenant)
+
+El panel administra **N Orchestrators** y **N plataformas SSE** de forma
+independiente:
+
+- Pestaña **Orquestadores**: alta/baja/edición de cada Orchestrator (URL, API
+  key o usuario/contraseña, TLS, credenciales SSH opcionales). Cada uno es un
+  target con nombre propio (p. ej. `prod`, `lab`).
+- Pestaña **Plataformas SSE**: alta/baja/edición de cada plataforma SSE (p.
+  ej. varias instancias de Axis Security), con su propio `base_url`, token y
+  timeout.
+- El botón **Aplicar** escribe el target seleccionado en `.env` y **además**
+  vuelca el registro completo como `EC_ORCHESTRATORS_JSON` y
+  `EC_SSE_PLATFORMS_JSON`. El runtime carga todos los targets como un pool de
+  clientes.
+- Las tools MCP aceptan un parámetro opcional `target` para operar contra un
+  Orchestrator o plataforma SSE concreto. Sin `target`, usan `default`.
+- `list_orchestrator_targets_tool` y `list_sse_targets_tool` enumeran los
+  targets configurados (nunca exponen secretos).
+- **Backwards compatible**: si los blobs están vacíos, todo funciona como
+  antes con un solo Orchestrator (`EC_ORCHESTRATOR_*`) y una sola plataforma
+  (`EC_AXIS_*`).
+
 ## Archivo de configuración y precedencia
 
 Al iniciar, el servidor busca variables en este orden:
@@ -277,6 +300,13 @@ Una variable ya presente en el proceso no es reemplazada por el archivo.
 | `EC_ORCHESTRATOR_USER` | vacío | Una opción | Usuario para login cuando no se usa API key. |
 | `EC_ORCHESTRATOR_PASSWORD` | vacío | Con usuario | Contraseña del usuario del Orchestrator. |
 | `EC_VERIFY_TLS` | `true` | No | Verifica el certificado TLS. Usa `false` únicamente en un laboratorio controlado. |
+
+### Multi-Orchestrator y multi-SSE (multi-tenant)
+
+| Variable | Predeterminado | Uso |
+|---|---:|---|
+| `EC_ORCHESTRATORS_JSON` | vacío | Blob JSON con N Orchestrators nombrados. Lo escribe el panel al aplicar. Si está vacío, se usa `EC_ORCHESTRATOR_*` (un solo target `default`). |
+| `EC_SSE_PLATFORMS_JSON` | vacío | Blob JSON con N plataformas SSE nombradas. Lo escribe el panel al aplicar. Si está vacío, se usa `EC_AXIS_*` (un solo target `default`). |
 
 ### SSH opcional a appliances
 
@@ -325,7 +355,7 @@ Una variable ya presente en el proceso no es reemplazada por el archivo.
 | `EC_ADMIN_LOGIN_MAX_FAILURES` | `5` | Fallos permitidos por IP antes del bloqueo temporal. |
 | `EC_ADMIN_LOGIN_WINDOW_SECONDS` | `60` | Duración de la ventana de bloqueo; una contraseña correcta desbloquea inmediatamente. |
 | `EC_ADMIN_PASSWORD_FILE` | `.ec-admin-pass` | Archivo alternativo para almacenar la contraseña del primer inicio. |
-| `EC_ADMIN_STORE` | `.ec-admin.json` | Almacén de configuraciones de Orchestrators. |
+| `EC_ADMIN_STORE` | `.ec-admin.json` | Registro JSON (0600) de Orchestrators y plataformas SSE gestionado desde el panel. |
 
 ### Actualizaciones web
 

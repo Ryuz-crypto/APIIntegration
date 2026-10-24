@@ -42,7 +42,7 @@ async function login(){
 async function logout(){await api('/logout',{});AUTHED=false;renderLogin()}
 function renderShell(){
  q('#app').innerHTML='<header><div class="brand"><h1>ec-mcp control plane</h1><p>Configuración, operación y actualizaciones sin SSH</p></div><span class="badge">__EC_MCP_VERSION__</span></header>'+
- '<nav><button id="tab-orch" onclick="showTab(\'orch\')">Orquestadores</button><button id="tab-config" onclick="showTab(\'config\')">Variables</button><button id="tab-update" onclick="showTab(\'update\')">Actualizaciones</button><button id="tab-ztp" onclick="showTab(\'ztp\')">ZTP</button><button class="secondary" onclick="logout()">Salir</button></nav>'+
+ '<nav><button id="tab-orch" onclick="showTab(\'orch\')">Orquestadores</button><button id="tab-sse" onclick="showTab(\'sse\')">Plataformas SSE</button><button id="tab-config" onclick="showTab(\'config\')">Variables</button><button id="tab-update" onclick="showTab(\'update\')">Actualizaciones</button><button id="tab-ztp" onclick="showTab(\'ztp\')">ZTP</button><button class="secondary" onclick="logout()">Salir</button></nav>'+
  '<div id="notice"></div><section id="workspace"></section>';
  showTab('config');
 }
@@ -50,6 +50,7 @@ function showTab(name){
  document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active-tab')});
  var tab=q('#tab-'+name);if(tab)tab.classList.add('active-tab');
  if(name==='orch')renderOrchestrators();
+ if(name==='sse')renderSse();
  if(name==='config')renderConfig();
  if(name==='update')renderUpdate();
  if(name==='ztp')renderZtp();
@@ -68,7 +69,18 @@ async function saveOrch(){
  try{var r=await api('/api/orchestrators',{name:q('#o-name').value.trim(),url:q('#o-url').value.trim(),api_key:q('#o-key').value,username:q('#o-user').value,password:q('#o-password').value,verify_tls:q('#o-tls').value==='true',ssh_user:q('#o-ssh-user').value,ssh_password:q('#o-ssh-password').value,ssh_enable_password:q('#o-enable').value,ssh_host:q('#o-ssh-host').value});notice(r.message||r.error,r.ok?'ok':'err');STATE=await api('/api/state');renderOrchestrators()}catch(e){notice(e.message,'err')}
 }
 async function deleteOrch(name){if(!confirm('Eliminar '+name+'?'))return;await api('/api/orchestrators/delete',{name:name});STATE=await api('/api/state');renderOrchestrators()}
-async function applyOrch(){try{var r=await api('/api/apply',{name:q('#o-name').value.trim()});notice(r.message||r.error,r.ok?'ok':'err');CONFIG=await api('/api/config')}catch(e){notice(e.message,'err')}}
+async function applyOrch(){try{var r=await api('/api/apply',{name:q('#o-name').value.trim(),kind:'orchestrator'});notice(r.message||r.error,r.ok?'ok':'err');CONFIG=await api('/api/config')}catch(e){notice(e.message,'err')}}
+function renderSse(){
+ var list=(STATE.sse_platforms||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="editSse(\''+esc(o.name)+'\')">Editar</button><button class="danger" onclick="deleteSse(\''+esc(o.name)+'\')">Eliminar</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+' <span class="badge">'+esc(o.provider)+'</span><br><span class="help">'+esc(o.base_url)+'</span></div>'}).join('')||'<p class="help">No hay plataformas SSE guardadas.</p>';
+ q('#workspace').innerHTML='<section class="panel"><h2>Plataformas SSE (multi-tenant)</h2><p>Administra N plataformas SSE de forma independiente (p. ej. varias instancias de Axis Security). Cada una guarda su propio token y URL.</p>'+list+
+ '<div class="group"><h3>Agregar o actualizar plataforma SSE</h3><div class="grid"><label>Nombre<input id="s-name" placeholder="axis-prod"></label><label>Proveedor<select id="s-provider"><option>axis</option></select></label><label>URL base<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>Token admin (Bearer JWT)<input id="s-token" type="password"></label><label>Verificar TLS<select id="s-tls"><option>true</option><option>false</option></select></label><label>Timeout (s)<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">Guardar</button><button class="secondary" onclick="applySse()">Aplicar al .env</button></div></div></section>';
+}
+function editSse(name){var o=(STATE.sse_platforms||[]).find(function(x){return x.name===name});if(!o)return;q('#s-name').value=o.name;q('#s-provider').value=o.provider;q('#s-url').value=o.base_url;q('#s-tls').value=String(o.verify_tls);q('#s-timeout').value=o.timeout}
+async function saveSse(){
+ try{var r=await api('/api/sse',{name:q('#s-name').value.trim(),provider:q('#s-provider').value,base_url:q('#s-url').value.trim(),admin_token:q('#s-token').value,verify_tls:q('#s-tls').value==='true',timeout:q('#s-timeout').value});notice(r.message||r.error,r.ok?'ok':'err');STATE=await api('/api/state');renderSse()}catch(e){notice(e.message,'err')}
+}
+async function deleteSse(name){if(!confirm('Eliminar plataforma '+name+'?'))return;await api('/api/sse/delete',{name:name});STATE=await api('/api/state');renderSse()}
+async function applySse(){try{var r=await api('/api/apply',{name:q('#s-name').value.trim(),kind:'sse'});notice(r.message||r.error,r.ok?'ok':'err');CONFIG=await api('/api/config')}catch(e){notice(e.message,'err')}}
 function fieldHtml(f){
  var id='cfg-'+f.key, input='';
  if(f.kind==='boolean')input='<select id="'+id+'" data-key="'+f.key+'"><option value="true">true</option><option value="false">false</option></select>';

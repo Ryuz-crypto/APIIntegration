@@ -32,6 +32,12 @@ from starlette.routing import Route
 from . import __version__
 from .admin_config import public_config, update_env
 from .admin_page import PAGE as _PAGE_TEMPLATE
+from .multi_target import (
+    RegistryError,
+    load_registry,
+    public_orchestrator,
+    public_sse,
+)
 
 
 def _render_page() -> str:
@@ -188,26 +194,24 @@ async def logout_post(request):
 
 
 def _public_state() -> dict:
-    store = _load_store()
+    registry = load_registry()
     active = os.environ.get("EC_ORCHESTRATOR_URL", "")
     orchestrators = []
-    for name, entry in store["orchestrators"].items():
-        orchestrators.append(
-            {
-                "name": name,
-                "url": entry.get("url", ""),
-                "verify_tls": entry.get("verify_tls", True),
-                "has_api_key": bool(entry.get("api_key")),
-                "has_password": bool(entry.get("password")),
-                "ssh_user": entry.get("ssh_user", ""),
-                "ssh_host": entry.get("ssh_host", ""),
-                "has_ssh_password": bool(entry.get("ssh_password")),
-                "has_enable_password": bool(entry.get("ssh_enable_password")),
-                "active": entry.get("url", "") == active,
-            }
-        )
+    for name, entry in registry.list_orchestrators().items():
+        item = public_orchestrator(name, entry)
+        item["active"] = bool(active) and entry.get("url", "") == active
+        orchestrators.append(item)
+    sse_platforms = []
+    for name, entry in registry.list_sse().items():
+        item = public_sse(name, entry)
+        if name == "default":
+            item["active"] = os.environ.get("EC_AXIS_ENABLED", "false").lower() == "true"
+        else:
+            item["active"] = False
+        sse_platforms.append(item)
     return {
         "orchestrators": orchestrators,
+        "sse_platforms": sse_platforms,
         "ssh_enabled": os.environ.get("EC_SSH_ENABLED", "false").lower() == "true",
     }
 
@@ -223,24 +227,22 @@ async def api_save_orchestrator(request):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     body = await request.json()
     name = str(body.get("name") or "").strip()
-    url = str(body.get("url") or "").strip().rstrip("/")
-    if not name or not url.startswith("http"):
-        return JSONResponse({"ok": False, "error": "name y url son obligatorios"})
-    store = _load_store()
-    entry = store["orchestrators"].get(name, {})
-    entry["url"] = url
-    entry["verify_tls"] = bool(body.get("verify_tls", True))
-    for field in ("api_key", "username", "password", "ssh_user", "ssh_password", "ssh_enable_password", "ssh_host"):
-        value = body.get(field)
-        if value:
-            entry[field] = str(value)
-    if body.get("ssh_user") == "":
-        entry.pop("ssh_user", None)
-    if body.get("ssh_host") == "":
-        entry.pop("ssh_host", None)
-    store["orchestrators"][name] = entry
-    _save_store(store)
-    return JSONResponse({"ok": True, "message": f"Orquestador '{name}' guardado. Usa 'Escribir en .env y activar' para aplicarlo."})
+    entry = {
+        "url": str(body.get("url") or "").strip(),
+        "verify_tls": body.get("verify_tls", True),
+        "api_key": body.get("api_key") or None,
+        "username": body.get("username") or None,
+        "password": body.get("password") or None,
+        "ssh_user": body.get("ssh_user") or None,
+        "ssh_password": body.get("ssh_password") or None,
+        "ssh_enable_password": body.get("ssh_enable_password") or None,
+        "ssh_host": body.get("ssh_host") or None,
+    }
+    try:
+        load_registry().save_orchestrator(name, entry)
+    except RegistryError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)})
+    return JSONResponse({"ok": True, "message": f"Orquestador '{name}' guardado. Usa 'Aplicar' para activarlo."})
 
 
 async def api_delete_orchestrator(request):
@@ -248,11 +250,36 @@ async def api_delete_orchestrator(request):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     body = await request.json()
     name = str(body.get("name") or "")
-    store = _load_store()
-    if name in store["orchestrators"]:
-        del store["orchestrators"][name]
-        _save_store(store)
-    return JSONResponse({"ok": True, "message": "Eliminado"})
+    deleted = load_registry().delete_orchestrator(name)
+    return JSONResponse({"ok": True, "deleted": deleted, "message": "Eliminado" if deleted else "No existía"})
+
+
+async def api_save_sse(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = await request.json()
+    name = str(body.get("name") or "").strip()
+    entry = {
+        "provider": body.get("provider") or "axis",
+        "base_url": str(body.get("base_url") or "").strip(),
+        "admin_token": body.get("admin_token") or None,
+        "verify_tls": body.get("verify_tls", True),
+        "timeout": body.get("timeout"),
+    }
+    try:
+        load_registry().save_sse(name, entry)
+    except RegistryError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)})
+    return JSONResponse({"ok": True, "message": f"Plataforma SSE '{name}' guardada."})
+
+
+async def api_delete_sse(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    body = await request.json()
+    name = str(body.get("name") or "")
+    deleted = load_registry().delete_sse(name)
+    return JSONResponse({"ok": True, "deleted": deleted, "message": "Eliminada" if deleted else "No existía"})
 
 
 ENV_KEYS = {
@@ -273,32 +300,55 @@ async def api_apply(request):
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     body = await request.json()
     name = str(body.get("name") or "").strip()
-    store = _load_store()
-    if name and name not in store["orchestrators"]:
-        return JSONResponse({"ok": False, "error": f"No existe el orquestador '{name}'"})
-    if not name:
-        # default: apply currently active or first entry
-        entries = list(store["orchestrators"].items())
-        if not entries:
-            return JSONResponse({"ok": False, "error": "No hay orquestadores guardados"})
-        name, _ = entries[0]
-    entry = store["orchestrators"][name]
+    kind = str(body.get("kind") or "orchestrator").strip().lower()
+    registry = load_registry()
+    if kind == "sse":
+        if name and not registry.get_sse(name):
+            return JSONResponse({"ok": False, "error": f"No existe la plataforma SSE '{name}'"})
+        if not name:
+            entries = registry.list_sse()
+            if not entries:
+                return JSONResponse({"ok": False, "error": "No hay plataformas SSE guardadas"})
+            name = sorted(entries)[0]
+        entry = registry.get_sse(name)
+        wanted = {
+            "EC_AXIS_ENABLED": "true",
+            "EC_AXIS_ADMIN_TOKEN": entry.get("admin_token", ""),
+            "EC_AXIS_BASE_URL": entry.get("base_url", ""),
+            "EC_AXIS_VERIFY_TLS": str(public_sse(name, entry)["verify_tls"]).lower(),
+            "EC_AXIS_TIMEOUT": str(public_sse(name, entry)["timeout"]),
+        }
+        target_label = f"Plataforma SSE '{name}'"
+    else:
+        if name and not registry.get_orchestrator(name):
+            return JSONResponse({"ok": False, "error": f"No existe el orquestador '{name}'"})
+        if not name:
+            entries = registry.list_orchestrators()
+            if not entries:
+                return JSONResponse({"ok": False, "error": "No hay orquestadores guardados"})
+            active = os.environ.get("EC_ORCHESTRATOR_URL", "")
+            name = next((n for n, e in sorted(entries.items()) if e.get("url") == active), sorted(entries)[0])
+        entry = registry.get_orchestrator(name)
+        wanted = {
+            "EC_ORCHESTRATOR_URL": entry.get("url", ""),
+            "EC_ORCHESTRATOR_API_KEY": entry.get("api_key", ""),
+            "EC_ORCHESTRATOR_USER": entry.get("username", ""),
+            "EC_ORCHESTRATOR_PASSWORD": entry.get("password", ""),
+            "EC_VERIFY_TLS": str(public_orchestrator(name, entry)["verify_tls"]).lower(),
+            "EC_SSH_ENABLED": "true" if entry.get("ssh_user") else os.environ.get("EC_SSH_ENABLED", "false"),
+            "EC_SSH_USER": entry.get("ssh_user", ""),
+            "EC_SSH_PASSWORD": entry.get("ssh_password", ""),
+            "EC_SSH_ENABLE_PASSWORD": entry.get("ssh_enable_password", ""),
+            "EC_SSH_HOST": entry.get("ssh_host", ""),
+        }
+        target_label = f"Orquestador '{name}'"
+    # Persistir el registro completo como blobs JSON para el runtime multi-target.
+    for key, value in registry.to_env_blob().items():
+        wanted[key] = value
     env_path = Path(os.environ.get("EC_MCP_ENV_FILE", Path.cwd() / ".env"))
     lines = []
     if env_path.is_file():
         lines = env_path.read_text(encoding="utf-8").splitlines()
-    wanted = {
-        "EC_ORCHESTRATOR_URL": entry.get("url", ""),
-        "EC_ORCHESTRATOR_API_KEY": entry.get("api_key", ""),
-        "EC_ORCHESTRATOR_USER": entry.get("username", ""),
-        "EC_ORCHESTRATOR_PASSWORD": entry.get("password", ""),
-        "EC_VERIFY_TLS": str(entry.get("verify_tls", True)).lower(),
-        "EC_SSH_ENABLED": "true" if entry.get("ssh_user") else os.environ.get("EC_SSH_ENABLED", "false"),
-        "EC_SSH_USER": entry.get("ssh_user", ""),
-        "EC_SSH_PASSWORD": entry.get("ssh_password", ""),
-        "EC_SSH_ENABLE_PASSWORD": entry.get("ssh_enable_password", ""),
-        "EC_SSH_HOST": entry.get("ssh_host", ""),
-    }
     for key, value in wanted.items():
         set_line = f"{key}={value}"
         for i, line in enumerate(lines):
@@ -318,7 +368,7 @@ async def api_apply(request):
         {
             "ok": True,
             "message": (
-                f"Orquestador '{name}' escrito en {env_path}. Reinicia el servicio para "
+                f"{target_label} escrito en {env_path}. Reinicia el servicio para "
                 "que el cambio quede persistente. Usa 'Guardar y reiniciar servicios' desde Variables para aplicarlo"
             ),
         }
@@ -409,6 +459,8 @@ def build_admin_app() -> Starlette:
             Route("/api/state", api_state, methods=["GET"]),
             Route("/api/orchestrators", api_save_orchestrator, methods=["POST"]),
             Route("/api/orchestrators/delete", api_delete_orchestrator, methods=["POST"]),
+            Route("/api/sse", api_save_sse, methods=["POST"]),
+            Route("/api/sse/delete", api_delete_sse, methods=["POST"]),
             Route("/api/apply", api_apply, methods=["POST"]),
             Route("/api/config", api_config, methods=["GET"]),
             Route("/api/config", api_save_config, methods=["POST"]),

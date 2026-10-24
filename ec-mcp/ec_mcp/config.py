@@ -30,6 +30,9 @@ class Settings:
     axis_verify_tls: bool = True
     axis_timeout: float = 30.0
 
+    orchestrators_json: str = ""
+    sse_platforms_json: str = ""
+
     dashboard_remote_enabled: bool = False
     dashboard_remote_host: str = ""
     dashboard_remote_user: str = ""
@@ -75,6 +78,8 @@ class Settings:
             axis_base_url=os.environ.get("EC_AXIS_BASE_URL", "https://admin-api.axissecurity.com"),
             axis_verify_tls=os.environ.get("EC_AXIS_VERIFY_TLS", "true").lower() != "false",
             axis_timeout=float(os.environ.get("EC_AXIS_TIMEOUT", "30")),
+            orchestrators_json=os.environ.get("EC_ORCHESTRATORS_JSON", ""),
+            sse_platforms_json=os.environ.get("EC_SSE_PLATFORMS_JSON", ""),
             dashboard_remote_enabled=os.environ.get("EC_DASHBOARD_REMOTE_ENABLED", "false").lower() == "true",
             dashboard_remote_host=os.environ.get("EC_DASHBOARD_REMOTE_HOST", ""),
             dashboard_remote_user=os.environ.get("EC_DASHBOARD_REMOTE_USER", ""),

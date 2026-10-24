@@ -15,10 +15,11 @@ logger = logging.getLogger("ec_mcp.orchestrator")
 
 
 class OrchestratorClient:
-    def __init__(self, settings: Settings, engine: CompatibilityEngine, client: httpx.Client | None = None):
+    def __init__(self, settings: Settings, engine: CompatibilityEngine, client: httpx.Client | None = None, *, target_name: str = "default"):
         if not settings.orchestrator_url:
             raise ValueError("EC_ORCHESTRATOR_URL is not configured")
         self._settings = settings
+        self.target_name = target_name
         self._engine = engine
         self._cached_profile: str | None = None
         self._appliances_cache: list[dict[str, Any]] | None = None
