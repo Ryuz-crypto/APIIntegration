@@ -23,6 +23,16 @@ Este repositorio no debe contener secretos reales, datos de clientes, direccione
 
 Gitleaks debe mantenerse como control preventivo de historial y contenido. Una ejecución fallida por referencias internas históricas se documenta y se eleva a GitHub Support; no se soluciona reduciendo silenciosamente el alcance del análisis.
 
+### Excepción documentada (refs #85, aprobada por el propietario, 2026-10-25)
+
+El commit histórico `ad8e66b` contiene ejemplos sintéticos con formato de credencial y es ancestro de `main`; las referencias internas `refs/pull/*` de GitHub no son editables mediante force-push. Con autorización explícita del propietario y la decisión de no recurrir a GitHub Support, el escaneo de CI se define así:
+
+1. **Contenido actual**: `gitleaks dir .` analiza el snapshot completo del repositorio en cada ejecución. Debe pasar siempre: un hallazgo aquí es un secreto en el árbol vigente.
+2. **Historial incremental**: `gitleaks git --log-opts="<rango>"` analiza únicamente los commits nuevos que introduce cada push o pull request respecto a su base. Un secreto introducido por un cambio nuevo sigue bloqueando ese cambio.
+3. Los 159 hallazgos históricos de #85 no se ocultaron con allowlist: permanecen clasificados en el issue como ejemplos sintéticos sin credenciales reales, y el snapshot vigente (`apiDocs.json`, `edgeconnect-10.0.json`) sustituye los valores por variables (`$EC_API_TOKEN`) o marcadores (`<CLIENT_KEY>`).
+
+Esta excepción no habilita secretos reales: toda detección en contenido nuevo o en commits nuevos se trata según la sección «Si se detecta una posible exposición». Si el proyecto decide después purgar el historial vía GitHub Support, se retira esta excepción y se restaura el escaneo de historial completo.
+
 ## Divulgación responsable
 
 Para una vulnerabilidad activa o una exposición de alto impacto, usa el canal privado de seguridad de GitHub cuando esté habilitado. Si no lo está, limita el issue a metadatos saneados y coordina la información sensible mediante un canal privado autorizado.
