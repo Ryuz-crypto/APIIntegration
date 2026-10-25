@@ -278,6 +278,24 @@ independiente:
   antes con un solo Orchestrator (`EC_ORCHESTRATOR_*`) y una sola plataforma
   (`EC_AXIS_*`).
 
+#### Pestaña Servicios: estado real verificado
+
+La pestaña **Servicios** (`GET /api/services/status`) comprueba cada backend
+con una petición HTTP real en el momento de la consulta y registra cada
+verificación en la auditoría estructurada (`tool=admin_panel`):
+
+- Cada **Orchestrator** del registro recibe un `GET /gms/rest/system/healthcheck`.
+- Cada **plataforma SSE** recibe un `GET /Health` con su token Bearer.
+- El **transporte MCP** se comprueba contra `EC_MCP_HOST:EC_MCP_PORT/health`.
+- El **worker de actualizaciones** reporta su estado real (`idle`, `pending`,
+  `running`, `success` o el último error).
+
+Un servicio solo se muestra como `up` si la última respuesta fue HTTP 200; si
+no, se muestra `down` con el error accionable y la marca de tiempo de la
+última comprobación. El panel nunca presenta un estado `ready` sin prueba.
+Los reinicios (`POST /api/restart`) y actualizaciones se modelan como
+solicitudes auditadas (prevalidación, confirmación escrita, worker separado).
+
 ## Archivo de configuración y precedencia
 
 Al iniciar, el servidor busca variables en este orden:

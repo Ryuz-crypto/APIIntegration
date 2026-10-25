@@ -32,6 +32,7 @@ from starlette.routing import Route
 from . import __version__
 from .admin_config import public_config, update_env
 from .admin_page import PAGE as _PAGE_TEMPLATE
+from .admin_services import services_status
 from .multi_target import (
     RegistryError,
     load_registry,
@@ -313,10 +314,10 @@ async def api_apply(request):
         entry = registry.get_sse(name)
         wanted = {
             "EC_AXIS_ENABLED": "true",
-            "EC_AXIS_ADMIN_TOKEN": entry.get("admin_token", ""),
-            "EC_AXIS_BASE_URL": entry.get("base_url", ""),
+            "EC_AXIS_ADMIN_TOKEN": entry.get("admin_token") or "",
+            "EC_AXIS_BASE_URL": entry.get("base_url") or "",
             "EC_AXIS_VERIFY_TLS": str(public_sse(name, entry)["verify_tls"]).lower(),
-            "EC_AXIS_TIMEOUT": str(public_sse(name, entry)["timeout"]),
+            "EC_AXIS_TIMEOUT": str(public_sse(name, entry).get("timeout") or ""),
         }
         target_label = f"Plataforma SSE '{name}'"
     else:
@@ -330,16 +331,16 @@ async def api_apply(request):
             name = next((n for n, e in sorted(entries.items()) if e.get("url") == active), sorted(entries)[0])
         entry = registry.get_orchestrator(name)
         wanted = {
-            "EC_ORCHESTRATOR_URL": entry.get("url", ""),
-            "EC_ORCHESTRATOR_API_KEY": entry.get("api_key", ""),
-            "EC_ORCHESTRATOR_USER": entry.get("username", ""),
-            "EC_ORCHESTRATOR_PASSWORD": entry.get("password", ""),
+            "EC_ORCHESTRATOR_URL": entry.get("url") or "",
+            "EC_ORCHESTRATOR_API_KEY": entry.get("api_key") or "",
+            "EC_ORCHESTRATOR_USER": entry.get("username") or "",
+            "EC_ORCHESTRATOR_PASSWORD": entry.get("password") or "",
             "EC_VERIFY_TLS": str(public_orchestrator(name, entry)["verify_tls"]).lower(),
             "EC_SSH_ENABLED": "true" if entry.get("ssh_user") else os.environ.get("EC_SSH_ENABLED", "false"),
-            "EC_SSH_USER": entry.get("ssh_user", ""),
-            "EC_SSH_PASSWORD": entry.get("ssh_password", ""),
-            "EC_SSH_ENABLE_PASSWORD": entry.get("ssh_enable_password", ""),
-            "EC_SSH_HOST": entry.get("ssh_host", ""),
+            "EC_SSH_USER": entry.get("ssh_user") or "",
+            "EC_SSH_PASSWORD": entry.get("ssh_password") or "",
+            "EC_SSH_ENABLE_PASSWORD": entry.get("ssh_enable_password") or "",
+            "EC_SSH_HOST": entry.get("ssh_host") or "",
         }
         target_label = f"Orquestador '{name}'"
     # Persistir el registro completo como blobs JSON para el runtime multi-target.
@@ -373,6 +374,12 @@ async def api_apply(request):
             ),
         }
     )
+
+
+async def api_services_status(request):
+    if not _check_session(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return JSONResponse(services_status(probe=True))
 
 
 async def api_config(request):
@@ -462,6 +469,7 @@ def build_admin_app() -> Starlette:
             Route("/api/sse", api_save_sse, methods=["POST"]),
             Route("/api/sse/delete", api_delete_sse, methods=["POST"]),
             Route("/api/apply", api_apply, methods=["POST"]),
+            Route("/api/services/status", api_services_status, methods=["GET"]),
             Route("/api/config", api_config, methods=["GET"]),
             Route("/api/config", api_save_config, methods=["POST"]),
             Route("/api/update/check", api_update_check, methods=["POST"]),

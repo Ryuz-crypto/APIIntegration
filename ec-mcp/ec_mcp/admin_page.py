@@ -42,7 +42,7 @@ async function login(){
 async function logout(){await api('/logout',{});AUTHED=false;renderLogin()}
 function renderShell(){
  q('#app').innerHTML='<header><div class="brand"><h1>ec-mcp control plane</h1><p>Configuración, operación y actualizaciones sin SSH</p></div><span class="badge">__EC_MCP_VERSION__</span></header>'+
- '<nav><button id="tab-orch" onclick="showTab(\'orch\')">Orquestadores</button><button id="tab-sse" onclick="showTab(\'sse\')">Plataformas SSE</button><button id="tab-config" onclick="showTab(\'config\')">Variables</button><button id="tab-update" onclick="showTab(\'update\')">Actualizaciones</button><button id="tab-ztp" onclick="showTab(\'ztp\')">ZTP</button><button class="secondary" onclick="logout()">Salir</button></nav>'+
+ '<nav><button id="tab-orch" onclick="showTab(\'orch\')">Orquestadores</button><button id="tab-sse" onclick="showTab(\'sse\')">Plataformas SSE</button><button id="tab-svc" onclick="showTab(\'svc\')">Servicios</button><button id="tab-config" onclick="showTab(\'config\')">Variables</button><button id="tab-update" onclick="showTab(\'update\')">Actualizaciones</button><button id="tab-ztp" onclick="showTab(\'ztp\')">ZTP</button><button class="secondary" onclick="logout()">Salir</button></nav>'+
  '<div id="notice"></div><section id="workspace"></section>';
  showTab('config');
 }
@@ -51,11 +51,23 @@ function showTab(name){
  var tab=q('#tab-'+name);if(tab)tab.classList.add('active-tab');
  if(name==='orch')renderOrchestrators();
  if(name==='sse')renderSse();
+ if(name==='svc')renderServices();
  if(name==='config')renderConfig();
  if(name==='update')renderUpdate();
  if(name==='ztp')renderZtp();
 }
-async function loadAll(){
+async function renderServices(){
+ q('#workspace').innerHTML='<section class="panel"><h2>Servicios</h2><p class="help">Comprobando estado real...</p></section>';
+ try{var r=await api('/api/services/status');var h='<section class="panel"><h2>Servicios</h2><p class="help">Estado verificado con peticiones reales el '+esc((r.checked_at||'').replace('T',' ').split('.')[0])+' UTC. Ningún servicio se muestra como activo sin comprobación.</p>';
+ var orch=(r.orchestrators||[]).map(function(s){return svcRow('Orchestrator: '+s.name,s)}).join('');
+ var sse=(r.sse_platforms||[]).map(function(s){return svcRow('SSE: '+s.name,s)}).join('');
+ var up=svcRow('Worker de actualizaciones',r.update_worker||{});
+ var mcp=r.mcp_transport||{};var mcpRow=svcRow('Transporte MCP ('+esc(mcp.url||'localhost')+')',mcp);
+ h+=orch+sse+mcpRow+up+'<div class="actions"><button onclick="renderServices()">Volver a comprobar</button></div></section>';
+ q('#workspace').innerHTML=h;}catch(e){notice(e.message,'err')}
+}
+function svcRow(label,s){var up=s.state==='up'||s.state==='success'||s.state==='idle';var st=s.state||'unknown';var cls=up?'ok':'err';var extra=s.error?esc(s.error):(s.latency!==undefined?('latencia '+s.latency.toFixed(2)+'s'):'');return '<div class="orch"><strong>'+esc(label)+'</strong> <span class="badge" data-state="'+esc(st)+'">'+esc(st)+'</span><br><span class="help">'+extra+'</span></div>'}
+
  try{var results=await Promise.all([api('/api/state'),api('/api/config'),api('/api/update/status')]);STATE=results[0];CONFIG=results[1];UPDATE={status:results[2]};renderConfig();}
  catch(e){notice(e.message,'err')}
 }
