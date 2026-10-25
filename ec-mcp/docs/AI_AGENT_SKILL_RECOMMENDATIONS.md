@@ -2,7 +2,7 @@
 
 Documento de diseño para construir un **skill** (Claude Skills, Cursor, Le Chat, etc.) o un
 **agente equivalente** que opere entornos HPE Aruba EdgeConnect a través del servidor MCP
-`ec-mcp` (v8.0.0). Complementa los skills existentes:
+`ec-mcp` (v8.1.0). Complementa los skills existentes:
 
 - `EDGECONNECT_NOC_OPS_SKILL.md` — operación NOC (monitoreo, diagnóstico, runbooks).
 - `EDGECONNECT_EXPERT_SKILL.md` — conocimiento experto del dominio (hallazgos de contrato, licenciamiento, ZTP).
@@ -64,7 +64,7 @@ salidas; el agente no debe pedir ni repetir credenciales.
 
 ---
 
-## 2. Capacidades del servidor (inventario real: 122 tools, v8.0.0)
+## 2. Capacidades del servidor (inventario real: 122 tools, v8.1.0)
 
 | Dominio | Tools | # | Tipo |
 |---|---|---|---|
@@ -176,7 +176,7 @@ skill-ec-mcp/
 ## 6. Deuda documental detectada (para corregir al actualizar el skill)
 
 El skill `EDGECONNECT_NOC_OPS_SKILL.md` está etiquetado **v6.0.0 / 112 tools**; el servidor
-actual (8.0.0) expone **122 tools**. Faltan por documentar:
+actual (8.1.0) expone **122 tools**. Faltan por documentar:
 
 - `get_ztp_status` — estado ZTP con filas paginadas sin credenciales.
 - `get_ztp_apply_status` — seguimiento de la cadena de tareas async del apply (op 254).

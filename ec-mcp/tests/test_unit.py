@@ -1396,7 +1396,7 @@ def test_orchestrator_info_exposes_build_for_deployment_verification():
 def test_stable_package_version_is_consistent():
     from ec_mcp import __version__
 
-    assert __version__ == "8.0.0"
+    assert __version__ == "8.1.0"
 
 
 def test_large_helper_response_is_closed_valid_json():
