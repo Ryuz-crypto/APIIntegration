@@ -620,7 +620,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/edge-ha/groups' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\n    \"appliances\": [\n      {\"nePk\": \"10.NE\", \"haIf\": \"wan1\", \"haSyncInfo\": {\"haSyncInterface\": \"wan1.100\", \"localIP\": \"169.254.1.1\", \"peerIP\": \"169.254.1.2\", \"vlanMask\": 30}},\n      {\"nePk\": \"11.NE\", \"haIf\": \"wan1\", \"haSyncInfo\": {\"haSyncInterface\": \"wan1.100\", \"localIP\": \"169.254.1.2\", \"peerIP\": \"169.254.1.1\", \"vlanMask\": 30}}\n    ],\n    \"subnet\": \"169.254.1.0/24\",\n    \"mask\": 30,\n    \"vlanStart\": 100\n  }'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/edge-ha/groups' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\n    \"appliances\": [\n      {\"nePk\": \"10.NE\", \"haIf\": \"wan1\", \"haSyncInfo\": {\"haSyncInterface\": \"wan1.100\", \"localIP\": \"169.254.1.1\", \"peerIP\": \"169.254.1.2\", \"vlanMask\": 30}},\n      {\"nePk\": \"11.NE\", \"haIf\": \"wan1\", \"haSyncInfo\": {\"haSyncInterface\": \"wan1.100\", \"localIP\": \"169.254.1.2\", \"peerIP\": \"169.254.1.1\", \"vlanMask\": 30}}\n    ],\n    \"subnet\": \"169.254.1.0/24\",\n    \"mask\": 30,\n    \"vlanStart\": 100\n  }'"
           }
         ],
         "parameters": []
@@ -805,7 +805,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/edge-ha/groups?id=1' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\n    \"appliances\": [\n      {\"nePk\": \"10.NE\", \"haIf\": \"wan1\", \"haSyncInfo\": {\"haSyncInterface\": \"wan1.150\", \"localIP\": \"169.254.2.1\", \"peerIP\": \"169.254.2.2\", \"vlanMask\": 30}},\n      {\"nePk\": \"11.NE\", \"haIf\": \"wan1\", \"haSyncInfo\": {\"haSyncInterface\": \"wan1.150\", \"localIP\": \"169.254.2.2\", \"peerIP\": \"169.254.2.1\", \"vlanMask\": 30}}\n    ],\n    \"subnet\": \"169.254.2.0/24\",\n    \"mask\": 30,\n    \"vlanStart\": 150\n  }'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/edge-ha/groups?id=1' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\n    \"appliances\": [\n      {\"nePk\": \"10.NE\", \"haIf\": \"wan1\", \"haSyncInfo\": {\"haSyncInterface\": \"wan1.150\", \"localIP\": \"169.254.2.1\", \"peerIP\": \"169.254.2.2\", \"vlanMask\": 30}},\n      {\"nePk\": \"11.NE\", \"haIf\": \"wan1\", \"haSyncInfo\": {\"haSyncInterface\": \"wan1.150\", \"localIP\": \"169.254.2.2\", \"peerIP\": \"169.254.2.1\", \"vlanMask\": 30}}\n    ],\n    \"subnet\": \"169.254.2.0/24\",\n    \"mask\": 30,\n    \"vlanStart\": 150\n  }'"
           }
         ]
       },
@@ -889,7 +889,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/edge-ha/groups?id=1' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/edge-ha/groups?id=1' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -13116,7 +13116,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X POST 'https://orchestrator/gms/rest/stats/aggregate/trafficClass?startTime=1609459200000&endTime=1609545600000&granularity=hour' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"nePks\": [\"10.NE\", \"20.NE\"]}'"
+            "source": "curl -X POST 'https://orchestrator/gms/rest/stats/aggregate/trafficClass?startTime=1609459200000&endTime=1609545600000&granularity=hour' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"nePks\": [\"10.NE\", \"20.NE\"]}'"
           }
         ]
       }
@@ -19497,12 +19497,12 @@
           {
             "lang": "curl",
             "label": "Delete all custom severities",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/alarm/customization/severity' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/alarm/customization/severity' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Delete specific alarm type severity",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/alarm/customization/severity?alarmTypeId=65536' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/alarm/customization/severity?alarmTypeId=65536' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -19593,12 +19593,12 @@
           {
             "lang": "curl",
             "label": "Get all custom severities",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/alarm/customization/severity' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/alarm/customization/severity' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Get specific alarm type severity",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/alarm/customization/severity?alarmTypeId=65536' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/alarm/customization/severity?alarmTypeId=65536' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -19699,12 +19699,12 @@
           {
             "lang": "curl",
             "label": "Create single alarm severity",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/alarm/customization/severity' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"65536\": \"CRITICAL\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/alarm/customization/severity' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"65536\": \"CRITICAL\"}'"
           },
           {
             "lang": "curl",
             "label": "Create multiple alarm severities",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/alarm/customization/severity' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"65536\": \"CRITICAL\", \"65537\": \"MAJOR\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/alarm/customization/severity' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"65536\": \"CRITICAL\", \"65537\": \"MAJOR\"}'"
           }
         ],
         "parameters": []
@@ -19813,12 +19813,12 @@
           {
             "lang": "curl",
             "label": "Update single alarm severity",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/alarm/customization/severity' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"65536\": \"MAJOR\"}'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/alarm/customization/severity' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"65536\": \"MAJOR\"}'"
           },
           {
             "lang": "curl",
             "label": "Update multiple alarm severities",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/alarm/customization/severity' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"65536\": \"CRITICAL\", \"65537\": \"MINOR\"}'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/alarm/customization/severity' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"65536\": \"CRITICAL\", \"65537\": \"MINOR\"}'"
           }
         ],
         "parameters": []
@@ -19877,7 +19877,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/alarm/delayEmail' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/alarm/delayEmail' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -19952,7 +19952,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/alarm/delayEmail' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/alarm/delayEmail' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -20090,7 +20090,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/alarm/delayEmail' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"duration\": 300}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/alarm/delayEmail' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"duration\": 300}'"
           }
         ],
         "parameters": []
@@ -20228,7 +20228,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/alarm/delayEmail' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"duration\": 300}'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/alarm/delayEmail' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"duration\": 300}'"
           }
         ],
         "parameters": []
@@ -20874,12 +20874,12 @@
           {
             "lang": "curl",
             "label": "cURL - Enable notifications",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/alarm/notification' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-API-Key: REDACTED_EXAMPLE' \\\n  -d '{\"enable\": true}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/alarm/notification' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-API-Key: $EC_API_TOKEN' \\\n  -d '{\"enable\": true}'"
           },
           {
             "lang": "curl",
             "label": "cURL - Disable notifications",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/alarm/notification' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"enable\": false}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/alarm/notification' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"enable\": false}'"
           }
         ],
         "parameters": []
@@ -20980,12 +20980,12 @@
           {
             "lang": "curl",
             "label": "Clear current correlation data only",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/alarm/resetCorrelation' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/alarm/resetCorrelation' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Clear all correlation data including historical",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/alarm/resetCorrelation?includeHistorical=true' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/alarm/resetCorrelation?includeHistorical=true' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -21079,17 +21079,17 @@
           {
             "lang": "curl",
             "label": "Get combined summary",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/alarm/summary' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/alarm/summary' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Get Orchestrator alarms only",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/alarm/summary?type=gms' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/alarm/summary?type=gms' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Get appliance alarms only",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/alarm/summary?type=appliance' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/alarm/summary?type=appliance' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -22170,7 +22170,7 @@
         "x-codeSamples": [
           {
             "lang": "curl",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/appliance?nePk=10.NE' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/appliance?nePk=10.NE' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -22310,11 +22310,11 @@
         "x-codeSamples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/appliance?nePk=10.NE' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/appliance?nePk=10.NE' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/appliance' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/appliance' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -22425,7 +22425,7 @@
         "x-codeSamples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/appliance?nePk=10.NE' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"IP\": \"192.168.1.100\", \"networkRole\": \"1\", \"webProtocolType\": 2}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/appliance?nePk=10.NE' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"IP\": \"192.168.1.100\", \"networkRole\": \"1\", \"webProtocolType\": 2}'"
           }
         ]
       }
@@ -25471,7 +25471,7 @@
                   "success": {
                     "summary": "Successful backup initiation",
                     "value": {
-                      "clientKey": "8283ade1-1320-4e92-b9bf-b1c255ee79d4"
+                      "clientKey": "<CLIENT_KEY>"
                     }
                   }
                 }
@@ -25757,7 +25757,7 @@
                   "success": {
                     "summary": "Successful restore initiation",
                     "value": {
-                      "clientKey": "8283ade1-1320-4e92-b9bf-b1c255ee79d4"
+                      "clientKey": "<CLIENT_KEY>"
                     }
                   }
                 }
@@ -29385,12 +29385,12 @@
           {
             "lang": "curl",
             "label": "Get all associations",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/applicationDefinition/appExpressGroup/association' -H 'X-AUTH-TOKEN: REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/applicationDefinition/appExpressGroup/association' -H 'X-AUTH-TOKEN: $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Get specific group",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/applicationDefinition/appExpressGroup/association?groupName=default-group' -H 'X-AUTH-TOKEN: REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/applicationDefinition/appExpressGroup/association?groupName=default-group' -H 'X-AUTH-TOKEN: $EC_API_TOKEN'"
           }
         ]
       },
@@ -29518,12 +29518,12 @@
           {
             "lang": "curl",
             "label": "Set associations",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/applicationDefinition/appExpressGroup/association' -H 'X-AUTH-TOKEN: REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '[{\"nePk\":\"10.NE\",\"appExpressGroupName\":\"default-group\"}]'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/applicationDefinition/appExpressGroup/association' -H 'X-AUTH-TOKEN: $EC_API_TOKEN' -H 'Content-Type: application/json' -d '[{\"nePk\":\"10.NE\",\"appExpressGroupName\":\"default-group\"}]'"
           },
           {
             "lang": "curl",
             "label": "Clear all associations",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/applicationDefinition/appExpressGroup/association' -H 'X-AUTH-TOKEN: REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '[]'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/applicationDefinition/appExpressGroup/association' -H 'X-AUTH-TOKEN: $EC_API_TOKEN' -H 'Content-Type: application/json' -d '[]'"
           }
         ],
         "parameters": []
@@ -33225,7 +33225,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/stats/config/availabilityThreshold' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"overlayAvailability\":{\"goodLimit\":99.0,\"okLimit\":99.99},\"underlayAvailability\":{\"goodLimit\":99.0,\"okLimit\":99.99},\"networkRoleAvailability\":{\"goodLimit\":99.0,\"okLimit\":99.99},\"interfaceAvailability\":{\"goodLimit\":99.0,\"okLimit\":99.99},\"reachability\":{\"goodLimit\":99.0,\"okLimit\":99.99}}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/stats/config/availabilityThreshold' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"overlayAvailability\":{\"goodLimit\":99.0,\"okLimit\":99.99},\"underlayAvailability\":{\"goodLimit\":99.0,\"okLimit\":99.99},\"networkRoleAvailability\":{\"goodLimit\":99.0,\"okLimit\":99.99},\"interfaceAvailability\":{\"goodLimit\":99.0,\"okLimit\":99.99},\"reachability\":{\"goodLimit\":99.0,\"okLimit\":99.99}}'"
           }
         ],
         "parameters": []
@@ -33603,12 +33603,12 @@
           {
             "lang": "curl",
             "label": "Get aggregate AVC status",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/avcMode' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/avcMode' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Get single appliance AVC status",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/avcMode?nePk=0.NE' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/avcMode?nePk=0.NE' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -33774,7 +33774,7 @@
         "x-codeSamples": [
           {
             "lang": "curl",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/cloudDeployment/aws/accounts?id=550e8400-e29b-41d4-a716-446655440000' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/cloudDeployment/aws/accounts?id=550e8400-e29b-41d4-a716-446655440000' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -33857,12 +33857,12 @@
           {
             "lang": "curl",
             "label": "Get all accounts",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/accounts' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/accounts' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Get specific account",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/accounts?id=550e8400-e29b-41d4-a716-446655440000' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/accounts?id=550e8400-e29b-41d4-a716-446655440000' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -33985,7 +33985,7 @@
         "x-codeSamples": [
           {
             "lang": "curl",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/cloudDeployment/aws/accounts?id=550e8400-e29b-41d4-a716-446655440000' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n    \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"name\": \"updated-aws-account\",\n    \"accessKey\": \"REDACTED_EXAMPLE\",\n    \"secretKey\": \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\",\n    \"comment\": \"Updated account\"\n  }'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/cloudDeployment/aws/accounts?id=550e8400-e29b-41d4-a716-446655440000' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n    \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"name\": \"updated-aws-account\",\n    \"accessKey\": \"REDACTED_EXAMPLE\",\n    \"secretKey\": \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\",\n    \"comment\": \"Updated account\"\n  }'"
           }
         ]
       }
@@ -34142,7 +34142,7 @@
         "x-codeSamples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n    \"name\": \"my-aws-deployment\",\n    \"accountId\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"provider\": \"aws\",\n    \"region\": \"us-west-2\",\n    \"vpcCidr\": \"10.100.0.0/16\",\n    \"sshKeyName\": \"my-ec2-keypair\",\n    \"bandwidth\": \"500\",\n    \"boost\": false,\n    \"instanceType\": \"c5.large\",\n    \"numInstances\": 1,\n    \"instances\": [{\"availabilityZone\": \"us-west-2a\", \"tag\": \"hub-1\"}]\n  }'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n    \"name\": \"my-aws-deployment\",\n    \"accountId\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"provider\": \"aws\",\n    \"region\": \"us-west-2\",\n    \"vpcCidr\": \"10.100.0.0/16\",\n    \"sshKeyName\": \"my-ec2-keypair\",\n    \"bandwidth\": \"500\",\n    \"boost\": false,\n    \"instanceType\": \"c5.large\",\n    \"numInstances\": 1,\n    \"instances\": [{\"availabilityZone\": \"us-west-2a\", \"tag\": \"hub-1\"}]\n  }'"
           }
         ],
         "parameters": []
@@ -34226,7 +34226,7 @@
         "x-codeSamples": [
           {
             "lang": "curl",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -34350,12 +34350,12 @@
           {
             "lang": "curl",
             "label": "Get all deployments",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Get specific deployment",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -34441,7 +34441,7 @@
         "x-codeSamples": [
           {
             "lang": "curl",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"comment\": \"Updated deployment description\"}'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"comment\": \"Updated deployment description\"}'"
           }
         ]
       }
@@ -34588,7 +34588,7 @@
           {
             "lang": "curl",
             "label": "Get cloud resources",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects/cloud-resources?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects/cloud-resources?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -34716,7 +34716,7 @@
           {
             "lang": "curl",
             "label": "Get deployment status",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects/deploy-status?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects/deploy-status?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -34849,7 +34849,7 @@
         "x-codeSamples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects/instance?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"availabilityZone\": \"us-west-2a\", \"tag\": \"hub-west-3\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects/instance?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"availabilityZone\": \"us-west-2a\", \"tag\": \"hub-west-3\"}'"
           }
         ]
       }
@@ -34956,7 +34956,7 @@
           {
             "lang": "curl",
             "label": "Download deployment log",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects/log?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -o deployment-log.txt"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/aws/edgeconnects/log?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -o deployment-log.txt"
           }
         ]
       }
@@ -35212,7 +35212,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/cloudDeployment/azure-nva/edgeconnects?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/cloudDeployment/azure-nva/edgeconnects?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "x-workflow": {
@@ -35392,12 +35392,12 @@
           {
             "lang": "curl",
             "label": "cURL - Get all deployments",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure-nva/edgeconnects' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure-nva/edgeconnects' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "cURL - Get specific deployment",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure-nva/edgeconnects?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure-nva/edgeconnects?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "x-permissions": {
@@ -35531,7 +35531,7 @@
           {
             "lang": "curl",
             "label": "cURL - Update comment",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/cloudDeployment/azure-nva/edgeconnects?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"comment\": \"Updated deployment comment\"}'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/cloudDeployment/azure-nva/edgeconnects?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"comment\": \"Updated deployment comment\"}'"
           }
         ],
         "x-permissions": {
@@ -35896,7 +35896,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure-nva/edgeconnects/log?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -o deployment-log.txt"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure-nva/edgeconnects/log?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -o deployment-log.txt"
           }
         ]
       }
@@ -36118,12 +36118,12 @@
           {
             "lang": "curl",
             "label": "Get all accounts",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure/accounts' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure/accounts' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Get account by ID",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure/accounts?id=550e8400-e29b-41d4-a716-446655440000' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure/accounts?id=550e8400-e29b-41d4-a716-446655440000' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "x-related-endpoints": [
@@ -36310,7 +36310,7 @@
           {
             "lang": "curl",
             "label": "Update account",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/cloudDeployment/azure/accounts?id=550e8400-e29b-41d4-a716-446655440000' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"name\":\"Updated-Account\",\"subscriptionId\":\"12345678-1234-1234-1234-123456789abc\",\"tenantId\":\"87654321-4321-4321-4321-cba987654321\",\"clientId\":\"abcdef12-3456-7890-abcd-ef1234567890\",\"clientSecret\":\"REDACTED_EXAMPLE\",\"comment\":\"Updated\"}'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/cloudDeployment/azure/accounts?id=550e8400-e29b-41d4-a716-446655440000' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"name\":\"Updated-Account\",\"subscriptionId\":\"12345678-1234-1234-1234-123456789abc\",\"tenantId\":\"87654321-4321-4321-4321-cba987654321\",\"clientId\":\"abcdef12-3456-7890-abcd-ef1234567890\",\"clientSecret\":\"REDACTED_EXAMPLE\",\"comment\":\"Updated\"}'"
           }
         ],
         "x-related-endpoints": [
@@ -36419,7 +36419,7 @@
           {
             "lang": "curl",
             "label": "Delete account",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/cloudDeployment/azure/accounts?id=550e8400-e29b-41d4-a716-446655440000' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/cloudDeployment/azure/accounts?id=550e8400-e29b-41d4-a716-446655440000' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "x-related-endpoints": [
@@ -37590,7 +37590,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/cloudDeployment/azure/load-balancer?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/cloudDeployment/azure/load-balancer?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "x-lifecycle": {
@@ -37750,12 +37750,12 @@
           {
             "lang": "curl",
             "label": "cURL - Get All",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure/load-balancer' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure/load-balancer' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "cURL - Get By ID",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure/load-balancer?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/cloudDeployment/azure/load-balancer?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -37908,12 +37908,12 @@
           {
             "lang": "curl",
             "label": "cURL - Update Comment",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/cloudDeployment/azure/load-balancer?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"comment\": \"Updated comment\"}'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/cloudDeployment/azure/load-balancer?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"comment\": \"Updated comment\"}'"
           },
           {
             "lang": "curl",
             "label": "cURL - Update Probe Port",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/cloudDeployment/azure/load-balancer?id=12345' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"probePort\": 8443}'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/cloudDeployment/azure/load-balancer?id=12345' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"probePort\": 8443}'"
           }
         ],
         "x-lifecycle": {
@@ -40818,7 +40818,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/brandCustomization' -H 'Authorization: Basic REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/brandCustomization' -H 'Authorization: Basic $EC_API_CREDENTIALS'"
           }
         ],
         "parameters": []
@@ -40973,7 +40973,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/brandCustomization' -H 'Authorization: Basic REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"footer\":{\"useDefault\":false,\"custom\":\"© 2024 My Company\"},\"homePageTitle\":{\"useDefault\":false,\"custom\":\"My Orchestrator\"}}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/brandCustomization' -H 'Authorization: Basic $EC_API_CREDENTIALS' -H 'Content-Type: application/json' -d '{\"footer\":{\"useDefault\":false,\"custom\":\"© 2024 My Company\"},\"homePageTitle\":{\"useDefault\":false,\"custom\":\"My Orchestrator\"}}'"
           }
         ],
         "parameters": []
@@ -41085,7 +41085,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/brandCustomization' -H 'Authorization: Basic REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"footer\":{\"useDefault\":false,\"custom\":\"© 2024 My Company\"},\"homePageTitle\":{\"useDefault\":false,\"custom\":\"My Orchestrator\"}}'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/brandCustomization' -H 'Authorization: Basic $EC_API_CREDENTIALS' -H 'Content-Type: application/json' -d '{\"footer\":{\"useDefault\":false,\"custom\":\"© 2024 My Company\"},\"homePageTitle\":{\"useDefault\":false,\"custom\":\"My Orchestrator\"}}'"
           }
         ],
         "parameters": []
@@ -41167,7 +41167,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/brandCustomization/image?metaData=true' -H 'Authorization: Basic REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/brandCustomization/image?metaData=true' -H 'Authorization: Basic $EC_API_CREDENTIALS'"
           }
         ]
       },
@@ -41267,7 +41267,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/brandCustomization/image?type=backgroundImage' -H 'Authorization: Basic REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/brandCustomization/image?type=backgroundImage' -H 'Authorization: Basic $EC_API_CREDENTIALS'"
           }
         ]
       },
@@ -41459,7 +41459,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/brandCustomization/image?type=logoImage&qqfile=my_logo.png' -H 'Authorization: Basic REDACTED_EXAMPLE' -H 'Content-Type: multipart/form-data' -F 'qqfile=@/path/to/my_logo.png'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/brandCustomization/image?type=logoImage&qqfile=my_logo.png' -H 'Authorization: Basic $EC_API_CREDENTIALS' -H 'Content-Type: multipart/form-data' -F 'qqfile=@/path/to/my_logo.png'"
           }
         ]
       },
@@ -41656,7 +41656,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/brandCustomization/image?type=logoImage&qqfile=my_logo.png' -H 'Authorization: Basic REDACTED_EXAMPLE' -H 'Content-Type: multipart/form-data' -F 'qqfile=@/path/to/my_logo.png'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/brandCustomization/image?type=logoImage&qqfile=my_logo.png' -H 'Authorization: Basic $EC_API_CREDENTIALS' -H 'Content-Type: multipart/form-data' -F 'qqfile=@/path/to/my_logo.png'"
           }
         ]
       }
@@ -45633,7 +45633,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/sse/image/refresh' \\\n  -H 'Authorization: Basic REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/sse/image/refresh' \\\n  -H 'Authorization: Basic $EC_API_CREDENTIALS'"
           }
         ],
         "parameters": []
@@ -46373,7 +46373,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X DELETE 'https://orchestrator.example.com/gms/rest/customCert?id=1' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://orchestrator.example.com/gms/rest/customCert?id=1' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -46489,7 +46489,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/customCert/applianceConnectivity?custom=true' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '[]'"
+            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/customCert/applianceConnectivity?custom=true' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '[]'"
           }
         ]
       }
@@ -46656,7 +46656,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://orchestrator.example.com/gms/rest/customCert/caCertsFromDefaultTrustStore' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://orchestrator.example.com/gms/rest/customCert/caCertsFromDefaultTrustStore' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -46737,7 +46737,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://orchestrator.example.com/gms/rest/customCert/enable' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://orchestrator.example.com/gms/rest/customCert/enable' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -46840,7 +46840,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/customCert/enable' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"enabled\": true}'"
+            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/customCert/enable' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"enabled\": true}'"
           }
         ],
         "parameters": []
@@ -47019,11 +47019,11 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/customCert/orchestratorConnectivity?custom=true' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '[]'"
+            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/customCert/orchestratorConnectivity?custom=true' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '[]'"
           },
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/customCert/orchestratorConnectivity?custom=false' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/customCert/orchestratorConnectivity?custom=false' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -47233,7 +47233,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/customCert/verify' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"alias\": \"my-ca\", \"key\": \"-----BEGIN CERTIFICATE-----\\nMIID...\\n-----END CERTIFICATE-----\"}'"
+            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/customCert/verify' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"alias\": \"my-ca\", \"key\": \"-----BEGIN CERTIFICATE-----\\nMIID...\\n-----END CERTIFICATE-----\"}'"
           }
         ],
         "parameters": []
@@ -51705,7 +51705,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/dnsProxy/config?nePk=0.NE&cached=true' \\\n  -H 'Authorization: Basic REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/dnsProxy/config?nePk=0.NE&cached=true' \\\n  -H 'Authorization: Basic $EC_API_CREDENTIALS'"
           }
         ]
       }
@@ -58748,12 +58748,12 @@
           {
             "lang": "curl",
             "label": "Get full configuration",
-            "source": "curl -X GET 'https://orchestrator.example.com/gms/gmsRegistration2' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://orchestrator.example.com/gms/gmsRegistration2' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Get IP for specific appliance",
-            "source": "curl -X GET 'https://orchestrator.example.com/gms/gmsRegistration2?nePk=10.NE' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://orchestrator.example.com/gms/gmsRegistration2?nePk=10.NE' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN'"
           }
         ]
       },
@@ -58904,12 +58904,12 @@
           {
             "lang": "curl",
             "label": "Set custom domain with labels",
-            "source": "curl -X POST 'https://orchestrator.example.com/gms/gmsRegistration2' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"customDefaultIP\": \"orchestrator.mycompany.com\", \"label\": {\"1\": {\"labelId\": \"5\", \"ipOrDns\": \"orch-wan1.mycompany.com\"}}}'"
+            "source": "curl -X POST 'https://orchestrator.example.com/gms/gmsRegistration2' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"customDefaultIP\": \"orchestrator.mycompany.com\", \"label\": {\"1\": {\"labelId\": \"5\", \"ipOrDns\": \"orch-wan1.mycompany.com\"}}}'"
           },
           {
             "lang": "curl",
             "label": "Use internal management IP",
-            "source": "curl -X POST 'https://orchestrator.example.com/gms/gmsRegistration2' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"customDefaultIP\": \"\", \"label\": {}}'"
+            "source": "curl -X POST 'https://orchestrator.example.com/gms/gmsRegistration2' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"customDefaultIP\": \"\", \"label\": {}}'"
           }
         ],
         "parameters": []
@@ -60165,7 +60165,7 @@
                 "primaryKey": "secretkey123",
                 "secondaryHost": "radius-backup.example.com",
                 "secondaryPort": 1812,
-                "secondaryKey": "secretkey456",
+                "secondaryKey": "<SECONDARY_KEY>",
                 "type": "PAP",
                 "defaultRole": "Network Monitor"
               }
@@ -60805,7 +60805,7 @@
                     "primaryKey": "primarySecret123",
                     "secondaryHost": "tacacs-backup.example.com",
                     "secondaryPort": 49,
-                    "secondaryKey": "secondarySecret456",
+                    "secondaryKey": "<SECONDARY_KEY>",
                     "type": "CHAP",
                     "defaultRole": "network-read"
                   }
@@ -61749,7 +61749,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsOperatingSystem' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsOperatingSystem' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -61814,7 +61814,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsOperatingSystem/diskSpaceFull' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsOperatingSystem/diskSpaceFull' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -61891,7 +61891,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/gmsOperatingSystem/diskSpaceFull' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"isDismissed\": true, \"description\": \"User dismissed warning\"}'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/gmsOperatingSystem/diskSpaceFull' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"isDismissed\": true, \"description\": \"User dismissed warning\"}'"
           }
         ],
         "parameters": []
@@ -61950,7 +61950,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsOperatingSystem/root/passwordChanged' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsOperatingSystem/root/passwordChanged' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -62031,7 +62031,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/gmsOperatingSystem/root/passwordChanged' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"passwordChanged\": true}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/gmsOperatingSystem/root/passwordChanged' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"passwordChanged\": true}'"
           }
         ],
         "parameters": []
@@ -62119,11 +62119,11 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsserver/briefInfo' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsserver/briefInfo' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsserver/briefInfo' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'If-None-Match: \"abc123def456\"'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsserver/briefInfo' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'If-None-Match: \"abc123def456\"'"
           }
         ],
         "parameters": []
@@ -62163,7 +62163,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsserver/hello' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsserver/hello' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "x-use-cases": [
@@ -62281,7 +62281,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsserver/info' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gmsserver/info' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "x-use-cases": [
@@ -62703,7 +62703,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X GET 'https://{orchestrator}/gms/statsCollection/default' \\\n  -H 'Authorization: Basic REDACTED_EXAMPLE' \\\n  -H 'Accept: application/json'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/statsCollection/default' \\\n  -H 'Authorization: Basic $EC_API_CREDENTIALS' \\\n  -H 'Accept: application/json'"
           }
         ],
         "x-use-cases": [
@@ -71410,7 +71410,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/license/portal/appliance/revoke?nePk=10.NE' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/license/portal/appliance/revoke?nePk=10.NE' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -75736,7 +75736,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X GET 'https://{orchestrator}/mist/registration-code' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/mist/registration-code' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN'"
           }
         ]
       },
@@ -75841,7 +75841,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X POST 'https://{orchestrator}/mist/registration-code' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"registrationCode\": \"<jwt>\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/mist/registration-code' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"registrationCode\": \"<jwt>\"}'"
           }
         ]
       },
@@ -75891,7 +75891,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X DELETE 'https://{orchestrator}/mist/registration-code' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/mist/registration-code' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN'"
           }
         ]
       }
@@ -76234,7 +76234,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/modelSpec/portList' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"models\": [{\"modelName\": \"EC-V\", \"partNum\": \"123456\"}]}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/modelSpec/portList' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"models\": [{\"modelName\": \"EC-V\", \"partNum\": \"123456\"}]}'"
           }
         ],
         "parameters": []
@@ -76335,7 +76335,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/multicast/config?nePk=0.NE&cached=true' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/multicast/config?nePk=0.NE&cached=true' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -76425,7 +76425,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/multicast/enable?nePk=0.NE&cached=true' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/multicast/enable?nePk=0.NE&cached=true' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -76506,7 +76506,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/multicast/state/interfaces?nePk=0.NE' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/multicast/state/interfaces?nePk=0.NE' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -76584,7 +76584,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/multicast/state/neighbors?nePk=0.NE' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/multicast/state/neighbors?nePk=0.NE' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -76669,7 +76669,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/multicast/state/routes?nePk=0.NE' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/multicast/state/routes?nePk=0.NE' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -83214,7 +83214,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/portProfiles/config' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE' \\\n  -d '{\"name\": \"my-profile\", \"config\": {\"sysConfig\": {\"mode\": \"router\", \"inline\": true, \"maxBW\": 50000, \"bonding\": false, \"tenG\": false, \"useMgmt0\": false, \"propagateLinkDown\": false, \"singleBridge\": false}, \"modeIfs\": [], \"dpRoutes\": []}}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/portProfiles/config' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN' \\\n  -d '{\"name\": \"my-profile\", \"config\": {\"sysConfig\": {\"mode\": \"router\", \"inline\": true, \"maxBW\": 50000, \"bonding\": false, \"tenG\": false, \"useMgmt0\": false, \"propagateLinkDown\": false, \"singleBridge\": false}, \"modeIfs\": [], \"dpRoutes\": []}}'"
           }
         ],
         "parameters": []
@@ -83343,7 +83343,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/portProfiles/config?id=2211e0f9-6d49-4f7c-a243-7de2641241fd' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE' \\\n  -d '{\"name\": \"my-profile-updated\", \"config\": {\"sysConfig\": {\"mode\": \"router\", \"inline\": true, \"maxBW\": 75000, \"bonding\": false, \"tenG\": false, \"useMgmt0\": false, \"propagateLinkDown\": false, \"singleBridge\": false}, \"modeIfs\": [], \"dpRoutes\": []}}'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/rest/portProfiles/config?id=2211e0f9-6d49-4f7c-a243-7de2641241fd' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN' \\\n  -d '{\"name\": \"my-profile-updated\", \"config\": {\"sysConfig\": {\"mode\": \"router\", \"inline\": true, \"maxBW\": 75000, \"bonding\": false, \"tenG\": false, \"useMgmt0\": false, \"propagateLinkDown\": false, \"singleBridge\": false}, \"modeIfs\": [], \"dpRoutes\": []}}'"
           }
         ]
       }
@@ -84913,7 +84913,7 @@
           {
             "lang": "curl",
             "label": "Create Role",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/rbac/role' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-AUTH-TOKEN: REDACTED_EXAMPLE' \\\n  -d '{\"viewer_role\": {\"menuTypeItems\": [\"menu_dashboard_id\", \"menu_monitoring_id\"], \"net_read\": true}}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/rbac/role' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-AUTH-TOKEN: $EC_API_TOKEN' \\\n  -d '{\"viewer_role\": {\"menuTypeItems\": [\"menu_dashboard_id\", \"menu_monitoring_id\"], \"net_read\": true}}'"
           }
         ],
         "parameters": []
@@ -84993,7 +84993,7 @@
           {
             "lang": "curl",
             "label": "Delete Role",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/rbac/role?menuTypeName=custom_role' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-AUTH-TOKEN: REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/rbac/role?menuTypeName=custom_role' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-AUTH-TOKEN: $EC_API_TOKEN'"
           }
         ],
         "x-error-handling": {
@@ -86823,12 +86823,12 @@
           {
             "lang": "curl",
             "label": "Dismiss specific version",
-            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/release/notifications/dismiss?version=9.3.0.40000' -H 'X-Auth-Token: REDACTED_EXAMPLE'"
+            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/release/notifications/dismiss?version=9.3.0.40000' -H 'X-Auth-Token: $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Dismiss all Orchestrator notifications",
-            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/release/notifications/dismiss' -H 'X-Auth-Token: REDACTED_EXAMPLE'"
+            "source": "curl -X POST 'https://orchestrator.example.com/gms/rest/release/notifications/dismiss' -H 'X-Auth-Token: $EC_API_TOKEN'"
           }
         ]
       }
@@ -89252,7 +89252,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/routeLabels/nextId' -H 'X-Auth-Token: REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/routeLabels/nextId' -H 'X-Auth-Token: $EC_API_TOKEN'"
           }
         ],
         "x-usage-notes": [
@@ -89343,7 +89343,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/routeLabels/versionCounter' -H 'X-Auth-Token: REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/routeLabels/versionCounter' -H 'X-Auth-Token: $EC_API_TOKEN'"
           }
         ],
         "x-usage-notes": [
@@ -91339,7 +91339,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/job/stop?id=42' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/job/stop?id=42' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -92085,7 +92085,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/secureWebServicesConfig/urlLookUp?urlLookUp=https://example.com' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/secureWebServicesConfig/urlLookUp?urlLookUp=https://example.com' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -92181,7 +92181,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/secureWebServicesConfig/webCategories' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/secureWebServicesConfig/webCategories' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -92852,7 +92852,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gms/thirdPartyServices' -H 'X-Auth-Token: REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/gms/thirdPartyServices' -H 'X-Auth-Token: $EC_API_TOKEN'"
           }
         ],
         "x-supported-services": [
@@ -93103,7 +93103,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X PUT 'https://{orchestrator}/gms/sessionTimeout' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"autoLogout\": 30, \"maxSession\": 20}'"
+            "source": "curl -X PUT 'https://{orchestrator}/gms/sessionTimeout' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"autoLogout\": 30, \"maxSession\": 20}'"
           }
         ],
         "parameters": []
@@ -93326,7 +93326,7 @@
           {
             "lang": "curl",
             "label": "Enable lockdown_ssa",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/shell/shellAccessSetting' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"shellAccessSetting\": \"lockdown_ssa\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/shell/shellAccessSetting' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"shellAccessSetting\": \"lockdown_ssa\"}'"
           }
         ],
         "parameters": []
@@ -97239,7 +97239,7 @@
         "x-codeSamples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/spPortal/registration/account' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/spPortal/registration/account' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "x-workflow": {
@@ -104090,7 +104090,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/arubaCentral/subscription' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/arubaCentral/subscription' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN'"
           }
         ],
         "x-operation-details": {
@@ -104178,7 +104178,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/arubaCentral/subscription' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/arubaCentral/subscription' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN'"
           }
         ],
         "x-operation-details": {
@@ -104291,7 +104291,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/arubaCentral/subscription' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n    \"customerId\": \"cust-12345-abcde\",\n    \"clientId\": \"abc123def456\",\n    \"clientSecret\": \"REDACTED_EXAMPLE\",\n    \"username\": \"admin@company.com\",\n    \"password\": \"REDACTED_EXAMPLE\",\n    \"domain\": \"https://apigw-uswest4.central.arubanetworks.com\"\n  }'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/arubaCentral/subscription' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\n    \"customerId\": \"cust-12345-abcde\",\n    \"clientId\": \"abc123def456\",\n    \"clientSecret\": \"REDACTED_EXAMPLE\",\n    \"username\": \"admin@company.com\",\n    \"password\": \"REDACTED_EXAMPLE\",\n    \"domain\": \"https://apigw-uswest4.central.arubanetworks.com\"\n  }'"
           }
         ],
         "x-operation-details": {
@@ -105032,7 +105032,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/coreNetworksWithCNEdges' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/coreNetworksWithCNEdges' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -105772,7 +105772,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/pollingInterval' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/pollingInterval' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -105848,12 +105848,12 @@
           {
             "lang": "curl",
             "label": "Standard Delete",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/subscription' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/subscription' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Force Delete",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/subscription?deletionType=forceDeleteSubscription' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/subscription?deletionType=forceDeleteSubscription' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -105895,7 +105895,7 @@
           {
             "lang": "curl",
             "label": "Get Subscription",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/subscription' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Accept: application/json'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/subscription' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Accept: application/json'"
           }
         ],
         "parameters": []
@@ -105986,7 +105986,7 @@
                   "summary": "Initial subscription setup (both fields required)",
                   "value": {
                     "awsAccessKeyId": "AKIAIOSFODNN7EXAMPLE",
-                    "awsSecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                    "awsSecretAccessKey": "<AWS_SECRET_ACCESS_KEY>"
                   }
                 },
                 "updateAccessKeyOnly": {
@@ -105999,7 +105999,7 @@
                   "summary": "Update both credentials",
                   "value": {
                     "awsAccessKeyId": "AKIAIOSFODNN7NEWEXAMPLE",
-                    "awsSecretAccessKey": "newSecretKey/K7MDENG/bPxRfiCYNEWKEY"
+                    "awsSecretAccessKey": "<AWS_SECRET_ACCESS_KEY>"
                   }
                 }
               }
@@ -106012,12 +106012,12 @@
           {
             "lang": "curl",
             "label": "Initial Setup",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/subscription' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"awsAccessKeyId\": \"AKIAIOSFODNN7EXAMPLE\", \"awsSecretAccessKey\": \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/subscription' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"awsAccessKeyId\": \"AKIAIOSFODNN7EXAMPLE\", \"awsSecretAccessKey\": \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\"}'"
           },
           {
             "lang": "curl",
             "label": "Update Access Key",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/subscription' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"awsAccessKeyId\": \"AKIAIOSFODNN7NEWEXAMPLE\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/awstgnm/subscription' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"awsAccessKeyId\": \"AKIAIOSFODNN7NEWEXAMPLE\"}'"
           }
         ],
         "parameters": []
@@ -107336,7 +107336,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/applianceAssociation' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"enabled\": [{\"nePk\": \"10.0.0.1\", \"priority\": 1, \"lastUpdateTime\": 1703721600000}]}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/applianceAssociation' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"enabled\": [{\"nePk\": \"10.0.0.1\", \"priority\": 1, \"lastUpdateTime\": 1703721600000}]}'"
           }
         ],
         "parameters": []
@@ -107404,7 +107404,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/connectivity' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/connectivity' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -108026,7 +108026,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/ipslaSetting' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"enableIpslaRuleOrchestration\": true}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/ipslaSetting' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"enableIpslaRuleOrchestration\": true}'"
           }
         ],
         "parameters": []
@@ -108287,12 +108287,12 @@
           {
             "lang": "curl",
             "label": "Pause orchestration",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/pauseOrchestration' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"paused\": true}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/pauseOrchestration' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"paused\": true}'"
           },
           {
             "lang": "curl",
             "label": "Resume orchestration",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/pauseOrchestration' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"paused\": false}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/pauseOrchestration' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"paused\": false}'"
           }
         ],
         "parameters": []
@@ -108484,7 +108484,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/popOverride?nePk=10.NE&labelId=1' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/popOverride?nePk=10.NE&labelId=1' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -108602,7 +108602,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/popOverride?nePk=10.NE&labelId=1' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"pop1\": \"192.168.1.100\", \"pop2\": \"192.168.1.101\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/popOverride?nePk=10.NE&labelId=1' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"pop1\": \"192.168.1.100\", \"pop2\": \"192.168.1.101\"}'"
           }
         ]
       },
@@ -108693,7 +108693,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/popOverride' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/popOverride' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "python",
@@ -108761,7 +108761,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/subLocationConfig?id=1' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/subLocationConfig?id=1' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -108837,7 +108837,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/subLocationConfig' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/subLocationConfig' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -108954,7 +108954,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/subLocationConfig' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '[{\"subLocationName\":\"Branch-Office\",\"appliance\":{\"all\":false,\"region\":[1],\"group\":[],\"nePk\":[]},\"subLocation\":{\"lanSubnet\":[\"192.168.1.0/24\"],\"lanLabel\":[],\"lanZone\":[],\"addressGroup\":[]}}]'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/subLocationConfig' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '[{\"subLocationName\":\"Branch-Office\",\"appliance\":{\"all\":false,\"region\":[1],\"group\":[],\"nePk\":[]},\"subLocation\":{\"lanSubnet\":[\"192.168.1.0/24\"],\"lanLabel\":[],\"lanZone\":[],\"addressGroup\":[]}}]'"
           }
         ],
         "x-validation-rules": {
@@ -109024,7 +109024,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/subscription' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/subscription' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -109070,7 +109070,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/subscription' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/subscription' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -109202,7 +109202,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/subscription' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"apiTokenName\":\"my-token\",\"apiTokenKey\":\"secret-key\",\"apiDomainName\":\"company.ssedomain.com\",\"fqdnDomainName\":\"sse.company.com\",\"orchestratorName\":\"Orchestrator-01\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/axis/subscription' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"apiTokenName\":\"my-token\",\"apiTokenKey\":\"secret-key\",\"apiDomainName\":\"company.ssedomain.com\",\"fqdnDomainName\":\"sse.company.com\",\"orchestratorName\":\"Orchestrator-01\"}'"
           }
         ],
         "parameters": []
@@ -109320,7 +109320,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://<orchestrator>/gms/rest/thirdPartyServices/axis/tunnelSettings' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"admin\":\"up\",\"mode\":\"ipsec_ip\",\"autoMaxBandwidthEnabled\":true,\"ipSecSuiteB\":\"none\",\"ikeAuthenticationAlgorithm\":\"sha256\",\"ikeEncryptionAlgorithm\":\"aes256\",\"dhgroup\":\"14\",\"ikeLifetime\":480,\"dpdDelay\":10,\"dpdRetry\":3,\"exchangeMode\":\"aggressive\",\"ikeVersion\":2,\"authenticationAlgorithm\":\"sha256\",\"encryptionAlgorithm\":\"aes256\",\"ipsecAntiReplayWindow\":\"disable\",\"lifebytes\":0,\"lifetime\":120,\"pfs\":true,\"pfsgroup\":\"14\"}'"
+            "source": "curl -X POST 'https://<orchestrator>/gms/rest/thirdPartyServices/axis/tunnelSettings' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"admin\":\"up\",\"mode\":\"ipsec_ip\",\"autoMaxBandwidthEnabled\":true,\"ipSecSuiteB\":\"none\",\"ikeAuthenticationAlgorithm\":\"sha256\",\"ikeEncryptionAlgorithm\":\"aes256\",\"dhgroup\":\"14\",\"ikeLifetime\":480,\"dpdDelay\":10,\"dpdRetry\":3,\"exchangeMode\":\"aggressive\",\"ikeVersion\":2,\"authenticationAlgorithm\":\"sha256\",\"encryptionAlgorithm\":\"aes256\",\"ipsecAntiReplayWindow\":\"disable\",\"lifebytes\":0,\"lifetime\":120,\"pfs\":true,\"pfsgroup\":\"14\"}'"
           }
         ],
         "x-auto-corrections": {
@@ -110585,7 +110585,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/azure/lan-side-connectivity/lanSideSubscription' -H 'X-Auth-Token: REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/azure/lan-side-connectivity/lanSideSubscription' -H 'X-Auth-Token: $EC_API_TOKEN'"
           }
         ],
         "x-cleanup-operations": [
@@ -111442,12 +111442,12 @@
           {
             "lang": "curl",
             "label": "Standard Delete",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/azure/subscription' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/azure/subscription' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "Force Delete",
-            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/azure/subscription?deletionType=forceDeleteSubscription' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/azure/subscription?deletionType=forceDeleteSubscription' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       },
@@ -111494,7 +111494,7 @@
           {
             "lang": "curl",
             "label": "Get Subscription",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/azure/subscription' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/azure/subscription' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -111592,12 +111592,12 @@
           {
             "lang": "curl",
             "label": "Create Subscription",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/azure/subscription' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"subscriptionId\":\"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\"tenantId\":\"f1e2d3c4-b5a6-7890-dcba-fedcba098765\",\"clientId\":\"12345678-90ab-cdef-1234-567890abcdef\",\"clientSecret\":\"REDACTED_EXAMPLE\",\"storageAccountName\":\"mystorageaccount\",\"storageAccountKey\":\"storagekey\",\"blobUrlLocation\":\"https://mystorageaccount.blob.core.windows.net/vpnconfig\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/azure/subscription' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"subscriptionId\":\"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\"tenantId\":\"f1e2d3c4-b5a6-7890-dcba-fedcba098765\",\"clientId\":\"12345678-90ab-cdef-1234-567890abcdef\",\"clientSecret\":\"REDACTED_EXAMPLE\",\"storageAccountName\":\"mystorageaccount\",\"storageAccountKey\":\"storagekey\",\"blobUrlLocation\":\"https://mystorageaccount.blob.core.windows.net/vpnconfig\"}'"
           },
           {
             "lang": "curl",
             "label": "Update Subscription (no credential change)",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/azure/subscription' -H 'Authorization: Bearer REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"subscriptionId\":\"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\"tenantId\":\"f1e2d3c4-b5a6-7890-dcba-fedcba098765\",\"clientId\":\"12345678-90ab-cdef-1234-567890abcdef\",\"storageAccountName\":\"mystorageaccount\",\"blobUrlLocation\":\"https://mystorageaccount.blob.core.windows.net/newcontainer\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/azure/subscription' -H 'Authorization: Bearer $EC_API_TOKEN' -H 'Content-Type: application/json' -d '{\"subscriptionId\":\"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\"tenantId\":\"f1e2d3c4-b5a6-7890-dcba-fedcba098765\",\"clientId\":\"12345678-90ab-cdef-1234-567890abcdef\",\"storageAccountName\":\"mystorageaccount\",\"blobUrlLocation\":\"https://mystorageaccount.blob.core.windows.net/newcontainer\"}'"
           }
         ],
         "parameters": []
@@ -113108,12 +113108,12 @@
           {
             "lang": "curl",
             "label": "Pause orchestration",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/clearpass/pauseOrchestration' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-AUTH-TOKEN: REDACTED_EXAMPLE' \\\n  -d '{\"paused\": true}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/clearpass/pauseOrchestration' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-AUTH-TOKEN: $EC_API_TOKEN' \\\n  -d '{\"paused\": true}'"
           },
           {
             "lang": "curl",
             "label": "Resume orchestration",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/clearpass/pauseOrchestration' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-AUTH-TOKEN: REDACTED_EXAMPLE' \\\n  -d '{\"paused\": false}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/clearpass/pauseOrchestration' \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-AUTH-TOKEN: $EC_API_TOKEN' \\\n  -d '{\"paused\": false}'"
           }
         ],
         "parameters": []
@@ -114568,7 +114568,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/netskope/ipslaSetting' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"enableIpslaRuleOrchestration\": true}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/netskope/ipslaSetting' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"enableIpslaRuleOrchestration\": true}'"
           }
         ],
         "parameters": []
@@ -115223,7 +115223,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X POST 'https://{orchestrator}/api/thirdPartyServices/netskope/popOverride?nePk=10.NE&labelId=2' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"pop1\": \"192.168.1.100\", \"pop2\": \"192.168.1.101\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/api/thirdPartyServices/netskope/popOverride?nePk=10.NE&labelId=2' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"pop1\": \"192.168.1.100\", \"pop2\": \"192.168.1.101\"}'"
           }
         ]
       },
@@ -115318,7 +115318,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X DELETE 'https://{orchestrator}/api/thirdPartyServices/netskope/popOverride?nePk=10.NE&labelId=2' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X DELETE 'https://{orchestrator}/api/thirdPartyServices/netskope/popOverride?nePk=10.NE&labelId=2' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "x-errorHandling": {
@@ -115379,7 +115379,7 @@
         ],
         "x-required-role": "READ_WRITE",
         "x-example-requests": {
-          "curl": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/netskope/subscription' -H 'Authorization: Basic REDACTED_EXAMPLE'"
+          "curl": "curl -X DELETE 'https://{orchestrator}/gms/rest/thirdPartyServices/netskope/subscription' -H 'Authorization: Basic $EC_API_CREDENTIALS'"
         },
         "parameters": []
       },
@@ -115431,7 +115431,7 @@
         "description": "Retrieves the current Netskope third-party service subscription configuration. Returns the username, API token (decrypted), and domain used for VPN credentials. The response is retrieved from the GMS configuration cache.",
         "x-required-role": "READ or READ_WRITE",
         "x-example-requests": {
-          "curl": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/netskope/subscription' -H 'Authorization: Basic REDACTED_EXAMPLE'"
+          "curl": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/netskope/subscription' -H 'Authorization: Basic $EC_API_CREDENTIALS'"
         },
         "x-use-cases": [
           "Verify current Netskope integration credentials",
@@ -115566,7 +115566,7 @@
           }
         ],
         "x-example-requests": {
-          "curl": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/netskope/subscription' -H 'Authorization: Basic REDACTED_EXAMPLE' -H 'Content-Type: application/json' -d '{\"username\":\"api-token-name\",\"apiToken\":\"your-token\",\"domain\":\"company.goskope.com\"}'"
+          "curl": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/netskope/subscription' -H 'Authorization: Basic $EC_API_CREDENTIALS' -H 'Content-Type: application/json' -d '{\"username\":\"api-token-name\",\"apiToken\":\"your-token\",\"domain\":\"company.goskope.com\"}'"
         },
         "x-related-endpoints": [
           "GET /thirdPartyServices/netskope/subscription - Retrieve current subscription",
@@ -118097,12 +118097,12 @@
           {
             "lang": "curl",
             "label": "Create Provider",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/serviceOrchestration/serviceProviders' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"serviceName\": \"Zscaler\", \"servicePrefix\": \"zscaler\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/serviceOrchestration/serviceProviders' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"serviceName\": \"Zscaler\", \"servicePrefix\": \"zscaler\"}'"
           },
           {
             "lang": "curl",
             "label": "Update Provider",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/serviceOrchestration/serviceProviders?serviceId=1' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"serviceName\": \"Zscaler Internet Access\", \"servicePrefix\": \"zscaler\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/serviceOrchestration/serviceProviders?serviceId=1' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"serviceName\": \"Zscaler Internet Access\", \"servicePrefix\": \"zscaler\"}'"
           }
         ]
       }
@@ -119200,7 +119200,7 @@
           {
             "lang": "curl",
             "label": "cURL",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/zscaler/countries' \\\n  -H 'X-Auth-Token: REDACTED_EXAMPLE' \\\n  -H 'Content-Type: text/plain' \\\n  -d 'US,UNITED_STATES|CA,CANADA|GB,UNITED_KINGDOM'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/zscaler/countries' \\\n  -H 'X-Auth-Token: $EC_API_TOKEN' \\\n  -H 'Content-Type: text/plain' \\\n  -d 'US,UNITED_STATES|CA,CANADA|GB,UNITED_KINGDOM'"
           }
         ],
         "parameters": []
@@ -119278,7 +119278,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/zscaler/defaultCountries' -H 'Authorization: Basic REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/zscaler/defaultCountries' -H 'Authorization: Basic $EC_API_CREDENTIALS'"
           }
         ],
         "x-response-format": {
@@ -119357,7 +119357,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/zscaler/defaultTimezones' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/thirdPartyServices/zscaler/defaultTimezones' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ],
         "parameters": []
@@ -119831,7 +119831,7 @@
         "x-codeSamples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/zscaler/interfaceTunnelSetting' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"1\":{\"admin\":\"up\",\"mode\":\"ipsec_ip\",\"autoMaxBandwidthEnabled\":true,\"ipSecSuiteB\":\"none\",\"presharedKey\":\"MyKey\",\"ikeAuthenticationAlgorithm\":\"sha256\",\"ikeEncryptionAlgorithm\":\"aes256\",\"dhgroup\":\"14\",\"ikeLifetime\":86400,\"ikeVersion\":2}}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/zscaler/interfaceTunnelSetting' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"1\":{\"admin\":\"up\",\"mode\":\"ipsec_ip\",\"autoMaxBandwidthEnabled\":true,\"ipSecSuiteB\":\"none\",\"presharedKey\":\"MyKey\",\"ikeAuthenticationAlgorithm\":\"sha256\",\"ikeEncryptionAlgorithm\":\"aes256\",\"dhgroup\":\"14\",\"ikeLifetime\":86400,\"ikeVersion\":2}}'"
           }
         ],
         "parameters": []
@@ -120887,7 +120887,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/zscaler/pauseOrchestration' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"paused\": true}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/thirdPartyServices/zscaler/pauseOrchestration' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"paused\": true}'"
           }
         ],
         "parameters": []
@@ -133072,7 +133072,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://<orchestrator>/gms/rest/stats/timeseries/shaper?startTime=1704067200&endTime=1704153600&granularity=hour' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"nePks\": [\"0.NE\", \"1.NE\"]}'"
+            "source": "curl -X POST 'https://<orchestrator>/gms/rest/stats/timeseries/shaper?startTime=1704067200&endTime=1704153600&granularity=hour' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"nePks\": [\"0.NE\", \"1.NE\"]}'"
           }
         ]
       }
@@ -134043,12 +134043,12 @@
           {
             "lang": "curl",
             "label": "cURL - Basic Request",
-            "source": "curl -X POST 'https://orchestrator/gms/rest/stats/timeseries/trafficClass?granularity=hour&trafficType=all_traffic&trafficClass=1&startTime=1706572800&endTime=1706659200' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Basic REDACTED_EXAMPLE' \\\n  -d '{\"nePks\": [\"10.NE\", \"20.NE\"]}'"
+            "source": "curl -X POST 'https://orchestrator/gms/rest/stats/timeseries/trafficClass?granularity=hour&trafficType=all_traffic&trafficClass=1&startTime=1706572800&endTime=1706659200' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Basic $EC_API_CREDENTIALS' \\\n  -d '{\"nePks\": [\"10.NE\", \"20.NE\"]}'"
           },
           {
             "lang": "curl",
             "label": "cURL - Latest Minutes",
-            "source": "curl -X POST 'https://orchestrator/gms/rest/stats/timeseries/trafficClass?granularity=minute&trafficType=optimized_traffic&trafficClass=1&latest=60&ip=true' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Basic REDACTED_EXAMPLE' \\\n  -d '{\"nePks\": [\"10.NE\"]}'"
+            "source": "curl -X POST 'https://orchestrator/gms/rest/stats/timeseries/trafficClass?granularity=minute&trafficType=optimized_traffic&trafficClass=1&latest=60&ip=true' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Basic $EC_API_CREDENTIALS' \\\n  -d '{\"nePks\": [\"10.NE\"]}'"
           }
         ]
       }
@@ -138221,7 +138221,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X GET 'https://{orchestrator}/gms/rest/tunnels2?metaData=true' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://{orchestrator}/gms/rest/tunnels2?metaData=true' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -138886,7 +138886,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/uiUsageStats?uiName=Dashboard_Overview_Tab' \\\n  -H 'Authorization: Basic REDACTED_EXAMPLE'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/uiUsageStats?uiName=Dashboard_Overview_Tab' \\\n  -H 'Authorization: Basic $EC_API_CREDENTIALS'"
           }
         ]
       }
@@ -140655,12 +140655,12 @@
           {
             "lang": "curl",
             "label": "cURL - Cached Data",
-            "source": "curl -X GET 'https://orchestrator/gms/rest/userAccount/passwordSettings?nePk=0.NE&cached=true' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://orchestrator/gms/rest/userAccount/passwordSettings?nePk=0.NE&cached=true' -H 'Authorization: Bearer $EC_API_TOKEN'"
           },
           {
             "lang": "curl",
             "label": "cURL - Fresh Data",
-            "source": "curl -X GET 'https://orchestrator/gms/rest/userAccount/passwordSettings?nePk=0.NE&cached=false' -H 'Authorization: Bearer REDACTED_EXAMPLE'"
+            "source": "curl -X GET 'https://orchestrator/gms/rest/userAccount/passwordSettings?nePk=0.NE&cached=false' -H 'Authorization: Bearer $EC_API_TOKEN'"
           }
         ]
       }
@@ -143303,7 +143303,7 @@
         "x-code-samples": [
           {
             "lang": "curl",
-            "source": "curl -X POST 'https://{orchestrator}/gms/rest/hostname?nePk=10.NE' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer REDACTED_EXAMPLE' \\\n  -d '{\"hostname\": \"edge-router-01\"}'"
+            "source": "curl -X POST 'https://{orchestrator}/gms/rest/hostname?nePk=10.NE' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer $EC_API_TOKEN' \\\n  -d '{\"hostname\": \"edge-router-01\"}'"
           }
         ]
       }

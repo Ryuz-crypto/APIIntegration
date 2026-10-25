@@ -8782,7 +8782,7 @@
         "primaryKey": "secretkey123",
         "primaryPort": 1812,
         "secondaryHost": "radius-backup.example.com",
-        "secondaryKey": "secretkey456",
+        "secondaryKey": "<SECONDARY_KEY>",
         "secondaryPort": 1812,
         "type": "PAP",
         "defaultRole": "Network Monitor"
@@ -8920,7 +8920,7 @@
         "primaryKey": "sharedSecret123",
         "secondaryHost": "tacacs-backup.example.com",
         "secondaryPort": 49,
-        "secondaryKey": "secondarySecret456",
+        "secondaryKey": "<SECONDARY_KEY>",
         "type": "CHAP",
         "defaultRole": "network-read"
       },
