@@ -4559,8 +4559,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     severity_counts: dict[str, int] = {}
                     _collect_alarm_counts(alarm_payload, severity_counts)
                     findings.extend(correlate_active_alarms(ne_pk, severity_counts))
-                except Exception:
-                    pass
+                except Exception as alarm_error:
+                    findings.append(
+                        {
+                            "nePk": ne_pk,
+                            "severity": "low",
+                            "finding": "Active alarm correlation unavailable for this appliance",
+                            "evidence": [str(alarm_error)[:200]],
+                            "recommendation": "Verify orchestrator connectivity for alarm counts and retry.",
+                        }
+                    )
                 if findings:
                     incidents.append({"nePk": ne_pk, "findings": findings})
             proposals = build_remediation_proposals(incidents, policy=policy)
