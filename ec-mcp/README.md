@@ -464,6 +464,31 @@ Las operaciones peligrosas también requieren
 `EC_ALLOW_DANGEROUS_WRITES=true`. No habilites estos interruptores para una
 cuenta del Orchestrator con privilegios que no necesitas.
 
+### Detección y remediación asistida (Fase 3)
+
+El flujo de respuesta a incidentes es: **detectar → proponer → decidir →
+aplicar con confirmación humana**:
+
+1. `correlate_incidents` correlaciona IDS/IPS, drops del firewall, DDoS,
+   alarmas y web filtering en hallazgos priorizados (solo lectura).
+2. `propose_remediation` convierte cada hallazgo en una **propuesta estructurada, dry-run**: evidencia, alcance, riesgo, plan de reversión,
+   política candidata y el paso siguiente de solo lectura. Nunca aplica nada.
+3. Políticas disponibles (plantillas del roadmap):
+   - `observation` — solo recopila y correlaciona señales.
+   - `containment_proposed` — sugiere clasificación/bloqueo temporal; nunca aplica.
+   - `controlled_change` — operación preaprobada para un alcance definido,
+     con ventana, confirmación y reversión.
+   - `emergency` — reservada a operadores autorizados; exige justificación,
+     evidencia y revisión posterior.
+4. Para actuar: `list_response_options` (dry-run exacto) y luego
+   `block_threat`/`apply_change`/`run_cli_command` con `confirm=true` tras
+   aprobación humana explícita. Cada propuesta queda registrada en la
+   auditoría estructurada (`tool=propose_remediation`, `dry_run=true`).
+
+La IA nunca ejecuta cambios de red por sí misma: puede explicar por qué
+recomienda una acción y qué cambio exacto se haría, pero la aplicación
+siempre requiere confirmación humana.
+
 ## Validación
 
 ```bash

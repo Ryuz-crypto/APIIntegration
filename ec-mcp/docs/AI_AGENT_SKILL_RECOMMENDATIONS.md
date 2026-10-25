@@ -64,7 +64,7 @@ salidas; el agente no debe pedir ni repetir credenciales.
 
 ---
 
-## 2. Capacidades del servidor (inventario real: 122 tools, v8.1.0)
+## 2. Capacidades del servidor (inventario real: 125 tools, v8.1.0)
 
 | Dominio | Tools | # | Tipo |
 |---|---|---|---|
@@ -77,11 +77,11 @@ salidas; el agente no debe pedir ni repetir credenciales.
 | Overlays / BIO | `prepare_overlay_clone`, `apply_overlay_plan`, `preview_overlay_plan`, `verify_overlay_plan`, `rollback_overlay_plan`, `list_overlay_sources` | 6 | Workflow transaccional |
 | SD-WAN AI embebida | `ask_sdwan_ai`, `get_sdwan_ai_chat_logs`, `clear_sdwan_ai_context`, `get_sase_copilot_status` | 4 | Conversacional (Orchestrator 10.0) |
 | Telemetría / Salud | `get_orchestrator_infrastructure`, `get_appliance_infrastructure`, `get_realtime_stats`, `get_appliance_health` | 4 | Solo lectura |
-| Troubleshooting asistido | `troubleshoot_flows`, `troubleshoot_tunnel`, `correlate_incidents` | 3 | Solo lectura (devuelve hallazgos + remedios) |
+| Troubleshooting asistido | `troubleshoot_flows`, `troubleshoot_tunnel`, `correlate_incidents`, `propose_remediation` | 4 | Solo lectura (devuelve hallazgos + remedios) |
 | API genérica | `list_api_operations`, `call_read_api`, `apply_change` | 3 | Lectura + escritura genérica (`apply_change`, dry-run por defecto) |
 | Inventario | `list_appliances`, `orchestrator_info`, `orchestrator_metrics` | 3 | Solo lectura |
 
-**Distribución de riesgo:** 72 tools son solo lectura/diagnóstico; 48 cambian estado
+**Distribución de riesgo:** 73 tools son solo lectura/diagnóstico; 48 cambian estado
 (todas detrás de `EC_ALLOW_WRITE_TOOLS` + `confirm=true`; las peligrosas además de
 `EC_ALLOW_DANGEROUS_WRITES`); 2 (`troubleshoot_*`) son orquestación de solo lectura.
 
@@ -95,7 +95,7 @@ salidas; el agente no debe pedir ni repetir credenciales.
 | "¿El Orchestrator está sano?" | `get_orchestrator_infrastructure`, `orchestrator_info`, `orchestrator_metrics` | No |
 | "Hay un túnel caído" | `troubleshoot_tunnel` (antes que `get_tunnel_state` + `get_brownout_state` por separado) | No |
 | "Algo va lento / una app no funciona" | `troubleshoot_flows` (correlaciona top talkers + flujos + log firewall del día) | No |
-| "Sospecha de ataque / hay drops" | `correlate_incidents` → `list_response_options` → (`block_threat` con confirm) | Opcional |
+| "Sospecha de ataque / hay drops" | `correlate_incidents` → `propose_remediation` (propuestas dry-run con evidencia/riesgo/reversión) → `list_response_options` → (`block_threat` con confirm) | Opcional |
 | "Ver comandos show por CLI" | `run_show_api` (vía Orchestrator, **sin SSH**) — preferir sobre `run_show_command` | No |
 | "Onboarding de appliance nuevo" | `list_discovered_appliances` → `prepare_ztp_adoption` → `preview_ztp_plan` → `apply_ztp_plan` → `verify_ztp_plan` / `get_ztp_apply_status` | Sí (flujo transaccional) |
 | "Onboarding masivo" | `prepare_bulk_ztp_adoption` → `apply_bulk_ztp_plan` → `list_bulk_ztp_plans` | Sí |
@@ -144,7 +144,7 @@ salidas; el agente no debe pedir ni repetir credenciales.
 skill-ec-mcp/
 ├── SKILL.md                  # frontmatter + resumen (este documento, versión corta)
 ├── references/
-│   ├── tool-map.md           # inventario 122 tools por dominio (sección 2)
+│   ├── tool-map.md           # inventario 125 tools por dominio (sección 2)
 │   ├── decision-matrix.md    # ¿qué tool cuándo? (sección 3)
 │   ├── guardrails.md         # dry-run, confirmación, deployment REPLACE, rate limit
 │   ├── ztp-workflow.md       # prepare → preview → apply → verify → rollback
@@ -154,7 +154,7 @@ skill-ec-mcp/
 │   └── sdwan-ai.md           # ask_sdwan_ai, chat_id, get_sase_copilot_status
 ├── examples/
 │   ├── tunnel-down.md        # runbook: troubleshoot_tunnel → remedios
-│   ├── incident-response.md  # correlate_incidents → list_response_options → block_threat
+│   ├── incident-response.md  # correlate_incidents → propose_remediation → list_response_options → block_threat
 │   └── ztp-onboarding.md     # alta de appliance con preconfig YAML
 └── evals/
     └── evals.xml             # casos de prueba: dry-run por defecto, rechazo sin confirm, etc.
@@ -176,7 +176,7 @@ skill-ec-mcp/
 ## 6. Deuda documental detectada (para corregir al actualizar el skill)
 
 El skill `EDGECONNECT_NOC_OPS_SKILL.md` está etiquetado **v6.0.0 / 112 tools**; el servidor
-actual (8.1.0) expone **122 tools**. Faltan por documentar:
+actual (8.1.0) expone **125 tools**. Faltan por documentar:
 
 - `get_ztp_status` — estado ZTP con filas paginadas sin credenciales.
 - `get_ztp_apply_status` — seguimiento de la cadena de tareas async del apply (op 254).

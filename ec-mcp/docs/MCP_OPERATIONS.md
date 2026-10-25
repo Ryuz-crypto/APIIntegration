@@ -34,6 +34,8 @@ Criterio de aceptación: el panel puede mostrar la última comprobación y segui
 
 Criterio de aceptación: la IA puede explicar por qué recomienda una acción y qué exacto cambio se realizaría, sin ejecutar cambios por sí misma.
 
+**Estado: entregado.** `correlate_incidents` (detección multi-señal) y `propose_remediation` (propuestas dry-run con evidencia, alcance, riesgo, reversión y política candidata: `observation|containment_proposed|controlled_change|emergency`) cubren los cuatro puntos; la aplicación siempre pasa por las tools de escritura con `confirm=true` y auditoría (`tool=propose_remediation`, `dry_run=true`).
+
 ## Plantillas de políticas iniciales
 
 1. **Observación**: solo recopila y correlaciona señales.

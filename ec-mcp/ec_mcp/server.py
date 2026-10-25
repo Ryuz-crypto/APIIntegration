@@ -54,6 +54,11 @@ from .overlay_workflow import (
     prepare_overlay_plan,
     select_overlay,
 )
+from .remediation_workflow import (
+    POLICY_TEMPLATES,
+    build_remediation_proposals,
+    summarize_proposals,
+)
 from .security import SecurityError, redact_secrets, redact_sensitive_values
 from .security_workflow import (
     BFD_SESSIONS_READ,
@@ -4499,6 +4504,86 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     "appliances_with_findings": len(incidents),
                     "incidents": incidents,
                     "next_step": "For any finding, call list_response_options(target=/domain=/context=) to see every EdgeConnect blocking option with its exact dry-run, then apply the chosen one with block_threat/apply_change/run_cli_command (confirm=true).",
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def propose_remediation(appliance_id: str = "all", date: str = "", policy: str = "containment_proposed") -> str:
+        """Build structured, dry-run remediation proposals for detected incidents: reruns the correlation of correlate_incidents and, for each finding, returns evidence, scope, risk, reversal plan, candidate policy and the exact read-only next step. NEVER applies anything; applying always requires the existing confirmed write tools (block_threat/apply_change/run_cli_command with confirm=true) plus human approval. policy: observation|containment_proposed|controlled_change|emergency."""
+        try:
+            client = require_client()
+            if client is None:
+                return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
+            if policy not in POLICY_TEMPLATES:
+                allowed = "|".join(sorted(POLICY_TEMPLATES))
+                return f"Error: invalid policy '{policy}'. Use one of: {allowed}"
+            version = client.resolve_active_profile()
+            if not date:
+                date = datetime.now().strftime("%Y-%m-%d")
+            incidents: list[dict[str, Any]] = []
+            for ne_pk in resolve_ne_pks(client, appliance_id):
+                try:
+                    ids_state = summarize_ids_state(
+                        client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ)
+                    )
+                except Exception as error:
+                    ids_state = {"active": None, "error": str(error)[:200]}
+                try:
+                    ids_events = extract_rows(
+                        client.appliance_api_call(version, ne_pk, IDS_IPS_EVENTS_READ, limit=50)
+                    )
+                except Exception:
+                    ids_events = []
+                firewall_summary = None
+                web_summary = None
+                try:
+                    log_payload = client.appliance_api_call(
+                        version,
+                        ne_pk,
+                        LOG_VIEWER_FILE_READ,
+                        path_params={"logType": "Firewall", "date": date, "lines": "200"},
+                    )
+                    entries = parse_firewall_log_entries(log_payload)
+                    firewall_summary = summarize_security_log(entries)
+                    web_summary = summarize_web_filtering(entries)
+                except Exception:
+                    firewall_summary = None
+                findings = correlate_security_signals(
+                    ne_pk, ids_state, ids_events, firewall_summary, web_summary
+                )
+                try:
+                    alarm_payload = kpi_alarm_counts(client, ne_pk)
+                    severity_counts: dict[str, int] = {}
+                    _collect_alarm_counts(alarm_payload, severity_counts)
+                    findings.extend(correlate_active_alarms(ne_pk, severity_counts))
+                except Exception:
+                    pass
+                if findings:
+                    incidents.append({"nePk": ne_pk, "findings": findings})
+            proposals = build_remediation_proposals(incidents, policy=policy)
+            audit.record(
+                "propose_remediation",
+                appliance_id,
+                "proposals_built",
+                dry_run=True,
+                details={"policy": policy, "proposal_count": len(proposals), "date": date},
+            )
+            return json_result(
+                {
+                    "date": date,
+                    "policy": POLICY_TEMPLATES[policy],
+                    "summary": summarize_proposals(proposals),
+                    "proposals": proposals,
+                    "applied": False,
+                    "requires_human_confirmation": True,
+                    "next_step": (
+                        "Revisa cada propuesta (evidencia/alcance/riesgo/reversión). Para actuar, "
+                        "llama list_response_options para el dry-run exacto y luego aplica con "
+                        "block_threat/apply_change/run_cli_command con confirm=true tras aprobación humana."
+                    ),
                 },
                 settings.max_output_chars,
             )
