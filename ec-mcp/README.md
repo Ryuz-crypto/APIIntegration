@@ -2,7 +2,7 @@
 
 **Versión estable: 8.2.0** en `main`.
 
-Línea de versiones: 2.0.0 → 3.0.0 → 4.0.0 → 4.5.0 → 5.0.0 → 6.0.0 → 7.0.0 → 7.0.1 → 8.0.0 → 8.1.0 → **8.2.0 (estable)**. Las versiones 8.x añaden: retiro del componente DashboardAPI-EC (el repositorio se enfoca en `ec-mcp`), multi-Orchestrator y multi-SSE (multi-tenant), estado real de servicios en el panel con auditoría estructurada (#88 Fases 1–3: SSH fiable, sondas reales de servicios, detección y remediación asistida con propuestas dry-run).
+Estado actual: **8.2.0 estable** en `main`. Esta línea concentra el soporte vigente y añade: retiro del componente DashboardAPI-EC (el repositorio se enfoca en `ec-mcp`), multi-Orchestrator y multi-SSE (multi-tenant), estado real de servicios en el panel con auditoría estructurada (#88 Fases 1–3: SSH fiable, sondas reales de servicios, detección y remediación asistida con propuestas dry-run).
 
 Esta entrega añade la capa de telemetría (PR #70): KPIs de infraestructura del Orchestrator (platform info, GMS server, disco, particiones BD, stats collectors), KPIs por appliance desde el Orchestrator (CPU/performance timeseries, interface state) y estadísticas real-time del appliance (`POST /stats/realtimeStats`, `POST /health`, disk usage) a través del proxy `/appliance/rest`, que alcanza los equipos por la red gestionada SD-WAN sin acceso WAN directo.
 
@@ -31,7 +31,7 @@ catálogo ECOS por SSH.
   de frecuencia y segundo candado para operaciones peligrosas.
 - Transporte stdio, HTTP streamable y SSE con bearer token.
 - Registro de auditoría JSONL y redacción de secretos.
-- Panel administrativo 3.0 para gestionar Orchestrators, editar todas las variables permitidas y aplicar cambios sin entrar por SSH.
+- Panel administrativo para gestionar Orchestrators, editar todas las variables permitidas y aplicar cambios sin entrar por SSH.
 - Updater web con detección de GitHub público o privado, commit exacto, pruebas, respaldo y rollback.
 - Workflows MCP transaccionales BIO/ZTP; la pestaña ZTP del panel aún muestra un roadmap y no implementa la adopción desde la UI.
 
@@ -76,11 +76,11 @@ usa SSH. `appliance_id` acepta nePk, nombre, IP o serial del appliance.
 ### 1. Clonar la versión estable
 
 ```bash
-git clone --branch release/4.5.0 https://github.com/Ryuz-crypto/APIIntegration.git
+git clone --branch main https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/ec-mcp
 ```
 
-La rama `release/4.5.0` identifica esta base estable. El updater web puede avanzar a `main` cuando apruebes un commit concreto; las mejoras en desarrollo usan una rama aparte.
+La rama `main` identifica la base estable vigente. El updater web puede fijar un commit concreto de `main` después de ejecutar las pruebas y validar el resultado.
 
 ### 2. Ejecutar el instalador
 
@@ -89,7 +89,7 @@ La rama `release/4.5.0` identifica esta base estable. El updater web puede avanz
 ```
 
 El instalador crea `.venv`, instala el paquete, solicita la configuración y
-genera `.env`. Es idempotente y no reemplaza un `.env` existente. Desde 4.5.1,
+genera `.env`. Es idempotente y no reemplaza un `.env` existente. En la versión estable vigente,
 el paso final instala y habilita los servicios systemd (`ec-mcp` y, si
 `EC_ADMIN_PASSWORD` está configurado, `ec-mcp-admin`) con `systemctl enable --now`:
 arrancan automáticamente al reiniciar el servidor y se reinician solos ante
@@ -149,7 +149,7 @@ sudo systemctl show ec-mcp-admin -p Environment -p WorkingDirectory --no-pager
 
 El primer comando no debe producir salida. Si systemd muestra una variable
 `EC_ADMIN_*` fijada en la unidad, reinstala el servicio con el script actual.
-Desde `3.0.0b3`, `install_admin_service.sh --port 9090` actualiza `.env`
+En la versión estable vigente, `install_admin_service.sh --port 9090` actualiza `.env`
 y la unidad sólo define `EC_MCP_ENV_FILE`.
 
 ## Instalación manual
@@ -158,7 +158,7 @@ y la unidad sólo define `EC_MCP_ENV_FILE`.
 sudo apt update
 sudo apt install -y git python3-venv python3-pip
 
-git clone --branch release/4.5.0 https://github.com/Ryuz-crypto/APIIntegration.git
+git clone --branch main https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/ec-mcp
 python3 -m venv .venv
 source .venv/bin/activate
@@ -531,7 +531,7 @@ La última llamada debe devolver `applied: true`,
 
 ## Upgrade por terminal
 
-Procedimiento para pasar de 2.x, 3.x, 4.0.0/betas anteriores a **4.5.0 estable**. Actualiza solamente el servidor MCP; no requiere cambiar firmware ni modificar configuración de red en los appliances. Sustituye `~/APIIntegration` por la ruta real de la instalación.
+Procedimiento para actualizar a **8.2.0 estable desde `main`**. Actualiza solamente el servidor MCP; no requiere cambiar firmware ni modificar configuración de red en los appliances. Sustituye `~/APIIntegration` por la ruta real de la instalación.
 
 ### 1. Preparar y respaldar
 
@@ -570,17 +570,17 @@ Ejecuta únicamente los comandos de los servicios que ya existen. En stdio, cier
 ```bash
 cd ~/APIIntegration
 git fetch origin
-git switch --detach origin/release/4.5.0
+git switch --detach origin/main
 cd ec-mcp
 ./scripts/install.sh --non-interactive
-./.venv/bin/python -c "from ec_mcp import __version__; assert __version__ == '4.5.0'; print(__version__)"
+./.venv/bin/python -c "from ec_mcp import __version__; assert __version__ == '8.2.0'; print(__version__)"
 ```
 
 El instalador conserva `.env` y usa `requirements-stable.txt` para instalar runtime y QA, incluido pytest. Revisa las claves nuevas de `.env.example` y añade solo las que falten; no reemplaces el archivo ni regeneres secretos, conexiones o puertos. La configuración del proceso/systemd prevalece sobre `.env`.
 
 | Instalación anterior | Revisión necesaria |
 |---|---|
-| 2.x o Python anterior a 3.12 | Actualizar Python/venv; comprobar `EC_MCP_ENV_FILE`, autenticación HTTP y variables actuales. |
+| Python anterior a 3.12 | Actualizar Python/venv; comprobar `EC_MCP_ENV_FILE`, autenticación HTTP y variables actuales. |
 | 3.x y betas | Revisar overrides antiguos de systemd y claves duplicadas; el puerto del panel se toma de `EC_ADMIN_PORT`. |
 | 4.0.x | Mismo procedimiento; las pruebas y dependencias quedan instaladas y la identidad de versión deja de esperar `4.0.0b1`. |
 
@@ -602,7 +602,7 @@ curl -fsS http://127.0.0.1:8000/health
 curl -I http://127.0.0.1:9090/login
 ```
 
-Sustituye 8000/9090 por tus puertos. `/health` comprueba el transporte; valida también `orchestrator_info()`, `list_appliances()` y `run_show_api(command="show version", appliance_id="<nePk-real>")` desde el cliente. Confirma versión 4.5.0, inventario real, respuesta por API y funcionamiento del login del panel antes de habilitar escrituras. En stdio, reinicia el cliente MCP.
+Sustituye 8000/9090 por tus puertos. `/health` comprueba el transporte; valida también `orchestrator_info()`, `list_appliances()` y `run_show_api(command="show version", appliance_id="<nePk-real>")` desde el cliente. Confirma versión 8.2.0, inventario real, respuesta por API y funcionamiento del login del panel antes de habilitar escrituras. En stdio, reinicia el cliente MCP.
 
 ### 4. Recuperar si falla
 
@@ -619,7 +619,7 @@ sudo systemctl daemon-reload
 sudo systemctl restart ec-mcp ec-mcp-admin
 ```
 
-Verifica de nuevo versión, transporte y conexión. Reactiva el timer del updater solo cuando el servidor esté validado. Para volver a seguir futuras publicaciones con Git, usa `git switch main` y avance rápido; el checkout separado de esta guía mantiene fija 4.5.0.
+Verifica de nuevo versión, transporte y conexión. Reactiva el timer del updater solo cuando el servidor esté validado. Para seguir futuras publicaciones con Git, usa `git switch main` y avance rápido después de revisar el commit y ejecutar las pruebas.
 
 ### Diagnóstico de acceso al panel
 
@@ -658,7 +658,7 @@ los secretos se redactan de los mensajes públicos.
 
 ## Flujo transaccional de Business Intent Overlays
 
-La versión `3.0.0b5` permite crear un BIO a partir de un overlay válido ya
+La versión estable vigente permite crear un BIO a partir de un overlay válido ya
 existente, sin depender del esquema placeholder del OpenAPI:
 
 ```text
@@ -689,7 +689,7 @@ overlay que no haya sido creado por el mismo plan.
 
 ## Flujo transaccional de adopción ZTP
 
-La línea **3.0.0 (estable)** extiende el patrón transaccional a la adopción
+La versión estable **8.2.0** extiende el patrón transaccional a la adopción
 de equipos descubiertos por ZTP, siguiendo el modelo real de preconfiguración
 del Orchestrator: la preconfiguración es un documento YAML con nombre propio
 que se crea vía `createpreconfiguration247_1` y se aplica al equipo descubierto
@@ -754,9 +754,9 @@ a reinicios del MCP. El rollback (deny + delete) requiere además
 `EC_ALLOW_DANGEROUS_WRITES=true`. No se permite adoptar un equipo ya
 aprobado ni enviar cuerpos vacíos.
 
-## Suite de seguridad y troubleshooting (4.0.0 estable)
+## Suite de seguridad y troubleshooting
 
-La versión `4.0.0` — ahora estable — añade herramientas curadas de solo lectura sobre el
+La versión estable `8.2.0` añade herramientas curadas de solo lectura sobre el
 catálogo crudo, agrupadas por dominio:
 
 | Herramienta | Dominio | Descripción |
@@ -778,7 +778,7 @@ dry-run ni confirmación. Para cambios de configuración de seguridad usa
 
 ## Mejoras de operación e inconsistencias en desarrollo
 
-La base estable 4.5.0 conserva los workflows MCP existentes. El roadmap ZTP de la UI administrativa sigue pendiente. La rama `fix/operation-integrity-4.5` inicia estas correcciones, con pruebas de regresión antes de integrarlas en otra publicación:
+La base estable 8.2.0 conserva los workflows MCP existentes. El roadmap ZTP de la UI administrativa sigue pendiente. Estas correcciones deben pasar por pruebas de regresión antes de integrarse en `main`:
 
 - Evitar repetir POST/PUT/PATCH/DELETE ante una respuesta vacía o por fallback de rutas.
 - Verificar adopción ZTP solo con tareas confirmadas, inventario fresco y salida de discovered.
@@ -786,7 +786,7 @@ La base estable 4.5.0 conserva los workflows MCP existentes. El roadmap ZTP de l
 - Conservar valores de parámetros como `0`/`false` y distinguir una escritura aplicada de una comprobación posterior fallida.
 - Sanear el registro de auditoría antes de persistirlo.
 
-Pendientes posteriores: validación de host keys SSH, aislamiento del worker privilegiado de actualización, cobertura de contratos API y correcciones de unidades/riesgo por sitio y sesiones WebSocket del dashboard. 4.5.0 no declara resueltos estos hallazgos. La validación automatizada no sustituye una prueba de actualización en un servidor real ni certifica todos los endpoints del catálogo.
+Pendientes posteriores: validación de host keys SSH, aislamiento del worker privilegiado de actualización, cobertura de contratos API y correcciones de unidades/riesgo por sitio y sesiones WebSocket del dashboard. La validación automatizada no sustituye una prueba de actualización en un servidor real ni certifica todos los endpoints del catálogo.
 
 ## Solución de problemas
 
@@ -799,9 +799,9 @@ Pendientes posteriores: validación de host keys SSH, aislamiento del worker pri
 | Error TLS | Instala la CA correcta. Usa `EC_VERIFY_TLS=false` solo para diagnóstico en laboratorio. |
 | Herramientas SSH deshabilitadas | Define `EC_SSH_ENABLED=true` y las credenciales SSH. |
 | `run_show_api` falla | Confirma el nePk con `list_appliances` y la conectividad del appliance desde el Orchestrator. |
-| Panel muestra `Demasiados intentos` | Espera el tiempo mostrado o inicia sesión con la contraseña correcta; desde 3.0.0b3 un login válido limpia inmediatamente el bloqueo. |
+| Panel muestra `Demasiados intentos` | Espera el tiempo mostrado o inicia sesión con la contraseña correcta; un login válido limpia inmediatamente el bloqueo. |
 | systemd no toma cambios | Ejecuta `sudo systemctl daemon-reload && sudo systemctl restart ec-mcp`. |
-| `EC_ADMIN_PORT` vuelve a `8080` | Actualiza a 3.0.0b3. El instalador anterior podía sobrescribir el puerto de `.env`; vuelve a guardar el puerto y reinstala `install_admin_service.sh`. |
+| `EC_ADMIN_PORT` vuelve a `8080` | Vuelve a guardar el puerto y reinstala `install_admin_service.sh` con la versión estable vigente. |
 
 ## Seguridad operativa
 
