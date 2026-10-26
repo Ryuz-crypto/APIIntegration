@@ -147,7 +147,7 @@ cd ec-mcp
 ./scripts/install_admin_service.sh
 sudo systemctl daemon-reload
 sudo systemctl restart ec-mcp ec-mcp-admin
-././.venv/bin/python -c "import ec_mcp; assert ec_mcp.__version__ == '8.2.0'; print(ec_mcp.__version__)"
+./.venv/bin/python -c "import ec_mcp; assert ec_mcp.__version__ == '8.2.0'; print(ec_mcp.__version__)"
 git rev-parse HEAD
 ```
 
