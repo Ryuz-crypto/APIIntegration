@@ -1,6 +1,6 @@
 # APIIntegration — ec-mcp
 
-[![ec-mcp](https://img.shields.io/badge/ec--mcp-6.0.0%20stable-7B61FF)](ec-mcp/README.md)
+[![ec-mcp](https://img.shields.io/badge/ec--mcp-8.2.0%20stable-7B61FF)](ec-mcp/README.md)
 [![ec-mcp CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
 
@@ -16,7 +16,7 @@ Todo bug detectado por personas o asistentes de IA se registra en [GitHub Issues
 
 ## ec-mcp — MCP y panel de administración web
 
-Versión estable en `main`: **6.0.0**. Incorpora la capa de telemetría del PR #70: KPIs de infraestructura del Orchestrator (`get_orchestrator_infrastructure`, `get_appliance_infrastructure`) y estadísticas real-time del appliance vía el proxy SD-WAN (`get_realtime_stats`, `get_appliance_health`). La referencia fija de la base anterior es la rama `release/4.5.0`. La referencia exhaustiva está en [ec-mcp/README.md](ec-mcp/README.md) y la plantilla completa en [ec-mcp/.env.example](ec-mcp/.env.example).
+Versión estable en `main`: **8.2.0**. Incluye telemetría del Orchestrator y appliances, herramientas de seguridad, multi-Orchestrator y multi-SSE, SD-WAN AI, panel administrativo y comandos `show` vía el API del Orchestrator. La referencia exhaustiva está en [ec-mcp/README.md](ec-mcp/README.md) y la plantilla completa en [ec-mcp/.env.example](ec-mcp/.env.example).
 
 > **Regla principal:** `ec-mcp/.env` es la única fuente de configuración. No dupliques las credenciales del Orchestrator en el JSON del cliente MCP ni declares `EC_ADMIN_PORT` o `EC_ADMIN_PASSWORD` directamente en systemd. Cada variable debe aparecer una sola vez en `.env`.
 
@@ -28,7 +28,7 @@ Requiere Ubuntu/Debian con Python 3.12 o superior:
 sudo apt update
 sudo apt install -y git python3 python3-venv python3-pip curl
 
-git clone --branch release/4.5.0 https://github.com/Ryuz-crypto/APIIntegration.git
+git clone --branch main https://github.com/Ryuz-crypto/APIIntegration.git
 cd APIIntegration/ec-mcp
 ./scripts/install.sh --non-interactive
 
@@ -129,9 +129,9 @@ No coloques `EC_ORCHESTRATOR_API_KEY`, contraseñas ni tokens directamente en es
 
 Para un conector remoto usa `https://TU-HOST/mcp` y el Bearer token definido en `EC_MCP_AUTH_TOKEN`. La publicación TLS/ZTNA/nginx está explicada en [ec-mcp/README.md](ec-mcp/README.md).
 
-### Actualizar servidores anteriores a 4.5.0
+### Actualizar servidores anteriores a 8.2.0
 
-Aplica a instalaciones 2.x, 3.x y 4.0.x. Usa Python 3.12+, termina las operaciones ZTP/BIO en curso y respalda `.env`, configuración administrativa, logs y estado ZTP antes de reiniciar. La guía con respaldo, comprobaciones y recuperación está en [Upgrade por terminal](ec-mcp/README.md#upgrade-por-terminal).
+Aplica a instalaciones anteriores a 8.2.0. Usa Python 3.12+, termina las operaciones ZTP/BIO en curso y respalda `.env`, configuración administrativa, logs y estado ZTP antes de reiniciar. La guía con respaldo, comprobaciones y recuperación está en [Upgrade por terminal](ec-mcp/README.md#upgrade-por-terminal).
 
 Con el checkout limpio, actualiza a la referencia estable:
 
@@ -139,7 +139,7 @@ Con el checkout limpio, actualiza a la referencia estable:
 cd ~/APIIntegration
 git status --short
 git fetch origin
-git switch --detach origin/release/4.5.0
+git switch --detach origin/main
 cd ec-mcp
 ./scripts/install.sh --non-interactive
 # Solo si ya utilizas estos servicios; conserva los puertos de .env.
@@ -147,7 +147,7 @@ cd ec-mcp
 ./scripts/install_admin_service.sh
 sudo systemctl daemon-reload
 sudo systemctl restart ec-mcp ec-mcp-admin
-./.venv/bin/python -c "import ec_mcp; assert ec_mcp.__version__ == '4.5.0'; print(ec_mcp.__version__)"
+././.venv/bin/python -c "import ec_mcp; assert ec_mcp.__version__ == '8.2.0'; print(ec_mcp.__version__)"
 git rev-parse HEAD
 ```
 
@@ -155,7 +155,7 @@ No continúes si hay cambios locales sin respaldar. El instalador conserva `.env
 
 ### Mejoras de operación e inconsistencias
 
-La base estable integra las correcciones existentes del PR #37 y alinea paquete, README y CI en 4.5.0. Las siguientes mejoras se desarrollan por separado en `fix/operation-integrity-4.5`: evitar repetir escrituras ante respuestas vacías, verificar ZTP con evidencia completa e inventario fresco, aplicar los mismos controles CLI en todas las rutas y distinguir escritura aplicada de verificación fallida. El endurecimiento SSH/updater y las inconsistencias del dashboard continúan pendientes de esa línea de trabajo.
+La línea estable se mantiene en `main` y el paquete debe coincidir con 8.2.0. Las ramas y releases anteriores son referencias históricas; las nuevas correcciones deben entrar mediante PR hacia `main`.
 
 ### Validación y errores comunes
 
@@ -170,7 +170,7 @@ sudo systemctl show ec-mcp-admin -p Environment -p WorkingDirectory --no-pager
 ```
 
 - Si el primer comando imprime una clave, elimínala hasta dejar una sola definición.
-- Si systemd muestra `Environment=EC_ADMIN_PORT=8080`, esa variable prevalece sobre `.env`. Reinstala el servicio con el script de 3.0.0b3 o elimina el override.
+- Si systemd muestra `Environment=EC_ADMIN_PORT=8080`, esa variable prevalece sobre `.env`. Reinstala el servicio con los scripts actuales de `main` o elimina el override.
 - Si el puerto correcto abre pero rechaza la contraseña, busca varias líneas `EC_ADMIN_PASSWORD=`; conserva exactamente una y reinicia `ec-mcp-admin`.
 - Después de demasiados intentos, espera el valor de `EC_ADMIN_LOGIN_WINDOW_SECONDS` o reinicia el servicio una vez corregida la contraseña.
 - `run_show_api(command="show arp", appliance_id="0.NE")` usa el API del Orchestrator. No requiere habilitar SSH ni usar `run_show_command`.
