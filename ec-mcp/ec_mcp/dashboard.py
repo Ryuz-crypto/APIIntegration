@@ -174,11 +174,9 @@ def collect_dashboard_payload(
     }
     if client is not None:
         if kpi_get is None or project_wan_health_stats is None or reachability_map is None:
-            from . import server as _server
-
-            kpi_get = kpi_get or _server.kpi_get
-            project_wan_health_stats = project_wan_health_stats or _server.project_wan_health_stats
-            reachability_map = reachability_map or _server.reachability_map
+            raise ValueError(
+                "EdgeConnect dashboard helpers must be supplied by the server instance."
+            )
         payload["edgeconnect"] = _collect_edgeconnect(
             client, kpi_get, project_wan_health_stats, reachability_map
         )
