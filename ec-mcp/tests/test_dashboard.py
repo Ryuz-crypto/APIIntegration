@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
+import pytest
 
 from ec_mcp.axis_client import AxisSecurityClient
 from ec_mcp.dashboard import collect_dashboard_payload, render_dashboard_html
@@ -233,3 +236,22 @@ class TestRedaction:
         payload = collect_dashboard_payload(None, axis)
         page = render_dashboard_html(payload)
         assert "test-token" not in page
+
+
+    def test_requires_injected_edgeconnect_helpers(self):
+        class FakeClient:
+            pass
+
+        with pytest.raises(ValueError, match="helpers must be supplied"):
+            collect_dashboard_payload(FakeClient(), None)
+
+
+def test_server_binds_dashboard_helpers_to_server_instance():
+    server_path = Path(__file__).resolve().parents[1] / "ec_mcp" / "server.py"
+    source = server_path.read_text(encoding="utf-8")
+
+    assert "def collect_current_dashboard_payload(" in source
+    assert "kpi_get=kpi_get" in source
+    assert "project_wan_health_stats=project_wan_health_stats" in source
+    assert "reachability_map=reachability_map" in source
+    assert source.count("collect_current_dashboard_payload(client, axis)") == 4

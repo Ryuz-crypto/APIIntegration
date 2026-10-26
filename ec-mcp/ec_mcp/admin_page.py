@@ -68,6 +68,7 @@ async function renderServices(){
 }
 function svcRow(label,s){var up=s.state==='up'||s.state==='success'||s.state==='idle';var st=s.state||'unknown';var cls=up?'ok':'err';var extra=s.error?esc(s.error):(s.latency!==undefined?('latencia '+s.latency.toFixed(2)+'s'):'');return '<div class="orch"><strong>'+esc(label)+'</strong> <span class="badge" data-state="'+esc(st)+'">'+esc(st)+'</span><br><span class="help">'+extra+'</span></div>'}
 
+async function loadAll(){
  try{var results=await Promise.all([api('/api/state'),api('/api/config'),api('/api/update/status')]);STATE=results[0];CONFIG=results[1];UPDATE={status:results[2]};renderConfig();}
  catch(e){notice(e.message,'err')}
 }

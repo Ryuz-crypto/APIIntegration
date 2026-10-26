@@ -3873,13 +3873,26 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except SecurityError:
             return None
 
+    def collect_current_dashboard_payload(
+        client: OrchestratorClient | None,
+        axis: AxisSecurityClient | None,
+    ) -> dict[str, Any]:
+        """Build a dashboard snapshot using the helpers bound to this server instance."""
+        return collect_dashboard_payload(
+            client,
+            axis,
+            kpi_get=kpi_get,
+            project_wan_health_stats=project_wan_health_stats,
+            reachability_map=reachability_map,
+        )
+
     @mcp.tool()
     def dashboard_snapshot() -> str:
         """Collect a compact dashboard payload (EdgeConnect inventory/reachability/WAN/tunnels/alarms/HA + Axis health/connectors/tunnels). Read-only. Returns JSON ready to render or deploy."""
         try:
             client = require_client()
             axis = require_axis_client()
-            payload = collect_dashboard_payload(client, axis)
+            payload = collect_current_dashboard_payload(client, axis)
             audit.record("dashboard_snapshot", "read", settings.orchestrator_url, "ok")
             return json_result(payload, settings.max_output_chars)
         except Exception as error:
@@ -3891,7 +3904,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         try:
             client = require_client()
             axis = require_axis_client()
-            payload = collect_dashboard_payload(client, axis)
+            payload = collect_current_dashboard_payload(client, axis)
             page = render_dashboard_html(payload, refresh_seconds=refresh_seconds)
             audit.record("dashboard_render", "read", settings.orchestrator_url, "ok", details={"bytes": len(page)})
             return json_result(
@@ -3979,7 +3992,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 )
             client = require_client()
             axis = require_axis_client()
-            payload = collect_dashboard_payload(client, axis)
+            payload = collect_current_dashboard_payload(client, axis)
             page = render_dashboard_html(payload, refresh_seconds=settings.dashboard_refresh_seconds)
             with require_dashboard_remote() as deployer:
                 if install:
@@ -4045,7 +4058,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 )
             client = require_client()
             axis = require_axis_client()
-            payload = collect_dashboard_payload(client, axis)
+            payload = collect_current_dashboard_payload(client, axis)
             page = render_dashboard_html(payload, refresh_seconds=settings.dashboard_refresh_seconds)
             with require_dashboard_remote() as deployer:
                 result = deployer.deploy(page.encode("utf-8"))
