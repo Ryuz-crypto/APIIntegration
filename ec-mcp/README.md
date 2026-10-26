@@ -1,8 +1,8 @@
 # ec-mcp — EdgeConnect SD-WAN MCP server
 
-**Versión en desarrollo: 7.0.0** — la línea estable es **6.0.0** en `release/6.0.0`.
+**Versión estable: 8.2.0** en `main`.
 
-Línea de versiones: 2.0.0 → 3.0.0 → 4.0.0 → 4.5.0 → 5.0.0 → **6.0.0 (estable)** → **7.0.0 (en desarrollo)**. `main` contiene el trabajo de la próxima versión.
+Línea de versiones: 2.0.0 → 3.0.0 → 4.0.0 → 4.5.0 → 5.0.0 → 6.0.0 → 7.0.0 → 7.0.1 → 8.0.0 → 8.1.0 → **8.2.0 (estable)**. Las versiones 8.x añaden: retiro del componente DashboardAPI-EC (el repositorio se enfoca en `ec-mcp`), multi-Orchestrator y multi-SSE (multi-tenant), estado real de servicios en el panel con auditoría estructurada (#88 Fases 1–3: SSH fiable, sondas reales de servicios, detección y remediación asistida con propuestas dry-run).
 
 Esta entrega añade la capa de telemetría (PR #70): KPIs de infraestructura del Orchestrator (platform info, GMS server, disco, particiones BD, stats collectors), KPIs por appliance desde el Orchestrator (CPU/performance timeseries, interface state) y estadísticas real-time del appliance (`POST /stats/realtimeStats`, `POST /health`, disk usage) a través del proxy `/appliance/rest`, que alcanza los equipos por la red gestionada SD-WAN sin acceso WAN directo.
 
@@ -17,6 +17,11 @@ catálogo ECOS por SSH.
 
 - Compatibilidad con perfiles API de Orchestrator 9.3–9.6; versiones 9.7 usan
   automáticamente el perfil compatible 9.6.
+- Multi-Orchestrator y multi-SSE: N Orchestrators y N plataformas SSE gestionados
+  desde el panel; las tools aceptan `target` opcional.
+- Detección de incidentes y remediación asistida: `correlate_incidents` y
+  `propose_remediation` (propuestas dry-run con evidencia, alcance, riesgo y
+  plan de reversión; nunca aplican por sí mismas).
 - Inventario, alarmas, salud WAN, MOS, túneles, HA, brownouts, ZTP, firmware,
   top talkers y métricas del Orchestrator.
 - `run_show_api`: ejecuta comandos `show` de solo lectura mediante el API del
@@ -31,13 +36,22 @@ catálogo ECOS por SSH.
 - Workflows MCP transaccionales BIO/ZTP; la pestaña ZTP del panel aún muestra un roadmap y no implementa la adopción desde la UI.
 
 ## Herramientas MCP
+El servidor expone **125 tools**. La descripción completa de cada una (parámetros y
+retorno) está disponible para el cliente MCP en `tools/list`. Resumen por dominio:
 
-| Grupo | Herramientas |
-|---|---|
-| Descubrimiento | `orchestrator_info`, `list_appliances`, `list_api_operations`, `orchestrator_metrics` |
-| Estado operativo | `get_wan_health`, `get_mos`, `get_tunnel_state`, `get_brownout_state`, `get_availability`, `get_top_talkers`, `get_active_alarms`, `get_ha_status`, `get_firmware_compliance`, `get_ztp_status` |
-| API genérica | `call_read_api`, `apply_change` |
-| CLI | `list_cli_commands`, `run_show_api`, `run_show_command`, `run_cli_command` |
+| Dominio | Tools | Qué hace |
+|---|---|---|
+| Inventario y API genérica | `orchestrator_info`, `list_appliances`, `orchestrator_metrics`, `list_api_operations`, `call_read_api`, `apply_change`, `list_discovered_appliances`, `list_orchestrator_targets_tool`, `list_sse_targets_tool` | Consultar inventario, métricas del Orchestrator y llamar cualquier operación del catálogo API (lectura directa; escritura con dry-run + `confirm=true`). `list_orchestrator_targets_tool`/`list_sse_targets_tool` enumeran los targets multi-tenant configurados (sin secretos). |
+| Estado operativo y telemetría | `get_wan_health`, `get_mos`, `get_tunnel_state`, `get_brownout_state`, `get_availability`, `get_top_talkers`, `get_active_alarms`, `get_ha_status`, `get_firmware_compliance`, `get_orchestrator_infrastructure`, `get_appliance_infrastructure`, `get_realtime_stats`, `get_appliance_health`, `troubleshoot_flows`, `troubleshoot_tunnel`, `get_bgp_neighbors`, `get_deployment_config`, `get_site_to_site_tunnels`, `get_ztp_status` | Salud WAN, MOS, túneles, brownouts, alarmas, HA, firmware, KPIs de infraestructura y estadísticas real-time; troubleshooting asistido de flujos y túneles. Todas de solo lectura. |
+| CLI / SSH | `list_cli_commands`, `run_show_api`, `run_show_command`, `run_cli_command`, `get_ssh_network_path`, `ensure_ssh_inbound_forwarding` | Catálogo ECOS y comandos `show` vía API del Orchestrator (sin SSH). `run_cli_command` (config) y `ensure_ssh_inbound_forwarding` son escritura con dry-run + confirmación; SSH opcional. |
+| ZTP (Zero Touch Provisioning) | `prepare_ztp_adoption`, `preview_ztp_plan`, `apply_ztp_plan`, `verify_ztp_plan`, `rollback_ztp_plan`, `get_ztp_apply_status`, `prepare_bulk_ztp_adoption`, `apply_bulk_ztp_plan`, `list_bulk_ztp_plans` | Adopción transaccional de appliances: prepara/valida (nunca escribe), preview, aplica con confirmación escrita, verifica y revierte. Incluye planes bulk. |
+| Overlays / BIO | `list_overlay_sources`, `prepare_overlay_clone`, `preview_overlay_plan`, `apply_overlay_plan`, `verify_overlay_plan`, `rollback_overlay_plan` | Clonación y despliegue transaccional de overlays/BIO: diff, plan inmutable, confirmación exacta y rollback. |
+| Seguridad e incidentes | `get_ids_ips_state`, `get_ids_ips_events`, `get_security_log`, `get_zone_matrix`, `get_ddos_status`, `get_sse_status`, `get_security_posture`, `correlate_incidents`, `propose_remediation`, `list_response_options`, `block_threat` | Postura IDS/IPS, logs de seguridad, matriz de zonas, DDoS e integraciones SSE. `correlate_incidents` detecta y prioriza; `propose_remediation` genera propuestas **dry-run** con evidencia/alcance/riesgo/reversión (nunca aplica); `block_threat` aplica bloqueos con `confirm=true`. |
+| SSE — Axis Security (55 tools) | `axis_health`, `axis_list_tags`, `axis_get_tag`, `axis_create_tag`, `axis_update_tag`, `axis_delete_tag`, `axis_list_applications`, `axis_get_application`, `axis_create_application`, `axis_update_application`, `axis_delete_application`, `axis_list_connectors`, `axis_get_connector`, `axis_connector_status`, `axis_create_connector`, `axis_update_connector`, `axis_delete_connector`, `axis_regenerate_connector`, `axis_list_connector_zones`, `axis_get_connector_zone`, `axis_create_connector_zone`, `axis_update_connector_zone`, `axis_delete_connector_zone`, `axis_list_ip_categories`, `axis_get_ip_category`, `axis_create_ip_category`, `axis_delete_ip_category`, `axis_list_web_categories`, `axis_get_web_category`, `axis_create_web_category`, `axis_delete_web_category`, `axis_list_ssl_exclusions`, `axis_create_ssl_exclusion`, `axis_delete_ssl_exclusion`, `axis_list_groups`, `axis_create_group`, `axis_delete_group`, `axis_list_users`, `axis_get_user`, `axis_create_user`, `axis_delete_user`, `axis_list_locations`, `axis_get_location`, `axis_create_location`, `axis_delete_location`, `axis_list_sub_locations`, `axis_create_sub_location`, `axis_delete_sub_location`, `axis_list_tunnels`, `axis_tunnel_status`, `axis_create_tunnel`, `axis_delete_tunnel`, `axis_list_certificates`, `axis_list_ipsec_locations`, `axis_commit` | Gestión completa de Axis Security: tags, aplicaciones, connectors (+zonas, regeneración), categorías IP/web, exclusiones SSL, grupos, usuarios, locations/sub-locations, túneles IPsec, certificados, estado de salud/commit. Cada herramienta acepta `target` opcional (multi-tenant); las `axis_create/update/delete/regenerate/commit` requieren permisos de escritura. |
+| SD-WAN AI (Orchestrator 10.0) | `ask_sdwan_ai`, `get_sdwan_ai_chat_logs`, `clear_sdwan_ai_context`, `get_sase_copilot_status` | Conversación con la SD-WAN AI embebida del Orchestrator: preguntar, leer logs del chat, limpiar contexto y consultar estado del copiloto SASE. |
+| Dashboard NOC | `dashboard_snapshot`, `dashboard_render`, `dashboard_remote_config`, `dashboard_deploy_remote`, `dashboard_remote_status`, `dashboard_refresh_remote` | Snapshots y render del dashboard NOC; despliegue remoto opcional vía SSH (escritura, confirmación). |
+
+Total: **125 tools**.
 
 `run_show_api` usa el Orchestrator como transporte:
 
