@@ -5,23 +5,47 @@ PAGE = r"""<!doctype html>
 <title>ec-mcp 3.0 control plane</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-:root{color-scheme:dark;--bg:#07111f;--panel:#101d30;--panel2:#15243a;--line:#2c3d55;--text:#e7eef8;--muted:#94a8c2;--brand:#38bdf8;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444}
-*{box-sizing:border-box}body{font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:radial-gradient(circle at top,#12304c 0,var(--bg) 45%);color:var(--text);margin:0;min-height:100vh}
-main{max-width:1180px;margin:auto;padding:28px 18px 60px}.panel{background:rgba(16,29,48,.96);border:1px solid var(--line);border-radius:14px;padding:22px;margin-top:16px;box-shadow:0 18px 50px rgba(0,0,0,.25)}
-header{display:flex;align-items:center;justify-content:space-between;gap:16px}.brand h1{margin:0;font-size:1.45rem}.brand p{margin:5px 0 0;color:var(--muted)}.badge{border:1px solid #0ea5e9;color:#7dd3fc;border-radius:999px;padding:5px 10px;font-size:.75rem}
-nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}nav button{background:#172a43}.active-tab{background:#0369a1!important}
-button{padding:10px 15px;border:0;border-radius:9px;background:#0284c7;color:white;font-weight:700;cursor:pointer}button.secondary{background:#334155}button.danger{background:#991b1b}button:disabled{opacity:.45;cursor:not-allowed}
-input,select{width:100%;margin-top:5px;padding:10px 11px;background:#091525;border:1px solid var(--line);border-radius:8px;color:var(--text)}label{display:block;color:#c6d3e3;font-size:.86rem}.help{display:block;color:var(--muted);font-size:.76rem;margin-top:4px}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.group{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:14px}.group h3{margin:0 0 14px;color:#bae6fd}.field{margin-bottom:13px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
-.msg{padding:11px 13px;border-radius:9px;margin-top:15px;white-space:pre-wrap}.ok{background:#052e1a;border:1px solid #166534}.err{background:#3b161a;border:1px solid #991b1b}.info{background:#102a43;border:1px solid #0369a1}
-.orch{padding:14px;border:1px solid var(--line);border-radius:10px;margin:9px 0}.orch-actions{float:right;display:flex;gap:7px}.secret-note{font-size:.74rem;color:#7dd3fc}.clear{display:flex;align-items:center;gap:6px;margin-top:6px}.clear input{width:auto;margin:0}
-.step{display:grid;grid-template-columns:42px 1fr;gap:12px;align-items:start;padding:14px 0;border-bottom:1px solid var(--line)}.step:last-child{border:0}.num{height:34px;width:34px;border-radius:50%;background:#1e3a5f;display:grid;place-items:center;font-weight:800}.locked{opacity:.6}.mono{font-family:ui-monospace,SFMono-Regular,monospace;word-break:break-all}
-.req{color:#f87171;font-weight:800}.diff{width:100%;border-collapse:collapse;margin-top:10px}.diff td{padding:6px 8px;border-bottom:1px solid var(--line);font-size:.82rem;vertical-align:top}.wizbar{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
-dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--text);max-width:480px;width:calc(100% - 30px);padding:24px}
+:root{color-scheme:light;--bg:#edf1f4;--panel:#ffffff;--panel2:#f6f8f9;--line:#d8e0e6;--text:#1b2733;--muted:#5d6b7a;--brand:#01a982;--ok:#1e7e34;--warn:#b45309;--bad:#b91c1c}
+*{box-sizing:border-box}body{font-family:"Segoe UI",Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);margin:0;min-height:100vh}
+main{max-width:1180px;margin:auto;padding:22px 18px 60px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#00263a;color:#fff;border-radius:8px;padding:13px 18px}
+.brand h1{margin:0;font-size:1.45rem}.brand p{margin:5px 0 0;color:var(--muted)}
+header .brand h1{color:#fff;font-size:1.2rem}header .brand p{color:#aebfcc;font-size:.85rem}
+.badge{border:1px solid var(--brand);color:var(--brand);background:#fff;border-radius:999px;padding:4px 10px;font-size:.75rem}
+header .badge{background:transparent;color:#8fe6c8;border-color:#33566b}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px}
+nav button{background:#fff;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px 13px;font-weight:600}
+nav button.active-tab{background:var(--brand);border-color:var(--brand);color:#fff}
+button{padding:9px 15px;border:0;border-radius:6px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
+button.secondary{background:#e3e9ee;color:var(--text)}button.danger{background:var(--bad);color:#fff}button:disabled{opacity:.45;cursor:not-allowed}
+input,select{width:100%;margin-top:5px;padding:9px 10px;background:#fff;border:1px solid var(--line);border-radius:6px;color:var(--text)}
+label{display:block;color:#33414f;font-size:.85rem}.help{display:block;color:var(--muted);font-size:.78rem;margin-top:4px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:20px;margin-top:16px;box-shadow:0 1px 3px rgba(0,38,58,.07)}
+.group{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:15px;margin-top:14px}.group h3{margin:0 0 13px;color:#0b4f42;font-size:.95rem}
+.field{margin-bottom:12px}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
+.msg{padding:10px 12px;border-radius:6px;margin-top:14px;white-space:pre-wrap}
+.ok{background:#e7f4ec;border:1px solid #bfe3cb;color:#14532d}.err{background:#fdecea;border:1px solid #f3c2bc;color:#7f1d1d}.info{background:#ecf3fb;border:1px solid #c8dcf2;color:#1e3a5f}
+.orch{padding:12px 14px;border:1px solid var(--line);border-radius:8px;margin:8px 0;background:#fff}
+.orch-actions{float:right;display:flex;gap:6px}.orch-actions button{padding:6px 10px;font-size:.78rem}
+.secret-note{font-size:.74rem;color:#0f766e}.clear{display:flex;align-items:center;gap:6px;margin-top:6px}.clear input{width:auto;margin:0}
+.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;word-break:break-all}
+dialog{border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text);max-width:480px;width:calc(100% - 30px);padding:22px}
+.req{color:#dc2626;font-weight:800}.diff{width:100%;border-collapse:collapse;margin-top:10px}.diff td{padding:6px 8px;border-bottom:1px solid var(--line);font-size:.82rem;vertical-align:top}
+.wizbar{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+.sw{width:16px;height:16px;border-radius:50%;display:inline-block;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #b9c4cd;margin-left:4px}
 @media(max-width:760px){.grid{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}}
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=0, WDRAFT={}, CURTAB='wizard';
+var LANG=localStorage.getItem('ec-lang')||'es';
+var ACCENTS=[{n:'HPE Green',c:'#01a982'},{n:'HPE Blue',c:'#0078d3'},{n:'HPE Navy',c:'#00263a'},{n:'Slate',c:'#475569'},{n:'Violet',c:'#7c3aed'}];
+var I18N={es:{nav_wizard:'Asistente',nav_orch:'Orquestadores',nav_sse:'Plataformas SSE',nav_svc:'Servicios',nav_config:'Variables',nav_update:'Actualizaciones',nav_users:'Usuarios',nav_out:'Salir',tagline:'Configuración, operación y actualizaciones sin SSH',login_title:'Control plane administrativo',login_user:'Usuario (opcional si hay varios)',login_pass:'Contraseña',login_enter:'Entrar',h2_orch:'Orquestadores',h2_sse:'Plataformas SSE (multi-tenant)',h2_svc:'Servicios',h2_config:'Variables del servicio',h2_update:'Actualizaciones desde GitHub',h2_users:'Usuarios del panel',h2_wizard:'Asistente de configuración',btn_save:'Guardar',btn_save_vars:'Guardar variables',btn_save_restart:'Guardar y reiniciar servicios',btn_save_restart_short:'Guardar y reiniciar',btn_recheck:'Volver a comprobar',btn_detect:'Detectar GitHub',btn_apply_update:'Aplicar actualización',btn_back:'Atrás',btn_next:t('btn_next'),btn_review:t('btn_review'),btn_probe:'Probar',btn_dup:'Duplicar',btn_ren:'Renombrar',btn_default:'Por defecto',btn_edit:'Editar',btn_delete:'Eliminar',btn_save_orch:'Guardar orquestador',btn_save_sse:'Guardar plataforma SSE',loading:'Cargando...',wiz_loading:''+t('wiz_loading')+'',secret_set:'Secreto configurado; no se muestra.',secret_unset:'Sin configurar.'},en:{nav_wizard:'Wizard',nav_orch:'Orchestrators',nav_sse:'SSE platforms',nav_svc:'Services',nav_config:'Settings',nav_update:'Updates',nav_users:'Users',nav_out:'Sign out',tagline:'Configuration, operations and updates without SSH',login_title:'Administrative control plane',login_user:'User (optional when there are several)',login_pass:'Password',login_enter:'Sign in',h2_orch:'Orchestrators',h2_sse:'SSE platforms (multi-tenant)',h2_svc:'Services',h2_config:'Service settings',h2_update:'Updates from GitHub',h2_users:'Panel users',h2_wizard:'Setup wizard',btn_save:'Save',btn_save_vars:'Save settings',btn_save_restart:'Save and restart services',btn_save_restart_short:'Save and restart',btn_recheck:'Re-check',btn_detect:'Check GitHub',btn_apply_update:'Apply update',btn_back:'Back',btn_next:'Next',btn_review:'Review changes',btn_probe:'Test',btn_dup:'Duplicate',btn_ren:'Rename',btn_default:'Default',btn_edit:'Edit',btn_delete:'Delete',btn_save_orch:'Save orchestrator',btn_save_sse:'Save SSE platform',loading:'Loading...',wiz_loading:'Loading steps...',secret_set:'Secret configured; never displayed.',secret_unset:'Not configured.'}};
+function t(k){var d=I18N[LANG]||I18N.es;return d[k]||I18N.es[k]||k}
+function setLang(l){LANG=l;localStorage.setItem('ec-lang',l);if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
+function setAccent(c){document.documentElement.style.setProperty('--brand',c);localStorage.setItem('ec-accent',c)}
+function chromeHtml(){var sw=ACCENTS.map(function(a){return '<span class="sw" style="background:'+a.c+'" title="'+a.n+'" onclick="setAccent(\''+a.c+'\')"></span>'}).join('');return '<span style="display:flex;gap:8px;align-items:center">'+sw+'<button class="secondary" style="padding:4px 9px;font-size:.75rem" onclick="setLang(LANG===\'es\'?\'en\':\'es\')">'+(LANG==='es'?'EN':'ES')+'</button></span>'}
+document.documentElement.style.setProperty('--brand',localStorage.getItem('ec-accent')||'#01a982');
 function q(s){return document.querySelector(s)}
 function esc(v){return String(v==null?'':v).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 async function api(path,body){
@@ -33,7 +57,7 @@ async function api(path,body){
 }
 function notice(message,type){var node=q('#notice');if(node)node.innerHTML='<div class="msg '+(type||'info')+'">'+esc(message)+'</div>'}
 function renderLogin(){
- q('#app').innerHTML='<section class="panel" style="max-width:440px;margin:12vh auto"><div class="brand"><h1>ec-mcp 3.0</h1><p>Control plane administrativo</p></div><label style="margin-top:22px">Usuario (opcional si hay varios)<input id="login-user" autocomplete="username"></label><label style="margin-top:12px">Contraseña<input id="login-password" type="password" autocomplete="current-password"></label><div class="actions"><button onclick="login()">Entrar</button></div><div id="notice"></div></section>';
+ q('#app').innerHTML='<section class="panel" style="max-width:440px;margin:12vh auto"><div class="brand"><h1>ec-mcp 3.0</h1><p>'+t('login_title')+'</p></div>'+chromeHtml()+'<label style="margin-top:22px">'+t('login_user')+'<input id="login-user" autocomplete="username"></label><label style="margin-top:12px">'+t('login_pass')+'<input id="login-password" type="password" autocomplete="current-password"></label><div class="actions"><button onclick="login()">'+t('login_enter')+'</button></div><div id="notice"></div></section>';
  q('#login-password').addEventListener('keydown',function(e){if(e.key==='Enter')login()});
 }
 async function login(){
@@ -42,8 +66,8 @@ async function login(){
 }
 async function logout(){await api('/logout',{});AUTHED=false;renderLogin()}
 function renderShell(){
- q('#app').innerHTML='<header><div class="brand"><h1>ec-mcp control plane</h1><p>Configuración, operación y actualizaciones sin SSH</p></div><span class="badge">'+esc(ME&&ME.user?ME.user+' · '+(ME.role||''):'')+'</span> <span class="badge">__EC_MCP_VERSION__</span></header>'+
- '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">Asistente</button><button id="tab-orch" onclick="showTab(\'orch\')">Orquestadores</button><button id="tab-sse" onclick="showTab(\'sse\')">Plataformas SSE</button><button id="tab-svc" onclick="showTab(\'svc\')">Servicios</button><button id="tab-config" onclick="showTab(\'config\')">Variables</button><button id="tab-update" onclick="showTab(\'update\')">Actualizaciones</button><button id="tab-ztp" onclick="showTab(\'ztp\')">ZTP</button><button id="tab-users" onclick="showTab(\'users\')">Usuarios</button><button class="secondary" onclick="logout()">Salir</button></nav>'+
+ q('#app').innerHTML='<header><div class="brand"><h1>ec-mcp control plane</h1><p>'+t('tagline')+'</p></div><span class="badge">'+esc(ME&&ME.user?ME.user+' · '+(ME.role||''):'')+'</span> <span class="badge">__EC_MCP_VERSION__</span>'+chromeHtml()+'</header>'+
+ '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button id="tab-orch" onclick="showTab(\'orch\')">'+t('nav_orch')+'</button><button id="tab-sse" onclick="showTab(\'sse\')">'+t('nav_sse')+'</button><button id="tab-svc" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button><button id="tab-config" onclick="showTab(\'config\')">'+t('nav_config')+'</button><button id="tab-update" onclick="showTab(\'update\')">'+t('nav_update')+'</button><button id="tab-users" onclick="showTab(\'users\')">'+t('nav_users')+'</button><button class="secondary" onclick="logout()">'+t('nav_out')+'</button></nav>'+
  '<div id="notice"></div><section id="workspace"></section>';
  if(ME&&ME.role!=='admin'){var ub=q('#tab-users');if(ub)ub.style.display='none'}
  showTab('wizard');
@@ -58,17 +82,16 @@ function showTab(name){
  if(name==='svc')renderServices();
  if(name==='config')renderConfig();
  if(name==='update')renderUpdate();
- if(name==='ztp')renderZtp();
  if(name==='users')renderUsers();
 }
 async function renderServices(){
- q('#workspace').innerHTML='<section class="panel"><h2>Servicios</h2><p class="help">Comprobando estado real...</p></section>';
- try{var r=await api('/api/services/status');var h='<section class="panel"><h2>Servicios</h2><p class="help">Estado verificado con peticiones reales el '+esc((r.checked_at||'').replace('T',' ').split('.')[0])+' UTC. Ningún servicio se muestra como activo sin comprobación.</p>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">Comprobando estado real...</p></section>';
+ try{var r=await api('/api/services/status');var h='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">Estado verificado con peticiones reales el '+esc((r.checked_at||'').replace('T',' ').split('.')[0])+' UTC. Ningún servicio se muestra como activo sin comprobación.</p>';
  var orch=(r.orchestrators||[]).map(function(s){return svcRow('Orchestrator: '+s.name,s)}).join('');
  var sse=(r.sse_platforms||[]).map(function(s){return svcRow('SSE: '+s.name,s)}).join('');
  var up=svcRow('Worker de actualizaciones',r.update_worker||{});
  var mcp=r.mcp_transport||{};var mcpRow=svcRow('Transporte MCP ('+esc(mcp.url||'localhost')+')',mcp);
- h+=orch+sse+mcpRow+up+'<div class="actions"><button onclick="renderServices()">Volver a comprobar</button></div></section>';
+ h+=orch+sse+mcpRow+up+'<div class="actions"><button onclick="renderServices()">'+t('btn_recheck')+'</button></div></section>';
  q('#workspace').innerHTML=h;}catch(e){notice(e.message,'err')}
 }
 function svcRow(label,s){var up=s.state==='up'||s.state==='success'||s.state==='idle';var st=s.state||'unknown';var cls=up?'ok':'err';var extra=s.error?esc(s.error):(s.latency!==undefined?('latencia '+s.latency.toFixed(2)+'s'):'');return '<div class="orch"><strong>'+esc(label)+'</strong> <span class="badge" data-state="'+esc(st)+'">'+esc(st)+'</span><br><span class="help">'+extra+'</span></div>'}
@@ -78,9 +101,9 @@ async function loadAll(){
  catch(e){notice(e.message,'err')}
 }
 function renderOrchestrators(){
- var list=(STATE.orchestrators||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'orchestrator\',\'+esc(o.name)+\')">Probar</button><button class="secondary" onclick="dupTarget(\'orchestrator\',\'+esc(o.name)+\')">Duplicar</button><button class="secondary" onclick="renTarget(\'orchestrator\',\'+esc(o.name)+\')">Renombrar</button><button class="secondary" onclick="setDefaultTarget(\'orchestrator\',\'+esc(o.name)+\')">Por defecto</button><button class="secondary" onclick="editOrch(\'+'+esc(o.name)+'\')">Editar</button><button class="danger" onclick="deleteOrch(\'+'+esc(o.name)+'\')">Eliminar</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+(o.default?'<span class="badge">por defecto</span>':'')+'<br><span class="help">'+esc(o.url)+'</span> <span id="probe-orchestrator-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">No hay orquestadores guardados.</p>';
- q('#workspace').innerHTML='<section class="panel"><h2>Orquestadores</h2>'+list+
- '<div class="group"><h3>Agregar o actualizar</h3><div class="grid"><label>Nombre<input id="o-name"></label><label>URL<input id="o-url" placeholder="https://orchestrator.example.com"></label><label>API key<input id="o-key" type="password"></label><label>Usuario<input id="o-user"></label><label>Password<input id="o-password" type="password"></label><label>Verificar TLS<select id="o-tls"><option>true</option><option>false</option></select></label><label>Usuario SSH<input id="o-ssh-user"></label><label>Password SSH<input id="o-ssh-password" type="password"></label><label>Password enable<input id="o-enable" type="password"></label><label>Host SSH<input id="o-ssh-host"></label></div><div class="actions"><button onclick="saveOrch()">Guardar</button><button class="secondary" onclick="applyOrch()">Aplicar al .env</button></div></div></section>';
+ var list=(STATE.orchestrators||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_probe')+'</button><button class="secondary" onclick="dupTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_dup')+'</button><button class="secondary" onclick="renTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_ren')+'</button><button class="secondary" onclick="setDefaultTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_default')+'</button><button class="secondary" onclick="editOrch(\'+'+esc(o.name)+'\')">'+t('btn_edit')+'</button><button class="danger" onclick="deleteOrch(\'+'+esc(o.name)+'\')">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+(o.default?'<span class="badge">por defecto</span>':'')+'<br><span class="help">'+esc(o.url)+'</span> <span id="probe-orchestrator-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">No hay orquestadores guardados.</p>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_orch')+'</h2>'+list+
+ '<div class="group"><h3>Agregar o actualizar</h3><div class="grid"><label>Nombre<input id="o-name"></label><label>URL<input id="o-url" placeholder="https://orchestrator.example.com"></label><label>API key<input id="o-key" type="password"></label><label>Usuario<input id="o-user"></label><label>Password<input id="o-password" type="password"></label><label>Verificar TLS<select id="o-tls"><option>true</option><option>false</option></select></label><label>Usuario SSH<input id="o-ssh-user"></label><label>Password SSH<input id="o-ssh-password" type="password"></label><label>Password enable<input id="o-enable" type="password"></label><label>Host SSH<input id="o-ssh-host"></label></div><div class="actions"><button onclick="saveOrch()">'+t('btn_save')+'</button><button class="secondary" onclick="applyOrch()">Aplicar al .env</button></div></div></section>';
 }
 function editOrch(name){var o=(STATE.orchestrators||[]).find(function(x){return x.name===name});if(!o)return;q('#o-name').value=o.name;q('#o-url').value=o.url;q('#o-tls').value=String(o.verify_tls);q('#o-ssh-user').value=o.ssh_user||'';q('#o-ssh-host').value=o.ssh_host||''}
 async function saveOrch(){
@@ -89,9 +112,9 @@ async function saveOrch(){
 async function deleteOrch(name){if(!confirm('Eliminar '+name+'?'))return;await api('/api/orchestrators/delete',{name:name});STATE=await api('/api/state');renderOrchestrators()}
 async function applyOrch(){try{var r=await api('/api/apply',{name:q('#o-name').value.trim(),kind:'orchestrator'});notice(r.message||r.error,r.ok?'ok':'err');CONFIG=await api('/api/config')}catch(e){notice(e.message,'err')}}
 function renderSse(){
- var list=(STATE.sse_platforms||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'sse\',\'+esc(o.name)+\')">Probar</button><button class="secondary" onclick="dupTarget(\'sse\',\'+esc(o.name)+\')">Duplicar</button><button class="secondary" onclick="renTarget(\'sse\',\'+esc(o.name)+\')">Renombrar</button><button class="secondary" onclick="setDefaultTarget(\'sse\',\'+esc(o.name)+\')">Por defecto</button><button class="secondary" onclick="editSse(\'+'+esc(o.name)+'\')">Editar</button><button class="danger" onclick="deleteSse(\'+'+esc(o.name)+'\')">Eliminar</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+(o.default?'<span class="badge">por defecto</span>':'')+' <span class="badge">'+esc(o.provider)+'</span><br><span class="help">'+esc(o.base_url)+'</span> <span id="probe-sse-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">No hay plataformas SSE guardadas.</p>';
- q('#workspace').innerHTML='<section class="panel"><h2>Plataformas SSE (multi-tenant)</h2><p>Administra N plataformas SSE de forma independiente (p. ej. varias instancias de Axis Security). Cada una guarda su propio token y URL.</p>'+list+
- '<div class="group"><h3>Agregar o actualizar plataforma SSE</h3><div class="grid"><label>Nombre<input id="s-name" placeholder="axis-prod"></label><label>Proveedor<select id="s-provider"><option>axis</option></select></label><label>URL base<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>Token admin (Bearer JWT)<input id="s-token" type="password"></label><label>Verificar TLS<select id="s-tls"><option>true</option><option>false</option></select></label><label>Timeout (s)<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">Guardar</button><button class="secondary" onclick="applySse()">Aplicar al .env</button></div></div></section>';
+ var list=(STATE.sse_platforms||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_probe')+'</button><button class="secondary" onclick="dupTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_dup')+'</button><button class="secondary" onclick="renTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_ren')+'</button><button class="secondary" onclick="setDefaultTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_default')+'</button><button class="secondary" onclick="editSse(\'+'+esc(o.name)+'\')">'+t('btn_edit')+'</button><button class="danger" onclick="deleteSse(\'+'+esc(o.name)+'\')">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+(o.default?'<span class="badge">por defecto</span>':'')+' <span class="badge">'+esc(o.provider)+'</span><br><span class="help">'+esc(o.base_url)+'</span> <span id="probe-sse-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">No hay plataformas SSE guardadas.</p>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_sse')+'</h2><p>Administra N plataformas SSE de forma independiente (p. ej. varias instancias de Axis Security). Cada una guarda su propio token y URL.</p>'+list+
+ '<div class="group"><h3>Agregar o actualizar plataforma SSE</h3><div class="grid"><label>Nombre<input id="s-name" placeholder="axis-prod"></label><label>Proveedor<select id="s-provider"><option>axis</option></select></label><label>URL base<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>Token admin (Bearer JWT)<input id="s-token" type="password"></label><label>Verificar TLS<select id="s-tls"><option>true</option><option>false</option></select></label><label>Timeout (s)<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">'+t('btn_save')+'</button><button class="secondary" onclick="applySse()">Aplicar al .env</button></div></div></section>';
 }
 function editSse(name){var o=(STATE.sse_platforms||[]).find(function(x){return x.name===name});if(!o)return;q('#s-name').value=o.name;q('#s-provider').value=o.provider;q('#s-url').value=o.base_url;q('#s-tls').value=String(o.verify_tls);q('#s-timeout').value=o.timeout}
 async function saveSse(){
@@ -101,7 +124,7 @@ async function deleteSse(name){if(!confirm('Eliminar plataforma '+name+'?'))retu
 async function applySse(){try{var r=await api('/api/apply',{name:q('#s-name').value.trim(),kind:'sse'});notice(r.message||r.error,r.ok?'ok':'err');CONFIG=await api('/api/config')}catch(e){notice(e.message,'err')}}
 async function renderWizard(){
  if(!WIZARD){
-  q('#workspace').innerHTML='<section class="panel"><h2>Asistente de configuración</h2><p class="help">Cargando pasos...</p></section>';
+  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_wizard')+'</h2><p class="help">'+t('wiz_loading')+'</p></section>';
   try{WIZARD=await api('/api/wizard')}catch(e){notice(e.message,'err');return}
   WSTEP=0;WDRAFT={};
   WIZARD.fields.forEach(function(f){WDRAFT[f.key]=f.secret?'':f.value});
@@ -122,16 +145,16 @@ function wizFieldHtml(f){
  else if(f.kind==='choice')input='<select id="'+id+'" data-wiz="'+f.key+'">'+f.choices.map(function(v){return '<option>'+esc(v)+'</option>'}).join('')+'</select>';
  else input='<input id="'+id+'" data-wiz="'+f.key+'" type="'+(f.secret?'password':(f.kind==='integer'||f.kind==='number'?'number':'text'))+'" placeholder="'+(f.secret&&f.configured?'Configurado; vacío conserva el secreto':'')+'">';
  var req=f.required?' <span class="req">*</span>':'';
- return '<div class="field" data-field="'+f.key+'" style="'+(wizDependsOk(f)?'':'display:none')+'"><label>'+esc(f.label)+req+input+'</label>'+(f.secret?'<span class="secret-note">'+(f.configured?'Secreto configurado; no se muestra.':'Sin configurar.')+'</span>':'')+(f.help?'<span class="help">'+esc(f.help)+'</span>':'')+'</div>';
+ return '<div class="field" data-field="'+f.key+'" style="'+(wizDependsOk(f)?'':'display:none')+'"><label>'+esc(f['label_'+LANG]||f.label)+req+input+'</label>'+(f.secret?'<span class="secret-note">'+(f.configured?t('secret_set'):t('secret_unset'))+'</span>':'')+((f['help_'+LANG]||f.help)?'<span class="help">'+esc(f['help_'+LANG]||f.help)+'</span>':'')+'</div>';
 }
 function wizRenderStep(){
  var steps=WIZARD.steps,s=steps[WSTEP],fields=wizFields(s.id);
- var bar=steps.map(function(st,i){return '<span class="badge" style="'+(i===WSTEP?'border-color:#38bdf8;color:#bae6fd':'')+'">'+(i+1)+' '+esc(st.title)+'</span>'}).join(' ');
+ var bar=steps.map(function(st,i){return '<span class="badge" style="'+(i===WSTEP?'border-color:#38bdf8;color:#bae6fd':'')+'">'+(i+1)+' '+esc(st['title_'+LANG]||st.title)+'</span>'}).join(' ');
  var targets=s.id==='targets'?wizTargetsHtml():'';
- q('#workspace').innerHTML='<section class="panel"><h2>Asistente · paso '+(WSTEP+1)+' de '+steps.length+': '+esc(s.title)+'</h2><div class="wizbar">'+bar+'</div>'+
+ q('#workspace').innerHTML='<section class="panel"><h2>Asistente · paso '+(WSTEP+1)+' de '+steps.length+': '+esc(s['title_'+LANG]||s.title)+'</h2><div class="wizbar">'+bar+'</div>'+
   (s.id==='targets'?'<p class="help">Guarda varios orquestadores y varias plataformas SSE a la vez; elige cuál queda por defecto para los tools sin target explícito.</p>':'')+
   '<div class="group"><div class="grid">'+fields.map(wizFieldHtml).join('')+'</div></div>'+targets+
-  '<div class="actions"><button class="secondary" onclick="wizBack()" '+(WSTEP===0?'disabled':'')+'>Atrás</button><button onclick="wizNext()">'+(WSTEP===steps.length-1?'Revisar cambios':'Siguiente')+'</button></div></section>';
+  '<div class="actions"><button class="secondary" onclick="wizBack()" '+(WSTEP===0?'disabled':'')+'>'+t('btn_back')+'</button><button onclick="wizNext()">'+(WSTEP===steps.length-1?t('btn_review'):t('btn_next'))+'</button></div></section>';
  fields.forEach(function(f){var el=q('#wiz-'+f.key);if(el){if(!f.secret)el.value=(WDRAFT[f.key]!==undefined?WDRAFT[f.key]:f.value);el.addEventListener('change',function(){WDRAFT[f.key]=el.value;wizRefreshDepends()})}});
  wizRefreshDepends();
 }
@@ -157,7 +180,7 @@ async function wizNext(){
 }
 function wizBack(){if(WSTEP>0){WSTEP--;wizRenderStep()}}
 async function wizReview(){
- q('#workspace').innerHTML='<section class="panel"><h2>Revisar cambios antes de guardar</h2><p class="help">Preview sobre <span class="mono">'+esc(WIZARD.env_file)+'</span>; todavía no se escribe nada.</p><div id="wiz-diff">Comprobando...</div><div class="actions"><button class="secondary" onclick="wizBack()">Atrás</button><button onclick="wizSave(false)">Guardar variables</button><button onclick="wizSave(true)">Guardar y reiniciar</button></div></section>';
+ q('#workspace').innerHTML='<section class="panel"><h2>Revisar cambios antes de guardar</h2><p class="help">Preview sobre <span class="mono">'+esc(WIZARD.env_file)+'</span>; todavía no se escribe nada.</p><div id="wiz-diff">Comprobando...</div><div class="actions"><button class="secondary" onclick="wizBack()">'+t('btn_back')+'</button><button onclick="wizSave(false)">'+t('btn_save_vars')+'</button><button onclick="wizSave(true)">'+t('btn_save_restart_short')+'</button></div></section>';
  try{
   var r=await api('/api/config/diff',{values:wizCollect()});
   var h='';
@@ -178,11 +201,11 @@ async function wizSave(restart){
 }
 function wizTargetRow(o,kind,urlField){
  return '<div class="orch"><span class="orch-actions">'+
-  '<button class="secondary" onclick="probeTarget(\''+kind+'\',\''+esc(o.name)+'\')">Probar</button>'+
-  '<button class="secondary" onclick="dupTarget(\''+kind+'\',\''+esc(o.name)+'\')">Duplicar</button>'+
-  '<button class="secondary" onclick="renTarget(\''+kind+'\',\''+esc(o.name)+'\')">Renombrar</button>'+
-  '<button class="secondary" onclick="setDefaultTarget(\''+kind+'\',\''+esc(o.name)+'\')">Por defecto</button>'+
-  '<button class="danger" onclick="delTarget(\''+kind+'\',\''+esc(o.name)+'\')">Eliminar</button></span>'+
+  '<button class="secondary" onclick="probeTarget(\''+kind+'\',\''+esc(o.name)+'\')">'+t('btn_probe')+'</button>'+
+  '<button class="secondary" onclick="dupTarget(\''+kind+'\',\''+esc(o.name)+'\')">'+t('btn_dup')+'</button>'+
+  '<button class="secondary" onclick="renTarget(\''+kind+'\',\''+esc(o.name)+'\')">'+t('btn_ren')+'</button>'+
+  '<button class="secondary" onclick="setDefaultTarget(\''+kind+'\',\''+esc(o.name)+'\')">'+t('btn_default')+'</button>'+
+  '<button class="danger" onclick="delTarget(\''+kind+'\',\''+esc(o.name)+'\')">'+t('btn_delete')+'</button></span>'+
   '<strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+(o.default?'<span class="badge">por defecto</span>':'')+'<br><span class="help">'+esc(o[urlField]||'')+'</span> <span id="probe-'+kind+'-'+esc(o.name)+'"></span></div>';
 }
 function wizTargetsHtml(){
@@ -190,9 +213,9 @@ function wizTargetsHtml(){
  var orch=(st.orchestrators||[]).map(function(o){return wizTargetRow(o,'orchestrator','url')}).join('')||'<p class="help">No hay orquestadores guardados.</p>';
  var sse=(st.sse_platforms||[]).map(function(o){return wizTargetRow(o,'sse','base_url')}).join('')||'<p class="help">No hay plataformas SSE guardadas.</p>';
  return '<div class="group"><h3>Orquestadores</h3>'+orch+
-  '<div class="grid" style="margin-top:10px"><label>Nombre<input id="wo-name" placeholder="prod"></label><label>URL<input id="wo-url" placeholder="https://orchestrator.example.com"></label><label>API key<input id="wo-key" type="password"></label><label>Usuario<input id="wo-user"></label><label>Password<input id="wo-pass" type="password"></label></div><div class="actions"><button onclick="wizSaveOrch()">Guardar orquestador</button></div></div>'+
+  '<div class="grid" style="margin-top:10px"><label>Nombre<input id="wo-name" placeholder="prod"></label><label>URL<input id="wo-url" placeholder="https://orchestrator.example.com"></label><label>API key<input id="wo-key" type="password"></label><label>Usuario<input id="wo-user"></label><label>Password<input id="wo-pass" type="password"></label></div><div class="actions"><button onclick="wizSaveOrch()">'+t('btn_save_orch')+'</button></div></div>'+
   '<div class="group"><h3>Plataformas SSE</h3>'+sse+
-  '<div class="grid" style="margin-top:10px"><label>Nombre<input id="ws-name" placeholder="axis-prod"></label><label>URL base<input id="ws-url" placeholder="https://admin-api.axissecurity.com"></label><label>Token admin<input id="ws-token" type="password"></label><label>Timeout (s)<input id="ws-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="wizSaveSse()">Guardar plataforma SSE</button></div></div>';
+  '<div class="grid" style="margin-top:10px"><label>Nombre<input id="ws-name" placeholder="axis-prod"></label><label>URL base<input id="ws-url" placeholder="https://admin-api.axissecurity.com"></label><label>Token admin<input id="ws-token" type="password"></label><label>Timeout (s)<input id="ws-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="wizSaveSse()">'+t('btn_save_sse')+'</button></div></div>';
 }
 async function reloadAfterMutation(){
  STATE=await api('/api/state');
@@ -228,11 +251,11 @@ async function setDefaultTarget(kind,name){
  try{var r=await api('/api/default',{kind:kind,name:name});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await reloadAfterMutation()}catch(e){notice(e.message,'err')}
 }
 async function renderUsers(){
- q('#workspace').innerHTML='<section class="panel"><h2>Usuarios del panel</h2><p class="help">Cargando...</p></section>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_users')+'</h2><p class="help">'+t('loading')+'</p></section>';
  try{
   var r=await api('/api/users');
-  var rows=(r.users||[]).map(function(u){return '<div class="orch"><strong>'+esc(u.username)+'</strong> <span class="badge">'+esc(u.role)+'</span><span class="orch-actions"><button class="danger" onclick="delUser(\''+esc(u.username)+'\')">Eliminar</button></span></div>'}).join('')||'<p class="help">Sin usuarios todavía: se usa la contraseña única (EC_ADMIN_PASSWORD).</p>';
-  q('#workspace').innerHTML='<section class="panel"><h2>Usuarios del panel</h2><p class="help">Archivo <span class="mono">'+esc(r.file)+'</span> · roles: '+esc((r.roles||[]).join(', '))+'. Los hashes nunca se muestran ni se devuelven.</p>'+rows+
+  var rows=(r.users||[]).map(function(u){return '<div class="orch"><strong>'+esc(u.username)+'</strong> <span class="badge">'+esc(u.role)+'</span><span class="orch-actions"><button class="danger" onclick="delUser(\''+esc(u.username)+'\')">'+t('btn_delete')+'</button></span></div>'}).join('')||'<p class="help">Sin usuarios todavía: se usa la contraseña única (EC_ADMIN_PASSWORD).</p>';
+  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_users')+'</h2><p class="help">Archivo <span class="mono">'+esc(r.file)+'</span> · roles: '+esc((r.roles||[]).join(', '))+'. Los hashes nunca se muestran ni se devuelven.</p>'+rows+
   '<div class="group"><h3>Agregar o actualizar usuario</h3><div class="grid"><label>Usuario<input id="u-name"></label><label>Contraseña<input id="u-pass" type="password" autocomplete="new-password"></label><label>Rol<select id="u-role"><option>viewer</option><option>operator</option><option>admin</option></select></label></div><div class="actions"><button onclick="saveUser()">Guardar usuario</button></div></div>'+
   '<div class="group"><h3>Cambiar contraseña</h3><div class="grid"><label>Usuario (vacío = mi sesión)<input id="p-user"></label><label>Contraseña actual<input id="p-old" type="password" autocomplete="current-password"></label><label>Nueva contraseña<input id="p-new" type="password" autocomplete="new-password"></label></div><div class="actions"><button onclick="changePass()">Cambiar contraseña</button></div></div></section>';
  }catch(e){notice(e.message,'err')}
@@ -253,13 +276,13 @@ function fieldHtml(f){
  else if(f.kind==='choice')input='<select id="'+id+'" data-key="'+f.key+'">'+f.choices.map(function(v){return '<option>'+esc(v)+'</option>'}).join('')+'</select>';
  else input='<input id="'+id+'" data-key="'+f.key+'" type="'+(f.secret?'password':(f.kind==='integer'||f.kind==='number'?'number':'text'))+'" value="'+esc(f.value)+'" placeholder="'+(f.secret&&f.configured?'Configurado; vacío conserva el secreto':'')+'">';
  var clear=f.secret&&f.configured?'<label class="clear"><input type="checkbox" data-clear="'+f.key+'">Eliminar secreto guardado</label>':'';
- return '<div class="field"><label>'+esc(f.label)+input+'</label>'+(f.secret?'<span class="secret-note">'+(f.configured?'Secreto configurado; no se muestra.':'Sin configurar.')+'</span>':'')+(f.help?'<span class="help">'+esc(f.help)+'</span>':'')+clear+'</div>';
+ return '<div class="field"><label>'+esc(f['label_'+LANG]||f.label)+input+'</label>'+(f.secret?'<span class="secret-note">'+(f.configured?t('secret_set'):t('secret_unset'))+'</span>':'')+((f['help_'+LANG]||f.help)?'<span class="help">'+esc(f['help_'+LANG]||f.help)+'</span>':'')+clear+'</div>';
 }
 function renderConfig(){
  if(!CONFIG){q('#workspace').innerHTML='<section class="panel">Cargando variables...</section>';return}
  var groups={};CONFIG.fields.forEach(function(f){(groups[f.group]||(groups[f.group]=[])).push(f)});
  var html=Object.keys(groups).map(function(name){return '<section class="group"><h3>'+esc(name)+'</h3><div class="grid">'+groups[name].map(fieldHtml).join('')+'</div></section>'}).join('');
- q('#workspace').innerHTML='<section class="panel"><h2>Variables del servicio</h2><p>Se guardan en <span class="mono">'+esc(CONFIG.env_file)+'</span>. Los secretos nunca regresan al navegador.</p>'+html+'<div class="actions"><button onclick="saveConfig()">Guardar variables</button><button class="secondary" onclick="restartServices()">Guardar y reiniciar servicios</button></div></section>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_config')+'</h2><p>Se guardan en <span class="mono">'+esc(CONFIG.env_file)+'</span>. Los secretos nunca regresan al navegador.</p>'+html+'<div class="actions"><button onclick="saveConfig()">'+t('btn_save_vars')+'</button><button class="secondary" onclick="restartServices()">'+t('btn_save_restart')+'</button></div></section>';
  CONFIG.fields.forEach(function(f){var el=q('#cfg-'+f.key);if(el&&!f.secret)el.value=f.value});
 }
 async function saveConfig(restart){
@@ -278,20 +301,12 @@ async function pollRestart(attempt){
 }
 function renderUpdate(){
  var s=UPDATE&&UPDATE.status?UPDATE.status:{state:'idle'};
- q('#workspace').innerHTML='<section class="panel"><h2>Actualizaciones desde GitHub</h2><p>Detecta la rama configurada, fija el commit exacto y delega la instalación a un worker separado. Para repositorios privados configura usuario y token en <b>Variables → Actualizaciones</b>.</p><div class="group"><h3>Estado del worker</h3><p><span class="badge">'+esc(s.state||'idle')+'</span> '+esc(s.message||'Sin operaciones pendientes')+'</p>'+(s.diagnostic?'<pre class="mono">'+esc(s.diagnostic)+'</pre>':'')+'</div><div id="update-detail"></div><div class="actions"><button onclick="checkUpdate()">Detectar GitHub</button></div></section>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_update')+'</h2><p>Detecta la rama configurada, fija el commit exacto y delega la instalación a un worker separado. Para repositorios privados configura usuario y token en <b>Variables → Actualizaciones</b>.</p><div class="group"><h3>Estado del worker</h3><p><span class="badge">'+esc(s.state||'idle')+'</span> '+esc(s.message||'Sin operaciones pendientes')+'</p>'+(s.diagnostic?'<pre class="mono">'+esc(s.diagnostic)+'</pre>':'')+'</div><div id="update-detail"></div><div class="actions"><button onclick="checkUpdate()">'+t('btn_detect')+'</button></div></section>';
 }
 async function checkUpdate(){
- try{var r=await api('/api/update/check',{});if(r.error)throw new Error(r.error);UPDATE=r;var remote=r.remote;var detail='<section class="group"><h3>'+esc(r.repository)+' · '+esc(r.branch)+'</h3><p>Instalado: <span class="mono">'+esc(r.current_short_sha||'desconocido')+'</span><br>GitHub: <span class="mono">'+esc(remote.short_sha)+'</span> · '+esc(remote.message)+'</p><p>'+(r.update_available?'Hay una actualización disponible.':'No hay una actualización pendiente o no se pudo determinar el commit instalado.')+'</p>';if(r.update_available)detail+='<label>Confirmación<input id="update-confirm" placeholder="'+esc(r.confirmation)+'"></label><div class="actions"><button onclick="applyUpdate(\''+esc(remote.sha)+'\',\''+esc(r.confirmation)+'\')">Aplicar actualización</button></div>';detail+='</section>';q('#update-detail').innerHTML=detail;notice('GitHub consultado correctamente.','ok')}catch(e){notice(e.message,'err')}
+ try{var r=await api('/api/update/check',{});if(r.error)throw new Error(r.error);UPDATE=r;var remote=r.remote;var detail='<section class="group"><h3>'+esc(r.repository)+' · '+esc(r.branch)+'</h3><p>Instalado: <span class="mono">'+esc(r.current_short_sha||'desconocido')+'</span><br>GitHub: <span class="mono">'+esc(remote.short_sha)+'</span> · '+esc(remote.message)+'</p><p>'+(r.update_available?'Hay una actualización disponible.':'No hay una actualización pendiente o no se pudo determinar el commit instalado.')+'</p>';if(r.update_available)detail+='<label>Confirmación<input id="update-confirm" placeholder="'+esc(r.confirmation)+'"></label><div class="actions"><button onclick="applyUpdate(\''+esc(remote.sha)+'\',\''+esc(r.confirmation)+'\')">'+t('btn_apply_update')+'</button></div>';detail+='</section>';q('#update-detail').innerHTML=detail;notice('GitHub consultado correctamente.','ok')}catch(e){notice(e.message,'err')}
 }
 async function applyUpdate(sha,expected){var confirmation=q('#update-confirm').value;if(confirmation!==expected){notice('Escribe exactamente: '+expected,'err');return}try{var r=await api('/api/update/apply',{remote_sha:sha,confirmation:confirmation});notice(r.message||r.error,r.state==='pending'?'ok':'err');UPDATE.status=r;setTimeout(pollStatus,2000)}catch(e){notice(e.message,'err')}}
 async function pollStatus(){try{var s=await api('/api/update/status');UPDATE.status=s;renderUpdate();if(s.state==='pending'||s.state==='running')setTimeout(pollStatus,3000)}catch(e){notice(e.message,'err')}}
-function renderZtp(){
- q('#workspace').innerHTML='<section class="panel"><h2>Ruta ZTP</h2><p>Esta base prepara el control plane. Las escrituras de adopción siguen bloqueadas hasta que cada etapa tenga preview, aprobación y auditoría.</p>'+
- '<div class="step"><span class="num">1</span><div><strong>Discover</strong><p class="help">Inventario y candidatos detectados por Orchestrator.</p></div></div>'+
- '<div class="step locked"><span class="num">2</span><div><strong>Seleccionar template</strong><p class="help">Variables tipadas, compatibilidad y validación previa.</p></div></div>'+
- '<div class="step locked"><span class="num">3</span><div><strong>Adoptar</strong><p class="help">Vincular el equipo con identidad y autorización explícita.</p></div></div>'+
- '<div class="step locked"><span class="num">4</span><div><strong>Preview / diff</strong><p class="help">Mostrar exactamente qué configuración se aplicará.</p></div></div>'+
- '<div class="step locked"><span class="num">5</span><div><strong>Confirmar y planchar</strong><p class="help">Ejecución auditable con estado, health check y rollback.</p></div></div></section>';
-}
 renderLogin();
 </script></body></html>"""

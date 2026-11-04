@@ -241,6 +241,29 @@ def test_page_has_wizard_users_and_target_actions():
     assert "tab-users" in PAGE
 
 
+def test_page_has_i18n_and_theme_picker_and_no_ztp():
+    assert "var I18N=" in PAGE
+    assert "function setLang(" in PAGE
+    assert "function setAccent(" in PAGE
+    assert "class=\"sw\"" in PAGE
+    assert "label_'+LANG" in PAGE
+    assert "title_'+LANG" in PAGE
+    assert "renderZtp" not in PAGE and "tab-ztp" not in PAGE
+    assert "#01a982" in PAGE and "#00263a" in PAGE
+    assert "es:" in PAGE and "en:" in PAGE
+
+
+def test_public_config_has_english_labels_and_step_titles(env):
+    config = admin_config.public_config(env / ".env")
+    by_key = {f["key"]: f for f in config["fields"]}
+    assert by_key["EC_ORCHESTRATOR_URL"]["label_en"] == "Orchestrator URL"
+    assert by_key["EC_ADMIN_PASSWORD"]["label_en"] == "Administrator password"
+    assert by_key["EC_ORCHESTRATOR_URL"]["help_en"]
+    titles = {s["id"]: s for s in config["steps"]}
+    assert titles["orchestrator"]["title_en"] == "Orchestrator"
+    assert titles["panel"]["title_en"] == "Web panel"
+
+
 def test_new_routes_registered():
     paths = {route.path for route in build_admin_app().routes}
     assert {

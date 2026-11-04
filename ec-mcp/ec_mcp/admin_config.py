@@ -106,6 +106,97 @@ STEP_TITLES = {
     "dashboard": "Dashboard remoto",
 }
 
+STEP_TITLES_EN = {
+    "orchestrator": "Orchestrator",
+    "ssh": "Optional SSH",
+    "sse": "SSE platform",
+    "targets": "Default targets (multi-Orchestrator / multi-SSE)",
+    "security": "MCP security",
+    "transport": "MCP transport",
+    "panel": "Web panel",
+    "updates": "Updates",
+    "dashboard": "Remote dashboard",
+}
+
+EN_LABELS = {
+    "EC_ORCHESTRATOR_URL": "Orchestrator URL",
+    "EC_ORCHESTRATOR_API_KEY": "API key (X-Auth-Token)",
+    "EC_ORCHESTRATOR_USER": "Alternative user",
+    "EC_ORCHESTRATOR_PASSWORD": "Alternative password",
+    "EC_VERIFY_TLS": "Verify TLS",
+    "EC_SSH_ENABLED": "Enable SSH",
+    "EC_SSH_HOST": "Default SSH host",
+    "EC_SSH_USER": "SSH user",
+    "EC_SSH_PASSWORD": "SSH password",
+    "EC_SSH_ENABLE_PASSWORD": "Enable password",
+    "EC_SSH_PORT": "SSH port",
+    "EC_SSH_AUTH_METHOD": "Authentication method",
+    "EC_AXIS_ENABLED": "Enable Axis Security",
+    "EC_AXIS_ADMIN_TOKEN": "Admin token (Bearer JWT)",
+    "EC_AXIS_BASE_URL": "Axis base URL",
+    "EC_AXIS_VERIFY_TLS": "Verify Axis TLS",
+    "EC_AXIS_TIMEOUT": "Axis timeout (seconds)",
+    "EC_DEFAULT_ORCHESTRATOR": "Default Orchestrator",
+    "EC_DEFAULT_SSE": "Default SSE platform",
+    "EC_ALLOW_WRITE_TOOLS": "Allow write tools",
+    "EC_ALLOW_DANGEROUS_WRITES": "Allow dangerous writes",
+    "EC_MAX_WRITES_PER_MINUTE": "Max writes per minute",
+    "EC_MAX_OUTPUT_CHARS": "Max output characters",
+    "EC_API_CACHE_TTL": "API cache TTL (seconds)",
+    "EC_MCP_AUDIT_LOG": "Audit log file",
+    "EC_MCP_PROFILES_DIR": "Profiles directory",
+    "EC_MCP_AUTH_TOKEN": "MCP bearer token",
+    "EC_MCP_HOST": "MCP listen IP",
+    "EC_MCP_PORT": "MCP port",
+    "EC_MCP_ALLOWED_HOSTS": "Allowed hosts",
+    "EC_MCP_JSON_RESPONSE": "JSON responses",
+    "EC_MCP_STATELESS": "Stateless mode",
+    "EC_MCP_BUILD_COMMIT": "Build commit",
+    "EC_ADMIN_HOST": "Panel listen IP",
+    "EC_ADMIN_PORT": "Panel port",
+    "EC_ADMIN_PASSWORD": "Administrator password",
+    "EC_ADMIN_USERS_FILE": "Panel users file",
+    "EC_ADMIN_LOGIN_MAX_FAILURES": "Failed attempts before lockout",
+    "EC_ADMIN_LOGIN_WINDOW_SECONDS": "Lockout window (seconds)",
+    "EC_ADMIN_PASSWORD_FILE": "Password file",
+    "EC_ADMIN_STORE": "Orchestrators file",
+    "EC_UPDATE_ALLOW_WEB": "Allow web updates",
+    "EC_UPDATE_REPOSITORY": "GitHub repository",
+    "EC_UPDATE_BRANCH": "Release branch",
+    "EC_UPDATE_GITHUB_USER": "GitHub user",
+    "EC_UPDATE_GITHUB_TOKEN": "GitHub token",
+    "EC_UPDATE_PROJECT_DIR": "Installed directory",
+    "EC_UPDATE_STATE_DIR": "State directory",
+    "EC_UPDATE_SERVICE_NAME": "MCP service",
+    "EC_UPDATE_ADMIN_SERVICE_NAME": "Panel service",
+    "EC_DASHBOARD_REMOTE_ENABLED": "Enable remote deploy",
+    "EC_DASHBOARD_REMOTE_HOST": "Ubuntu server IP/host",
+    "EC_DASHBOARD_REMOTE_USER": "SSH user",
+    "EC_DASHBOARD_REMOTE_PASSWORD": "SSH password",
+    "EC_DASHBOARD_REMOTE_PORT": "SSH port",
+    "EC_DASHBOARD_REMOTE_KEY_PATH": "Private key path (optional)",
+    "EC_DASHBOARD_PORT": "Dashboard HTTP port on remote",
+    "EC_DASHBOARD_DIR": "Dashboard directory on remote",
+    "EC_DASHBOARD_REFRESH_SECONDS": "Dashboard auto-refresh (seconds)",
+}
+
+EN_HELP = {
+    "EC_ORCHESTRATOR_URL": "Orchestrator HTTP/HTTPS URL. Required to use the Orchestrator.",
+    "EC_ORCHESTRATOR_API_KEY": "Required unless user+password are configured.",
+    "EC_SSH_ENABLED": "run_show_api does not use SSH.",
+    "EC_AXIS_ENABLED": "Axis Security SSE platform.",
+    "EC_AXIS_ADMIN_TOKEN": "JWT token for admin-api.axissecurity.com. Required when Axis is enabled.",
+    "EC_UPDATE_REPOSITORY": "Format owner/repository.",
+    "EC_UPDATE_GITHUB_TOKEN": "Needed for private repositories; never returned to the browser.",
+    "EC_ADMIN_PASSWORD": "Required when the panel listens on a non-loopback IP.",
+    "EC_ADMIN_USERS_FILE": "JSON 0600 with users and roles; falls back to EC_ADMIN_PASSWORD when absent.",
+    "EC_DASHBOARD_REMOTE_ENABLED": "Installs and publishes the dashboard on an Ubuntu server over SSH.",
+    "EC_DASHBOARD_REMOTE_PASSWORD": "Requires sudo on the remote server (installs nginx).",
+    "EC_DASHBOARD_REMOTE_KEY_PATH": "When set, used instead of the password.",
+    "EC_DEFAULT_ORCHESTRATOR": "Target used when a tool does not pass 'target'. Must exist in the registry.",
+    "EC_DEFAULT_SSE": "SSE platform used when a tool does not pass 'target'.",
+}
+
 BY_KEY = {setting.key: setting for setting in SETTINGS}
 _REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 _BRANCH = re.compile(r"^[A-Za-z0-9._/-]+$")
@@ -144,6 +235,8 @@ def public_config(path: Path | None = None) -> dict:
         item = asdict(setting)
         item["choices"] = list(setting.choices)
         item["depends_on"] = list(setting.depends_on) if setting.depends_on else None
+        item["label_en"] = EN_LABELS.get(setting.key, setting.label)
+        item["help_en"] = EN_HELP.get(setting.key, setting.help)
         value = values.get(setting.key, setting.default)
         item["configured"] = bool(value) if setting.secret else True
         item["value"] = "" if setting.secret else value
@@ -153,7 +246,13 @@ def public_config(path: Path | None = None) -> dict:
     for setting in SETTINGS:
         if setting.step and setting.step not in seen:
             seen.add(setting.step)
-            steps.append({"id": setting.step, "title": STEP_TITLES.get(setting.step, setting.step)})
+            steps.append(
+                {
+                    "id": setting.step,
+                    "title": STEP_TITLES.get(setting.step, setting.step),
+                    "title_en": STEP_TITLES_EN.get(setting.step, setting.step),
+                }
+            )
     return {
         "fields": fields,
         "steps": steps,

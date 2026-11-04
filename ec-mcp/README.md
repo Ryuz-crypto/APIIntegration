@@ -33,7 +33,7 @@ catálogo ECOS por SSH.
 - Registro de auditoría JSONL y redacción de secretos.
 - Panel administrativo para gestionar Orchestrators, editar todas las variables permitidas y aplicar cambios sin entrar por SSH.
 - Updater web con detección de GitHub público o privado, commit exacto, pruebas, respaldo y rollback.
-- Workflows MCP transaccionales BIO/ZTP; la pestaña ZTP del panel aún muestra un roadmap y no implementa la adopción desde la UI.
+- Workflows MCP transaccionales BIO/ZTP (solo vía tools MCP; el panel web ya no incluye pestaña ZTP).
 
 ## Herramientas MCP
 El servidor expone **125 tools**. La descripción completa de cada una (parámetros y
@@ -284,6 +284,11 @@ quedan en la auditoría estructurada con el campo `user`.
 **Guardar variables** actualiza `.env` de forma atómica. **Guardar y reiniciar
 servicios** crea una solicitud que procesa el worker privilegiado; el proceso
 web nunca ejecuta Git, pip ni systemctl directamente.
+
+La interfaz está en **español e inglés** (botón ES/EN en la cabecera, se
+recuerda en `localStorage`) y usa un tema claro estilo HPE (cabecera navy
+`#00263a`, acento HPE Green `#01a982`); los círculos de la cabecera permiten
+cambiar el color de acento.
 
 #### Multi-Orchestrator y multi-SSE (multi-tenant)
 
