@@ -66,6 +66,7 @@ SETTINGS = (
     Setting("EC_MCP_JSON_RESPONSE", "Transporte MCP", "Respuesta JSON", "boolean", "true", step="transport"),
     Setting("EC_MCP_STATELESS", "Transporte MCP", "Modo stateless", "boolean", "false", step="transport"),
     Setting("EC_MCP_BUILD_COMMIT", "Transporte MCP", "Commit de build", step="transport"),
+    Setting("EC_MCP_DISABLED_TOOLS", "Seguridad", "Tools MCP desactivadas (coma)", step="security", help="Lista separada por comas de nombres de tools que no se exponen (p. ej. desde la pestaña Tools)."),
     Setting("EC_ADMIN_HOST", "Panel web", "IP de escucha del panel", default="127.0.0.1", step="panel"),
     Setting("EC_ADMIN_PORT", "Panel web", "Puerto del panel", "integer", "8080", minimum=1, maximum=65535, step="panel"),
     Setting("EC_ADMIN_PASSWORD", "Panel web", "Password del administrador", "password", secret=True, step="panel", help="Obligatoria si el panel escucha en una IP no loopback."),
@@ -156,6 +157,7 @@ EN_LABELS = {
     "EC_MCP_JSON_RESPONSE": "JSON responses",
     "EC_MCP_STATELESS": "Stateless mode",
     "EC_MCP_BUILD_COMMIT": "Build commit",
+    "EC_MCP_DISABLED_TOOLS": "Disabled MCP tools (comma-separated)",
     "EC_ADMIN_HOST": "Panel listen IP",
     "EC_ADMIN_PORT": "Panel port",
     "EC_ADMIN_PASSWORD": "Administrator password",  # nosec B105
@@ -210,6 +212,7 @@ EN_LABELS.update(EN_LABELS_TLS)
 
 EN_HELP = {
     "EC_ORCHESTRATOR_URL": "Orchestrator HTTP/HTTPS URL. Required to use the Orchestrator.",
+    "EC_MCP_DISABLED_TOOLS": "Comma-separated list of MCP tool names to hide (managed from the Tools tab).",
     "EC_ORCHESTRATOR_API_KEY": "Required unless user+password are configured.",
     "EC_SSH_ENABLED": "run_show_api does not use SSH.",
     "EC_AXIS_ENABLED": "Axis Security SSE platform.",

@@ -247,7 +247,7 @@ def test_page_has_i18n_and_theme_picker_and_no_ztp():
     assert "var I18N=" in PAGE
     assert "function setLang(" in PAGE
     assert "function setAccent(" in PAGE
-    assert "<span class=\"sw" in PAGE
+    assert "setAccent" in PAGE
     assert "label_'+LANG" in PAGE
     assert "title_'+LANG" in PAGE
     assert "renderZtp" not in PAGE and "tab-ztp" not in PAGE
@@ -393,7 +393,8 @@ def test_page_has_tls_tab_branding_and_per_target_selector():
     assert "fmt_pfx" in PAGE and "tls_confirm_code" in PAGE
     assert "siteName" in PAGE and "siteLogo" in PAGE and "openCustom" in PAGE
     assert "userChip" in PAGE and "topbar" in PAGE
-    assert "targetSelectorHtml" in PAGE and "renderTargetPanel" in PAGE
+    assert "ACCENTS.map" not in PAGE
+    assert "cfgTargets" in PAGE and "targetPanelHtml" in PAGE
     assert "wiz_step" in PAGE
     assert "group_'+LANG" in PAGE
     assert "ntc.innerHTML" in PAGE
@@ -409,6 +410,49 @@ def test_public_config_has_group_en_and_tls_settings(env):
     assert by_key["EC_ADMIN_TLS_CERT"]["depends_on"] == ["EC_ADMIN_TLS_ENABLED", "true"]
 
 
+def test_tools_list_toggle_and_runtime_filter(client, env, monkeypatch):
+    admin._TOOLS_CACHE = None
+    r = client.get("/api/tools")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 125
+    assert data["disabled"] == []
+    name = data["tools"][0]["name"]
+    off = client.post("/api/tools/toggle", json={"name": name, "enabled": False})
+    assert off.json()["ok"] is True and name in off.json()["disabled"]
+    assert f"EC_MCP_DISABLED_TOOLS={name}" in (env / ".env").read_text(encoding="utf-8")
+    assert client.post("/api/tools/toggle", json={"name": "no-existe", "enabled": False}).status_code == 404
+    from ec_mcp import server
+
+    mcp = server.create_server()
+    assert name not in {t.name for t in mcp._tool_manager.list_tools()}
+    assert len(mcp._tool_manager.list_tools()) == 124
+    on = client.post("/api/tools/toggle", json={"name": name, "enabled": True})
+    assert on.json()["disabled"] == []
+    mcp2 = server.create_server()
+    assert len(mcp2._tool_manager.list_tools()) == 125
+    admin._TOOLS_CACHE = None
+
+
+def test_agent_prompt_endpoint_includes_skills(client):
+    r = client.get("/api/agent-prompt")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["tools_total"] == 125
+    assert "EDGECONNECT_NOC_OPS_SKILL.md" in data["prompt"]
+    assert "AI_AGENT_SKILL_RECOMMENDATIONS.md" in data["prompt"]
+    assert "sugerencia" in data["prompt"].lower()
+
+
+def test_page_has_tools_tab_and_clean_chrome():
+    assert "renderTools" in PAGE
+    assert "/api/tools/toggle" in PAGE
+    assert "showAgentPrompt" in PAGE
+    assert "cfgTab" in PAGE and "global_vars" in PAGE
+    assert "t('yes')" in PAGE
+    assert "ACCENTS.map" not in PAGE
+
+
 def test_new_routes_registered():
     paths = {route.path for route in build_admin_app().routes}
     assert {
@@ -416,6 +460,9 @@ def test_new_routes_registered():
         "/api/tls",
         "/api/tls/upload",
         "/api/tls/delete",
+        "/api/tools",
+        "/api/tools/toggle",
+        "/api/agent-prompt",
         "/api/config/diff",
         "/api/probe",
         "/api/default",

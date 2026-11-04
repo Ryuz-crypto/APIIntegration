@@ -303,6 +303,13 @@ las variables globales, permite ver la configuración guardada de cada
 Orquestador/SSE por nombre (URL, usuario, TLS, flags de secretos), junto al
 estado de los blobs `EC_ORCHESTRATORS_JSON` / `EC_SSE_PLATFORMS_JSON`.
 
+La pestaña **Tools** (`/api/tools`, `/api/tools/toggle`) lista las 125 tools MCP
+con interruptores para activar/desactivar (se guarda en `EC_MCP_DISABLED_TOOLS`,
+aplica al reiniciar y también es editable en Variables). El botón **Sugerencia
+para AI Agent** (`/api/agent-prompt`) muestra el prompt completo para el agente,
+incluyendo los skills de `ec-mcp/docs/` (`EDGECONNECT_NOC_OPS_SKILL.md`,
+`AI_AGENT_SKILL_RECOMMENDATIONS.md`, `EDGECONNECT_EXPERT_SKILL.md`).
+
 La pestaña **Certificados** (estilo WAN_SIM) instala certificados HTTPS con
 los modos **PEM** (certificado y llave separados), **PEM bundle**, **PFX/P12**
 (con contraseña) y **DER**; los archivos se suben como archivo (base64, límite

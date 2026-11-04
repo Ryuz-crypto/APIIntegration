@@ -5030,6 +5030,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             audit.record("get_appliance_health", "read", appliance_id, f"error: {error}")
             return f"Error: {error}"
 
+    disabled_tools = {name.strip() for name in os.environ.get("EC_MCP_DISABLED_TOOLS", "").split(",") if name.strip()}
+    tool_manager = getattr(mcp, "_tool_manager", None)
+    if disabled_tools and tool_manager is not None and hasattr(tool_manager, "_tools"):
+        for name in disabled_tools:
+            tool_manager._tools.pop(name, None)
+
     return mcp
 
 
