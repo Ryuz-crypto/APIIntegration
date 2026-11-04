@@ -286,22 +286,32 @@ servicios** crea una solicitud que procesa el worker privilegiado; el proceso
 web nunca ejecuta Git, pip ni systemctl directamente.
 
 La interfaz está en **español e inglés** (botón ES/EN en la cabecera, se
-recuerda en `localStorage`) y usa un tema claro estilo HPE (acento HPE Green
-`#01a982` por defecto; la cabecera deriva del acento elegido). Los círculos de
-la cabecera son una **paleta de colores** que cambia el acento de toda la
-página. Con el engranaje (**Personalizar**) se puede cambiar el **nombre del
-sitio** (`ec-mcp control plane`) y subir un **icono PNG** (se guarda en
-`localStorage`). La cabecera muestra el usuario/rol conectado con menú propio.
+recuerda en `localStorage`) y usa el look and feel del dashboard de WAN_SIM:
+paleta HPE viva (`--green:#01a982`, cabecera teal `#073b4c` con borde inferior
+verde, acentos cian `#00c8ff`, fondo claro `#edf5f6`, paneles blancos con
+borde superior de acento y pestañas con subrayado). Los círculos de la
+cabecera son una **paleta de colores** (verde/cian/azul/dorado/rosa/teal) que
+cambia el acento de toda la página. Con el engranaje (**Personalizar**)….se
+puede cambiar el **nombre del sitio** (`ec-mcp control plane`) y subir un
+**icono PNG** (se guarda en `localStorage`). La cabecera muestra la versión y
+el usuario/rol conectado con menú propio; los avisos se limpian al cambiar de
+pestaña. En **Variables**, los grupos van ordenados por paso del asistente y
+son colapsables, con contador de campos por grupo.
 
 En **Variables** (Service settings) hay un selector **por target**: además de
 las variables globales, permite ver la configuración guardada de cada
 Orquestador/SSE por nombre (URL, usuario, TLS, flags de secretos), junto al
 estado de los blobs `EC_ORCHESTRATORS_JSON` / `EC_SSE_PLATFORMS_JSON`.
 
-La pestaña **Certificados** (`/api/tls`, `/api/tls/upload`, `/api/tls/delete`)
-permite subir certificado y llave privada PEM (se guardan con `0600` en
-`EC_ADMIN_TLS_DIR`); con `EC_ADMIN_TLS_ENABLED=true` + `EC_ADMIN_TLS_CERT` /
-`EC_ADMIN_TLS_KEY` el panel sirve HTTPS.
+La pestaña **Certificados** (estilo WAN_SIM) instala certificados HTTPS con
+los modos **PEM** (certificado y llave separados), **PEM bundle**, **PFX/P12**
+(con contraseña) y **DER**; los archivos se suben como archivo (base64, límite
+3 MB), se validan y normalizan a PEM con `openssl`, se comprueba que la llave
+corresponde al certificado, se respalda el anterior (`cert.pem.bak`) y se
+pide la confirmación escrita `INSTALAR CERTIFICADO`. Se guardan con `0600` en
+`EC_ADMIN_TLS_DIR` y el estado muestra sujeto/emisor/vence/huella; con
+`EC_ADMIN_TLS_ENABLED=true` + `EC_ADMIN_TLS_CERT`/`EC_ADMIN_TLS_KEY` el panel
+sirve HTTPS (`/api/tls`, `/api/tls/upload`, `/api/tls/delete`).
 
 #### Multi-Orchestrator y multi-SSE (multi-tenant)
 
