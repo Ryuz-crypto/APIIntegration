@@ -26,3 +26,4 @@ dist/
 logs/
 *.log
 audit*.log
+.ec-admin-users.json

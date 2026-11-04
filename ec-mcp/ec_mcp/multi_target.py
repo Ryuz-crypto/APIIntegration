@@ -265,6 +265,40 @@ class TargetRegistry:
             return True
         return False
 
+    def _rename(self, section: str, old: str, new: str) -> dict[str, Any]:
+        new = _validate_name(new)
+        data = self._load()
+        if old not in data[section]:
+            raise RegistryError(f"No existe '{old}'")
+        if new != old and new in data[section]:
+            raise RegistryError(f"Ya existe '{new}'")
+        data[section][new] = data[section].pop(old)
+        self._save(data)
+        return data[section][new]
+
+    def _duplicate(self, section: str, name: str, new: str) -> dict[str, Any]:
+        new = _validate_name(new)
+        data = self._load()
+        if name not in data[section]:
+            raise RegistryError(f"No existe '{name}'")
+        if new in data[section]:
+            raise RegistryError(f"Ya existe '{new}'")
+        data[section][new] = dict(data[section][name])
+        self._save(data)
+        return data[section][new]
+
+    def rename_orchestrator(self, old: str, new: str) -> dict[str, Any]:
+        return self._rename("orchestrators", old, new)
+
+    def duplicate_orchestrator(self, name: str, new: str) -> dict[str, Any]:
+        return self._duplicate("orchestrators", name, new)
+
+    def rename_sse(self, old: str, new: str) -> dict[str, Any]:
+        return self._rename("sse_platforms", old, new)
+
+    def duplicate_sse(self, name: str, new: str) -> dict[str, Any]:
+        return self._duplicate("sse_platforms", name, new)
+
     def save_sse(self, name: str, entry: dict[str, Any], *, partial: bool = True) -> dict[str, Any]:
         name = _validate_name(name)
         data = self._load()
@@ -299,6 +333,16 @@ class TargetRegistry:
             blob["EC_SSE_PLATFORMS_JSON"] = json.dumps(data["sse_platforms"], separators=(",", ":"))
         return blob
 
+
+def resolve_default_name(names, explicit: str = "") -> str:
+    """Resolve the default target name: explicit name, else 'default', else first sorted."""
+    ordered = sorted(names)
+    explicit = (explicit or "").strip()
+    if explicit and explicit in ordered:
+        return explicit
+    if "default" in ordered:
+        return "default"
+    return ordered[0] if ordered else ""
 
 def _parse_env_json_blob(name: str, blob: str = "") -> dict[str, dict[str, Any]]:
     raw = blob.strip() or os.environ.get(name, "")

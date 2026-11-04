@@ -94,7 +94,7 @@ def test_queue_update_pins_exact_remote_commit(monkeypatch):
     }
 
 
-def test_admin_v3_routes_and_ztp_roadmap_exist():
+def test_admin_v3_routes_exist_and_ztp_tab_removed():
     paths = {route.path for route in build_admin_app().routes}
     assert {
         "/api/config",
@@ -103,9 +103,10 @@ def test_admin_v3_routes_and_ztp_roadmap_exist():
         "/api/update/apply",
         "/api/restart",
     }.issubset(paths)
-    assert "Discover" in PAGE
-    assert "Seleccionar template" in PAGE
-    assert "Confirmar y planchar" in PAGE
+    assert "renderZtp" not in PAGE
+    assert "tab-ztp" not in PAGE
+    assert "Discover" not in PAGE
+    assert "Confirmar y planchar" not in PAGE
 
 
 def test_admin_page_badge_reflects_installed_version():

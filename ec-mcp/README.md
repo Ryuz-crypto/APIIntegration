@@ -33,7 +33,7 @@ catálogo ECOS por SSH.
 - Registro de auditoría JSONL y redacción de secretos.
 - Panel administrativo para gestionar Orchestrators, editar todas las variables permitidas y aplicar cambios sin entrar por SSH.
 - Updater web con detección de GitHub público o privado, commit exacto, pruebas, respaldo y rollback.
-- Workflows MCP transaccionales BIO/ZTP; la pestaña ZTP del panel aún muestra un roadmap y no implementa la adopción desde la UI.
+- Workflows MCP transaccionales BIO/ZTP (solo vía tools MCP; el panel web ya no incluye pestaña ZTP).
 
 ## Herramientas MCP
 El servidor expone **125 tools**. La descripción completa de cada una (parámetros y
@@ -260,14 +260,35 @@ ec-mcp admin
 ```
 
 El panel usa `EC_ADMIN_HOST`, `EC_ADMIN_PORT` y
-`EC_ADMIN_PASSWORD`. La pestaña **Variables** presenta la lista blanca
-completa de parámetros de Orchestrator, SSH opcional, seguridad, transporte,
-panel y updater. Los secretos se guardan con permisos `600`, se muestran sólo
-como “configurado” y un campo secreto vacío conserva el valor existente.
+`EC_ADMIN_PASSWORD`. La pestaña **Asistente** guía la configuración paso a
+paso: cada paso declara qué variables son obligatorias (`*`) y cuáles sólo
+aplican si se habilita su feature (p. ej. SSH o Axis), valida antes de avanzar
+y muestra un diff del `.env` antes de escribir. La pestaña **Variables**
+presenta la lista blanca completa de parámetros de Orchestrator, SSH opcional,
+seguridad, transporte, panel y updater. Los secretos se guardan con permisos
+`600`, se muestran sólo como “configurado” y un campo secreto vacío conserva
+el valor existente. `POST /api/config/diff` devuelve el preview de cambios sin
+escribir.
+
+#### Usuarios y roles del panel
+
+Si existe `EC_ADMIN_USERS_FILE` (JSON `0600` con
+`{"users": {"nombre": {"password_hash": "sha256:...", "role": "..."}}}`), el
+login pide usuario+contraseña y la pestaña **Usuarios** (solo rol `admin`)
+permite crear, eliminar y cambiar contraseñas. Roles: `viewer` (solo lectura),
+`operator` (configura, aplica, sondea y reinicia) y `admin` (además gestiona
+usuarios). Sin archivo de usuarios se mantiene el modo retrocompatible de una
+sola contraseña (`EC_ADMIN_PASSWORD`, rol admin). Todas las acciones del panel
+quedan en la auditoría estructurada con el campo `user`.
 
 **Guardar variables** actualiza `.env` de forma atómica. **Guardar y reiniciar
 servicios** crea una solicitud que procesa el worker privilegiado; el proceso
 web nunca ejecuta Git, pip ni systemctl directamente.
+
+La interfaz está en **español e inglés** (botón ES/EN en la cabecera, se
+recuerda en `localStorage`) y usa un tema claro estilo HPE (cabecera navy
+`#00263a`, acento HPE Green `#01a982`); los círculos de la cabecera permiten
+cambiar el color de acento.
 
 #### Multi-Orchestrator y multi-SSE (multi-tenant)
 
@@ -285,7 +306,12 @@ independiente:
   `EC_SSE_PLATFORMS_JSON`. El runtime carga todos los targets como un pool de
   clientes.
 - Las tools MCP aceptan un parámetro opcional `target` para operar contra un
-  Orchestrator o plataforma SSE concreto. Sin `target`, usan `default`.
+  Orchestrator o plataforma SSE concreto. Sin `target`, usan
+  `EC_DEFAULT_ORCHESTRATOR` / `EC_DEFAULT_SSE` si apuntan a un target del
+  registro; si no, `default` y, como último recurso, el primer target
+  ordenado. El panel permite fijar el por defecto con el botón **Por defecto**
+  (`POST /api/default`) y sondear cada target con **Probar** (`POST /api/probe`),
+  además de **Duplicar** y **Renombrar** cada entrada.
 - `list_orchestrator_targets_tool` y `list_sse_targets_tool` enumeran los
   targets configurados (nunca exponen secretos).
 - **Backwards compatible**: si los blobs están vacíos, todo funciona como

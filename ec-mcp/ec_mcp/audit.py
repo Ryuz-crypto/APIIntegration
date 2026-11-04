@@ -36,6 +36,7 @@ class AuditLog:
         result: str,
         dry_run: bool = False,
         details: dict[str, Any] | None = None,
+        user: str | None = None,
     ) -> dict[str, Any]:
         entry = {
             "timestamp": datetime.now(UTC).isoformat(),
@@ -46,6 +47,8 @@ class AuditLog:
             "dry_run": dry_run,
             "details": _redact_details(details or {}),
         }
+        if user:
+            entry["user"] = redact_secrets(str(user), [])
         with self._path.open("a", encoding="utf-8") as log_file:
             log_file.write(json.dumps(entry) + "\n")
         return entry
