@@ -264,6 +264,40 @@ def test_public_config_has_english_labels_and_step_titles(env):
     assert titles["panel"]["title_en"] == "Web panel"
 
 
+def test_i18n_literal_has_no_runtime_calls():
+    import re
+
+    line = next(row for row in PAGE.splitlines() if row.startswith("var I18N="))
+    assert not re.search(r":(''\s*\+\s*t\(|t\()", line), "el literal I18N no debe llamar a t() en su evaluación"
+
+
+def test_page_script_executes_cleanly_in_node(tmp_path):
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node no disponible")
+    import re
+
+    match = re.search(r"<script>(.*)</script>", PAGE, re.S)
+    script = tmp_path / "page.js"
+    script.write_text(match.group(1), encoding="utf-8")
+    stub = tmp_path / "stub.js"
+    stub.write_text(
+        "var el={};function mk(){return{innerHTML:'',value:'',textContent:'',style:{},addEventListener:function(){},classList:{add:function(){},remove:function(){}}}}\n"
+        "global.document={documentElement:{style:{setProperty:function(){}}},querySelector:function(s){return el[s]||(el[s]=mk())},querySelectorAll:function(){return[]},getElementById:function(){return mk()}};\n"
+        "global.window=global;global.localStorage={getItem:function(){return null},setItem:function(){}};\n"
+        "global.fetch=function(){return Promise.reject(new Error('offline'))};\n"
+        "global.confirm=function(){return true};global.prompt=function(){return ''};\n",
+        encoding="utf-8",
+    )
+    run = tmp_path / "run.js"
+    run.write_text(stub.read_text(encoding="utf-8") + script.read_text(encoding="utf-8"), encoding="utf-8")
+    result = subprocess.run([node, str(run)], capture_output=True, text=True, timeout=30)  # noqa: S603 - node binario local sobre fixture propio
+    assert result.returncode == 0, result.stderr[-2000:]
+
+
 def test_new_routes_registered():
     paths = {route.path for route in build_admin_app().routes}
     assert {
