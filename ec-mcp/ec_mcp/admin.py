@@ -917,6 +917,113 @@ async def api_tls_delete(request):
     return JSONResponse({"ok": True, "removed": removed, "message": "Certificados eliminados" if removed else "No había certificados"})
 
 
+_TOOLS_CACHE: list | None = None
+
+
+def _mcp_tools() -> list:
+    global _TOOLS_CACHE
+    if _TOOLS_CACHE is None:
+        from . import server as _server
+
+        mcp = _server.create_server()
+        tool_manager = getattr(mcp, "_tool_manager", None)
+        tools = list(tool_manager.list_tools()) if tool_manager is not None else []
+        _TOOLS_CACHE = sorted(
+            ({"name": t.name, "description": (t.description or "").strip().splitlines()[0][:200]} for t in tools),
+            key=lambda item: item["name"],
+        )
+    return _TOOLS_CACHE
+
+
+def _disabled_tools() -> set[str]:
+    return {name.strip() for name in os.environ.get("EC_MCP_DISABLED_TOOLS", "").split(",") if name.strip()}
+
+
+async def api_tools_list(request):
+    _session, denied = _authorize(request, "read")
+    if denied:
+        return denied
+    disabled = _disabled_tools()
+    tools = _mcp_tools()
+    return JSONResponse(
+        {
+            "ok": True,
+            "total": len(tools),
+            "disabled": sorted(disabled),
+            "tools": [
+                {"name": t["name"], "description": t["description"], "disabled": t["name"] in disabled}
+                for t in tools
+            ],
+        }
+    )
+
+
+async def api_tools_toggle(request):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    body = await request.json()
+    name = str(body.get("name") or "").strip()
+    enabled = bool(body.get("enabled"))
+    if name not in {t["name"] for t in _mcp_tools()}:
+        return JSONResponse({"ok": False, "error": f"Tool desconocida: {name}"}, status_code=404)
+    disabled = _disabled_tools()
+    if enabled:
+        disabled.discard(name)
+    else:
+        disabled.add(name)
+    try:
+        update_env({"EC_MCP_DISABLED_TOOLS": ",".join(sorted(disabled))})
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    _audit_panel(session["user"], "tool_toggle", name, "enabled" if enabled else "disabled")
+    return JSONResponse({"ok": True, "name": name, "enabled": enabled, "disabled": sorted(disabled)})
+
+
+AGENT_PROMPT_HEADER = """# ec-mcp — sugerencia para AI Agent (skill)
+
+Eres un agente operando **ec-mcp**, un servidor MCP para HPE Aruba EdgeConnect SD-WAN.
+Reglas de oro:
+1. Descubre primero: `list_orchestrator_targets_tool`, `list_appliances` (necesitas el nePk), `orchestrator_info`.
+2. Multi-target: pasa `target="<nombre>"` en las tools que lo aceptan; sin `target` se usa el default del panel.
+3. Las escrituras están DESACTIVADAS por defecto (`EC_ALLOW_WRITE_TOOLS=false`) y siempre con dry-run/preview + confirmación explícita; nunca fuerces escrituras peligrosas.
+4. SSH es opcional y está off por defecto; la API del Orchestrator es la ruta principal (`run_api_operation`, `run_show_api`).
+5. ZTP/BIO son transaccionales: prepara → preview → confirma con texto exacto → verifica → rollback si falla.
+6. SSE (Axis Security): usa `axis_health` y las tools `axis_*` con `target` de plataforma SSE; recuerda `axis_commit` para publicar.
+7. Respeta los límites de salida y el audit log; nunca imprimas secretos.
+8. Si un llamado falla, lee el mensaje de error: suele indicar el parámetro exacto que falta.
+
+Consulta también la documentación completa en `ec-mcp/README.md` (125 tools) y los skills de `ec-mcp/docs/` reproducidos abajo.
+"""
+
+
+def _agent_prompt() -> str:
+    docs_dir = Path(__file__).resolve().parent.parent / "docs"
+    parts = [AGENT_PROMPT_HEADER]
+    parts.append(f"\n- Versión: {__version__}\n- Tools totales: {len(_mcp_tools())}\n- Tools desactivadas: {len(_disabled_tools())}\n")
+    for fname in ("EDGECONNECT_NOC_OPS_SKILL.md", "AI_AGENT_SKILL_RECOMMENDATIONS.md", "EDGECONNECT_EXPERT_SKILL.md"):
+        path = docs_dir / fname
+        if path.is_file():
+            parts.append(f"\n---\n\n## {fname}\n\n" + path.read_text(encoding="utf-8"))
+    return "\n".join(parts)
+
+
+async def api_agent_prompt(request):
+    _session, denied = _authorize(request, "read")
+    if denied:
+        return denied
+    prompt = _agent_prompt()
+    return JSONResponse(
+        {
+            "ok": True,
+            "prompt": prompt,
+            "chars": len(prompt),
+            "tools_total": len(_mcp_tools()),
+            "disabled_tools": sorted(_disabled_tools()),
+        }
+    )
+
+
 async def api_users_password(request):
     session, denied = _authorize(request, "read")
     if denied:
@@ -987,6 +1094,9 @@ def build_admin_app() -> Starlette:
             Route("/api/tls", api_tls_status, methods=["GET"]),
             Route("/api/tls/upload", api_tls_upload, methods=["POST"]),
             Route("/api/tls/delete", api_tls_delete, methods=["POST"]),
+            Route("/api/tools", api_tools_list, methods=["GET"]),
+            Route("/api/tools/toggle", api_tools_toggle, methods=["POST"]),
+            Route("/api/agent-prompt", api_agent_prompt, methods=["GET"]),
         ]
     )
 

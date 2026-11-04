@@ -87,13 +87,14 @@ function setAccent(c){document.documentElement.style.setProperty('--brand',c);lo
 function siteName(){return localStorage.getItem('ec-site-name')||'ec-mcp control plane'}
 function siteLogo(){return localStorage.getItem('ec-logo')||''}
 function brandHtml(){var logo=siteLogo();return '<div class="brand">'+(logo?'<img class="logo" src="'+logo+'" alt="logo">':'')+'<div><strong>'+esc(siteName())+'</strong><span>'+t('tagline')+'</span></div></div>'}
-function openCustom(){var d=q('#custom-dlg');if(!d)return;var n=q('#custom-name');if(n)n.value=siteName();d.showModal?d.showModal():d.setAttribute('open','')}
+function openCustom(){var d=q('#custom-dlg');if(!d){q('#app').innerHTML+=customDialogHtml();d=q('#custom-dlg')}
+ if(!d)return;var n=q('#custom-name');if(n)n.value=siteName();d.showModal?d.showModal():d.setAttribute('open','')}
 function closeCustom(){var d=q('#custom-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
 function saveCustom(){var name=q('#custom-name')?q('#custom-name').value.trim():'';if(name)localStorage.setItem('ec-site-name',name);var f=q('#custom-logo');if(f&&f.files&&f.files[0]){var r=new FileReader();r.onload=function(e){try{localStorage.setItem('ec-logo',String(e.target.result))}catch(err){notice('Icono demasiado grande','err')}closeCustom();if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}};r.readAsDataURL(f.files[0])}else{closeCustom();if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}}
 function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name"></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button></div></dialog>'}
 function userChip(){return '<details class="menu"><summary class="chip">'+esc(ME&&ME.user?ME.user:'')+' · '+esc(ME&&ME.role?ME.role:'')+'</summary><div class="menu-body"><button class="secondary" onclick="showTab(\'users\')">'+t('menu_users')+'</button><button class="secondary" onclick="openCustom()">'+t('menu_custom')+'</button><button class="danger" onclick="logout()">'+t('nav_out')+'</button></div></details>'}
 
-function chromeHtml(){var cur=localStorage.getItem('ec-accent')||'#01a982';var sw=ACCENTS.map(function(a){return '<span class="sw'+(a.c===cur?' active':'')+'" style="background:'+a.c+'" title="'+a.n+'" onclick="setAccent(\''+a.c+'\')"></span>'}).join('');return '<span class="chrome">'+sw+'<button class="secondary" style="padding:4px 9px;font-size:.75rem" onclick="setLang(LANG===\'es\'?\'en\':\'es\')">'+(LANG==='es'?'EN':'ES')+'</button><button class="secondary" style="padding:4px 9px;font-size:.75rem" title="'+t('menu_custom')+'" onclick="openCustom()">&#9881;</button></span>'}
+function chromeHtml(){return '<span class="chrome"><button class="secondary" style="padding:4px 9px;font-size:.75rem" onclick="setLang(LANG===\'es\'?\'en\':\'es\')">'+(LANG==='es'?'EN':'ES')+'</button><button class="secondary" style="padding:4px 9px;font-size:.75rem" title="'+t('menu_custom')+'" onclick="openCustom()">&#9881;</button></span>'}
 document.documentElement.style.setProperty('--brand',localStorage.getItem('ec-accent')||'#01a982');
 
 var I18N2={es:{wiz_step:'Asistente · paso {a} de {b}',badge_active:'activo',badge_default:'por defecto',no_orch:'No hay orquestadores guardados.',no_sse:'No hay plataformas SSE guardadas.',per_target:'Configuración por target',view_target:'Ver configuración de',all_targets:'(todas las variables globales)',blob_set:'configurado',blob_unset:'vacío',nav_tls:'Certificados',menu_users:'Usuarios y contraseña',menu_custom:'Personalizar panel',f_name:'Nombre',f_url:'URL',f_apikey:'API key',f_user:'Usuario',f_pass:'Password',f_tls:'Verificar TLS',f_ssh_user:'Usuario SSH',f_ssh_pass:'Password SSH',f_enable:'Password enable',f_ssh_host:'Host SSH',f_provider:'Proveedor',f_baseurl:'URL base',f_token:'Token admin (Bearer JWT)',f_timeout:'Timeout (s)',add_update:'Agregar o actualizar',apply_env:'Aplicar al .env',add_update_sse:'Agregar o actualizar plataforma SSE',saved_in:'Se guardan en',secrets_note:'Los secretos nunca regresan al navegador.',clear_secret:'Eliminar secreto guardado',checking:'Comprobando...',svc_checked:'Estado verificado con peticiones reales el',latency:'latencia',orch_label:'Orchestrator',sse_label:'SSE',upd_worker:'Worker de actualizaciones',mcp_label:'Transporte MCP',review_title:'Revisar cambios antes de guardar',review_desc:'Preview sobre',review_nowrite:'; todavía no se escribe nada.',no_changes:'Sin cambios en variables.',targets_h:'Targets (orquestadores / SSE)',wiz_targets_help:'Guarda varios orquestadores y varias plataformas SSE a la vez; elige cuál queda por defecto para los tools sin target explícito.',probing:'probando...',probe_ok:'OK: ',probe_fail:'Fallo: ',no_users:'Sin usuarios todavía: se usa la contraseña única (EC_ADMIN_PASSWORD).',hashes_note:'Los hashes nunca se muestran ni se devuelven.',add_user:'Agregar o actualizar usuario',change_pass:'Cambiar contraseña',u_name:'Usuario',u_pass:'Contraseña',u_role:'Rol',u_old:'Contraseña actual',u_new:'Nueva contraseña',u_empty:'Usuario (vacío = mi sesión)',users_file:'Archivo',tls_title:'Certificados HTTPS',tls_desc:'Sube el certificado y la llave privada (PEM) del panel. Los archivos se guardan con permisos 0600 y el panel puede servirse en HTTPS con EC_ADMIN_TLS_ENABLED=true.',tls_cert:'Certificado PEM',tls_key:'Llave privada PEM',tls_upload:'Subir certificado',tls_delete:'Eliminar certificado',tls_enabled:'HTTPS activo',tls_disabled:'HTTPS desactivado',tls_fp:'Huella SHA-256',tls_present:'presente',tls_missing:'ausente',tls_none:'Sin certificado subido.',custom_title:'Personalizar panel',custom_name:'Nombre del sitio',custom_logo:'Icono PNG',custom_save:'Guardar',custom_cancel:'Cancelar',target_info:'Configuración guardada en el registro para'},en:{wiz_step:'Wizard · step {a} of {b}',badge_active:'active',badge_default:'default',no_orch:'No orchestrators saved.',no_sse:'No SSE platforms saved.',per_target:'Per-target settings',view_target:'Show settings for',all_targets:'(all global variables)',blob_set:'configured',blob_unset:'empty',nav_tls:'Certificates',menu_users:'Users & password',menu_custom:'Customize panel',f_name:'Name',f_url:'URL',f_apikey:'API key',f_user:'User',f_pass:'Password',f_tls:'Verify TLS',f_ssh_user:'SSH user',f_ssh_pass:'SSH password',f_enable:'Enable password',f_ssh_host:'SSH host',f_provider:'Provider',f_baseurl:'Base URL',f_token:'Admin token (Bearer JWT)',f_timeout:'Timeout (s)',add_update:'Add or update',apply_env:'Apply to .env',add_update_sse:'Add or update SSE platform',saved_in:'Saved in',secrets_note:'Secrets are never returned to the browser.',clear_secret:'Remove saved secret',checking:'Checking...',svc_checked:'Status verified with real requests at',latency:'latency',orch_label:'Orchestrator',sse_label:'SSE',upd_worker:'Update worker',mcp_label:'MCP transport',review_title:'Review changes before saving',review_desc:'Preview on',review_nowrite:'; nothing is written yet.',no_changes:'No variable changes.',targets_h:'Targets (orchestrators / SSE)',wiz_targets_help:'Save several orchestrators and SSE platforms at once; choose which one is default for tools without an explicit target.',probing:'checking...',probe_ok:'OK: ',probe_fail:'Fail: ',no_users:'No users yet: the single password (EC_ADMIN_PASSWORD) is used.',hashes_note:'Hashes are never shown or returned.',add_user:'Add or update user',change_pass:'Change password',u_name:'User',u_pass:'Password',u_role:'Role',u_old:'Current password',u_new:'New password',u_empty:'User (empty = my session)',users_file:'File',tls_title:'HTTPS certificates',tls_desc:'Upload the panel certificate and private key (PEM). Files are stored with 0600 and the panel can serve HTTPS with EC_ADMIN_TLS_ENABLED=true.',tls_cert:'Certificate PEM',tls_key:'Private key PEM',tls_upload:'Upload certificate',tls_delete:'Delete certificate',tls_enabled:'HTTPS enabled',tls_disabled:'HTTPS disabled',tls_fp:'SHA-256 fingerprint',tls_present:'present',tls_missing:'missing',tls_none:'No certificate uploaded.',custom_title:'Customize panel',custom_name:'Site name',custom_logo:'PNG icon',custom_save:'Save',custom_cancel:'Cancel',target_info:'Registry settings for'}};
@@ -103,6 +104,11 @@ for(var k2 in I18N2.en){I18N.en[k2]=I18N2.en[k2]}
 var I18N3={es:{tls_mode:'Formato',tls_cert_file:'Certificado (archivo)',tls_key_file:'Llave privada (archivo)',tls_pfx_file:'Archivo PFX / P12 / PKCS12',tls_bundle_file:'Bundle PEM (certificado y llave juntos)',tls_pw:'Contraseña de la llave o contenedor, si aplica',tls_note:'Los archivos se validan en el servidor, se normalizan a PEM y solo se instala si la llave corresponde al certificado. El certificado anterior se respalda (cert.pem.bak). Límite 3 MB.',tls_confirm:'Confirmación',tls_confirm_code:'INSTALAR CERTIFICADO',tls_install:'Instalar certificado',tls_installed:'Certificado instalado',tls_subject:'Sujeto',tls_issuer:'Emisor',tls_expires:'Vence',fmt_pem:'PEM: certificado y llave separados',fmt_bundle:'PEM bundle: certificado y llave juntos',fmt_pfx:'PFX / PKCS12',fmt_der:'DER: certificado y llave separados',file_too_big:'El archivo excede el límite de 3 MB'},en:{tls_mode:'Format',tls_cert_file:'Certificate (file)',tls_key_file:'Private key (file)',tls_pfx_file:'PFX / P12 / PKCS12 file',tls_bundle_file:'PEM bundle (certificate and key together)',tls_pw:'Key or container password, if any',tls_note:'Files are validated server-side, normalized to PEM and installed only if the key matches the certificate. The previous certificate is backed up (cert.pem.bak). 3 MB limit.',tls_confirm:'Confirmation',tls_confirm_code:'INSTALAR CERTIFICADO',tls_install:'Install certificate',tls_installed:'Certificate installed',tls_subject:'Subject',tls_issuer:'Issuer',tls_expires:'Expires',fmt_pem:'PEM: certificate and key separate',fmt_bundle:'PEM bundle: certificate and key together',fmt_pfx:'PFX / PKCS12',fmt_der:'DER: certificate and key separate',file_too_big:'File exceeds the 3 MB limit'}};
 for(var k3 in I18N3.es){I18N.es[k3]=I18N3.es[k3]}
 for(var k3 in I18N3.en){I18N.en[k3]=I18N3.en[k3]}
+
+var I18N4={es:{yes:'Sí',no:'No',nav_tools:'Tools',global_vars:'Global (.env)',tools_title:'Tools MCP',tools_desc:'Activa o desactiva tools del servidor MCP (se guarda en EC_MCP_DISABLED_TOOLS y aplica al reiniciar).',tools_total:'tools totales',tools_disabled:'desactivadas',tool_on:'Activada:',tool_off:'Desactivada:',agent_btn:'Sugerencia para AI Agent',agent_title:'Prompt sugerido para el AI Agent',agent_desc:'Copia este texto al contexto de tu agente (skill) para que use ec-mcp de la mejor manera. Incluye los skills de docs/.',copy:'Copiar',copied:'Copiado al portapapeles'},en:{yes:'Yes',no:'No',nav_tools:'Tools',global_vars:'Global (.env)',tools_title:'MCP tools',tools_desc:'Enable or disable MCP server tools (saved to EC_MCP_DISABLED_TOOLS, applied on restart).',tools_total:'total tools',tools_disabled:'disabled',tool_on:'Enabled:',tool_off:'Disabled:',agent_btn:'AI Agent suggestion',agent_title:'Suggested prompt for the AI Agent',agent_desc:'Copy this text into your agent context (skill) so it uses ec-mcp the right way. Includes the docs/ skills.',copy:'Copy',copied:'Copied to clipboard'}};
+for(var k4 in I18N4.es){I18N.es[k4]=I18N4.es[k4]}
+for(var k4 in I18N4.en){I18N.en[k4]=I18N4.en[k4]}
+
 
 
 
@@ -120,6 +126,7 @@ function notice(message,type){var node=q('#notice');if(node)node.innerHTML='<div
 function renderLogin(){
  q('#app').innerHTML='<section class="panel" style="max-width:440px;margin:12vh auto"><div class="brand"><h1>'+esc(siteName())+'</h1><p>'+t('login_title')+'</p></div>'+chromeHtml()+'<label style="margin-top:22px">'+t('login_user')+'<input id="login-user" autocomplete="username"></label><label style="margin-top:12px">'+t('login_pass')+'<input id="login-password" type="password" autocomplete="current-password"></label><div class="actions"><button onclick="login()">'+t('login_enter')+'</button></div><div id="notice"></div></section>';
  q('#login-password').addEventListener('keydown',function(e){if(e.key==='Enter')login()});
+ if(!q('#custom-dlg'))q('#app').innerHTML+=customDialogHtml();
 }
 async function login(){
  try{var r=await api('/login',{username:q('#login-user').value,password:q('#login-password').value});if(!r.ok){notice(r.error||'Contraseña incorrecta','err');return}ME=r;AUTHED=true;renderShell();await loadAll();}
@@ -128,7 +135,7 @@ async function login(){
 async function logout(){await api('/logout',{});AUTHED=false;renderLogin()}
 function renderShell(){
  q('#app').innerHTML='<header class="topbar">'+brandHtml()+'<div class="topbar-actions"><span class="version">__EC_MCP_VERSION__</span>'+userChip()+chromeHtml()+'</div></header>'+
- '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button id="tab-orch" onclick="showTab(\'orch\')">'+t('nav_orch')+'</button><button id="tab-sse" onclick="showTab(\'sse\')">'+t('nav_sse')+'</button><button id="tab-svc" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button><button id="tab-config" onclick="showTab(\'config\')">'+t('nav_config')+'</button><button id="tab-tls" onclick="showTab(\'tls\')">'+t('nav_tls')+'</button><button id="tab-update" onclick="showTab(\'update\')">'+t('nav_update')+'</button><button id="tab-users" onclick="showTab(\'users\')">'+t('nav_users')+'</button></nav>'+
+ '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button id="tab-orch" onclick="showTab(\'orch\')">'+t('nav_orch')+'</button><button id="tab-sse" onclick="showTab(\'sse\')">'+t('nav_sse')+'</button><button id="tab-svc" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button><button id="tab-config" onclick="showTab(\'config\')">'+t('nav_config')+'</button><button id="tab-tls" onclick="showTab(\'tls\')">'+t('nav_tls')+'</button><button id="tab-tools" onclick="showTab(\'tools\')">'+t('nav_tools')+'</button><button id="tab-update" onclick="showTab(\'update\')">'+t('nav_update')+'</button><button id="tab-users" onclick="showTab(\'users\')">'+t('nav_users')+'</button></nav>'+
  '<div id="notice"></div><section id="workspace"></section>'+customDialogHtml();
  if(ME&&ME.role!=='admin'){var ub=q('#tab-users');if(ub)ub.style.display='none'}
  showTab('wizard');
@@ -146,6 +153,7 @@ function showTab(name){
  if(name==='update')renderUpdate();
  if(name==='users')renderUsers();
  if(name==='tls')renderTls();
+ if(name==='tools')renderTools();
 }
 async function renderServices(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">'+t('checking')+'</p></section>';
@@ -166,7 +174,7 @@ async function loadAll(){
 function renderOrchestrators(){
  var list=(STATE.orchestrators||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_probe')+'</button><button class="secondary" onclick="dupTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_dup')+'</button><button class="secondary" onclick="renTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_ren')+'</button><button class="secondary" onclick="setDefaultTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_default')+'</button><button class="secondary" onclick="editOrch(\'+'+esc(o.name)+'\')">'+t('btn_edit')+'</button><button class="danger" onclick="deleteOrch(\'+'+esc(o.name)+'\')">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">'+t('badge_active')+'</span>':'')+(o.default?'<span class="badge">'+t('badge_default')+'</span>':'')+'<br><span class="help">'+esc(o.url)+'</span> <span id="probe-orchestrator-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">'+t('no_orch')+'</p>';
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_orch')+'</h2>'+list+
- '<div class="group"><h3>'+t('add_update')+'</h3><div class="grid"><label>'+t('f_name')+'<input id="o-name"></label><label>'+t('f_url')+'<input id="o-url" placeholder="https://orchestrator.example.com"></label><label>'+t('f_apikey')+'<input id="o-key" type="password"></label><label>'+t('f_user')+'<input id="o-user"></label><label>'+t('f_pass')+'<input id="o-password" type="password"></label><label>'+t('f_tls')+'<select id="o-tls"><option>true</option><option>false</option></select></label><label>'+t('f_ssh_user')+'<input id="o-ssh-user"></label><label>'+t('f_ssh_pass')+'<input id="o-ssh-password" type="password"></label><label>'+t('f_enable')+'<input id="o-enable" type="password"></label><label>'+t('f_ssh_host')+'<input id="o-ssh-host"></label></div><div class="actions"><button onclick="saveOrch()">'+t('btn_save')+'</button><button class="secondary" onclick="applyOrch()"'>+t('apply_env')+'</button></div></div></section>';
+ '<div class="group"><h3>'+t('add_update')+'</h3><div class="grid"><label>'+t('f_name')+'<input id="o-name"></label><label>'+t('f_url')+'<input id="o-url" placeholder="https://orchestrator.example.com"></label><label>'+t('f_apikey')+'<input id="o-key" type="password"></label><label>'+t('f_user')+'<input id="o-user"></label><label>'+t('f_pass')+'<input id="o-password" type="password"></label><label>'+t('f_tls')+'<select id="o-tls"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select></label><label>'+t('f_ssh_user')+'<input id="o-ssh-user"></label><label>'+t('f_ssh_pass')+'<input id="o-ssh-password" type="password"></label><label>'+t('f_enable')+'<input id="o-enable" type="password"></label><label>'+t('f_ssh_host')+'<input id="o-ssh-host"></label></div><div class="actions"><button onclick="saveOrch()">'+t('btn_save')+'</button><button class="secondary" onclick="applyOrch()"'>+t('apply_env')+'</button></div></div></section>';
 }
 function editOrch(name){var o=(STATE.orchestrators||[]).find(function(x){return x.name===name});if(!o)return;q('#o-name').value=o.name;q('#o-url').value=o.url;q('#o-tls').value=String(o.verify_tls);q('#o-ssh-user').value=o.ssh_user||'';q('#o-ssh-host').value=o.ssh_host||''}
 async function saveOrch(){
@@ -177,7 +185,7 @@ async function applyOrch(){try{var r=await api('/api/apply',{name:q('#o-name').v
 function renderSse(){
  var list=(STATE.sse_platforms||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_probe')+'</button><button class="secondary" onclick="dupTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_dup')+'</button><button class="secondary" onclick="renTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_ren')+'</button><button class="secondary" onclick="setDefaultTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_default')+'</button><button class="secondary" onclick="editSse(\'+'+esc(o.name)+'\')">'+t('btn_edit')+'</button><button class="danger" onclick="deleteSse(\'+'+esc(o.name)+'\')">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">'+t('badge_active')+'</span>':'')+(o.default?'<span class="badge">'+t('badge_default')+'</span>':'')+' <span class="badge">'+esc(o.provider)+'</span><br><span class="help">'+esc(o.base_url)+'</span> <span id="probe-sse-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">'+t('no_sse')+'</p>';
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_sse')+'</h2><p>Administra N plataformas SSE de forma independiente (p. ej. varias instancias de Axis Security). Cada una guarda su propio token y URL.</p>'+list+
- '<div class="group"><h3>'+t('add_update_sse')+'</h3><div class="grid"><label>'+t('f_name')+'<input id="s-name" placeholder="axis-prod"></label><label>'+t('f_provider')+'<select id="s-provider"><option>axis</option></select></label><label>'+t('f_baseurl')+'<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>'+t('f_token')+'<input id="s-token" type="password"></label><label>Verificar TLS<select id="s-tls"><option>true</option><option>false</option></select></label><label>'+t('f_timeout')+'<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">'+t('btn_save')+'</button><button class="secondary" onclick="applySse()"'>+t('apply_env')+'</button></div></div></section>';
+ '<div class="group"><h3>'+t('add_update_sse')+'</h3><div class="grid"><label>'+t('f_name')+'<input id="s-name" placeholder="axis-prod"></label><label>'+t('f_provider')+'<select id="s-provider"><option>axis</option></select></label><label>'+t('f_baseurl')+'<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>'+t('f_token')+'<input id="s-token" type="password"></label><label>Verificar TLS<select id="s-tls"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select></label><label>'+t('f_timeout')+'<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">'+t('btn_save')+'</button><button class="secondary" onclick="applySse()"'>+t('apply_env')+'</button></div></div></section>';
 }
 function editSse(name){var o=(STATE.sse_platforms||[]).find(function(x){return x.name===name});if(!o)return;q('#s-name').value=o.name;q('#s-provider').value=o.provider;q('#s-url').value=o.base_url;q('#s-tls').value=String(o.verify_tls);q('#s-timeout').value=o.timeout}
 async function saveSse(){
@@ -204,7 +212,7 @@ function wizDependsOk(f){
 }
 function wizFieldHtml(f){
  var id='wiz-'+f.key,input='';
- if(f.kind==='boolean')input='<select id="'+id+'" data-wiz="'+f.key+'"><option value="true">true</option><option value="false">false</option></select>';
+ if(f.kind==='boolean')input='<select id="'+id+'" data-wiz="'+f.key+'"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select>';
  else if(f.kind==='choice')input='<select id="'+id+'" data-wiz="'+f.key+'">'+f.choices.map(function(v){return '<option>'+esc(v)+'</option>'}).join('')+'</select>';
  else input='<input id="'+id+'" data-wiz="'+f.key+'" type="'+(f.secret?'password':(f.kind==='integer'||f.kind==='number'?'number':'text'))+'" placeholder="'+(f.secret&&f.configured?'Configurado; vacío conserva el secreto':'')+'">';
  var req=f.required?' <span class="req">*</span>':'';
@@ -334,30 +342,31 @@ async function changePass(){
  try{var r=await api('/api/users/password',{username:q('#p-user').value.trim(),old_password:q('#p-old').value,new_password:q('#p-new').value});notice(r.message||r.error,r.ok?'ok':'err')}catch(e){notice(e.message,'err')}
 }
 
-function targetSelectorHtml(){
- var orchs=STATE.orchestrators||[], sses=STATE.sse_platforms||[];
- if(!orchs.length&&!sses.length)return '';
- var opts='<option value="">'+t('all_targets')+'</option>';
- if(orchs.length)opts+='<optgroup label="'+t('h2_orch')+'">'+orchs.map(function(o){return '<option value="orchestrator:'+esc(o.name)+'">'+esc(o.name)+'</option>'}).join('')+'</optgroup>';
- if(sses.length)opts+='<optgroup label="'+t('h2_sse')+'">'+sses.map(function(o){return '<option value="sse:'+esc(o.name)+'">'+esc(o.name)+'</option>'}).join('')+'</optgroup>';
- return '<div class="group"><h3>'+t('per_target')+'</h3><label>'+t('view_target')+'<select id="cfg-target" onchange="renderTargetPanel()">'+opts+'</select></label><div id="target-panel"></div></div>';
+var CFG_TAB='global';
+function cfgTargets(){
+ var r=[];
+ (STATE.orchestrators||[]).forEach(function(o){r.push({id:'orchestrator:'+o.name,label:o.name,obj:o,kind:'orchestrator'})});
+ (STATE.sse_platforms||[]).forEach(function(o){r.push({id:'sse:'+o.name,label:o.name,obj:o,kind:'sse'})});
+ return r;
 }
-function renderTargetPanel(){
- var sel=q('#cfg-target');var el=q('#target-panel');if(!sel||!el)return;
- var v=sel.value;if(!v){el.innerHTML='';return}
- var parts=v.split(':');var kind=parts[0];var name=parts.slice(1).join(':');
- var list=kind==='sse'?(STATE.sse_platforms||[]):(STATE.orchestrators||[]);
- var o=list.find(function(x){return x.name===name});if(!o){el.innerHTML='';return}
- var rows=[['URL',o.url||o.base_url],['username',o.username],['ssh_host',o.ssh_host],['ssh_user',o.ssh_user]];
+function targetsNavHtml(){
+ var ts=cfgTargets();if(!ts.length)return '';
+ var h='<div class="wizbar"><button class="secondary" style="padding:5px 10px;font-size:.78rem'+'" onclick="cfgTab(\'global\')">'+t('global_vars')+'</button>';
+ ts.forEach(function(x){h+='<button class="secondary" style="padding:5px 10px;font-size:.78rem" onclick="cfgTab(\''+esc(x.id)+'\')">'+esc(x.label)+'</button>'});
+ return h+'</div>';
+}
+function cfgTab(id){CFG_TAB=id;renderConfig()}
+function targetPanelHtml(x){
+ var o=x.obj;
+ var rows=[['URL',o.url||o.base_url],['username',o.username||''],['ssh_host',o.ssh_host||''],['ssh_user',o.ssh_user||'']];
  var flags=[];
- if(o.has_api_key)flags.push('has_api_key');if(o.has_password)flags.push('has_password');if(o.has_ssh_password)flags.push('has_ssh_password');if(o.has_enable_password)flags.push('has_enable_password');if(o.has_admin_token)flags.push('has_admin_token');
- el.innerHTML='<div class="orch"><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">'+t('badge_active')+'</span>':'')+(o.default?'<span class="badge">'+t('badge_default')+'</span>':'')+'<dl class="kv">'+rows.filter(function(r){return r[1]}).map(function(r){return '<dt>'+esc(r[0])+'</dt><dd class="mono">'+esc(r[1])+'</dd>'}).join('')+'<dt>verify_tls</dt><dd>'+String(o.verify_tls)+'</dd>'+(o.timeout!==undefined?'<dt>timeout</dt><dd>'+esc(o.timeout)+'</dd>':'')+'</dl>'+(flags.length?'<p class="help">secretos: '+flags.join(', ')+'</p>':'')+'<p class="help">'+t('target_info')+' · '+esc(name)+'</p></div>';
+ if(o.has_api_key)flags.push('api_key');if(o.has_password)flags.push('password');if(o.has_ssh_password)flags.push('ssh_password');if(o.has_enable_password)flags.push('enable_password');if(o.has_admin_token)flags.push('admin_token');
+ return '<div class="orch"><strong>'+esc(o.name)+'</strong> <span class="badge">'+t(x.kind==='sse'?'h2_sse':'h2_orch')+'</span> '+(o.active?'<span class="badge" style="color:#075842;background:#d8f8eb">'+t('badge_active')+'</span>':'')+(o.default?'<span class="badge" style="color:#075842;background:#d8f8eb">'+t('badge_default')+'</span>':'')+'<dl class="kv">'+rows.filter(function(r){return r[1]}).map(function(r){return '<dt>'+esc(r[0])+'</dt><dd class="mono">'+esc(r[1])+'</dd>'}).join('')+'<dt>verify_tls</dt><dd>'+(o.verify_tls?t('yes'):t('no'))+'</dd>'+(o.timeout!==undefined?'<dt>timeout</dt><dd>'+esc(o.timeout)+'</dd>':'')+'</dl>'+(flags.length?'<p class="help">secretos: '+flags.join(', ')+'</p>':'')+'<p class="help">'+t('target_info')+' · '+esc(o.name)+'</p></div>';
 }
 function blobsInfoHtml(){
  var b=STATE.blobs||{};
  return '<p class="help">EC_ORCHESTRATORS_JSON: '+(b.orchestrators?t('blob_set'):t('blob_unset'))+' · EC_SSE_PLATFORMS_JSON: '+(b.sse?t('blob_set'):t('blob_unset'))+'</p>';
 }
-
 async function renderTls(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tls_title')+'</h2><p class="help">'+t('tls_desc')+'</p><p class="help">'+t('checking')+'</p></section>';
  try{
@@ -395,9 +404,27 @@ async function delTls(){
  if(!confirm(t('tls_delete')+'?'))return;
  try{var r=await api('/api/tls/delete',{});notice(r.message||r.error,r.ok?'ok':'err');await renderTls()}catch(e){notice(e.message,'err')}
 }
+async function renderTools(){
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('tools_title')+'</h2><p class="help">'+t('tools_desc')+'</p><p class="help">'+t('checking')+'</p></section>';
+ try{
+  var r=await api('/api/tools');
+  var canWrite=ME&&ME.role!=='viewer';
+  var rows=r.tools.map(function(x){return '<div class="orch"><label class="clear" style="font-weight:700;margin:0"><input type="checkbox" '+(x.disabled?'':'checked')+' style="width:auto;margin:0" '+(canWrite?'onchange="toggleTool(\''+esc(x.name)+'\',this.checked)"':'disabled')+'> '+esc(x.name)+'</label><span class="help">'+esc(x.description)+'</span></div>'}).join('');
+  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tools_title')+'</h2><p class="help">'+t('tools_desc')+'</p><p><span class="badge">'+r.total+'</span> '+t('tools_total')+' · <span class="badge">'+r.disabled.length+'</span> '+t('tools_disabled')+'</p><div class="actions"><button class="secondary" onclick="showAgentPrompt()">'+t('agent_btn')+'</button></div><div id="tools-list">'+rows+'</div></section>';
+ }catch(e){notice(e.message,'err')}
+}
+async function toggleTool(name,enabled){
+ try{var r=await api('/api/tools/toggle',{name:name,enabled:enabled});notice(r.ok?((enabled?t('tool_on'):t('tool_off'))+' '+name):(r.error||'Error'),r.ok?'ok':'err');if(r.ok)await renderTools()}catch(e){notice(e.message,'err')}
+}
+async function showAgentPrompt(){
+ try{var r=await api('/api/agent-prompt');if(!q('#agent-dlg'))q('#app').innerHTML+=agentDialogHtml();q('#agent-text').textContent=r.prompt;var d=q('#agent-dlg');d.showModal?d.showModal():d.setAttribute('open','')}catch(e){notice(e.message,'err')}
+}
+function agentDialogHtml(){return '<dialog id="agent-dlg" style="max-width:780px;width:calc(100% - 30px)"><h3>'+t('agent_title')+'</h3><p class="help">'+t('agent_desc')+'</p><pre id="agent-text" style="max-height:52vh;overflow:auto;background:#f6f8f9;border:1px solid var(--line);border-radius:4px;padding:12px;font-size:11px;white-space:pre-wrap"></pre><div class="actions"><button onclick="copyAgent()">'+t('copy')+'</button><button class="secondary" onclick="closeAgent()">'+t('custom_cancel')+'</button></div></dialog>'}
+function copyAgent(){var el=q('#agent-text');if(el&&navigator.clipboard){navigator.clipboard.writeText(el.textContent)}notice(t('copied'),'ok')}
+function closeAgent(){var d=q('#agent-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
 function fieldHtml(f){
  var id='cfg-'+f.key, input='';
- if(f.kind==='boolean')input='<select id="'+id+'" data-key="'+f.key+'"><option value="true">true</option><option value="false">false</option></select>';
+ if(f.kind==='boolean')input='<select id="'+id+'" data-key="'+f.key+'"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select>';
  else if(f.kind==='choice')input='<select id="'+id+'" data-key="'+f.key+'">'+f.choices.map(function(v){return '<option>'+esc(v)+'</option>'}).join('')+'</select>';
  else input='<input id="'+id+'" data-key="'+f.key+'" type="'+(f.secret?'password':(f.kind==='integer'||f.kind==='number'?'number':'text'))+'" value="'+esc(f.value)+'" placeholder="'+(f.secret&&f.configured?'Configurado; vacío conserva el secreto':'')+'">';
  var clear=f.secret&&f.configured?'<label class="clear"><input type="checkbox" data-clear="'+f.key+'">'+t('clear_secret')+'</label>':'';
@@ -405,9 +432,10 @@ function fieldHtml(f){
 }
 function renderConfig(){
  if(!CONFIG){q('#workspace').innerHTML='<section class="panel">Cargando variables...</section>';return}
+ if(CFG_TAB!=='global'){var ts=cfgTargets();var x=ts.find(function(v){return v.id===CFG_TAB});q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_config')+'</h2>'+targetsNavHtml()+(x?targetPanelHtml(x):'<p class="help">'+t('no_orch')+'</p>')+'</section>';return}
  var groups={};CONFIG.fields.forEach(function(f){var gk=f['group_'+LANG]||f.group;(groups[gk]||(groups[gk]=[])).push(f)});
  var stepOrder={};(CONFIG.steps||[]).forEach(function(s,i){stepOrder[s.id]=i});var gnames=Object.keys(groups).sort(function(a,b){var fa=groups[a][0],fb=groups[b][0];return (stepOrder[fa.step]??99)-(stepOrder[fb.step]??99)||a.localeCompare(b)});var html=gnames.map(function(name){return '<details class="group" open><summary><h3>'+esc(name)+'<span class="count">'+groups[name].length+'</span></h3></summary><div class="grid">'+groups[name].map(fieldHtml).join('')+'</div></details>'}).join('');
- q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_config')+'</h2><p>'+t('saved_in')+'<span class="mono">'+esc(CONFIG.env_file)+'</span>. '+t('secrets_note')+'</p>'+targetSelectorHtml()+html+blobsInfoHtml()+'<div class="actions"><button onclick="saveConfig()">'+t('btn_save_vars')+'</button><button class="secondary" onclick="restartServices()">'+t('btn_save_restart')+'</button></div></section>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_config')+'</h2><p>'+t('saved_in')+'<span class="mono">'+esc(CONFIG.env_file)+'</span>. '+t('secrets_note')+'</p>'+targetsNavHtml()+html+blobsInfoHtml()+'<div class="actions"><button onclick="saveConfig()">'+t('btn_save_vars')+'</button><button class="secondary" onclick="restartServices()">'+t('btn_save_restart')+'</button></div></section>';
  CONFIG.fields.forEach(function(f){var el=q('#cfg-'+f.key);if(el&&!f.secret)el.value=f.value});
 }
 async function saveConfig(restart){
