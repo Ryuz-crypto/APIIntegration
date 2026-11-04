@@ -277,6 +277,10 @@ def _public_state() -> dict:
         "ssh_enabled": os.environ.get("EC_SSH_ENABLED", "false").lower() == "true",
         "default_orchestrator": default_orch,
         "default_sse": default_sse,
+        "blobs": {
+            "orchestrators": bool(os.environ.get("EC_ORCHESTRATORS_JSON", "").strip()),
+            "sse": bool(os.environ.get("EC_SSE_PLATFORMS_JSON", "").strip()),
+        },
     }
 
 
@@ -699,6 +703,97 @@ async def api_users_delete(request):
     return JSONResponse({"ok": True, "deleted": deleted, "message": "Eliminado" if deleted else "No existía"})
 
 
+def _tls_dir() -> Path:
+    return Path(os.environ.get("EC_ADMIN_TLS_DIR", Path.cwd() / ".ec-admin-tls"))
+
+
+def _tls_paths() -> tuple[Path, Path]:
+    directory = _tls_dir()
+    cert = Path(os.environ.get("EC_ADMIN_TLS_CERT", "") or (directory / "cert.pem"))
+    key = Path(os.environ.get("EC_ADMIN_TLS_KEY", "") or (directory / "key.pem"))
+    return cert, key
+
+
+def _cert_fingerprint(pem: str) -> str | None:
+    try:
+        import ssl
+
+        der = ssl.PEM_cert_to_DER_cert(pem)
+        return hashlib.sha256(der).hexdigest()
+    except (ValueError, TypeError):
+        return None
+
+
+async def api_tls_status(request):
+    _session, denied = _authorize(request, "read")
+    if denied:
+        return denied
+    cert_path, key_path = _tls_paths()
+    cert_pem = cert_path.read_text(encoding="utf-8") if cert_path.is_file() else ""
+    return JSONResponse(
+        {
+            "ok": True,
+            "enabled": os.environ.get("EC_ADMIN_TLS_ENABLED", "false").lower() == "true",
+            "cert": str(cert_path),
+            "key": str(key_path),
+            "cert_present": bool(cert_pem),
+            "key_present": key_path.is_file(),
+            "fingerprint": _cert_fingerprint(cert_pem) if cert_pem else None,
+        }
+    )
+
+
+async def api_tls_upload(request):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    body = await request.json()
+    cert_pem = str(body.get("cert") or "")
+    key_pem = str(body.get("key") or "")
+    if "BEGIN CERTIFICATE" not in cert_pem:
+        return JSONResponse({"ok": False, "error": "El certificado debe ser PEM con bloque BEGIN CERTIFICATE"}, status_code=400)
+    if "PRIVATE KEY" not in key_pem:
+        return JSONResponse({"ok": False, "error": "La llave debe ser PEM con bloque PRIVATE KEY"}, status_code=400)
+    if _cert_fingerprint(cert_pem) is None:
+        return JSONResponse({"ok": False, "error": "Certificado PEM inválido"}, status_code=400)
+    cert_path, key_path = _tls_paths()
+    cert_path.parent.mkdir(parents=True, exist_ok=True)
+    cert_path.write_text(cert_pem if cert_pem.endswith("\n") else cert_pem + "\n", encoding="utf-8")
+    key_path.write_text(key_pem if key_pem.endswith("\n") else key_pem + "\n", encoding="utf-8")
+    cert_path.chmod(0o600)
+    key_path.chmod(0o600)
+    try:
+        update_env({"EC_ADMIN_TLS_CERT": str(cert_path), "EC_ADMIN_TLS_KEY": str(key_path)})
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    _audit_panel(session["user"], "tls_upload", str(cert_path), "ok", {"fingerprint": _cert_fingerprint(cert_pem)})
+    return JSONResponse(
+        {
+            "ok": True,
+            "message": f"Certificado guardado en {cert_path} (0600). Activa EC_ADMIN_TLS_ENABLED=true y reinicia el panel para servir HTTPS.",
+            "fingerprint": _cert_fingerprint(cert_pem),
+        }
+    )
+
+
+async def api_tls_delete(request):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    cert_path, key_path = _tls_paths()
+    removed = []
+    for path in (cert_path, key_path):
+        if path.is_file():
+            path.unlink()
+            removed.append(str(path))
+    try:
+        update_env({"EC_ADMIN_TLS_CERT": "", "EC_ADMIN_TLS_KEY": ""})
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    _audit_panel(session["user"], "tls_delete", ",".join(removed) or "(nada)", "ok")
+    return JSONResponse({"ok": True, "removed": removed, "message": "Certificados eliminados" if removed else "No había certificados"})
+
+
 async def api_users_password(request):
     session, denied = _authorize(request, "read")
     if denied:
@@ -766,6 +861,9 @@ def build_admin_app() -> Starlette:
             Route("/api/users", api_users_save, methods=["POST"]),
             Route("/api/users/delete", api_users_delete, methods=["POST"]),
             Route("/api/users/password", api_users_password, methods=["POST"]),
+            Route("/api/tls", api_tls_status, methods=["GET"]),
+            Route("/api/tls/upload", api_tls_upload, methods=["POST"]),
+            Route("/api/tls/delete", api_tls_delete, methods=["POST"]),
         ]
     )
 
@@ -786,14 +884,23 @@ def main() -> None:
             "127.0.0.1 para fijar la contraseña) y vuelve a arrancar.\n"
             "Alternativa: EC_ADMIN_HOST=127.0.0.1 para acceso solo local."
         )
-    print(f"ec-mcp admin UI on http://{host}:{port}")
-    if not _loopback_only(host):
+    tls_enabled = os.environ.get("EC_ADMIN_TLS_ENABLED", "false").lower() == "true"
+    cert_file = os.environ.get("EC_ADMIN_TLS_CERT", "")
+    key_file = os.environ.get("EC_ADMIN_TLS_KEY", "")
+    scheme = "https" if tls_enabled and cert_file and key_file else "http"
+    print(f"ec-mcp admin UI on {scheme}://{host}:{port}")
+    if scheme == "http" and not _loopback_only(host):
         print(
             "AVISO: la UI de admin es alcanzable desde la red. Asegurate de "
             "usar EC_ADMIN_PASSWORD fuerte y, si es posible, restringir el "
             "acceso por firewall al puerto " + str(port) + "."
         )
-    uvicorn.run(build_admin_app(), host=host, port=port, log_level="warning")
+    if tls_enabled and not (cert_file and key_file):
+        raise SystemExit("ERROR: EC_ADMIN_TLS_ENABLED=true requiere EC_ADMIN_TLS_CERT y EC_ADMIN_TLS_KEY existentes.")
+    ssl_kwargs = {}
+    if scheme == "https":
+        ssl_kwargs = {"ssl_certfile": cert_file, "ssl_keyfile": key_file}
+    uvicorn.run(build_admin_app(), host=host, port=port, log_level="warning", **ssl_kwargs)
 
 
 if __name__ == "__main__":

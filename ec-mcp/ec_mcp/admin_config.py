@@ -74,6 +74,10 @@ SETTINGS = (
     Setting("EC_ADMIN_LOGIN_WINDOW_SECONDS", "Panel web", "Ventana de bloqueo (segundos)", "number", "60", minimum=1, maximum=3600, step="panel"),
     Setting("EC_ADMIN_PASSWORD_FILE", "Panel web", "Archivo de password", step="panel"),
     Setting("EC_ADMIN_STORE", "Panel web", "Archivo de orquestadores", step="panel"),
+    Setting("EC_ADMIN_TLS_ENABLED", "Panel web", "Habilitar HTTPS en el panel", "boolean", "false", step="panel", help="Usa los certificados subidos desde la pestaña Certificados."),
+    Setting("EC_ADMIN_TLS_CERT", "Panel web", "Ruta del certificado TLS (PEM)", step="panel", depends_on=("EC_ADMIN_TLS_ENABLED", "true")),
+    Setting("EC_ADMIN_TLS_KEY", "Panel web", "Ruta de la llave privada TLS (PEM)", step="panel", depends_on=("EC_ADMIN_TLS_ENABLED", "true")),
+    Setting("EC_ADMIN_TLS_DIR", "Panel web", "Directorio de certificados subidos", default=".ec-admin-tls", step="panel", depends_on=("EC_ADMIN_TLS_ENABLED", "true")),
     Setting("EC_UPDATE_ALLOW_WEB", "Actualizaciones", "Permitir actualizaciones web", "boolean", "true", step="updates"),
     Setting("EC_UPDATE_REPOSITORY", "Actualizaciones", "Repositorio GitHub", default="Ryuz-crypto/APIIntegration", step="updates", help="Formato owner/repository."),
     Setting("EC_UPDATE_BRANCH", "Actualizaciones", "Rama de publicación", default="main", step="updates"),
@@ -178,7 +182,31 @@ EN_LABELS = {
     "EC_DASHBOARD_PORT": "Dashboard HTTP port on remote",
     "EC_DASHBOARD_DIR": "Dashboard directory on remote",
     "EC_DASHBOARD_REFRESH_SECONDS": "Dashboard auto-refresh (seconds)",
+    "EC_ADMIN_TLS_ENABLED": "Serves the panel over HTTPS using the uploaded certificates.",
+    "EC_ADMIN_TLS_CERT": "PEM certificate written by the Certificates tab.",
+    "EC_ADMIN_TLS_KEY": "PEM private key written by the Certificates tab.",
+    "EC_ADMIN_TLS_DIR": "Upload target directory; files are written with 0600.",
 }
+
+GROUP_EN = {
+    "Orchestrator": "Orchestrator",
+    "SSH opcional": "Optional SSH",
+    "Axis Security (SSE)": "Axis Security (SSE)",
+    "Multi-target": "Multi-target",
+    "Seguridad": "Security",
+    "Transporte MCP": "MCP transport",
+    "Panel web": "Web panel",
+    "Actualizaciones": "Updates",
+    "Dashboard remoto (SSH)": "Remote dashboard (SSH)",
+}
+
+EN_LABELS_TLS = {
+    "EC_ADMIN_TLS_ENABLED": "Enable HTTPS on the panel",
+    "EC_ADMIN_TLS_CERT": "TLS certificate path (PEM)",
+    "EC_ADMIN_TLS_KEY": "TLS private key path (PEM)",
+    "EC_ADMIN_TLS_DIR": "Directory for uploaded certificates",
+}
+EN_LABELS.update(EN_LABELS_TLS)
 
 EN_HELP = {
     "EC_ORCHESTRATOR_URL": "Orchestrator HTTP/HTTPS URL. Required to use the Orchestrator.",
@@ -237,6 +265,7 @@ def public_config(path: Path | None = None) -> dict:
         item["depends_on"] = list(setting.depends_on) if setting.depends_on else None
         item["label_en"] = EN_LABELS.get(setting.key, setting.label)
         item["help_en"] = EN_HELP.get(setting.key, setting.help)
+        item["group_en"] = GROUP_EN.get(setting.group, setting.group)
         value = values.get(setting.key, setting.default)
         item["configured"] = bool(value) if setting.secret else True
         item["value"] = "" if setting.secret else value
