@@ -294,10 +294,28 @@ def test_page_script_executes_cleanly_in_node(tmp_path):
         "global.confirm=function(){return true};global.prompt=function(){return ''};\n",
         encoding="utf-8",
     )
+    tail = (
+        "global.fetch=function(p){var d={ok:true};if(p==='/login')d={ok:true,user:'admin',role:'admin'};"
+        "if(p==='/api/state')d={orchestrators:[],sse_platforms:[],session:{},blobs:{}};"
+        "var F={key:'K',group:'G',label:'l',kind:'text',secret:false,required:false,depends_on:null,step:'x',value:'',choices:[],configured:true,minimum:null,maximum:null,help:''};"
+        "if(p==='/api/config')d={fields:[F],steps:[{id:'x',title:'X',title_en:'X'}],env_file:'.env'};"
+        "if(p==='/api/update/status')d={state:'idle'};"
+        "if(p==='/api/wizard')d={steps:[{id:'x',title:'X',title_en:'X'}],fields:[F],state:{},env_file:'.env'};"
+        "if(p==='/api/tools')d={ok:true,total:0,disabled:[],tools:[]};"
+        "if(p==='/api/tls')d={ok:true,enabled:false,cert_present:false,key_present:false};"
+        "return Promise.resolve({status:200,json:function(){return Promise.resolve(d)}})};"
+        "(async function(){await login();await new Promise(function(r){setTimeout(r,30)});"
+        "var tabs=['wizard','orch','sse','svc','config','tls','tools','update','users'];"
+        "for(var i=0;i<tabs.length;i++){showTab(tabs[i]);await new Promise(function(r){setTimeout(r,10)});"
+        "var ih=String(document.querySelector('#workspace').innerHTML||'');"
+        "if(ih.charAt(0)!=='<'){console.error('TAB '+tabs[i]+' no renderiza: '+ih.slice(0,40));process.exit(1)}}\n"
+        "console.log('ALL TABS RENDER HTML')})();\n"
+    )
     run = tmp_path / "run.js"
-    run.write_text(stub.read_text(encoding="utf-8") + script.read_text(encoding="utf-8"), encoding="utf-8")
+    run.write_text(stub.read_text(encoding="utf-8") + script.read_text(encoding="utf-8") + tail, encoding="utf-8")
     result = subprocess.run([node, str(run)], capture_output=True, text=True, timeout=30)  # noqa: S603 - node binario local sobre fixture propio
     assert result.returncode == 0, result.stderr[-2000:]
+    assert "ALL TABS RENDER HTML" in result.stdout
 
 
 def _openssl():
@@ -451,6 +469,10 @@ def test_page_has_tools_tab_and_clean_chrome():
     assert "cfgTab" in PAGE and "global_vars" in PAGE
     assert "t('yes')" in PAGE
     assert "ACCENTS.map" not in PAGE
+    assert 'class="slider"' in PAGE and "tools-grid" in PAGE
+    assert "brand-preview" in PAGE and "icon-picker" in PAGE and "applySavedTheme" in PAGE
+    assert 'onclick="applyOrch()">' in PAGE and 'onclick="applySse()">' in PAGE
+    assert '()"' + chr(39) + '>' not in PAGE  # patrón del bug "false": comilla antes del >
 
 
 def test_new_routes_registered():
