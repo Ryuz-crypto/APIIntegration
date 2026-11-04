@@ -5,54 +5,80 @@ PAGE = r"""<!doctype html>
 <title>ec-mcp 3.0 control plane</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-:root{color-scheme:light;--bg:#edf1f4;--panel:#ffffff;--panel2:#f6f8f9;--line:#d8e0e6;--text:#1b2733;--muted:#5d6b7a;--brand:#01a982;--ok:#1e7e34;--warn:#b45309;--bad:#b91c1c}
-*{box-sizing:border-box}body{font-family:"Segoe UI",Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);margin:0;min-height:100vh}
-main{max-width:1180px;margin:auto;padding:22px 18px 60px}
-header{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#00263a;background:color-mix(in srgb, var(--brand) 72%, #001521);color:#fff;border-radius:8px;padding:13px 18px}
-.brand h1{margin:0;font-size:1.45rem}.brand p{margin:5px 0 0;color:var(--muted)}
-header .brand h1{color:#fff;font-size:1.2rem}header .brand p{color:#aebfcc;font-size:.85rem}
-.badge{border:1px solid var(--brand);color:var(--brand);background:#fff;border-radius:999px;padding:4px 10px;font-size:.75rem}
-header .badge{background:transparent;color:#8fe6c8;border-color:#33566b}
-nav{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px}
-nav button{background:#fff;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px 13px;font-weight:600}
-nav button.active-tab{background:var(--brand);border-color:var(--brand);color:#fff}
-button{padding:9px 15px;border:0;border-radius:6px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
-button.secondary{background:#e3e9ee;color:var(--text)}button.danger{background:var(--bad);color:#fff}button:disabled{opacity:.45;cursor:not-allowed}
-input,select{width:100%;margin-top:5px;padding:9px 10px;background:#fff;border:1px solid var(--line);border-radius:6px;color:var(--text)}
-label{display:block;color:#33414f;font-size:.85rem}.help{display:block;color:var(--muted);font-size:.78rem;margin-top:4px}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:20px;margin-top:16px;box-shadow:0 1px 3px rgba(0,38,58,.07)}
-.group{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:15px;margin-top:14px}.group h3{margin:0 0 13px;color:#0b4f42;font-size:.95rem}
-.field{margin-bottom:12px}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:16px}
-.msg{padding:10px 12px;border-radius:6px;margin-top:14px;white-space:pre-wrap}
-.ok{background:#e7f4ec;border:1px solid #bfe3cb;color:#14532d}.err{background:#fdecea;border:1px solid #f3c2bc;color:#7f1d1d}.info{background:#ecf3fb;border:1px solid #c8dcf2;color:#1e3a5f}
-.orch{padding:12px 14px;border:1px solid var(--line);border-radius:8px;margin:8px 0;background:#fff}
-.orch-actions{float:right;display:flex;gap:6px}.orch-actions button{padding:6px 10px;font-size:.78rem}
-.secret-note{font-size:.74rem;color:#0f766e}.clear{display:flex;align-items:center;gap:6px;margin-top:6px}.clear input{width:auto;margin:0}
+:root{color-scheme:light;--green:#01a982;--ink:#102a43;--cyan:#00c8ff;--brand-header:#073b4c;--blue:#00739d;--rose:#d94f70;--gold:#f2b900;--line:#c8d6df;--page-bg:#edf5f6;--surface:#fff;--text:#102a43;--muted:#5d7480;--brand:var(--green)}
+*{box-sizing:border-box}
+body{font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:var(--page-bg);color:var(--text);margin:0;min-height:100vh}
+main{max-width:1500px;margin:0 auto;padding-bottom:40px}
+header.topbar{min-height:68px;padding:12px 32px;display:flex;align-items:center;justify-content:space-between;gap:16px;color:#fff;background:var(--brand-header);border-bottom:4px solid var(--green)}
+.brand{display:flex;align-items:center;gap:10px;color:var(--cyan)}
+.logo{width:34px;height:34px;object-fit:contain}
+.brand strong{display:block;font-size:20px;color:#fff}
+.brand span{display:block;color:#d7eff3;font-size:12px}
+.topbar-actions{display:flex;align-items:center;gap:10px}
+.version{font-size:12px;padding:5px 9px;border:1px solid #4f7080;border-radius:4px;color:#d7eff3;white-space:nowrap}
+nav{display:flex;gap:2px;padding:0 32px;background:#fff;border-bottom:1px solid var(--line);overflow-x:auto}
+nav button{flex:0 0 auto;border:0;padding:14px 18px 12px;color:#506b78;background:transparent;border-bottom:3px solid transparent;font-weight:600;cursor:pointer;font-size:14px}
+nav button.active-tab{color:var(--blue);border-bottom-color:var(--green);font-weight:700}
+.panel{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--brand);border-radius:6px;padding:20px;margin:16px 32px 0;box-shadow:0 8px 18px rgba(16,42,67,.08)}
+#notice{margin:16px 32px 0}
+.msg{padding:10px 13px;border-left:4px solid var(--green);background:#e2f8ef;color:#075842;border-radius:4px;white-space:pre-wrap}
+.msg.err{border-left-color:var(--rose);background:#fde5ec;color:#8b2140}
+.msg.info{border-left-color:var(--blue);background:#e3f2fa;color:#0b4a6b}
+.group{background:#f8fbfc;border:1px solid var(--line);border-radius:6px;padding:15px;margin-top:14px}
+.group>summary{cursor:pointer;list-style:none}
+.group>summary::-webkit-details-marker{display:none}
+.group h3{margin:0;color:var(--blue);font-size:14px;font-weight:700;display:inline}
+.count{display:inline-grid;place-items:center;min-width:24px;height:22px;margin-left:8px;padding:0 6px;background:#d5f7eb;color:#05684e;border-radius:4px;font-size:11px;font-weight:800;vertical-align:middle}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.field{margin-bottom:12px}
+label{display:block;color:#385563;font-size:13px;font-weight:700;margin:12px 0 0}
+input,select,textarea{display:block;width:100%;margin-top:5px;min-height:39px;padding:8px 10px;color:var(--text);background:var(--surface);border:1px solid #aebfca;border-radius:4px;outline:none;font:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(1,169,130,.14)}
+.help{display:block;color:#617985;font-size:12px;margin-top:5px}
+.actions{display:flex;gap:9px;margin-top:18px;flex-wrap:wrap}
+button{border-radius:4px;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:8px 12px;font-weight:700;border:1px solid var(--green);background:var(--green);color:#06261f;cursor:pointer;font:inherit}
+button:hover{background:#00c495}
+button.secondary{color:#14546a;background:#fff;border:1px solid #8eabb7}
+button.secondary:hover{border-color:var(--blue);color:var(--blue);background:#fff}
+button.danger{color:#fff;background:#a12449;border-color:#a12449}
+button.danger:hover{background:#c22c58}
+button:disabled{opacity:.5;cursor:not-allowed}
+.badge{display:inline-block;padding:3px 8px;border:1px solid var(--line);border-radius:4px;font-size:11px;font-weight:700;background:#edf2f4;color:#4e6672}
+.orch{padding:12px 14px;border:1px solid var(--line);border-radius:5px;margin:8px 0;background:#fff}
+.orch-actions{float:right;display:flex;gap:6px}
+.orch-actions button{min-height:31px;padding:5px 8px;font-size:12px}
+.secret-note{font-size:11px;color:#0f766e}
+.clear{display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400}
+.clear input{width:auto;margin:0;min-height:0}
 .mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;word-break:break-all}
-dialog{border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text);max-width:480px;width:calc(100% - 30px);padding:22px}
-.req{color:#dc2626;font-weight:800}.diff{width:100%;border-collapse:collapse;margin-top:10px}.diff td{padding:6px 8px;border-bottom:1px solid var(--line);font-size:.82rem;vertical-align:top}
+.req{color:#a12449;font-weight:800}
+.diff{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+.diff td{padding:8px 10px;border-bottom:1px solid #e3eaed;vertical-align:top}
 .wizbar{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
-.sw{width:16px;height:16px;border-radius:50%;display:inline-block;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #b9c4cd;margin-left:4px}
-@media(max-width:760px){.grid{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}}
-
-.logo{height:30px;width:auto;max-width:120px;border-radius:6px;vertical-align:middle;margin-right:9px;background:#fff;padding:2px}
-.brand{display:flex;align-items:center}
-.chrome{display:flex;gap:10px;align-items:center}
+.sw{width:18px;height:18px;border-radius:50%;display:inline-block;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #8eabb7}
 .sw.active{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--brand)}
-.chip{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:999px;padding:5px 12px;font-size:.78rem;cursor:pointer;list-style:none}
+.chrome{display:flex;gap:8px;align-items:center}
+.chip{display:flex;align-items:center;background:rgba(255,255,255,.08);border:1px solid #4f7080;color:#bffce8;border-radius:4px;padding:6px 10px;font-size:12px;cursor:pointer;list-style:none}
+.chip:hover{border-color:var(--cyan);color:#fff}
 details.menu{position:relative}
-details.menu .menu-body{position:absolute;right:0;top:34px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,38,58,.18);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:190px;z-index:20}
-details.menu .menu-body button{width:100%;text-align:left}
-dialog .actions{margin-top:14px}
-textarea{width:100%;min-height:110px;margin-top:5px;padding:9px 10px;background:#fff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-family:ui-monospace,Consolas,monospace;font-size:.78rem}
-.kv{display:grid;grid-template-columns:180px 1fr;gap:6px 10px;font-size:.84rem;margin-top:10px}
-.kv dt{color:var(--muted)}.kv dd{margin:0;word-break:break-all}
+details.menu .menu-body{position:absolute;right:0;top:36px;background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 24px rgba(7,59,76,.25);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:200px;z-index:20}
+details.menu .menu-body button{width:100%;justify-content:flex-start}
+dialog{border:1px solid var(--line);border-top:5px solid var(--gold);border-radius:6px;background:#fff;color:var(--text);max-width:520px;width:calc(100% - 30px);padding:22px;box-shadow:0 20px 60px rgba(4,31,42,.35)}
+dialog::backdrop{background:rgba(7,59,76,.68)}
+textarea{min-height:110px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.kv{display:grid;grid-template-columns:180px 1fr;gap:6px 10px;font-size:13px;margin-top:10px}
+.kv dt{color:#617985;font-weight:700}
+.kv dd{margin:0;word-break:break-all}
+.cert-status{display:grid;gap:6px;margin:12px 0 16px;padding:14px;border-left:4px solid #8da2aa;background:#edf3f5;border-radius:4px}
+.cert-status.active{border-left-color:var(--green);background:#e2f8ef}
+.cert-status span{color:#4c6874;font-size:12px;overflow-wrap:anywhere}
+.confirm-code{display:block;padding:10px;overflow-wrap:anywhere;color:#704f00;background:#fff5ce;border:1px solid #e6c65a;border-radius:4px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+@media(max-width:900px){header.topbar,nav{padding-left:16px;padding-right:16px}.panel,#notice{margin-left:16px;margin-right:16px}.grid{grid-template-columns:1fr}}
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=0, WDRAFT={}, CURTAB='wizard';
 var LANG=localStorage.getItem('ec-lang')||'es';
-var ACCENTS=[{n:'HPE Green',c:'#01a982'},{n:'HPE Blue',c:'#0078d3'},{n:'HPE Navy',c:'#00263a'},{n:'Aruba Teal',c:'#00b0b9'},{n:'Orange',c:'#f59e0b'},{n:'Red',c:'#dc2626'},{n:'Slate',c:'#475569'},{n:'Violet',c:'#7c3aed'},{n:'Pink',c:'#db2777'},{n:'Brown',c:'#92400e'}];
+var ACCENTS=[{n:'HPE Green',c:'#01a982'},{n:'Cyan',c:'#00c8ff'},{n:'Blue',c:'#00739d'},{n:'Gold',c:'#f2b900'},{n:'Rose',c:'#d94f70'},{n:'Header teal',c:'#073b4c'}];
 var I18N={es:{nav_wizard:'Asistente',nav_orch:'Orquestadores',nav_sse:'Plataformas SSE',nav_svc:'Servicios',nav_config:'Variables',nav_update:'Actualizaciones',nav_users:'Usuarios',nav_out:'Salir',tagline:'Configuración, operación y actualizaciones sin SSH',login_title:'Control plane administrativo',login_user:'Usuario (opcional si hay varios)',login_pass:'Contraseña',login_enter:'Entrar',h2_orch:'Orquestadores',h2_sse:'Plataformas SSE (multi-tenant)',h2_svc:'Servicios',h2_config:'Variables del servicio',h2_update:'Actualizaciones desde GitHub',h2_users:'Usuarios del panel',h2_wizard:'Asistente de configuración',btn_save:'Guardar',btn_save_vars:'Guardar variables',btn_save_restart:'Guardar y reiniciar servicios',btn_save_restart_short:'Guardar y reiniciar',btn_recheck:'Volver a comprobar',btn_detect:'Detectar GitHub',btn_apply_update:'Aplicar actualización',btn_back:'Atrás',btn_next:'Siguiente',btn_review:'Revisar cambios',btn_probe:'Probar',btn_dup:'Duplicar',btn_ren:'Renombrar',btn_default:'Por defecto',btn_edit:'Editar',btn_delete:'Eliminar',btn_save_orch:'Guardar orquestador',btn_save_sse:'Guardar plataforma SSE',loading:'Cargando...',wiz_loading:'Cargando pasos...',secret_set:'Secreto configurado; no se muestra.',secret_unset:'Sin configurar.'},en:{nav_wizard:'Wizard',nav_orch:'Orchestrators',nav_sse:'SSE platforms',nav_svc:'Services',nav_config:'Settings',nav_update:'Updates',nav_users:'Users',nav_out:'Sign out',tagline:'Configuration, operations and updates without SSH',login_title:'Administrative control plane',login_user:'User (optional when there are several)',login_pass:'Password',login_enter:'Sign in',h2_orch:'Orchestrators',h2_sse:'SSE platforms (multi-tenant)',h2_svc:'Services',h2_config:'Service settings',h2_update:'Updates from GitHub',h2_users:'Panel users',h2_wizard:'Setup wizard',btn_save:'Save',btn_save_vars:'Save settings',btn_save_restart:'Save and restart services',btn_save_restart_short:'Save and restart',btn_recheck:'Re-check',btn_detect:'Check GitHub',btn_apply_update:'Apply update',btn_back:'Back',btn_next:'Next',btn_review:'Review changes',btn_probe:'Test',btn_dup:'Duplicate',btn_ren:'Rename',btn_default:'Default',btn_edit:'Edit',btn_delete:'Delete',btn_save_orch:'Save orchestrator',btn_save_sse:'Save SSE platform',loading:'Loading...',wiz_loading:'Loading steps...',secret_set:'Secret configured; never displayed.',secret_unset:'Not configured.'}};
 function t(k,v){var d=I18N[LANG]||I18N.es;var s=d[k]||I18N.es[k]||k;if(v){for(var x in v){s=s.split('{'+x+'}').join(v[x])}}return s}
 function setLang(l){LANG=l;localStorage.setItem('ec-lang',l);if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
@@ -60,7 +86,7 @@ function setAccent(c){document.documentElement.style.setProperty('--brand',c);lo
 
 function siteName(){return localStorage.getItem('ec-site-name')||'ec-mcp control plane'}
 function siteLogo(){return localStorage.getItem('ec-logo')||''}
-function brandHtml(){var logo=siteLogo();return '<div class="brand">'+(logo?'<img class="logo" src="'+logo+'" alt="logo">':'')+'<h1>'+esc(siteName())+'</h1></div>'}
+function brandHtml(){var logo=siteLogo();return '<div class="brand">'+(logo?'<img class="logo" src="'+logo+'" alt="logo">':'')+'<div><strong>'+esc(siteName())+'</strong><span>'+t('tagline')+'</span></div></div>'}
 function openCustom(){var d=q('#custom-dlg');if(!d)return;var n=q('#custom-name');if(n)n.value=siteName();d.showModal?d.showModal():d.setAttribute('open','')}
 function closeCustom(){var d=q('#custom-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
 function saveCustom(){var name=q('#custom-name')?q('#custom-name').value.trim():'';if(name)localStorage.setItem('ec-site-name',name);var f=q('#custom-logo');if(f&&f.files&&f.files[0]){var r=new FileReader();r.onload=function(e){try{localStorage.setItem('ec-logo',String(e.target.result))}catch(err){notice('Icono demasiado grande','err')}closeCustom();if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}};r.readAsDataURL(f.files[0])}else{closeCustom();if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}}
@@ -73,6 +99,11 @@ document.documentElement.style.setProperty('--brand',localStorage.getItem('ec-ac
 var I18N2={es:{wiz_step:'Asistente · paso {a} de {b}',badge_active:'activo',badge_default:'por defecto',no_orch:'No hay orquestadores guardados.',no_sse:'No hay plataformas SSE guardadas.',per_target:'Configuración por target',view_target:'Ver configuración de',all_targets:'(todas las variables globales)',blob_set:'configurado',blob_unset:'vacío',nav_tls:'Certificados',menu_users:'Usuarios y contraseña',menu_custom:'Personalizar panel',f_name:'Nombre',f_url:'URL',f_apikey:'API key',f_user:'Usuario',f_pass:'Password',f_tls:'Verificar TLS',f_ssh_user:'Usuario SSH',f_ssh_pass:'Password SSH',f_enable:'Password enable',f_ssh_host:'Host SSH',f_provider:'Proveedor',f_baseurl:'URL base',f_token:'Token admin (Bearer JWT)',f_timeout:'Timeout (s)',add_update:'Agregar o actualizar',apply_env:'Aplicar al .env',add_update_sse:'Agregar o actualizar plataforma SSE',saved_in:'Se guardan en',secrets_note:'Los secretos nunca regresan al navegador.',clear_secret:'Eliminar secreto guardado',checking:'Comprobando...',svc_checked:'Estado verificado con peticiones reales el',latency:'latencia',orch_label:'Orchestrator',sse_label:'SSE',upd_worker:'Worker de actualizaciones',mcp_label:'Transporte MCP',review_title:'Revisar cambios antes de guardar',review_desc:'Preview sobre',review_nowrite:'; todavía no se escribe nada.',no_changes:'Sin cambios en variables.',targets_h:'Targets (orquestadores / SSE)',wiz_targets_help:'Guarda varios orquestadores y varias plataformas SSE a la vez; elige cuál queda por defecto para los tools sin target explícito.',probing:'probando...',probe_ok:'OK: ',probe_fail:'Fallo: ',no_users:'Sin usuarios todavía: se usa la contraseña única (EC_ADMIN_PASSWORD).',hashes_note:'Los hashes nunca se muestran ni se devuelven.',add_user:'Agregar o actualizar usuario',change_pass:'Cambiar contraseña',u_name:'Usuario',u_pass:'Contraseña',u_role:'Rol',u_old:'Contraseña actual',u_new:'Nueva contraseña',u_empty:'Usuario (vacío = mi sesión)',users_file:'Archivo',tls_title:'Certificados HTTPS',tls_desc:'Sube el certificado y la llave privada (PEM) del panel. Los archivos se guardan con permisos 0600 y el panel puede servirse en HTTPS con EC_ADMIN_TLS_ENABLED=true.',tls_cert:'Certificado PEM',tls_key:'Llave privada PEM',tls_upload:'Subir certificado',tls_delete:'Eliminar certificado',tls_enabled:'HTTPS activo',tls_disabled:'HTTPS desactivado',tls_fp:'Huella SHA-256',tls_present:'presente',tls_missing:'ausente',tls_none:'Sin certificado subido.',custom_title:'Personalizar panel',custom_name:'Nombre del sitio',custom_logo:'Icono PNG',custom_save:'Guardar',custom_cancel:'Cancelar',target_info:'Configuración guardada en el registro para'},en:{wiz_step:'Wizard · step {a} of {b}',badge_active:'active',badge_default:'default',no_orch:'No orchestrators saved.',no_sse:'No SSE platforms saved.',per_target:'Per-target settings',view_target:'Show settings for',all_targets:'(all global variables)',blob_set:'configured',blob_unset:'empty',nav_tls:'Certificates',menu_users:'Users & password',menu_custom:'Customize panel',f_name:'Name',f_url:'URL',f_apikey:'API key',f_user:'User',f_pass:'Password',f_tls:'Verify TLS',f_ssh_user:'SSH user',f_ssh_pass:'SSH password',f_enable:'Enable password',f_ssh_host:'SSH host',f_provider:'Provider',f_baseurl:'Base URL',f_token:'Admin token (Bearer JWT)',f_timeout:'Timeout (s)',add_update:'Add or update',apply_env:'Apply to .env',add_update_sse:'Add or update SSE platform',saved_in:'Saved in',secrets_note:'Secrets are never returned to the browser.',clear_secret:'Remove saved secret',checking:'Checking...',svc_checked:'Status verified with real requests at',latency:'latency',orch_label:'Orchestrator',sse_label:'SSE',upd_worker:'Update worker',mcp_label:'MCP transport',review_title:'Review changes before saving',review_desc:'Preview on',review_nowrite:'; nothing is written yet.',no_changes:'No variable changes.',targets_h:'Targets (orchestrators / SSE)',wiz_targets_help:'Save several orchestrators and SSE platforms at once; choose which one is default for tools without an explicit target.',probing:'checking...',probe_ok:'OK: ',probe_fail:'Fail: ',no_users:'No users yet: the single password (EC_ADMIN_PASSWORD) is used.',hashes_note:'Hashes are never shown or returned.',add_user:'Add or update user',change_pass:'Change password',u_name:'User',u_pass:'Password',u_role:'Role',u_old:'Current password',u_new:'New password',u_empty:'User (empty = my session)',users_file:'File',tls_title:'HTTPS certificates',tls_desc:'Upload the panel certificate and private key (PEM). Files are stored with 0600 and the panel can serve HTTPS with EC_ADMIN_TLS_ENABLED=true.',tls_cert:'Certificate PEM',tls_key:'Private key PEM',tls_upload:'Upload certificate',tls_delete:'Delete certificate',tls_enabled:'HTTPS enabled',tls_disabled:'HTTPS disabled',tls_fp:'SHA-256 fingerprint',tls_present:'present',tls_missing:'missing',tls_none:'No certificate uploaded.',custom_title:'Customize panel',custom_name:'Site name',custom_logo:'PNG icon',custom_save:'Save',custom_cancel:'Cancel',target_info:'Registry settings for'}};
 for(var k2 in I18N2.es){I18N.es[k2]=I18N2.es[k2]}
 for(var k2 in I18N2.en){I18N.en[k2]=I18N2.en[k2]}
+
+var I18N3={es:{tls_mode:'Formato',tls_cert_file:'Certificado (archivo)',tls_key_file:'Llave privada (archivo)',tls_pfx_file:'Archivo PFX / P12 / PKCS12',tls_bundle_file:'Bundle PEM (certificado y llave juntos)',tls_pw:'Contraseña de la llave o contenedor, si aplica',tls_note:'Los archivos se validan en el servidor, se normalizan a PEM y solo se instala si la llave corresponde al certificado. El certificado anterior se respalda (cert.pem.bak). Límite 3 MB.',tls_confirm:'Confirmación',tls_confirm_code:'INSTALAR CERTIFICADO',tls_install:'Instalar certificado',tls_installed:'Certificado instalado',tls_subject:'Sujeto',tls_issuer:'Emisor',tls_expires:'Vence',fmt_pem:'PEM: certificado y llave separados',fmt_bundle:'PEM bundle: certificado y llave juntos',fmt_pfx:'PFX / PKCS12',fmt_der:'DER: certificado y llave separados',file_too_big:'El archivo excede el límite de 3 MB'},en:{tls_mode:'Format',tls_cert_file:'Certificate (file)',tls_key_file:'Private key (file)',tls_pfx_file:'PFX / P12 / PKCS12 file',tls_bundle_file:'PEM bundle (certificate and key together)',tls_pw:'Key or container password, if any',tls_note:'Files are validated server-side, normalized to PEM and installed only if the key matches the certificate. The previous certificate is backed up (cert.pem.bak). 3 MB limit.',tls_confirm:'Confirmation',tls_confirm_code:'INSTALAR CERTIFICADO',tls_install:'Install certificate',tls_installed:'Certificate installed',tls_subject:'Subject',tls_issuer:'Issuer',tls_expires:'Expires',fmt_pem:'PEM: certificate and key separate',fmt_bundle:'PEM bundle: certificate and key together',fmt_pfx:'PFX / PKCS12',fmt_der:'DER: certificate and key separate',file_too_big:'File exceeds the 3 MB limit'}};
+for(var k3 in I18N3.es){I18N.es[k3]=I18N3.es[k3]}
+for(var k3 in I18N3.en){I18N.en[k3]=I18N3.en[k3]}
+
 
 
 
@@ -96,14 +127,15 @@ async function login(){
 }
 async function logout(){await api('/logout',{});AUTHED=false;renderLogin()}
 function renderShell(){
- q('#app').innerHTML='<header>'+brandHtml()+'<p>'+t('tagline')+'</p></div><span class="badge">'+esc(ME&&ME.user?ME.user+' · '+(ME.role||''):'')+'</span> <span class="badge">__EC_MCP_VERSION__</span>'+userChip()+chromeHtml()+'</header>'+
- '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button id="tab-orch" onclick="showTab(\'orch\')">'+t('nav_orch')+'</button><button id="tab-sse" onclick="showTab(\'sse\')">'+t('nav_sse')+'</button><button id="tab-svc" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button><button id="tab-config" onclick="showTab(\'config\')">'+t('nav_config')+'</button><button id="tab-tls" onclick="showTab(\'tls\')">'+t('nav_tls')+'</button><button id="tab-update" onclick="showTab(\'update\')">'+t('nav_update')+'</button><button id="tab-users" onclick="showTab(\'users\')">'+t('nav_users')+'</button><button class="secondary" onclick="logout()">'+t('nav_out')+'</button></nav>'+
+ q('#app').innerHTML='<header class="topbar">'+brandHtml()+'<div class="topbar-actions"><span class="version">__EC_MCP_VERSION__</span>'+userChip()+chromeHtml()+'</div></header>'+
+ '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button id="tab-orch" onclick="showTab(\'orch\')">'+t('nav_orch')+'</button><button id="tab-sse" onclick="showTab(\'sse\')">'+t('nav_sse')+'</button><button id="tab-svc" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button><button id="tab-config" onclick="showTab(\'config\')">'+t('nav_config')+'</button><button id="tab-tls" onclick="showTab(\'tls\')">'+t('nav_tls')+'</button><button id="tab-update" onclick="showTab(\'update\')">'+t('nav_update')+'</button><button id="tab-users" onclick="showTab(\'users\')">'+t('nav_users')+'</button></nav>'+
  '<div id="notice"></div><section id="workspace"></section>'+customDialogHtml();
  if(ME&&ME.role!=='admin'){var ub=q('#tab-users');if(ub)ub.style.display='none'}
  showTab('wizard');
 }
 function showTab(name){
  CURTAB=name;
+ var ntc=q('#notice');if(ntc)ntc.innerHTML='';
  document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active-tab')});
  var tab=q('#tab-'+name);if(tab)tab.classList.add('active-tab');
  if(name==='wizard')renderWizard();
@@ -331,13 +363,33 @@ async function renderTls(){
  try{
   var r=await api('/api/tls');
   var canWrite=ME&&ME.role!=='viewer';
-  var status=(r.enabled?'<span class="badge">'+t('tls_enabled')+'</span>':'<span class="badge">'+t('tls_disabled')+'</span>');
-  var fp=r.fingerprint?('<dt>'+t('tls_fp')+'</dt><dd class="mono">'+esc(r.fingerprint)+'</dd>'):'';
-  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tls_title')+'</h2><p class="help">'+t('tls_desc')+'</p>'+status+'<dl class="kv"><dt>EC_ADMIN_TLS_CERT</dt><dd class="mono">'+esc(r.cert)+' ('+(r.cert_present?t('tls_present'):t('tls_missing'))+')</dd><dt>EC_ADMIN_TLS_KEY</dt><dd class="mono">'+esc(r.key)+' ('+(r.key_present?t('tls_present'):t('tls_missing'))+')</dd>'+fp+'</dl>'+(r.cert_present?'':'<p class="help">'+t('tls_none')+'</p>')+'<div class="group"><h3>'+t('tls_title')+'</h3><label>'+t('tls_cert')+'<textarea id="tls-cert" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label><label style="margin-top:10px">'+t('tls_key')+'<textarea id="tls-key" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></label><div class="actions">'+(canWrite?'<button onclick="saveTls()">'+t('tls_upload')+'</button><button class="danger" onclick="delTls()">'+t('tls_delete')+'</button>':'')+'</div></div></section>';
+  var st=r.cert_present?'<div class="cert-status active"><strong>'+t('tls_installed')+'</strong>'+(r.subject?'<span>'+t('tls_subject')+': '+esc(r.subject)+'</span>':'')+(r.issuer?'<span>'+t('tls_issuer')+': '+esc(r.issuer)+'</span>':'')+(r.expires_at?'<span>'+t('tls_expires')+': '+esc(r.expires_at)+'</span>':'')+(r.fingerprint?'<span>'+t('tls_fp')+': <span class="mono">'+esc(r.fingerprint)+'</span></span>':'')+'</div>':'<div class="cert-status"><strong>'+t('tls_none')+'</strong></div>';
+  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tls_title')+'</h2><p class="help">'+t('tls_desc')+'</p>'+(r.enabled?'<span class="badge" style="color:#075842;background:#d8f8eb;border-color:#65cba9">'+t('tls_enabled')+'</span>':'<span class="badge">'+t('tls_disabled')+'</span>')+st+
+  '<div class="group"><h3>'+t('tls_install')+'</h3>'+
+  '<label>'+t('tls_mode')+'<select id="tls-mode" onchange="tlsModeChange()"><option value="pem">'+t('fmt_pem')+'</option><option value="pem-bundle">'+t('fmt_bundle')+'</option><option value="pfx">'+t('fmt_pfx')+'</option><option value="der">'+t('fmt_der')+'</option></select></label>'+
+  '<label id="tls-cert-label">'+t('tls_cert_file')+'<input id="tls-cert" type="file" accept=".pem,.crt,.cer,.der,.pfx,.p12,.pkcs12"></label>'+
+  '<label id="tls-key-label">'+t('tls_key_file')+'<input id="tls-key" type="file" accept=".pem,.key,.der"></label>'+
+  '<label>'+t('tls_pw')+'<input id="tls-pw" type="password" autocomplete="new-password"></label>'+
+  '<p class="help">'+t('tls_note')+'</p><code class="confirm-code">'+t('tls_confirm_code')+'</code><label>'+t('tls_confirm')+'<input id="tls-confirm"></label>'+
+  '<div class="actions">'+(canWrite?'<button onclick="saveTls()">'+t('tls_upload')+'</button><button class="danger" onclick="delTls()">'+t('tls_delete')+'</button>':'')+'</div></div></section>';
  }catch(e){notice(e.message,'err')}
 }
+function tlsModeChange(){
+ var m=q('#tls-mode').value;
+ var keyRow=q('#tls-key-label');if(keyRow)keyRow.style.display=(m==='pem'||m==='der')?'':'none';
+ var cl=q('#tls-cert-label');if(cl&&cl.firstChild)cl.firstChild.textContent=(m==='pfx'?t('tls_pfx_file'):m==='pem-bundle'?t('tls_bundle_file'):t('tls_cert_file'));
+ var ci=q('#tls-cert');if(ci)ci.accept=m==='pfx'?'.pfx,.p12,.pkcs12':m==='der'?'.der,.cer,.crt':'.pem,.crt,.cer';
+}
+async function fileB64(id){
+ var f=q(id);if(!f||!f.files||!f.files[0])return '';
+ var file=f.files[0];if(file.size>3000000){notice(t('file_too_big'),'err');return ''}
+ return await new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(String(r.result).split(',')[1]||'')};r.onerror=rej;r.readAsDataURL(file)});
+}
 async function saveTls(){
- try{var r=await api('/api/tls/upload',{cert:q('#tls-cert').value,key:q('#tls-key').value});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await renderTls()}catch(e){notice(e.message,'err')}
+ try{
+  var r=await api('/api/tls/upload',{mode:q('#tls-mode').value,certificateData:await fileB64('#tls-cert'),keyData:await fileB64('#tls-key'),password:q('#tls-pw').value,confirmation:q('#tls-confirm').value});
+  notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await renderTls();
+ }catch(e){notice(e.message,'err')}
 }
 async function delTls(){
  if(!confirm(t('tls_delete')+'?'))return;
@@ -354,7 +406,7 @@ function fieldHtml(f){
 function renderConfig(){
  if(!CONFIG){q('#workspace').innerHTML='<section class="panel">Cargando variables...</section>';return}
  var groups={};CONFIG.fields.forEach(function(f){var gk=f['group_'+LANG]||f.group;(groups[gk]||(groups[gk]=[])).push(f)});
- var html=Object.keys(groups).map(function(name){return '<section class="group"><h3>'+esc(name)+'</h3><div class="grid">'+groups[name].map(fieldHtml).join('')+'</div></section>'}).join('');
+ var stepOrder={};(CONFIG.steps||[]).forEach(function(s,i){stepOrder[s.id]=i});var gnames=Object.keys(groups).sort(function(a,b){var fa=groups[a][0],fb=groups[b][0];return (stepOrder[fa.step]??99)-(stepOrder[fb.step]??99)||a.localeCompare(b)});var html=gnames.map(function(name){return '<details class="group" open><summary><h3>'+esc(name)+'<span class="count">'+groups[name].length+'</span></h3></summary><div class="grid">'+groups[name].map(fieldHtml).join('')+'</div></details>'}).join('');
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_config')+'</h2><p>'+t('saved_in')+'<span class="mono">'+esc(CONFIG.env_file)+'</span>. '+t('secrets_note')+'</p>'+targetSelectorHtml()+html+blobsInfoHtml()+'<div class="actions"><button onclick="saveConfig()">'+t('btn_save_vars')+'</button><button class="secondary" onclick="restartServices()">'+t('btn_save_restart')+'</button></div></section>';
  CONFIG.fields.forEach(function(f){var el=q('#cfg-'+f.key);if(el&&!f.secret)el.value=f.value});
 }

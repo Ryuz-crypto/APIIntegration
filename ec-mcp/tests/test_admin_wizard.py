@@ -251,7 +251,7 @@ def test_page_has_i18n_and_theme_picker_and_no_ztp():
     assert "label_'+LANG" in PAGE
     assert "title_'+LANG" in PAGE
     assert "renderZtp" not in PAGE and "tab-ztp" not in PAGE
-    assert "#01a982" in PAGE and "#00263a" in PAGE
+    assert "#01a982" in PAGE and "#073b4c" in PAGE
     assert "es:" in PAGE and "en:" in PAGE
 
 
@@ -300,32 +300,45 @@ def test_page_script_executes_cleanly_in_node(tmp_path):
     assert result.returncode == 0, result.stderr[-2000:]
 
 
-@pytest.fixture()
-def pem_pair(tmp_path: Path):
+def _openssl():
     import shutil
-    import subprocess
 
     openssl = shutil.which("openssl")
     if not openssl:
         pytest.skip("openssl no disponible")
+    return openssl
+
+
+def _run(openssl, args, data=None):
+    import subprocess
+
+    proc = subprocess.run([openssl, *args], input=data, capture_output=True, timeout=30)  # noqa: S603 - argv fijo
+    assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
+    return proc.stdout
+
+
+@pytest.fixture()
+def pem_pair(tmp_path: Path):
+    openssl = _openssl()
     cert = tmp_path / "cert.pem"
     key = tmp_path / "key.pem"
-    subprocess.run(  # noqa: S603 - openssl binario local con args fijos
-        [openssl, "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-         "-subj", "/CN=ec-mcp-test", "-keyout", str(key), "-out", str(cert)],
-        check=True, capture_output=True, timeout=30,
-    )
+    _run(openssl, ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                   "-subj", "/CN=ec-mcp-test", "-keyout", str(key), "-out", str(cert)])
     return cert.read_text(encoding="utf-8"), key.read_text(encoding="utf-8")
 
 
-def test_tls_endpoints_upload_status_delete(client, env, pem_pair):
+def test_tls_pem_upload_requires_confirmation_and_matching_key(client, env, pem_pair):
+    import base64
+
     cert_pem, key_pem = pem_pair
     assert client.get("/api/tls").json()["cert_present"] is False
-    bad = client.post("/api/tls/upload", json={"cert": "no pem", "key": key_pem})
+    no_confirm = client.post("/api/tls/upload", json={"mode": "pem", "certificateData": base64.b64encode(cert_pem.encode()).decode(), "keyData": base64.b64encode(key_pem.encode()).decode(), "confirmation": "mal"})
+    assert no_confirm.status_code == 400
+    bad = client.post("/api/tls/upload", json={"mode": "pem", "cert": "no pem", "key": key_pem, "confirmation": "INSTALAR CERTIFICADO"})
     assert bad.status_code == 400
-    ok = client.post("/api/tls/upload", json={"cert": cert_pem, "key": key_pem})
+    ok = client.post("/api/tls/upload", json={"mode": "pem", "cert": cert_pem, "key": key_pem, "confirmation": "INSTALAR CERTIFICADO"})
     assert ok.json()["ok"] is True
-    assert ok.json()["fingerprint"]
+    assert ok.json()["fingerprint"] and "ec-mcp-test" in ok.json()["subject"]
     cert_path = env / ".ec-admin-tls" / "cert.pem"
     key_path = env / ".ec-admin-tls" / "key.pem"
     assert cert_path.is_file() and key_path.is_file()
@@ -333,7 +346,8 @@ def test_tls_endpoints_upload_status_delete(client, env, pem_pair):
         assert cert_path.stat().st_mode & 0o777 == 0o600
         assert key_path.stat().st_mode & 0o777 == 0o600
     status = client.get("/api/tls").json()
-    assert status["cert_present"] is True and status["key_present"] is True
+    assert status["cert_present"] and status["key_present"] and status["valid"] is True
+    assert "ec-mcp-test" in status["subject"] and status["expires_at"]
     assert "EC_ADMIN_TLS_CERT=" in (env / ".env").read_text(encoding="utf-8")
     deleted = client.post("/api/tls/delete")
     assert deleted.json()["ok"] is True
@@ -341,12 +355,34 @@ def test_tls_endpoints_upload_status_delete(client, env, pem_pair):
     assert client.get("/api/tls").json()["cert_present"] is False
 
 
+def test_tls_pfx_mode_and_key_mismatch(client, env, pem_pair, tmp_path):
+    import base64
+
+    openssl = _openssl()
+    cert_pem, _key_pem = pem_pair
+    # primera instalación PEM correcta
+    first = client.post("/api/tls/upload", json={"mode": "pem", "cert": cert_pem, "key": (tmp_path / "key.pem").read_text(encoding="utf-8"), "confirmation": "INSTALAR CERTIFICADO"})
+    assert first.json()["ok"] is True
+    pfx = tmp_path / "cert.pfx"
+    _run(openssl, ["pkcs12", "-export", "-out", str(pfx), "-inkey", str(tmp_path / "key.pem"), "-in", str(tmp_path / "cert.pem"), "-passout", "pass:secreto123"])
+    pfx_b64 = base64.b64encode(pfx.read_bytes()).decode()
+    r = client.post("/api/tls/upload", json={"mode": "pfx", "certificateData": pfx_b64, "password": "secreto123", "confirmation": "INSTALAR CERTIFICADO"})
+    assert r.json()["ok"] is True and r.json()["mode"] == "pfx"
+    # el certificado anterior quedó respaldado
+    assert (env / ".ec-admin-tls" / "cert.pem.bak").is_file()
+    # llave que no corresponde
+    other_key = tmp_path / "other.key"
+    _run(openssl, ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=otro", "-keyout", str(other_key), "-out", str(tmp_path / "other.pem")])
+    wrong = client.post("/api/tls/upload", json={"mode": "pem", "cert": cert_pem, "key": other_key.read_text(encoding="utf-8"), "confirmation": "INSTALAR CERTIFICADO"})
+    assert wrong.status_code == 400 and "no corresponde" in wrong.json()["error"]
+
+
 def test_tls_upload_forbidden_for_viewer(env, pem_pair):
     cert_pem, key_pem = pem_pair
     admin_users.upsert_user("bob", "bobpw", "viewer")
     c = TestClient(build_admin_app())
     assert c.post("/login", json={"username": "bob", "password": "bobpw"}).json()["ok"] is True
-    assert c.post("/api/tls/upload", json={"cert": cert_pem, "key": key_pem}).status_code == 403
+    assert c.post("/api/tls/upload", json={"mode": "pem", "cert": cert_pem, "key": key_pem, "confirmation": "INSTALAR CERTIFICADO"}).status_code == 403
     assert c.get("/api/tls").status_code == 200
 
 
@@ -354,11 +390,14 @@ def test_page_has_tls_tab_branding_and_per_target_selector():
     assert "renderTls" in PAGE
     assert "/api/tls" in PAGE
     assert "nav_tls" in PAGE
+    assert "fmt_pfx" in PAGE and "tls_confirm_code" in PAGE
     assert "siteName" in PAGE and "siteLogo" in PAGE and "openCustom" in PAGE
-    assert "userChip" in PAGE
+    assert "userChip" in PAGE and "topbar" in PAGE
     assert "targetSelectorHtml" in PAGE and "renderTargetPanel" in PAGE
     assert "wiz_step" in PAGE
     assert "group_'+LANG" in PAGE
+    assert "ntc.innerHTML" in PAGE
+    assert "#073b4c" in PAGE and "#01a982" in PAGE and "details class=\"group\"" in PAGE
 
 
 def test_public_config_has_group_en_and_tls_settings(env):

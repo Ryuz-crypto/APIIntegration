@@ -23,11 +23,16 @@ Endpoints (all behind session cookie auth):
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
+import shutil
+import subprocess  # nosec B404 - se usa con argv fijo y binario resuelto
+import tempfile
 import time
 from math import ceil
 from pathlib import Path
@@ -724,12 +729,101 @@ def _cert_fingerprint(pem: str) -> str | None:
         return None
 
 
+_PEM_CERT_RE = re.compile(r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", re.S)
+_PEM_KEY_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S)
+TLS_MAX_BYTES = 3_000_000
+TLS_CONFIRMATION = "INSTALAR CERTIFICADO"
+
+
+def _openssl(args: list[str], data: bytes | None = None) -> bytes:
+    binary = shutil.which("openssl")
+    if not binary:
+        raise ValueError("openssl no está disponible en el servidor")
+    try:
+        proc = subprocess.run([binary, *args], input=data, capture_output=True, timeout=20)  # noqa: S603 - argv fijo  # nosec B603 B607
+    except FileNotFoundError as exc:
+        raise ValueError("openssl no está disponible en el servidor") from exc
+    if proc.returncode != 0:
+        raise ValueError("openssl: " + proc.stderr.decode("utf-8", "replace").strip()[:300])
+    return proc.stdout
+
+
+def _decode_blob(raw: object) -> bytes:
+    text = str(raw or "").strip()
+    if not text:
+        return b""
+    if text.startswith("-----BEGIN"):
+        return text.encode("utf-8")
+    try:
+        return base64.b64decode(text, validate=True)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("El archivo no es PEM ni base64 válido") from exc
+
+
+def _normalize_tls(mode: str, cert_raw: bytes, key_raw: bytes, password: str) -> tuple[str, str]:
+    """Normaliza cualquier formato soportado a (certificado PEM, llave PEM)."""
+    if mode == "pfx":
+        handle = tempfile.NamedTemporaryFile(suffix=".pfx", delete=False)
+        try:
+            handle.write(cert_raw)
+            handle.close()
+            passin = ["-passin", f"pass:{password}"]
+            cert_pem = _openssl(["pkcs12", "-in", handle.name, "-clcerts", "-nokeys", *passin]).decode("utf-8", "replace")
+            key_pem = _openssl(["pkcs12", "-in", handle.name, "-nocerts", "-nodes", *passin]).decode("utf-8", "replace")
+        finally:
+            Path(handle.name).unlink(missing_ok=True)
+    elif mode == "der":
+        cert_pem = _openssl(["x509", "-inform", "der", "-outform", "pem"], cert_raw).decode("utf-8", "replace")
+        key_pem = _openssl(["pkey", "-inform", "der", "-outform", "pem"], key_raw).decode("utf-8", "replace") if key_raw else ""
+    elif mode == "pem-bundle":
+        text = cert_raw.decode("utf-8", "replace")
+        certs = _PEM_CERT_RE.findall(text)
+        keys = _PEM_KEY_RE.findall(text)
+        if not certs or not keys:
+            raise ValueError("El bundle PEM debe incluir certificado y llave privada")
+        cert_pem, key_pem = certs[0] + "\n", keys[0] + "\n"
+    else:
+        cert_pem = cert_raw.decode("utf-8", "replace")
+        key_pem = key_raw.decode("utf-8", "replace") if key_raw else ""
+    if not _PEM_CERT_RE.search(cert_pem):
+        raise ValueError("No se encontró un certificado PEM válido")
+    return cert_pem, key_pem
+
+
+def _tls_key_matches(cert_pem: str, key_pem: str) -> bool:
+    if not key_pem or not _PEM_KEY_RE.search(key_pem):
+        return False
+    try:
+        cert_pub = _openssl(["x509", "-noout", "-pubkey"], cert_pem.encode("utf-8")).strip()
+        key_pub = _openssl(["pkey", "-pubout"], key_pem.encode("utf-8")).strip()
+    except ValueError:
+        return False
+    return cert_pub == key_pub
+
+
+def _cert_info(path: Path) -> dict:
+    try:
+        import ssl
+
+        info = ssl._ssl._test_decode_cert(str(path))
+        def _dn(name) -> str:
+            return ", ".join("=".join(part) for rdn in name for part in rdn)
+        return {
+            "subject": _dn(info.get("subject", ())),
+            "issuer": _dn(info.get("issuer", ())),
+            "expires_at": info.get("notAfter", ""),
+        }
+    except Exception:
+        return {}
+
+
 async def api_tls_status(request):
     _session, denied = _authorize(request, "read")
     if denied:
         return denied
     cert_path, key_path = _tls_paths()
     cert_pem = cert_path.read_text(encoding="utf-8") if cert_path.is_file() else ""
+    info = _cert_info(cert_path) if cert_path.is_file() else {}
     return JSONResponse(
         {
             "ok": True,
@@ -738,7 +832,11 @@ async def api_tls_status(request):
             "key": str(key_path),
             "cert_present": bool(cert_pem),
             "key_present": key_path.is_file(),
+            "valid": bool(cert_pem) and _cert_fingerprint(cert_pem) is not None,
             "fingerprint": _cert_fingerprint(cert_pem) if cert_pem else None,
+            "subject": info.get("subject", ""),
+            "issuer": info.get("issuer", ""),
+            "expires_at": info.get("expires_at", ""),
         }
     )
 
@@ -748,30 +846,55 @@ async def api_tls_upload(request):
     if denied:
         return denied
     body = await request.json()
-    cert_pem = str(body.get("cert") or "")
-    key_pem = str(body.get("key") or "")
-    if "BEGIN CERTIFICATE" not in cert_pem:
-        return JSONResponse({"ok": False, "error": "El certificado debe ser PEM con bloque BEGIN CERTIFICATE"}, status_code=400)
-    if "PRIVATE KEY" not in key_pem:
-        return JSONResponse({"ok": False, "error": "La llave debe ser PEM con bloque PRIVATE KEY"}, status_code=400)
-    if _cert_fingerprint(cert_pem) is None:
-        return JSONResponse({"ok": False, "error": "Certificado PEM inválido"}, status_code=400)
+    mode = str(body.get("mode") or "pem").strip().lower()
+    if mode not in {"pem", "pem-bundle", "pfx", "der"}:
+        return JSONResponse({"ok": False, "error": "Formato no soportado (pem, pem-bundle, pfx, der)"}, status_code=400)
+    confirmation = str(body.get("confirmation") or "")
+    if confirmation != TLS_CONFIRMATION:
+        return JSONResponse({"ok": False, "error": f"Escribe exactamente: {TLS_CONFIRMATION}"}, status_code=400)
+    try:
+        cert_raw = _decode_blob(body.get("certificateData") or body.get("cert") or "")
+        key_raw = _decode_blob(body.get("keyData") or body.get("key") or "")
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    password = str(body.get("password") or "")
+    if not cert_raw:
+        return JSONResponse({"ok": False, "error": "Falta el archivo del certificado"}, status_code=400)
+    if len(cert_raw) > TLS_MAX_BYTES or len(key_raw) > TLS_MAX_BYTES:
+        return JSONResponse({"ok": False, "error": "El archivo excede el límite de 3 MB"}, status_code=400)
+    if mode in {"pem", "der"} and not key_raw:
+        return JSONResponse({"ok": False, "error": "Falta la llave privada"}, status_code=400)
+    try:
+        cert_pem, key_pem = _normalize_tls(mode, cert_raw, key_raw, password)
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    if mode in {"pem", "der"} and not _tls_key_matches(cert_pem, key_pem):
+        return JSONResponse({"ok": False, "error": "La llave privada no corresponde al certificado"}, status_code=400)
     cert_path, key_path = _tls_paths()
     cert_path.parent.mkdir(parents=True, exist_ok=True)
+    if cert_path.is_file():
+        shutil.copy2(cert_path, cert_path.with_suffix(".pem.bak"))
+        cert_path.with_suffix(".pem.bak").chmod(0o600)
     cert_path.write_text(cert_pem if cert_pem.endswith("\n") else cert_pem + "\n", encoding="utf-8")
-    key_path.write_text(key_pem if key_pem.endswith("\n") else key_pem + "\n", encoding="utf-8")
+    if key_pem:
+        key_path.write_text(key_pem if key_pem.endswith("\n") else key_pem + "\n", encoding="utf-8")
     cert_path.chmod(0o600)
     key_path.chmod(0o600)
     try:
         update_env({"EC_ADMIN_TLS_CERT": str(cert_path), "EC_ADMIN_TLS_KEY": str(key_path)})
     except ValueError as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-    _audit_panel(session["user"], "tls_upload", str(cert_path), "ok", {"fingerprint": _cert_fingerprint(cert_pem)})
+    _audit_panel(
+        session["user"], "tls_upload", str(cert_path), "ok",
+        {"mode": mode, "fingerprint": _cert_fingerprint(cert_pem), "subject": _cert_info(cert_path).get("subject", "")},
+    )
     return JSONResponse(
         {
             "ok": True,
-            "message": f"Certificado guardado en {cert_path} (0600). Activa EC_ADMIN_TLS_ENABLED=true y reinicia el panel para servir HTTPS.",
+            "message": f"Certificado instalado en {cert_path} (0600; el anterior quedó en cert.pem.bak). Activa EC_ADMIN_TLS_ENABLED=true y reinicia el panel para servir HTTPS.",
+            "mode": mode,
             "fingerprint": _cert_fingerprint(cert_pem),
+            "subject": _cert_info(cert_path).get("subject", ""),
         }
     )
 
