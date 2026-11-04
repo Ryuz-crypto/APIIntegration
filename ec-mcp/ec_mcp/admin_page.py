@@ -8,7 +8,7 @@ PAGE = r"""<!doctype html>
 :root{color-scheme:light;--bg:#edf1f4;--panel:#ffffff;--panel2:#f6f8f9;--line:#d8e0e6;--text:#1b2733;--muted:#5d6b7a;--brand:#01a982;--ok:#1e7e34;--warn:#b45309;--bad:#b91c1c}
 *{box-sizing:border-box}body{font-family:"Segoe UI",Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);margin:0;min-height:100vh}
 main{max-width:1180px;margin:auto;padding:22px 18px 60px}
-header{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#00263a;color:#fff;border-radius:8px;padding:13px 18px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#00263a;background:color-mix(in srgb, var(--brand) 72%, #001521);color:#fff;border-radius:8px;padding:13px 18px}
 .brand h1{margin:0;font-size:1.45rem}.brand p{margin:5px 0 0;color:var(--muted)}
 header .brand h1{color:#fff;font-size:1.2rem}header .brand p{color:#aebfcc;font-size:.85rem}
 .badge{border:1px solid var(--brand);color:var(--brand);background:#fff;border-radius:999px;padding:4px 10px;font-size:.75rem}
@@ -35,17 +35,47 @@ dialog{border:1px solid var(--line);border-radius:8px;background:#fff;color:var(
 .wizbar{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
 .sw{width:16px;height:16px;border-radius:50%;display:inline-block;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #b9c4cd;margin-left:4px}
 @media(max-width:760px){.grid{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}}
+
+.logo{height:30px;width:auto;max-width:120px;border-radius:6px;vertical-align:middle;margin-right:9px;background:#fff;padding:2px}
+.brand{display:flex;align-items:center}
+.chrome{display:flex;gap:10px;align-items:center}
+.sw.active{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--brand)}
+.chip{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:999px;padding:5px 12px;font-size:.78rem;cursor:pointer;list-style:none}
+details.menu{position:relative}
+details.menu .menu-body{position:absolute;right:0;top:34px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,38,58,.18);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:190px;z-index:20}
+details.menu .menu-body button{width:100%;text-align:left}
+dialog .actions{margin-top:14px}
+textarea{width:100%;min-height:110px;margin-top:5px;padding:9px 10px;background:#fff;border:1px solid var(--line);border-radius:6px;color:var(--text);font-family:ui-monospace,Consolas,monospace;font-size:.78rem}
+.kv{display:grid;grid-template-columns:180px 1fr;gap:6px 10px;font-size:.84rem;margin-top:10px}
+.kv dt{color:var(--muted)}.kv dd{margin:0;word-break:break-all}
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=0, WDRAFT={}, CURTAB='wizard';
 var LANG=localStorage.getItem('ec-lang')||'es';
-var ACCENTS=[{n:'HPE Green',c:'#01a982'},{n:'HPE Blue',c:'#0078d3'},{n:'HPE Navy',c:'#00263a'},{n:'Slate',c:'#475569'},{n:'Violet',c:'#7c3aed'}];
+var ACCENTS=[{n:'HPE Green',c:'#01a982'},{n:'HPE Blue',c:'#0078d3'},{n:'HPE Navy',c:'#00263a'},{n:'Aruba Teal',c:'#00b0b9'},{n:'Orange',c:'#f59e0b'},{n:'Red',c:'#dc2626'},{n:'Slate',c:'#475569'},{n:'Violet',c:'#7c3aed'},{n:'Pink',c:'#db2777'},{n:'Brown',c:'#92400e'}];
 var I18N={es:{nav_wizard:'Asistente',nav_orch:'Orquestadores',nav_sse:'Plataformas SSE',nav_svc:'Servicios',nav_config:'Variables',nav_update:'Actualizaciones',nav_users:'Usuarios',nav_out:'Salir',tagline:'Configuración, operación y actualizaciones sin SSH',login_title:'Control plane administrativo',login_user:'Usuario (opcional si hay varios)',login_pass:'Contraseña',login_enter:'Entrar',h2_orch:'Orquestadores',h2_sse:'Plataformas SSE (multi-tenant)',h2_svc:'Servicios',h2_config:'Variables del servicio',h2_update:'Actualizaciones desde GitHub',h2_users:'Usuarios del panel',h2_wizard:'Asistente de configuración',btn_save:'Guardar',btn_save_vars:'Guardar variables',btn_save_restart:'Guardar y reiniciar servicios',btn_save_restart_short:'Guardar y reiniciar',btn_recheck:'Volver a comprobar',btn_detect:'Detectar GitHub',btn_apply_update:'Aplicar actualización',btn_back:'Atrás',btn_next:'Siguiente',btn_review:'Revisar cambios',btn_probe:'Probar',btn_dup:'Duplicar',btn_ren:'Renombrar',btn_default:'Por defecto',btn_edit:'Editar',btn_delete:'Eliminar',btn_save_orch:'Guardar orquestador',btn_save_sse:'Guardar plataforma SSE',loading:'Cargando...',wiz_loading:'Cargando pasos...',secret_set:'Secreto configurado; no se muestra.',secret_unset:'Sin configurar.'},en:{nav_wizard:'Wizard',nav_orch:'Orchestrators',nav_sse:'SSE platforms',nav_svc:'Services',nav_config:'Settings',nav_update:'Updates',nav_users:'Users',nav_out:'Sign out',tagline:'Configuration, operations and updates without SSH',login_title:'Administrative control plane',login_user:'User (optional when there are several)',login_pass:'Password',login_enter:'Sign in',h2_orch:'Orchestrators',h2_sse:'SSE platforms (multi-tenant)',h2_svc:'Services',h2_config:'Service settings',h2_update:'Updates from GitHub',h2_users:'Panel users',h2_wizard:'Setup wizard',btn_save:'Save',btn_save_vars:'Save settings',btn_save_restart:'Save and restart services',btn_save_restart_short:'Save and restart',btn_recheck:'Re-check',btn_detect:'Check GitHub',btn_apply_update:'Apply update',btn_back:'Back',btn_next:'Next',btn_review:'Review changes',btn_probe:'Test',btn_dup:'Duplicate',btn_ren:'Rename',btn_default:'Default',btn_edit:'Edit',btn_delete:'Delete',btn_save_orch:'Save orchestrator',btn_save_sse:'Save SSE platform',loading:'Loading...',wiz_loading:'Loading steps...',secret_set:'Secret configured; never displayed.',secret_unset:'Not configured.'}};
-function t(k){var d=I18N[LANG]||I18N.es;return d[k]||I18N.es[k]||k}
+function t(k,v){var d=I18N[LANG]||I18N.es;var s=d[k]||I18N.es[k]||k;if(v){for(var x in v){s=s.split('{'+x+'}').join(v[x])}}return s}
 function setLang(l){LANG=l;localStorage.setItem('ec-lang',l);if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
-function setAccent(c){document.documentElement.style.setProperty('--brand',c);localStorage.setItem('ec-accent',c)}
-function chromeHtml(){var sw=ACCENTS.map(function(a){return '<span class="sw" style="background:'+a.c+'" title="'+a.n+'" onclick="setAccent(\''+a.c+'\')"></span>'}).join('');return '<span style="display:flex;gap:8px;align-items:center">'+sw+'<button class="secondary" style="padding:4px 9px;font-size:.75rem" onclick="setLang(LANG===\'es\'?\'en\':\'es\')">'+(LANG==='es'?'EN':'ES')+'</button></span>'}
+function setAccent(c){document.documentElement.style.setProperty('--brand',c);localStorage.setItem('ec-accent',c);if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
+
+function siteName(){return localStorage.getItem('ec-site-name')||'ec-mcp control plane'}
+function siteLogo(){return localStorage.getItem('ec-logo')||''}
+function brandHtml(){var logo=siteLogo();return '<div class="brand">'+(logo?'<img class="logo" src="'+logo+'" alt="logo">':'')+'<h1>'+esc(siteName())+'</h1></div>'}
+function openCustom(){var d=q('#custom-dlg');if(!d)return;var n=q('#custom-name');if(n)n.value=siteName();d.showModal?d.showModal():d.setAttribute('open','')}
+function closeCustom(){var d=q('#custom-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
+function saveCustom(){var name=q('#custom-name')?q('#custom-name').value.trim():'';if(name)localStorage.setItem('ec-site-name',name);var f=q('#custom-logo');if(f&&f.files&&f.files[0]){var r=new FileReader();r.onload=function(e){try{localStorage.setItem('ec-logo',String(e.target.result))}catch(err){notice('Icono demasiado grande','err')}closeCustom();if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}};r.readAsDataURL(f.files[0])}else{closeCustom();if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}}
+function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name"></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button></div></dialog>'}
+function userChip(){return '<details class="menu"><summary class="chip">'+esc(ME&&ME.user?ME.user:'')+' · '+esc(ME&&ME.role?ME.role:'')+'</summary><div class="menu-body"><button class="secondary" onclick="showTab(\'users\')">'+t('menu_users')+'</button><button class="secondary" onclick="openCustom()">'+t('menu_custom')+'</button><button class="danger" onclick="logout()">'+t('nav_out')+'</button></div></details>'}
+
+function chromeHtml(){var cur=localStorage.getItem('ec-accent')||'#01a982';var sw=ACCENTS.map(function(a){return '<span class="sw'+(a.c===cur?' active':'')+'" style="background:'+a.c+'" title="'+a.n+'" onclick="setAccent(\''+a.c+'\')"></span>'}).join('');return '<span class="chrome">'+sw+'<button class="secondary" style="padding:4px 9px;font-size:.75rem" onclick="setLang(LANG===\'es\'?\'en\':\'es\')">'+(LANG==='es'?'EN':'ES')+'</button><button class="secondary" style="padding:4px 9px;font-size:.75rem" title="'+t('menu_custom')+'" onclick="openCustom()">&#9881;</button></span>'}
 document.documentElement.style.setProperty('--brand',localStorage.getItem('ec-accent')||'#01a982');
+
+var I18N2={es:{wiz_step:'Asistente · paso {a} de {b}',badge_active:'activo',badge_default:'por defecto',no_orch:'No hay orquestadores guardados.',no_sse:'No hay plataformas SSE guardadas.',per_target:'Configuración por target',view_target:'Ver configuración de',all_targets:'(todas las variables globales)',blob_set:'configurado',blob_unset:'vacío',nav_tls:'Certificados',menu_users:'Usuarios y contraseña',menu_custom:'Personalizar panel',f_name:'Nombre',f_url:'URL',f_apikey:'API key',f_user:'Usuario',f_pass:'Password',f_tls:'Verificar TLS',f_ssh_user:'Usuario SSH',f_ssh_pass:'Password SSH',f_enable:'Password enable',f_ssh_host:'Host SSH',f_provider:'Proveedor',f_baseurl:'URL base',f_token:'Token admin (Bearer JWT)',f_timeout:'Timeout (s)',add_update:'Agregar o actualizar',apply_env:'Aplicar al .env',add_update_sse:'Agregar o actualizar plataforma SSE',saved_in:'Se guardan en',secrets_note:'Los secretos nunca regresan al navegador.',clear_secret:'Eliminar secreto guardado',checking:'Comprobando...',svc_checked:'Estado verificado con peticiones reales el',latency:'latencia',orch_label:'Orchestrator',sse_label:'SSE',upd_worker:'Worker de actualizaciones',mcp_label:'Transporte MCP',review_title:'Revisar cambios antes de guardar',review_desc:'Preview sobre',review_nowrite:'; todavía no se escribe nada.',no_changes:'Sin cambios en variables.',targets_h:'Targets (orquestadores / SSE)',wiz_targets_help:'Guarda varios orquestadores y varias plataformas SSE a la vez; elige cuál queda por defecto para los tools sin target explícito.',probing:'probando...',probe_ok:'OK: ',probe_fail:'Fallo: ',no_users:'Sin usuarios todavía: se usa la contraseña única (EC_ADMIN_PASSWORD).',hashes_note:'Los hashes nunca se muestran ni se devuelven.',add_user:'Agregar o actualizar usuario',change_pass:'Cambiar contraseña',u_name:'Usuario',u_pass:'Contraseña',u_role:'Rol',u_old:'Contraseña actual',u_new:'Nueva contraseña',u_empty:'Usuario (vacío = mi sesión)',users_file:'Archivo',tls_title:'Certificados HTTPS',tls_desc:'Sube el certificado y la llave privada (PEM) del panel. Los archivos se guardan con permisos 0600 y el panel puede servirse en HTTPS con EC_ADMIN_TLS_ENABLED=true.',tls_cert:'Certificado PEM',tls_key:'Llave privada PEM',tls_upload:'Subir certificado',tls_delete:'Eliminar certificado',tls_enabled:'HTTPS activo',tls_disabled:'HTTPS desactivado',tls_fp:'Huella SHA-256',tls_present:'presente',tls_missing:'ausente',tls_none:'Sin certificado subido.',custom_title:'Personalizar panel',custom_name:'Nombre del sitio',custom_logo:'Icono PNG',custom_save:'Guardar',custom_cancel:'Cancelar',target_info:'Configuración guardada en el registro para'},en:{wiz_step:'Wizard · step {a} of {b}',badge_active:'active',badge_default:'default',no_orch:'No orchestrators saved.',no_sse:'No SSE platforms saved.',per_target:'Per-target settings',view_target:'Show settings for',all_targets:'(all global variables)',blob_set:'configured',blob_unset:'empty',nav_tls:'Certificates',menu_users:'Users & password',menu_custom:'Customize panel',f_name:'Name',f_url:'URL',f_apikey:'API key',f_user:'User',f_pass:'Password',f_tls:'Verify TLS',f_ssh_user:'SSH user',f_ssh_pass:'SSH password',f_enable:'Enable password',f_ssh_host:'SSH host',f_provider:'Provider',f_baseurl:'Base URL',f_token:'Admin token (Bearer JWT)',f_timeout:'Timeout (s)',add_update:'Add or update',apply_env:'Apply to .env',add_update_sse:'Add or update SSE platform',saved_in:'Saved in',secrets_note:'Secrets are never returned to the browser.',clear_secret:'Remove saved secret',checking:'Checking...',svc_checked:'Status verified with real requests at',latency:'latency',orch_label:'Orchestrator',sse_label:'SSE',upd_worker:'Update worker',mcp_label:'MCP transport',review_title:'Review changes before saving',review_desc:'Preview on',review_nowrite:'; nothing is written yet.',no_changes:'No variable changes.',targets_h:'Targets (orchestrators / SSE)',wiz_targets_help:'Save several orchestrators and SSE platforms at once; choose which one is default for tools without an explicit target.',probing:'checking...',probe_ok:'OK: ',probe_fail:'Fail: ',no_users:'No users yet: the single password (EC_ADMIN_PASSWORD) is used.',hashes_note:'Hashes are never shown or returned.',add_user:'Add or update user',change_pass:'Change password',u_name:'User',u_pass:'Password',u_role:'Role',u_old:'Current password',u_new:'New password',u_empty:'User (empty = my session)',users_file:'File',tls_title:'HTTPS certificates',tls_desc:'Upload the panel certificate and private key (PEM). Files are stored with 0600 and the panel can serve HTTPS with EC_ADMIN_TLS_ENABLED=true.',tls_cert:'Certificate PEM',tls_key:'Private key PEM',tls_upload:'Upload certificate',tls_delete:'Delete certificate',tls_enabled:'HTTPS enabled',tls_disabled:'HTTPS disabled',tls_fp:'SHA-256 fingerprint',tls_present:'present',tls_missing:'missing',tls_none:'No certificate uploaded.',custom_title:'Customize panel',custom_name:'Site name',custom_logo:'PNG icon',custom_save:'Save',custom_cancel:'Cancel',target_info:'Registry settings for'}};
+for(var k2 in I18N2.es){I18N.es[k2]=I18N2.es[k2]}
+for(var k2 in I18N2.en){I18N.en[k2]=I18N2.en[k2]}
+
+
+
 function q(s){return document.querySelector(s)}
 function esc(v){return String(v==null?'':v).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 async function api(path,body){
@@ -57,7 +87,7 @@ async function api(path,body){
 }
 function notice(message,type){var node=q('#notice');if(node)node.innerHTML='<div class="msg '+(type||'info')+'">'+esc(message)+'</div>'}
 function renderLogin(){
- q('#app').innerHTML='<section class="panel" style="max-width:440px;margin:12vh auto"><div class="brand"><h1>ec-mcp 3.0</h1><p>'+t('login_title')+'</p></div>'+chromeHtml()+'<label style="margin-top:22px">'+t('login_user')+'<input id="login-user" autocomplete="username"></label><label style="margin-top:12px">'+t('login_pass')+'<input id="login-password" type="password" autocomplete="current-password"></label><div class="actions"><button onclick="login()">'+t('login_enter')+'</button></div><div id="notice"></div></section>';
+ q('#app').innerHTML='<section class="panel" style="max-width:440px;margin:12vh auto"><div class="brand"><h1>'+esc(siteName())+'</h1><p>'+t('login_title')+'</p></div>'+chromeHtml()+'<label style="margin-top:22px">'+t('login_user')+'<input id="login-user" autocomplete="username"></label><label style="margin-top:12px">'+t('login_pass')+'<input id="login-password" type="password" autocomplete="current-password"></label><div class="actions"><button onclick="login()">'+t('login_enter')+'</button></div><div id="notice"></div></section>';
  q('#login-password').addEventListener('keydown',function(e){if(e.key==='Enter')login()});
 }
 async function login(){
@@ -66,9 +96,9 @@ async function login(){
 }
 async function logout(){await api('/logout',{});AUTHED=false;renderLogin()}
 function renderShell(){
- q('#app').innerHTML='<header><div class="brand"><h1>ec-mcp control plane</h1><p>'+t('tagline')+'</p></div><span class="badge">'+esc(ME&&ME.user?ME.user+' · '+(ME.role||''):'')+'</span> <span class="badge">__EC_MCP_VERSION__</span>'+chromeHtml()+'</header>'+
- '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button id="tab-orch" onclick="showTab(\'orch\')">'+t('nav_orch')+'</button><button id="tab-sse" onclick="showTab(\'sse\')">'+t('nav_sse')+'</button><button id="tab-svc" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button><button id="tab-config" onclick="showTab(\'config\')">'+t('nav_config')+'</button><button id="tab-update" onclick="showTab(\'update\')">'+t('nav_update')+'</button><button id="tab-users" onclick="showTab(\'users\')">'+t('nav_users')+'</button><button class="secondary" onclick="logout()">'+t('nav_out')+'</button></nav>'+
- '<div id="notice"></div><section id="workspace"></section>';
+ q('#app').innerHTML='<header>'+brandHtml()+'<p>'+t('tagline')+'</p></div><span class="badge">'+esc(ME&&ME.user?ME.user+' · '+(ME.role||''):'')+'</span> <span class="badge">__EC_MCP_VERSION__</span>'+userChip()+chromeHtml()+'</header>'+
+ '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button id="tab-orch" onclick="showTab(\'orch\')">'+t('nav_orch')+'</button><button id="tab-sse" onclick="showTab(\'sse\')">'+t('nav_sse')+'</button><button id="tab-svc" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button><button id="tab-config" onclick="showTab(\'config\')">'+t('nav_config')+'</button><button id="tab-tls" onclick="showTab(\'tls\')">'+t('nav_tls')+'</button><button id="tab-update" onclick="showTab(\'update\')">'+t('nav_update')+'</button><button id="tab-users" onclick="showTab(\'users\')">'+t('nav_users')+'</button><button class="secondary" onclick="logout()">'+t('nav_out')+'</button></nav>'+
+ '<div id="notice"></div><section id="workspace"></section>'+customDialogHtml();
  if(ME&&ME.role!=='admin'){var ub=q('#tab-users');if(ub)ub.style.display='none'}
  showTab('wizard');
 }
@@ -83,27 +113,28 @@ function showTab(name){
  if(name==='config')renderConfig();
  if(name==='update')renderUpdate();
  if(name==='users')renderUsers();
+ if(name==='tls')renderTls();
 }
 async function renderServices(){
- q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">Comprobando estado real...</p></section>';
- try{var r=await api('/api/services/status');var h='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">Estado verificado con peticiones reales el '+esc((r.checked_at||'').replace('T',' ').split('.')[0])+' UTC. Ningún servicio se muestra como activo sin comprobación.</p>';
- var orch=(r.orchestrators||[]).map(function(s){return svcRow('Orchestrator: '+s.name,s)}).join('');
- var sse=(r.sse_platforms||[]).map(function(s){return svcRow('SSE: '+s.name,s)}).join('');
- var up=svcRow('Worker de actualizaciones',r.update_worker||{});
- var mcp=r.mcp_transport||{};var mcpRow=svcRow('Transporte MCP ('+esc(mcp.url||'localhost')+')',mcp);
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">'+t('checking')+'</p></section>';
+ try{var r=await api('/api/services/status');var h='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">'+t('svc_checked')+''+esc((r.checked_at||'').replace('T',' ').split('.')[0])+' UTC. Ningún servicio se muestra como activo sin comprobación.</p>';
+ var orch=(r.orchestrators||[]).map(function(s){return svcRow(t('orch_label')+': '+s.name,s)}).join('');
+ var sse=(r.sse_platforms||[]).map(function(s){return svcRow(t('sse_label')+': '+s.name,s)}).join('');
+ var up=svcRow(''+t('upd_worker')+'',r.update_worker||{});
+ var mcp=r.mcp_transport||{};var mcpRow=svcRow(t('mcp_label')+' ('+esc(mcp.url||'localhost')+')',mcp);
  h+=orch+sse+mcpRow+up+'<div class="actions"><button onclick="renderServices()">'+t('btn_recheck')+'</button></div></section>';
  q('#workspace').innerHTML=h;}catch(e){notice(e.message,'err')}
 }
-function svcRow(label,s){var up=s.state==='up'||s.state==='success'||s.state==='idle';var st=s.state||'unknown';var cls=up?'ok':'err';var extra=s.error?esc(s.error):(s.latency!==undefined?('latencia '+s.latency.toFixed(2)+'s'):'');return '<div class="orch"><strong>'+esc(label)+'</strong> <span class="badge" data-state="'+esc(st)+'">'+esc(st)+'</span><br><span class="help">'+extra+'</span></div>'}
+function svcRow(label,s){var up=s.state==='up'||s.state==='success'||s.state==='idle';var st=s.state||'unknown';var cls=up?'ok':'err';var extra=s.error?esc(s.error):(s.latency!==undefined?(t('latency')+' '+s.latency.toFixed(2)+'s'):'');return '<div class="orch"><strong>'+esc(label)+'</strong> <span class="badge" data-state="'+esc(st)+'">'+esc(st)+'</span><br><span class="help">'+extra+'</span></div>'}
 
 async function loadAll(){
  try{var results=await Promise.all([api('/api/state'),api('/api/config'),api('/api/update/status')]);STATE=results[0];CONFIG=results[1];UPDATE={status:results[2]};showTab(CURTAB);}
  catch(e){notice(e.message,'err')}
 }
 function renderOrchestrators(){
- var list=(STATE.orchestrators||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_probe')+'</button><button class="secondary" onclick="dupTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_dup')+'</button><button class="secondary" onclick="renTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_ren')+'</button><button class="secondary" onclick="setDefaultTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_default')+'</button><button class="secondary" onclick="editOrch(\'+'+esc(o.name)+'\')">'+t('btn_edit')+'</button><button class="danger" onclick="deleteOrch(\'+'+esc(o.name)+'\')">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+(o.default?'<span class="badge">por defecto</span>':'')+'<br><span class="help">'+esc(o.url)+'</span> <span id="probe-orchestrator-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">No hay orquestadores guardados.</p>';
+ var list=(STATE.orchestrators||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_probe')+'</button><button class="secondary" onclick="dupTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_dup')+'</button><button class="secondary" onclick="renTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_ren')+'</button><button class="secondary" onclick="setDefaultTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_default')+'</button><button class="secondary" onclick="editOrch(\'+'+esc(o.name)+'\')">'+t('btn_edit')+'</button><button class="danger" onclick="deleteOrch(\'+'+esc(o.name)+'\')">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">'+t('badge_active')+'</span>':'')+(o.default?'<span class="badge">'+t('badge_default')+'</span>':'')+'<br><span class="help">'+esc(o.url)+'</span> <span id="probe-orchestrator-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">'+t('no_orch')+'</p>';
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_orch')+'</h2>'+list+
- '<div class="group"><h3>Agregar o actualizar</h3><div class="grid"><label>Nombre<input id="o-name"></label><label>URL<input id="o-url" placeholder="https://orchestrator.example.com"></label><label>API key<input id="o-key" type="password"></label><label>Usuario<input id="o-user"></label><label>Password<input id="o-password" type="password"></label><label>Verificar TLS<select id="o-tls"><option>true</option><option>false</option></select></label><label>Usuario SSH<input id="o-ssh-user"></label><label>Password SSH<input id="o-ssh-password" type="password"></label><label>Password enable<input id="o-enable" type="password"></label><label>Host SSH<input id="o-ssh-host"></label></div><div class="actions"><button onclick="saveOrch()">'+t('btn_save')+'</button><button class="secondary" onclick="applyOrch()">Aplicar al .env</button></div></div></section>';
+ '<div class="group"><h3>'+t('add_update')+'</h3><div class="grid"><label>'+t('f_name')+'<input id="o-name"></label><label>'+t('f_url')+'<input id="o-url" placeholder="https://orchestrator.example.com"></label><label>'+t('f_apikey')+'<input id="o-key" type="password"></label><label>'+t('f_user')+'<input id="o-user"></label><label>'+t('f_pass')+'<input id="o-password" type="password"></label><label>'+t('f_tls')+'<select id="o-tls"><option>true</option><option>false</option></select></label><label>'+t('f_ssh_user')+'<input id="o-ssh-user"></label><label>'+t('f_ssh_pass')+'<input id="o-ssh-password" type="password"></label><label>'+t('f_enable')+'<input id="o-enable" type="password"></label><label>'+t('f_ssh_host')+'<input id="o-ssh-host"></label></div><div class="actions"><button onclick="saveOrch()">'+t('btn_save')+'</button><button class="secondary" onclick="applyOrch()"'>+t('apply_env')+'</button></div></div></section>';
 }
 function editOrch(name){var o=(STATE.orchestrators||[]).find(function(x){return x.name===name});if(!o)return;q('#o-name').value=o.name;q('#o-url').value=o.url;q('#o-tls').value=String(o.verify_tls);q('#o-ssh-user').value=o.ssh_user||'';q('#o-ssh-host').value=o.ssh_host||''}
 async function saveOrch(){
@@ -112,9 +143,9 @@ async function saveOrch(){
 async function deleteOrch(name){if(!confirm('Eliminar '+name+'?'))return;await api('/api/orchestrators/delete',{name:name});STATE=await api('/api/state');renderOrchestrators()}
 async function applyOrch(){try{var r=await api('/api/apply',{name:q('#o-name').value.trim(),kind:'orchestrator'});notice(r.message||r.error,r.ok?'ok':'err');CONFIG=await api('/api/config')}catch(e){notice(e.message,'err')}}
 function renderSse(){
- var list=(STATE.sse_platforms||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_probe')+'</button><button class="secondary" onclick="dupTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_dup')+'</button><button class="secondary" onclick="renTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_ren')+'</button><button class="secondary" onclick="setDefaultTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_default')+'</button><button class="secondary" onclick="editSse(\'+'+esc(o.name)+'\')">'+t('btn_edit')+'</button><button class="danger" onclick="deleteSse(\'+'+esc(o.name)+'\')">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+(o.default?'<span class="badge">por defecto</span>':'')+' <span class="badge">'+esc(o.provider)+'</span><br><span class="help">'+esc(o.base_url)+'</span> <span id="probe-sse-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">No hay plataformas SSE guardadas.</p>';
+ var list=(STATE.sse_platforms||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_probe')+'</button><button class="secondary" onclick="dupTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_dup')+'</button><button class="secondary" onclick="renTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_ren')+'</button><button class="secondary" onclick="setDefaultTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_default')+'</button><button class="secondary" onclick="editSse(\'+'+esc(o.name)+'\')">'+t('btn_edit')+'</button><button class="danger" onclick="deleteSse(\'+'+esc(o.name)+'\')">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">'+t('badge_active')+'</span>':'')+(o.default?'<span class="badge">'+t('badge_default')+'</span>':'')+' <span class="badge">'+esc(o.provider)+'</span><br><span class="help">'+esc(o.base_url)+'</span> <span id="probe-sse-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">'+t('no_sse')+'</p>';
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_sse')+'</h2><p>Administra N plataformas SSE de forma independiente (p. ej. varias instancias de Axis Security). Cada una guarda su propio token y URL.</p>'+list+
- '<div class="group"><h3>Agregar o actualizar plataforma SSE</h3><div class="grid"><label>Nombre<input id="s-name" placeholder="axis-prod"></label><label>Proveedor<select id="s-provider"><option>axis</option></select></label><label>URL base<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>Token admin (Bearer JWT)<input id="s-token" type="password"></label><label>Verificar TLS<select id="s-tls"><option>true</option><option>false</option></select></label><label>Timeout (s)<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">'+t('btn_save')+'</button><button class="secondary" onclick="applySse()">Aplicar al .env</button></div></div></section>';
+ '<div class="group"><h3>'+t('add_update_sse')+'</h3><div class="grid"><label>'+t('f_name')+'<input id="s-name" placeholder="axis-prod"></label><label>'+t('f_provider')+'<select id="s-provider"><option>axis</option></select></label><label>'+t('f_baseurl')+'<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>'+t('f_token')+'<input id="s-token" type="password"></label><label>Verificar TLS<select id="s-tls"><option>true</option><option>false</option></select></label><label>'+t('f_timeout')+'<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">'+t('btn_save')+'</button><button class="secondary" onclick="applySse()"'>+t('apply_env')+'</button></div></div></section>';
 }
 function editSse(name){var o=(STATE.sse_platforms||[]).find(function(x){return x.name===name});if(!o)return;q('#s-name').value=o.name;q('#s-provider').value=o.provider;q('#s-url').value=o.base_url;q('#s-tls').value=String(o.verify_tls);q('#s-timeout').value=o.timeout}
 async function saveSse(){
@@ -151,8 +182,8 @@ function wizRenderStep(){
  var steps=WIZARD.steps,s=steps[WSTEP],fields=wizFields(s.id);
  var bar=steps.map(function(st,i){return '<span class="badge" style="'+(i===WSTEP?'border-color:#38bdf8;color:#bae6fd':'')+'">'+(i+1)+' '+esc(st['title_'+LANG]||st.title)+'</span>'}).join(' ');
  var targets=s.id==='targets'?wizTargetsHtml():'';
- q('#workspace').innerHTML='<section class="panel"><h2>Asistente · paso '+(WSTEP+1)+' de '+steps.length+': '+esc(s['title_'+LANG]||s.title)+'</h2><div class="wizbar">'+bar+'</div>'+
-  (s.id==='targets'?'<p class="help">Guarda varios orquestadores y varias plataformas SSE a la vez; elige cuál queda por defecto para los tools sin target explícito.</p>':'')+
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('wiz_step',{a:WSTEP+1,b:steps.length})+' '+esc(s['title_'+LANG]||s.title)+'</h2><div class="wizbar">'+bar+'</div>'+
+  (s.id==='targets'?'<p class="help">'+t('wiz_targets_help')+'</p>':'')+
   '<div class="group"><div class="grid">'+fields.map(wizFieldHtml).join('')+'</div></div>'+targets+
   '<div class="actions"><button class="secondary" onclick="wizBack()" '+(WSTEP===0?'disabled':'')+'>'+t('btn_back')+'</button><button onclick="wizNext()">'+(WSTEP===steps.length-1?t('btn_review'):t('btn_next'))+'</button></div></section>';
  fields.forEach(function(f){var el=q('#wiz-'+f.key);if(el){if(!f.secret)el.value=(WDRAFT[f.key]!==undefined?WDRAFT[f.key]:f.value);el.addEventListener('change',function(){WDRAFT[f.key]=el.value;wizRefreshDepends()})}});
@@ -180,14 +211,14 @@ async function wizNext(){
 }
 function wizBack(){if(WSTEP>0){WSTEP--;wizRenderStep()}}
 async function wizReview(){
- q('#workspace').innerHTML='<section class="panel"><h2>Revisar cambios antes de guardar</h2><p class="help">Preview sobre <span class="mono">'+esc(WIZARD.env_file)+'</span>; todavía no se escribe nada.</p><div id="wiz-diff">Comprobando...</div><div class="actions"><button class="secondary" onclick="wizBack()">'+t('btn_back')+'</button><button onclick="wizSave(false)">'+t('btn_save_vars')+'</button><button onclick="wizSave(true)">'+t('btn_save_restart_short')+'</button></div></section>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('review_title')+'</h2><p class="help">'+t('review_desc')+'<span class="mono">'+esc(WIZARD.env_file)+'</span>'+t('review_nowrite')+'</p><div id="wiz-diff">Comprobando...</div><div class="actions"><button class="secondary" onclick="wizBack()">'+t('btn_back')+'</button><button onclick="wizSave(false)">'+t('btn_save_vars')+'</button><button onclick="wizSave(true)">'+t('btn_save_restart_short')+'</button></div></section>';
  try{
   var r=await api('/api/config/diff',{values:wizCollect()});
   var h='';
   if(r.errors&&r.errors.length)h+='<div class="msg err">'+r.errors.map(esc).join('<br>')+'</div>';
   if(r.changes&&r.changes.length)h+='<table class="diff">'+r.changes.map(function(c){return '<tr><td class="mono">'+esc(c.key)+'</td><td class="mono">'+(c.cleared?'(eliminar secreto)':esc(c.old))+'</td><td>→</td><td class="mono">'+esc(c.new)+'</td></tr>'}).join('')+'</table>';
-  else if(!r.errors||!r.errors.length)h+='<p class="help">Sin cambios en variables.</p>';
-  h+='<h3 style="margin-top:16px">Targets (orquestadores / SSE)</h3>'+wizTargetsHtml();
+  else if(!r.errors||!r.errors.length)h+='<p class="help">'+t('no_changes')+'</p>';
+  h+='<h3 style="margin-top:16px">'+t('targets_h')+'</h3>'+wizTargetsHtml();
   q('#wiz-diff').innerHTML=h;
  }catch(e){q('#wiz-diff').innerHTML='<div class="msg err">'+esc(e.message)+'</div>'}
 }
@@ -206,16 +237,16 @@ function wizTargetRow(o,kind,urlField){
   '<button class="secondary" onclick="renTarget(\''+kind+'\',\''+esc(o.name)+'\')">'+t('btn_ren')+'</button>'+
   '<button class="secondary" onclick="setDefaultTarget(\''+kind+'\',\''+esc(o.name)+'\')">'+t('btn_default')+'</button>'+
   '<button class="danger" onclick="delTarget(\''+kind+'\',\''+esc(o.name)+'\')">'+t('btn_delete')+'</button></span>'+
-  '<strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+(o.default?'<span class="badge">por defecto</span>':'')+'<br><span class="help">'+esc(o[urlField]||'')+'</span> <span id="probe-'+kind+'-'+esc(o.name)+'"></span></div>';
+  '<strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">'+t('badge_active')+'</span>':'')+(o.default?'<span class="badge">'+t('badge_default')+'</span>':'')+'<br><span class="help">'+esc(o[urlField]||'')+'</span> <span id="probe-'+kind+'-'+esc(o.name)+'"></span></div>';
 }
 function wizTargetsHtml(){
  var st=WIZARD.state||{};
- var orch=(st.orchestrators||[]).map(function(o){return wizTargetRow(o,'orchestrator','url')}).join('')||'<p class="help">No hay orquestadores guardados.</p>';
- var sse=(st.sse_platforms||[]).map(function(o){return wizTargetRow(o,'sse','base_url')}).join('')||'<p class="help">No hay plataformas SSE guardadas.</p>';
+ var orch=(st.orchestrators||[]).map(function(o){return wizTargetRow(o,'orchestrator','url')}).join('')||'<p class="help">'+t('no_orch')+'</p>';
+ var sse=(st.sse_platforms||[]).map(function(o){return wizTargetRow(o,'sse','base_url')}).join('')||'<p class="help">'+t('no_sse')+'</p>';
  return '<div class="group"><h3>Orquestadores</h3>'+orch+
-  '<div class="grid" style="margin-top:10px"><label>Nombre<input id="wo-name" placeholder="prod"></label><label>URL<input id="wo-url" placeholder="https://orchestrator.example.com"></label><label>API key<input id="wo-key" type="password"></label><label>Usuario<input id="wo-user"></label><label>Password<input id="wo-pass" type="password"></label></div><div class="actions"><button onclick="wizSaveOrch()">'+t('btn_save_orch')+'</button></div></div>'+
+  '<div class="grid" style="margin-top:10px"><label>'+t('f_name')+'<input id="wo-name" placeholder="prod"></label><label>'+t('f_url')+'<input id="wo-url" placeholder="https://orchestrator.example.com"></label><label>'+t('f_apikey')+'<input id="wo-key" type="password"></label><label>'+t('f_user')+'<input id="wo-user"></label><label>'+t('f_pass')+'<input id="wo-pass" type="password"></label></div><div class="actions"><button onclick="wizSaveOrch()">'+t('btn_save_orch')+'</button></div></div>'+
   '<div class="group"><h3>Plataformas SSE</h3>'+sse+
-  '<div class="grid" style="margin-top:10px"><label>Nombre<input id="ws-name" placeholder="axis-prod"></label><label>URL base<input id="ws-url" placeholder="https://admin-api.axissecurity.com"></label><label>Token admin<input id="ws-token" type="password"></label><label>Timeout (s)<input id="ws-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="wizSaveSse()">'+t('btn_save_sse')+'</button></div></div>';
+  '<div class="grid" style="margin-top:10px"><label>'+t('f_name')+'<input id="ws-name" placeholder="axis-prod"></label><label>'+t('f_baseurl')+'<input id="ws-url" placeholder="https://admin-api.axissecurity.com"></label><label>'+t('f_token')+'<input id="ws-token" type="password"></label><label>'+t('f_timeout')+'<input id="ws-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="wizSaveSse()">'+t('btn_save_sse')+'</button></div></div>';
 }
 async function reloadAfterMutation(){
  STATE=await api('/api/state');
@@ -228,8 +259,8 @@ async function wizSaveSse(){
  try{var r=await api('/api/sse',{name:q('#ws-name').value.trim(),provider:'axis',base_url:q('#ws-url').value.trim(),admin_token:q('#ws-token').value||null,verify_tls:true,timeout:q('#ws-timeout').value});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await reloadAfterMutation()}catch(e){notice(e.message,'err')}
 }
 async function probeTarget(kind,name){
- var node=document.getElementById('probe-'+kind+'-'+name);if(node)node.textContent=' probando...';
- try{var r=await api('/api/probe',{kind:kind,name:name});if(node)node.innerHTML=' <span class="badge">'+(r.ok?'up':'down')+'</span>';notice((r.ok?'OK: ':'Fallo: ')+kind+' '+name+(r.error?' — '+r.error:''),r.ok?'ok':'err')}
+ var node=document.getElementById('probe-'+kind+'-'+name);if(node)node.textContent=' '+t('probing')+'';
+ try{var r=await api('/api/probe',{kind:kind,name:name});if(node)node.innerHTML=' <span class="badge">'+(r.ok?'up':'down')+'</span>';notice((r.ok?t('probe_ok'):t('probe_fail'))+kind+' '+name+(r.error?' — '+r.error:''),r.ok?'ok':'err')}
  catch(e){notice(e.message,'err')}
 }
 async function dupTarget(kind,name){
@@ -254,10 +285,10 @@ async function renderUsers(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_users')+'</h2><p class="help">'+t('loading')+'</p></section>';
  try{
   var r=await api('/api/users');
-  var rows=(r.users||[]).map(function(u){return '<div class="orch"><strong>'+esc(u.username)+'</strong> <span class="badge">'+esc(u.role)+'</span><span class="orch-actions"><button class="danger" onclick="delUser(\''+esc(u.username)+'\')">'+t('btn_delete')+'</button></span></div>'}).join('')||'<p class="help">Sin usuarios todavía: se usa la contraseña única (EC_ADMIN_PASSWORD).</p>';
-  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_users')+'</h2><p class="help">Archivo <span class="mono">'+esc(r.file)+'</span> · roles: '+esc((r.roles||[]).join(', '))+'. Los hashes nunca se muestran ni se devuelven.</p>'+rows+
-  '<div class="group"><h3>Agregar o actualizar usuario</h3><div class="grid"><label>Usuario<input id="u-name"></label><label>Contraseña<input id="u-pass" type="password" autocomplete="new-password"></label><label>Rol<select id="u-role"><option>viewer</option><option>operator</option><option>admin</option></select></label></div><div class="actions"><button onclick="saveUser()">Guardar usuario</button></div></div>'+
-  '<div class="group"><h3>Cambiar contraseña</h3><div class="grid"><label>Usuario (vacío = mi sesión)<input id="p-user"></label><label>Contraseña actual<input id="p-old" type="password" autocomplete="current-password"></label><label>Nueva contraseña<input id="p-new" type="password" autocomplete="new-password"></label></div><div class="actions"><button onclick="changePass()">Cambiar contraseña</button></div></div></section>';
+  var rows=(r.users||[]).map(function(u){return '<div class="orch"><strong>'+esc(u.username)+'</strong> <span class="badge">'+esc(u.role)+'</span><span class="orch-actions"><button class="danger" onclick="delUser(\''+esc(u.username)+'\')">'+t('btn_delete')+'</button></span></div>'}).join('')||'<p class="help">'+t('no_users')+'</p>';
+  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_users')+'</h2><p class="help">'+t('users_file')+' <span class="mono">'+esc(r.file)+'</span> · roles: '+esc((r.roles||[]).join(', '))+'. '+t('hashes_note')+'</p>'+rows+
+  '<div class="group"><h3>'+t('add_user')+'</h3><div class="grid"><label>'+t('u_name')+'<input id="u-name"></label><label>'+t('u_pass')+'<input id="u-pass" type="password" autocomplete="new-password"></label><label>'+t('u_role')+'<select id="u-role"><option>viewer</option><option>operator</option><option>admin</option></select></label></div><div class="actions"><button onclick="saveUser()">Guardar usuario</button></div></div>'+
+  '<div class="group"><h3>'+t('change_pass')+'</h3><div class="grid"><label>'+t('u_empty')+'<input id="p-user"></label><label>'+t('u_old')+'<input id="p-old" type="password" autocomplete="current-password"></label><label>'+t('u_new')+'<input id="p-new" type="password" autocomplete="new-password"></label></div><div class="actions"><button onclick="changePass()">Cambiar contraseña</button></div></div></section>';
  }catch(e){notice(e.message,'err')}
 }
 async function saveUser(){
@@ -270,19 +301,61 @@ async function delUser(name){
 async function changePass(){
  try{var r=await api('/api/users/password',{username:q('#p-user').value.trim(),old_password:q('#p-old').value,new_password:q('#p-new').value});notice(r.message||r.error,r.ok?'ok':'err')}catch(e){notice(e.message,'err')}
 }
+
+function targetSelectorHtml(){
+ var orchs=STATE.orchestrators||[], sses=STATE.sse_platforms||[];
+ if(!orchs.length&&!sses.length)return '';
+ var opts='<option value="">'+t('all_targets')+'</option>';
+ if(orchs.length)opts+='<optgroup label="'+t('h2_orch')+'">'+orchs.map(function(o){return '<option value="orchestrator:'+esc(o.name)+'">'+esc(o.name)+'</option>'}).join('')+'</optgroup>';
+ if(sses.length)opts+='<optgroup label="'+t('h2_sse')+'">'+sses.map(function(o){return '<option value="sse:'+esc(o.name)+'">'+esc(o.name)+'</option>'}).join('')+'</optgroup>';
+ return '<div class="group"><h3>'+t('per_target')+'</h3><label>'+t('view_target')+'<select id="cfg-target" onchange="renderTargetPanel()">'+opts+'</select></label><div id="target-panel"></div></div>';
+}
+function renderTargetPanel(){
+ var sel=q('#cfg-target');var el=q('#target-panel');if(!sel||!el)return;
+ var v=sel.value;if(!v){el.innerHTML='';return}
+ var parts=v.split(':');var kind=parts[0];var name=parts.slice(1).join(':');
+ var list=kind==='sse'?(STATE.sse_platforms||[]):(STATE.orchestrators||[]);
+ var o=list.find(function(x){return x.name===name});if(!o){el.innerHTML='';return}
+ var rows=[['URL',o.url||o.base_url],['username',o.username],['ssh_host',o.ssh_host],['ssh_user',o.ssh_user]];
+ var flags=[];
+ if(o.has_api_key)flags.push('has_api_key');if(o.has_password)flags.push('has_password');if(o.has_ssh_password)flags.push('has_ssh_password');if(o.has_enable_password)flags.push('has_enable_password');if(o.has_admin_token)flags.push('has_admin_token');
+ el.innerHTML='<div class="orch"><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">'+t('badge_active')+'</span>':'')+(o.default?'<span class="badge">'+t('badge_default')+'</span>':'')+'<dl class="kv">'+rows.filter(function(r){return r[1]}).map(function(r){return '<dt>'+esc(r[0])+'</dt><dd class="mono">'+esc(r[1])+'</dd>'}).join('')+'<dt>verify_tls</dt><dd>'+String(o.verify_tls)+'</dd>'+(o.timeout!==undefined?'<dt>timeout</dt><dd>'+esc(o.timeout)+'</dd>':'')+'</dl>'+(flags.length?'<p class="help">secretos: '+flags.join(', ')+'</p>':'')+'<p class="help">'+t('target_info')+' · '+esc(name)+'</p></div>';
+}
+function blobsInfoHtml(){
+ var b=STATE.blobs||{};
+ return '<p class="help">EC_ORCHESTRATORS_JSON: '+(b.orchestrators?t('blob_set'):t('blob_unset'))+' · EC_SSE_PLATFORMS_JSON: '+(b.sse?t('blob_set'):t('blob_unset'))+'</p>';
+}
+
+async function renderTls(){
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('tls_title')+'</h2><p class="help">'+t('tls_desc')+'</p><p class="help">'+t('checking')+'</p></section>';
+ try{
+  var r=await api('/api/tls');
+  var canWrite=ME&&ME.role!=='viewer';
+  var status=(r.enabled?'<span class="badge">'+t('tls_enabled')+'</span>':'<span class="badge">'+t('tls_disabled')+'</span>');
+  var fp=r.fingerprint?('<dt>'+t('tls_fp')+'</dt><dd class="mono">'+esc(r.fingerprint)+'</dd>'):'';
+  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tls_title')+'</h2><p class="help">'+t('tls_desc')+'</p>'+status+'<dl class="kv"><dt>EC_ADMIN_TLS_CERT</dt><dd class="mono">'+esc(r.cert)+' ('+(r.cert_present?t('tls_present'):t('tls_missing'))+')</dd><dt>EC_ADMIN_TLS_KEY</dt><dd class="mono">'+esc(r.key)+' ('+(r.key_present?t('tls_present'):t('tls_missing'))+')</dd>'+fp+'</dl>'+(r.cert_present?'':'<p class="help">'+t('tls_none')+'</p>')+'<div class="group"><h3>'+t('tls_title')+'</h3><label>'+t('tls_cert')+'<textarea id="tls-cert" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label><label style="margin-top:10px">'+t('tls_key')+'<textarea id="tls-key" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></label><div class="actions">'+(canWrite?'<button onclick="saveTls()">'+t('tls_upload')+'</button><button class="danger" onclick="delTls()">'+t('tls_delete')+'</button>':'')+'</div></div></section>';
+ }catch(e){notice(e.message,'err')}
+}
+async function saveTls(){
+ try{var r=await api('/api/tls/upload',{cert:q('#tls-cert').value,key:q('#tls-key').value});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await renderTls()}catch(e){notice(e.message,'err')}
+}
+async function delTls(){
+ if(!confirm(t('tls_delete')+'?'))return;
+ try{var r=await api('/api/tls/delete',{});notice(r.message||r.error,r.ok?'ok':'err');await renderTls()}catch(e){notice(e.message,'err')}
+}
 function fieldHtml(f){
  var id='cfg-'+f.key, input='';
  if(f.kind==='boolean')input='<select id="'+id+'" data-key="'+f.key+'"><option value="true">true</option><option value="false">false</option></select>';
  else if(f.kind==='choice')input='<select id="'+id+'" data-key="'+f.key+'">'+f.choices.map(function(v){return '<option>'+esc(v)+'</option>'}).join('')+'</select>';
  else input='<input id="'+id+'" data-key="'+f.key+'" type="'+(f.secret?'password':(f.kind==='integer'||f.kind==='number'?'number':'text'))+'" value="'+esc(f.value)+'" placeholder="'+(f.secret&&f.configured?'Configurado; vacío conserva el secreto':'')+'">';
- var clear=f.secret&&f.configured?'<label class="clear"><input type="checkbox" data-clear="'+f.key+'">Eliminar secreto guardado</label>':'';
+ var clear=f.secret&&f.configured?'<label class="clear"><input type="checkbox" data-clear="'+f.key+'">'+t('clear_secret')+'</label>':'';
  return '<div class="field"><label>'+esc(f['label_'+LANG]||f.label)+input+'</label>'+(f.secret?'<span class="secret-note">'+(f.configured?t('secret_set'):t('secret_unset'))+'</span>':'')+((f['help_'+LANG]||f.help)?'<span class="help">'+esc(f['help_'+LANG]||f.help)+'</span>':'')+clear+'</div>';
 }
 function renderConfig(){
  if(!CONFIG){q('#workspace').innerHTML='<section class="panel">Cargando variables...</section>';return}
- var groups={};CONFIG.fields.forEach(function(f){(groups[f.group]||(groups[f.group]=[])).push(f)});
+ var groups={};CONFIG.fields.forEach(function(f){var gk=f['group_'+LANG]||f.group;(groups[gk]||(groups[gk]=[])).push(f)});
  var html=Object.keys(groups).map(function(name){return '<section class="group"><h3>'+esc(name)+'</h3><div class="grid">'+groups[name].map(fieldHtml).join('')+'</div></section>'}).join('');
- q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_config')+'</h2><p>Se guardan en <span class="mono">'+esc(CONFIG.env_file)+'</span>. Los secretos nunca regresan al navegador.</p>'+html+'<div class="actions"><button onclick="saveConfig()">'+t('btn_save_vars')+'</button><button class="secondary" onclick="restartServices()">'+t('btn_save_restart')+'</button></div></section>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_config')+'</h2><p>'+t('saved_in')+'<span class="mono">'+esc(CONFIG.env_file)+'</span>. '+t('secrets_note')+'</p>'+targetSelectorHtml()+html+blobsInfoHtml()+'<div class="actions"><button onclick="saveConfig()">'+t('btn_save_vars')+'</button><button class="secondary" onclick="restartServices()">'+t('btn_save_restart')+'</button></div></section>';
  CONFIG.fields.forEach(function(f){var el=q('#cfg-'+f.key);if(el&&!f.secret)el.value=f.value});
 }
 async function saveConfig(restart){

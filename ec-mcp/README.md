@@ -286,9 +286,22 @@ servicios** crea una solicitud que procesa el worker privilegiado; el proceso
 web nunca ejecuta Git, pip ni systemctl directamente.
 
 La interfaz está en **español e inglés** (botón ES/EN en la cabecera, se
-recuerda en `localStorage`) y usa un tema claro estilo HPE (cabecera navy
-`#00263a`, acento HPE Green `#01a982`); los círculos de la cabecera permiten
-cambiar el color de acento.
+recuerda en `localStorage`) y usa un tema claro estilo HPE (acento HPE Green
+`#01a982` por defecto; la cabecera deriva del acento elegido). Los círculos de
+la cabecera son una **paleta de colores** que cambia el acento de toda la
+página. Con el engranaje (**Personalizar**) se puede cambiar el **nombre del
+sitio** (`ec-mcp control plane`) y subir un **icono PNG** (se guarda en
+`localStorage`). La cabecera muestra el usuario/rol conectado con menú propio.
+
+En **Variables** (Service settings) hay un selector **por target**: además de
+las variables globales, permite ver la configuración guardada de cada
+Orquestador/SSE por nombre (URL, usuario, TLS, flags de secretos), junto al
+estado de los blobs `EC_ORCHESTRATORS_JSON` / `EC_SSE_PLATFORMS_JSON`.
+
+La pestaña **Certificados** (`/api/tls`, `/api/tls/upload`, `/api/tls/delete`)
+permite subir certificado y llave privada PEM (se guardan con `0600` en
+`EC_ADMIN_TLS_DIR`); con `EC_ADMIN_TLS_ENABLED=true` + `EC_ADMIN_TLS_CERT` /
+`EC_ADMIN_TLS_KEY` el panel sirve HTTPS.
 
 #### Multi-Orchestrator y multi-SSE (multi-tenant)
 

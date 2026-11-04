@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,7 @@ def env(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("EC_ADMIN_USERS_FILE", str(tmp_path / "users.json"))
     monkeypatch.setenv("EC_MCP_ENV_FILE", str(tmp_path / ".env"))
     monkeypatch.setenv("EC_MCP_AUDIT_LOG", str(tmp_path / "audit.jsonl"))
+    monkeypatch.setenv("EC_ADMIN_TLS_DIR", str(tmp_path / ".ec-admin-tls"))
     (tmp_path / ".env").write_text("EC_MCP_PORT=8000\n", encoding="utf-8")
     admin.SESSIONS.clear()
     admin.LOGIN_FAILURES.clear()
@@ -245,7 +247,7 @@ def test_page_has_i18n_and_theme_picker_and_no_ztp():
     assert "var I18N=" in PAGE
     assert "function setLang(" in PAGE
     assert "function setAccent(" in PAGE
-    assert "class=\"sw\"" in PAGE
+    assert "<span class=\"sw" in PAGE
     assert "label_'+LANG" in PAGE
     assert "title_'+LANG" in PAGE
     assert "renderZtp" not in PAGE and "tab-ztp" not in PAGE
@@ -298,10 +300,83 @@ def test_page_script_executes_cleanly_in_node(tmp_path):
     assert result.returncode == 0, result.stderr[-2000:]
 
 
+@pytest.fixture()
+def pem_pair(tmp_path: Path):
+    import shutil
+    import subprocess
+
+    openssl = shutil.which("openssl")
+    if not openssl:
+        pytest.skip("openssl no disponible")
+    cert = tmp_path / "cert.pem"
+    key = tmp_path / "key.pem"
+    subprocess.run(  # noqa: S603 - openssl binario local con args fijos
+        [openssl, "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+         "-subj", "/CN=ec-mcp-test", "-keyout", str(key), "-out", str(cert)],
+        check=True, capture_output=True, timeout=30,
+    )
+    return cert.read_text(encoding="utf-8"), key.read_text(encoding="utf-8")
+
+
+def test_tls_endpoints_upload_status_delete(client, env, pem_pair):
+    cert_pem, key_pem = pem_pair
+    assert client.get("/api/tls").json()["cert_present"] is False
+    bad = client.post("/api/tls/upload", json={"cert": "no pem", "key": key_pem})
+    assert bad.status_code == 400
+    ok = client.post("/api/tls/upload", json={"cert": cert_pem, "key": key_pem})
+    assert ok.json()["ok"] is True
+    assert ok.json()["fingerprint"]
+    cert_path = env / ".ec-admin-tls" / "cert.pem"
+    key_path = env / ".ec-admin-tls" / "key.pem"
+    assert cert_path.is_file() and key_path.is_file()
+    if os.name != "nt":
+        assert cert_path.stat().st_mode & 0o777 == 0o600
+        assert key_path.stat().st_mode & 0o777 == 0o600
+    status = client.get("/api/tls").json()
+    assert status["cert_present"] is True and status["key_present"] is True
+    assert "EC_ADMIN_TLS_CERT=" in (env / ".env").read_text(encoding="utf-8")
+    deleted = client.post("/api/tls/delete")
+    assert deleted.json()["ok"] is True
+    assert not cert_path.exists() and not key_path.exists()
+    assert client.get("/api/tls").json()["cert_present"] is False
+
+
+def test_tls_upload_forbidden_for_viewer(env, pem_pair):
+    cert_pem, key_pem = pem_pair
+    admin_users.upsert_user("bob", "bobpw", "viewer")
+    c = TestClient(build_admin_app())
+    assert c.post("/login", json={"username": "bob", "password": "bobpw"}).json()["ok"] is True
+    assert c.post("/api/tls/upload", json={"cert": cert_pem, "key": key_pem}).status_code == 403
+    assert c.get("/api/tls").status_code == 200
+
+
+def test_page_has_tls_tab_branding_and_per_target_selector():
+    assert "renderTls" in PAGE
+    assert "/api/tls" in PAGE
+    assert "nav_tls" in PAGE
+    assert "siteName" in PAGE and "siteLogo" in PAGE and "openCustom" in PAGE
+    assert "userChip" in PAGE
+    assert "targetSelectorHtml" in PAGE and "renderTargetPanel" in PAGE
+    assert "wiz_step" in PAGE
+    assert "group_'+LANG" in PAGE
+
+
+def test_public_config_has_group_en_and_tls_settings(env):
+    config = admin_config.public_config(env / ".env")
+    by_key = {f["key"]: f for f in config["fields"]}
+    assert by_key["EC_ORCHESTRATOR_URL"]["group_en"] == "Orchestrator"
+    assert by_key["EC_SSH_USER"]["group_en"] == "Optional SSH"
+    assert by_key["EC_ADMIN_TLS_ENABLED"]["label_en"] == "Enable HTTPS on the panel"
+    assert by_key["EC_ADMIN_TLS_CERT"]["depends_on"] == ["EC_ADMIN_TLS_ENABLED", "true"]
+
+
 def test_new_routes_registered():
     paths = {route.path for route in build_admin_app().routes}
     assert {
         "/api/wizard",
+        "/api/tls",
+        "/api/tls/upload",
+        "/api/tls/delete",
         "/api/config/diff",
         "/api/probe",
         "/api/default",
