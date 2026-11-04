@@ -122,17 +122,17 @@ EN_LABELS = {
     "EC_ORCHESTRATOR_URL": "Orchestrator URL",
     "EC_ORCHESTRATOR_API_KEY": "API key (X-Auth-Token)",
     "EC_ORCHESTRATOR_USER": "Alternative user",
-    "EC_ORCHESTRATOR_PASSWORD": "Alternative password",
+    "EC_ORCHESTRATOR_PASSWORD": "Alternative password",  # nosec B105
     "EC_VERIFY_TLS": "Verify TLS",
     "EC_SSH_ENABLED": "Enable SSH",
     "EC_SSH_HOST": "Default SSH host",
     "EC_SSH_USER": "SSH user",
-    "EC_SSH_PASSWORD": "SSH password",
-    "EC_SSH_ENABLE_PASSWORD": "Enable password",
+    "EC_SSH_PASSWORD": "SSH password",  # nosec B105
+    "EC_SSH_ENABLE_PASSWORD": "Enable password",  # nosec B105
     "EC_SSH_PORT": "SSH port",
     "EC_SSH_AUTH_METHOD": "Authentication method",
     "EC_AXIS_ENABLED": "Enable Axis Security",
-    "EC_AXIS_ADMIN_TOKEN": "Admin token (Bearer JWT)",
+    "EC_AXIS_ADMIN_TOKEN": "Admin token (Bearer JWT)",  # nosec B105
     "EC_AXIS_BASE_URL": "Axis base URL",
     "EC_AXIS_VERIFY_TLS": "Verify Axis TLS",
     "EC_AXIS_TIMEOUT": "Axis timeout (seconds)",
@@ -145,7 +145,7 @@ EN_LABELS = {
     "EC_API_CACHE_TTL": "API cache TTL (seconds)",
     "EC_MCP_AUDIT_LOG": "Audit log file",
     "EC_MCP_PROFILES_DIR": "Profiles directory",
-    "EC_MCP_AUTH_TOKEN": "MCP bearer token",
+    "EC_MCP_AUTH_TOKEN": "MCP bearer token",  # nosec B105
     "EC_MCP_HOST": "MCP listen IP",
     "EC_MCP_PORT": "MCP port",
     "EC_MCP_ALLOWED_HOSTS": "Allowed hosts",
@@ -154,17 +154,17 @@ EN_LABELS = {
     "EC_MCP_BUILD_COMMIT": "Build commit",
     "EC_ADMIN_HOST": "Panel listen IP",
     "EC_ADMIN_PORT": "Panel port",
-    "EC_ADMIN_PASSWORD": "Administrator password",
+    "EC_ADMIN_PASSWORD": "Administrator password",  # nosec B105
     "EC_ADMIN_USERS_FILE": "Panel users file",
     "EC_ADMIN_LOGIN_MAX_FAILURES": "Failed attempts before lockout",
     "EC_ADMIN_LOGIN_WINDOW_SECONDS": "Lockout window (seconds)",
-    "EC_ADMIN_PASSWORD_FILE": "Password file",
+    "EC_ADMIN_PASSWORD_FILE": "Password file",  # nosec B105
     "EC_ADMIN_STORE": "Orchestrators file",
     "EC_UPDATE_ALLOW_WEB": "Allow web updates",
     "EC_UPDATE_REPOSITORY": "GitHub repository",
     "EC_UPDATE_BRANCH": "Release branch",
     "EC_UPDATE_GITHUB_USER": "GitHub user",
-    "EC_UPDATE_GITHUB_TOKEN": "GitHub token",
+    "EC_UPDATE_GITHUB_TOKEN": "GitHub token",  # nosec B105
     "EC_UPDATE_PROJECT_DIR": "Installed directory",
     "EC_UPDATE_STATE_DIR": "State directory",
     "EC_UPDATE_SERVICE_NAME": "MCP service",
@@ -172,7 +172,7 @@ EN_LABELS = {
     "EC_DASHBOARD_REMOTE_ENABLED": "Enable remote deploy",
     "EC_DASHBOARD_REMOTE_HOST": "Ubuntu server IP/host",
     "EC_DASHBOARD_REMOTE_USER": "SSH user",
-    "EC_DASHBOARD_REMOTE_PASSWORD": "SSH password",
+    "EC_DASHBOARD_REMOTE_PASSWORD": "SSH password",  # nosec B105
     "EC_DASHBOARD_REMOTE_PORT": "SSH port",
     "EC_DASHBOARD_REMOTE_KEY_PATH": "Private key path (optional)",
     "EC_DASHBOARD_PORT": "Dashboard HTTP port on remote",
@@ -185,13 +185,13 @@ EN_HELP = {
     "EC_ORCHESTRATOR_API_KEY": "Required unless user+password are configured.",
     "EC_SSH_ENABLED": "run_show_api does not use SSH.",
     "EC_AXIS_ENABLED": "Axis Security SSE platform.",
-    "EC_AXIS_ADMIN_TOKEN": "JWT token for admin-api.axissecurity.com. Required when Axis is enabled.",
+    "EC_AXIS_ADMIN_TOKEN": "JWT token for admin-api.axissecurity.com. Required when Axis is enabled.",  # nosec B105
     "EC_UPDATE_REPOSITORY": "Format owner/repository.",
-    "EC_UPDATE_GITHUB_TOKEN": "Needed for private repositories; never returned to the browser.",
-    "EC_ADMIN_PASSWORD": "Required when the panel listens on a non-loopback IP.",
+    "EC_UPDATE_GITHUB_TOKEN": "Needed for private repositories; never returned to the browser.",  # nosec B105
+    "EC_ADMIN_PASSWORD": "Required when the panel listens on a non-loopback IP.",  # nosec B105
     "EC_ADMIN_USERS_FILE": "JSON 0600 with users and roles; falls back to EC_ADMIN_PASSWORD when absent.",
     "EC_DASHBOARD_REMOTE_ENABLED": "Installs and publishes the dashboard on an Ubuntu server over SSH.",
-    "EC_DASHBOARD_REMOTE_PASSWORD": "Requires sudo on the remote server (installs nginx).",
+    "EC_DASHBOARD_REMOTE_PASSWORD": "Requires sudo on the remote server (installs nginx).",  # nosec B105
     "EC_DASHBOARD_REMOTE_KEY_PATH": "When set, used instead of the password.",
     "EC_DEFAULT_ORCHESTRATOR": "Target used when a tool does not pass 'target'. Must exist in the registry.",
     "EC_DEFAULT_SSE": "SSE platform used when a tool does not pass 'target'.",
