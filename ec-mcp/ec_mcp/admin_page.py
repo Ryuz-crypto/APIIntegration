@@ -16,11 +16,12 @@ input,select{width:100%;margin-top:5px;padding:10px 11px;background:#091525;bord
 .msg{padding:11px 13px;border-radius:9px;margin-top:15px;white-space:pre-wrap}.ok{background:#052e1a;border:1px solid #166534}.err{background:#3b161a;border:1px solid #991b1b}.info{background:#102a43;border:1px solid #0369a1}
 .orch{padding:14px;border:1px solid var(--line);border-radius:10px;margin:9px 0}.orch-actions{float:right;display:flex;gap:7px}.secret-note{font-size:.74rem;color:#7dd3fc}.clear{display:flex;align-items:center;gap:6px;margin-top:6px}.clear input{width:auto;margin:0}
 .step{display:grid;grid-template-columns:42px 1fr;gap:12px;align-items:start;padding:14px 0;border-bottom:1px solid var(--line)}.step:last-child{border:0}.num{height:34px;width:34px;border-radius:50%;background:#1e3a5f;display:grid;place-items:center;font-weight:800}.locked{opacity:.6}.mono{font-family:ui-monospace,SFMono-Regular,monospace;word-break:break-all}
+.req{color:#f87171;font-weight:800}.diff{width:100%;border-collapse:collapse;margin-top:10px}.diff td{padding:6px 8px;border-bottom:1px solid var(--line);font-size:.82rem;vertical-align:top}.wizbar{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--text);max-width:480px;width:calc(100% - 30px);padding:24px}
 @media(max-width:760px){.grid{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}}
 </style></head><body><main id="app">Cargando...</main>
 <script>
-var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null;
+var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=0, WDRAFT={}, CURTAB='wizard';
 function q(s){return document.querySelector(s)}
 function esc(v){return String(v==null?'':v).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 async function api(path,body){
@@ -32,29 +33,33 @@ async function api(path,body){
 }
 function notice(message,type){var node=q('#notice');if(node)node.innerHTML='<div class="msg '+(type||'info')+'">'+esc(message)+'</div>'}
 function renderLogin(){
- q('#app').innerHTML='<section class="panel" style="max-width:440px;margin:12vh auto"><div class="brand"><h1>ec-mcp 3.0</h1><p>Control plane administrativo</p></div><label style="margin-top:22px">Contraseña<input id="login-password" type="password" autocomplete="current-password"></label><div class="actions"><button onclick="login()">Entrar</button></div><div id="notice"></div></section>';
+ q('#app').innerHTML='<section class="panel" style="max-width:440px;margin:12vh auto"><div class="brand"><h1>ec-mcp 3.0</h1><p>Control plane administrativo</p></div><label style="margin-top:22px">Usuario (opcional si hay varios)<input id="login-user" autocomplete="username"></label><label style="margin-top:12px">Contraseña<input id="login-password" type="password" autocomplete="current-password"></label><div class="actions"><button onclick="login()">Entrar</button></div><div id="notice"></div></section>';
  q('#login-password').addEventListener('keydown',function(e){if(e.key==='Enter')login()});
 }
 async function login(){
- try{var r=await api('/login',{password:q('#login-password').value});if(!r.ok){notice(r.error||'Contraseña incorrecta','err');return}AUTHED=true;renderShell();await loadAll();}
+ try{var r=await api('/login',{username:q('#login-user').value,password:q('#login-password').value});if(!r.ok){notice(r.error||'Contraseña incorrecta','err');return}ME=r;AUTHED=true;renderShell();await loadAll();}
  catch(e){notice(e.message,'err')}
 }
 async function logout(){await api('/logout',{});AUTHED=false;renderLogin()}
 function renderShell(){
- q('#app').innerHTML='<header><div class="brand"><h1>ec-mcp control plane</h1><p>Configuración, operación y actualizaciones sin SSH</p></div><span class="badge">__EC_MCP_VERSION__</span></header>'+
- '<nav><button id="tab-orch" onclick="showTab(\'orch\')">Orquestadores</button><button id="tab-sse" onclick="showTab(\'sse\')">Plataformas SSE</button><button id="tab-svc" onclick="showTab(\'svc\')">Servicios</button><button id="tab-config" onclick="showTab(\'config\')">Variables</button><button id="tab-update" onclick="showTab(\'update\')">Actualizaciones</button><button id="tab-ztp" onclick="showTab(\'ztp\')">ZTP</button><button class="secondary" onclick="logout()">Salir</button></nav>'+
+ q('#app').innerHTML='<header><div class="brand"><h1>ec-mcp control plane</h1><p>Configuración, operación y actualizaciones sin SSH</p></div><span class="badge">'+esc(ME&&ME.user?ME.user+' · '+(ME.role||''):'')+'</span> <span class="badge">__EC_MCP_VERSION__</span></header>'+
+ '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">Asistente</button><button id="tab-orch" onclick="showTab(\'orch\')">Orquestadores</button><button id="tab-sse" onclick="showTab(\'sse\')">Plataformas SSE</button><button id="tab-svc" onclick="showTab(\'svc\')">Servicios</button><button id="tab-config" onclick="showTab(\'config\')">Variables</button><button id="tab-update" onclick="showTab(\'update\')">Actualizaciones</button><button id="tab-ztp" onclick="showTab(\'ztp\')">ZTP</button><button id="tab-users" onclick="showTab(\'users\')">Usuarios</button><button class="secondary" onclick="logout()">Salir</button></nav>'+
  '<div id="notice"></div><section id="workspace"></section>';
- showTab('config');
+ if(ME&&ME.role!=='admin'){var ub=q('#tab-users');if(ub)ub.style.display='none'}
+ showTab('wizard');
 }
 function showTab(name){
+ CURTAB=name;
  document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active-tab')});
  var tab=q('#tab-'+name);if(tab)tab.classList.add('active-tab');
+ if(name==='wizard')renderWizard();
  if(name==='orch')renderOrchestrators();
  if(name==='sse')renderSse();
  if(name==='svc')renderServices();
  if(name==='config')renderConfig();
  if(name==='update')renderUpdate();
  if(name==='ztp')renderZtp();
+ if(name==='users')renderUsers();
 }
 async function renderServices(){
  q('#workspace').innerHTML='<section class="panel"><h2>Servicios</h2><p class="help">Comprobando estado real...</p></section>';
@@ -69,11 +74,11 @@ async function renderServices(){
 function svcRow(label,s){var up=s.state==='up'||s.state==='success'||s.state==='idle';var st=s.state||'unknown';var cls=up?'ok':'err';var extra=s.error?esc(s.error):(s.latency!==undefined?('latencia '+s.latency.toFixed(2)+'s'):'');return '<div class="orch"><strong>'+esc(label)+'</strong> <span class="badge" data-state="'+esc(st)+'">'+esc(st)+'</span><br><span class="help">'+extra+'</span></div>'}
 
 async function loadAll(){
- try{var results=await Promise.all([api('/api/state'),api('/api/config'),api('/api/update/status')]);STATE=results[0];CONFIG=results[1];UPDATE={status:results[2]};renderConfig();}
+ try{var results=await Promise.all([api('/api/state'),api('/api/config'),api('/api/update/status')]);STATE=results[0];CONFIG=results[1];UPDATE={status:results[2]};showTab(CURTAB);}
  catch(e){notice(e.message,'err')}
 }
 function renderOrchestrators(){
- var list=(STATE.orchestrators||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="editOrch(\''+esc(o.name)+'\')">Editar</button><button class="danger" onclick="deleteOrch(\''+esc(o.name)+'\')">Eliminar</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+'<br><span class="help">'+esc(o.url)+'</span></div>'}).join('')||'<p class="help">No hay orquestadores guardados.</p>';
+ var list=(STATE.orchestrators||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'orchestrator\',\'+esc(o.name)+\')">Probar</button><button class="secondary" onclick="dupTarget(\'orchestrator\',\'+esc(o.name)+\')">Duplicar</button><button class="secondary" onclick="renTarget(\'orchestrator\',\'+esc(o.name)+\')">Renombrar</button><button class="secondary" onclick="setDefaultTarget(\'orchestrator\',\'+esc(o.name)+\')">Por defecto</button><button class="secondary" onclick="editOrch(\'+'+esc(o.name)+'\')">Editar</button><button class="danger" onclick="deleteOrch(\'+'+esc(o.name)+'\')">Eliminar</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+(o.default?'<span class="badge">por defecto</span>':'')+'<br><span class="help">'+esc(o.url)+'</span> <span id="probe-orchestrator-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">No hay orquestadores guardados.</p>';
  q('#workspace').innerHTML='<section class="panel"><h2>Orquestadores</h2>'+list+
  '<div class="group"><h3>Agregar o actualizar</h3><div class="grid"><label>Nombre<input id="o-name"></label><label>URL<input id="o-url" placeholder="https://orchestrator.example.com"></label><label>API key<input id="o-key" type="password"></label><label>Usuario<input id="o-user"></label><label>Password<input id="o-password" type="password"></label><label>Verificar TLS<select id="o-tls"><option>true</option><option>false</option></select></label><label>Usuario SSH<input id="o-ssh-user"></label><label>Password SSH<input id="o-ssh-password" type="password"></label><label>Password enable<input id="o-enable" type="password"></label><label>Host SSH<input id="o-ssh-host"></label></div><div class="actions"><button onclick="saveOrch()">Guardar</button><button class="secondary" onclick="applyOrch()">Aplicar al .env</button></div></div></section>';
 }
@@ -84,7 +89,7 @@ async function saveOrch(){
 async function deleteOrch(name){if(!confirm('Eliminar '+name+'?'))return;await api('/api/orchestrators/delete',{name:name});STATE=await api('/api/state');renderOrchestrators()}
 async function applyOrch(){try{var r=await api('/api/apply',{name:q('#o-name').value.trim(),kind:'orchestrator'});notice(r.message||r.error,r.ok?'ok':'err');CONFIG=await api('/api/config')}catch(e){notice(e.message,'err')}}
 function renderSse(){
- var list=(STATE.sse_platforms||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="editSse(\''+esc(o.name)+'\')">Editar</button><button class="danger" onclick="deleteSse(\''+esc(o.name)+'\')">Eliminar</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+' <span class="badge">'+esc(o.provider)+'</span><br><span class="help">'+esc(o.base_url)+'</span></div>'}).join('')||'<p class="help">No hay plataformas SSE guardadas.</p>';
+ var list=(STATE.sse_platforms||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'sse\',\'+esc(o.name)+\')">Probar</button><button class="secondary" onclick="dupTarget(\'sse\',\'+esc(o.name)+\')">Duplicar</button><button class="secondary" onclick="renTarget(\'sse\',\'+esc(o.name)+\')">Renombrar</button><button class="secondary" onclick="setDefaultTarget(\'sse\',\'+esc(o.name)+\')">Por defecto</button><button class="secondary" onclick="editSse(\'+'+esc(o.name)+'\')">Editar</button><button class="danger" onclick="deleteSse(\'+'+esc(o.name)+'\')">Eliminar</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+(o.default?'<span class="badge">por defecto</span>':'')+' <span class="badge">'+esc(o.provider)+'</span><br><span class="help">'+esc(o.base_url)+'</span> <span id="probe-sse-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">No hay plataformas SSE guardadas.</p>';
  q('#workspace').innerHTML='<section class="panel"><h2>Plataformas SSE (multi-tenant)</h2><p>Administra N plataformas SSE de forma independiente (p. ej. varias instancias de Axis Security). Cada una guarda su propio token y URL.</p>'+list+
  '<div class="group"><h3>Agregar o actualizar plataforma SSE</h3><div class="grid"><label>Nombre<input id="s-name" placeholder="axis-prod"></label><label>Proveedor<select id="s-provider"><option>axis</option></select></label><label>URL base<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>Token admin (Bearer JWT)<input id="s-token" type="password"></label><label>Verificar TLS<select id="s-tls"><option>true</option><option>false</option></select></label><label>Timeout (s)<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">Guardar</button><button class="secondary" onclick="applySse()">Aplicar al .env</button></div></div></section>';
 }
@@ -94,6 +99,154 @@ async function saveSse(){
 }
 async function deleteSse(name){if(!confirm('Eliminar plataforma '+name+'?'))return;await api('/api/sse/delete',{name:name});STATE=await api('/api/state');renderSse()}
 async function applySse(){try{var r=await api('/api/apply',{name:q('#s-name').value.trim(),kind:'sse'});notice(r.message||r.error,r.ok?'ok':'err');CONFIG=await api('/api/config')}catch(e){notice(e.message,'err')}}
+async function renderWizard(){
+ if(!WIZARD){
+  q('#workspace').innerHTML='<section class="panel"><h2>Asistente de configuración</h2><p class="help">Cargando pasos...</p></section>';
+  try{WIZARD=await api('/api/wizard')}catch(e){notice(e.message,'err');return}
+  WSTEP=0;WDRAFT={};
+  WIZARD.fields.forEach(function(f){WDRAFT[f.key]=f.secret?'':f.value});
+ }
+ wizRenderStep();
+}
+function wizFields(stepId){return WIZARD.fields.filter(function(f){return f.step===stepId})}
+function wizDependsOk(f){
+ if(!f.depends_on)return true;
+ var cur=WIZARD.fields.find(function(x){return x.key===f.depends_on[0]});
+ var v=WDRAFT[f.depends_on[0]];
+ if(v===undefined||v===null||v==='')v=cur?cur.value:'';
+ return String(v)===f.depends_on[1];
+}
+function wizFieldHtml(f){
+ var id='wiz-'+f.key,input='';
+ if(f.kind==='boolean')input='<select id="'+id+'" data-wiz="'+f.key+'"><option value="true">true</option><option value="false">false</option></select>';
+ else if(f.kind==='choice')input='<select id="'+id+'" data-wiz="'+f.key+'">'+f.choices.map(function(v){return '<option>'+esc(v)+'</option>'}).join('')+'</select>';
+ else input='<input id="'+id+'" data-wiz="'+f.key+'" type="'+(f.secret?'password':(f.kind==='integer'||f.kind==='number'?'number':'text'))+'" placeholder="'+(f.secret&&f.configured?'Configurado; vacío conserva el secreto':'')+'">';
+ var req=f.required?' <span class="req">*</span>':'';
+ return '<div class="field" data-field="'+f.key+'" style="'+(wizDependsOk(f)?'':'display:none')+'"><label>'+esc(f.label)+req+input+'</label>'+(f.secret?'<span class="secret-note">'+(f.configured?'Secreto configurado; no se muestra.':'Sin configurar.')+'</span>':'')+(f.help?'<span class="help">'+esc(f.help)+'</span>':'')+'</div>';
+}
+function wizRenderStep(){
+ var steps=WIZARD.steps,s=steps[WSTEP],fields=wizFields(s.id);
+ var bar=steps.map(function(st,i){return '<span class="badge" style="'+(i===WSTEP?'border-color:#38bdf8;color:#bae6fd':'')+'">'+(i+1)+' '+esc(st.title)+'</span>'}).join(' ');
+ var targets=s.id==='targets'?wizTargetsHtml():'';
+ q('#workspace').innerHTML='<section class="panel"><h2>Asistente · paso '+(WSTEP+1)+' de '+steps.length+': '+esc(s.title)+'</h2><div class="wizbar">'+bar+'</div>'+
+  (s.id==='targets'?'<p class="help">Guarda varios orquestadores y varias plataformas SSE a la vez; elige cuál queda por defecto para los tools sin target explícito.</p>':'')+
+  '<div class="group"><div class="grid">'+fields.map(wizFieldHtml).join('')+'</div></div>'+targets+
+  '<div class="actions"><button class="secondary" onclick="wizBack()" '+(WSTEP===0?'disabled':'')+'>Atrás</button><button onclick="wizNext()">'+(WSTEP===steps.length-1?'Revisar cambios':'Siguiente')+'</button></div></section>';
+ fields.forEach(function(f){var el=q('#wiz-'+f.key);if(el){if(!f.secret)el.value=(WDRAFT[f.key]!==undefined?WDRAFT[f.key]:f.value);el.addEventListener('change',function(){WDRAFT[f.key]=el.value;wizRefreshDepends()})}});
+ wizRefreshDepends();
+}
+function wizRefreshDepends(){WIZARD.fields.forEach(function(f){if(!f.depends_on)return;var n=document.querySelector('[data-field="'+f.key+'"]');if(n)n.style.display=wizDependsOk(f)?'':'none'})}
+function wizValidateStep(){
+ var errs=[];
+ wizFields(WIZARD.steps[WSTEP].id).forEach(function(f){
+  if(!wizDependsOk(f))return;
+  var el=q('#wiz-'+f.key),v=el?el.value:'';
+  if(f.required&&v==='')errs.push(f.label+' ('+f.key+') es obligatorio');
+  if(f.kind==='url'&&v&&!/^https?:\/\/[^\s]+/.test(v))errs.push(f.key+': URL inválida (http/https)');
+  if((f.kind==='integer'||f.kind==='number')&&v!==''){var n=Number(v);if(isNaN(n))errs.push(f.key+': debe ser numérico');else{if(f.minimum!==null&&f.minimum!==undefined&&n<f.minimum)errs.push(f.key+': mínimo '+f.minimum);if(f.maximum!==null&&f.maximum!==undefined&&n>f.maximum)errs.push(f.key+': máximo '+f.maximum)}}
+ });
+ return errs;
+}
+function wizCollect(){var values={};WIZARD.fields.forEach(function(f){var el=q('#wiz-'+f.key);if(!el)return;var v=el.value;if(f.secret){if(v!=='')values[f.key]=v}else values[f.key]=v});return values}
+async function wizNext(){
+ var errs=wizValidateStep();
+ wizFields(WIZARD.steps[WSTEP].id).forEach(function(f){var el=q('#wiz-'+f.key);if(el)WDRAFT[f.key]=el.value});
+ if(errs.length){notice(errs.join('\n'),'err');return}
+ if(WSTEP<WIZARD.steps.length-1){WSTEP++;wizRenderStep();return}
+ await wizReview();
+}
+function wizBack(){if(WSTEP>0){WSTEP--;wizRenderStep()}}
+async function wizReview(){
+ q('#workspace').innerHTML='<section class="panel"><h2>Revisar cambios antes de guardar</h2><p class="help">Preview sobre <span class="mono">'+esc(WIZARD.env_file)+'</span>; todavía no se escribe nada.</p><div id="wiz-diff">Comprobando...</div><div class="actions"><button class="secondary" onclick="wizBack()">Atrás</button><button onclick="wizSave(false)">Guardar variables</button><button onclick="wizSave(true)">Guardar y reiniciar</button></div></section>';
+ try{
+  var r=await api('/api/config/diff',{values:wizCollect()});
+  var h='';
+  if(r.errors&&r.errors.length)h+='<div class="msg err">'+r.errors.map(esc).join('<br>')+'</div>';
+  if(r.changes&&r.changes.length)h+='<table class="diff">'+r.changes.map(function(c){return '<tr><td class="mono">'+esc(c.key)+'</td><td class="mono">'+(c.cleared?'(eliminar secreto)':esc(c.old))+'</td><td>→</td><td class="mono">'+esc(c.new)+'</td></tr>'}).join('')+'</table>';
+  else if(!r.errors||!r.errors.length)h+='<p class="help">Sin cambios en variables.</p>';
+  h+='<h3 style="margin-top:16px">Targets (orquestadores / SSE)</h3>'+wizTargetsHtml();
+  q('#wiz-diff').innerHTML=h;
+ }catch(e){q('#wiz-diff').innerHTML='<div class="msg err">'+esc(e.message)+'</div>'}
+}
+async function wizSave(restart){
+ try{
+  var r=await api('/api/config',{values:wizCollect()});
+  if(!r.ok){notice(r.error||'Error al guardar','err');return}
+  notice(r.message,'ok');CONFIG=await api('/api/config');
+  if(restart)await doRestart();else{WIZARD=null;WSTEP=0;await renderWizard()}
+ }catch(e){notice(e.message,'err')}
+}
+function wizTargetRow(o,kind,urlField){
+ return '<div class="orch"><span class="orch-actions">'+
+  '<button class="secondary" onclick="probeTarget(\''+kind+'\',\''+esc(o.name)+'\')">Probar</button>'+
+  '<button class="secondary" onclick="dupTarget(\''+kind+'\',\''+esc(o.name)+'\')">Duplicar</button>'+
+  '<button class="secondary" onclick="renTarget(\''+kind+'\',\''+esc(o.name)+'\')">Renombrar</button>'+
+  '<button class="secondary" onclick="setDefaultTarget(\''+kind+'\',\''+esc(o.name)+'\')">Por defecto</button>'+
+  '<button class="danger" onclick="delTarget(\''+kind+'\',\''+esc(o.name)+'\')">Eliminar</button></span>'+
+  '<strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">activo</span>':'')+(o.default?'<span class="badge">por defecto</span>':'')+'<br><span class="help">'+esc(o[urlField]||'')+'</span> <span id="probe-'+kind+'-'+esc(o.name)+'"></span></div>';
+}
+function wizTargetsHtml(){
+ var st=WIZARD.state||{};
+ var orch=(st.orchestrators||[]).map(function(o){return wizTargetRow(o,'orchestrator','url')}).join('')||'<p class="help">No hay orquestadores guardados.</p>';
+ var sse=(st.sse_platforms||[]).map(function(o){return wizTargetRow(o,'sse','base_url')}).join('')||'<p class="help">No hay plataformas SSE guardadas.</p>';
+ return '<div class="group"><h3>Orquestadores</h3>'+orch+
+  '<div class="grid" style="margin-top:10px"><label>Nombre<input id="wo-name" placeholder="prod"></label><label>URL<input id="wo-url" placeholder="https://orchestrator.example.com"></label><label>API key<input id="wo-key" type="password"></label><label>Usuario<input id="wo-user"></label><label>Password<input id="wo-pass" type="password"></label></div><div class="actions"><button onclick="wizSaveOrch()">Guardar orquestador</button></div></div>'+
+  '<div class="group"><h3>Plataformas SSE</h3>'+sse+
+  '<div class="grid" style="margin-top:10px"><label>Nombre<input id="ws-name" placeholder="axis-prod"></label><label>URL base<input id="ws-url" placeholder="https://admin-api.axissecurity.com"></label><label>Token admin<input id="ws-token" type="password"></label><label>Timeout (s)<input id="ws-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="wizSaveSse()">Guardar plataforma SSE</button></div></div>';
+}
+async function reloadAfterMutation(){
+ STATE=await api('/api/state');
+ if(CURTAB==='wizard'){WIZARD=null;WSTEP=0;await renderWizard()}else showTab(CURTAB);
+}
+async function wizSaveOrch(){
+ try{var r=await api('/api/orchestrators',{name:q('#wo-name').value.trim(),url:q('#wo-url').value.trim(),api_key:q('#wo-key').value||null,username:q('#wo-user').value||null,password:q('#wo-pass').value||null,verify_tls:true});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await reloadAfterMutation()}catch(e){notice(e.message,'err')}
+}
+async function wizSaveSse(){
+ try{var r=await api('/api/sse',{name:q('#ws-name').value.trim(),provider:'axis',base_url:q('#ws-url').value.trim(),admin_token:q('#ws-token').value||null,verify_tls:true,timeout:q('#ws-timeout').value});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await reloadAfterMutation()}catch(e){notice(e.message,'err')}
+}
+async function probeTarget(kind,name){
+ var node=document.getElementById('probe-'+kind+'-'+name);if(node)node.textContent=' probando...';
+ try{var r=await api('/api/probe',{kind:kind,name:name});if(node)node.innerHTML=' <span class="badge">'+(r.ok?'up':'down')+'</span>';notice((r.ok?'OK: ':'Fallo: ')+kind+' '+name+(r.error?' — '+r.error:''),r.ok?'ok':'err')}
+ catch(e){notice(e.message,'err')}
+}
+async function dupTarget(kind,name){
+ var nn=prompt('Nuevo nombre para duplicar '+name+':',name+'-copia');if(!nn)return;
+ var path=kind==='sse'?'/api/sse/duplicate':'/api/orchestrators/duplicate';
+ try{var r=await api(path,{name:name,new_name:nn.trim()});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await reloadAfterMutation()}catch(e){notice(e.message,'err')}
+}
+async function renTarget(kind,name){
+ var nn=prompt('Renombrar '+name+' a:',name);if(!nn||nn.trim()===name)return;
+ var path=kind==='sse'?'/api/sse/rename':'/api/orchestrators/rename';
+ try{var r=await api(path,{name:name,new_name:nn.trim()});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await reloadAfterMutation()}catch(e){notice(e.message,'err')}
+}
+async function delTarget(kind,name){
+ if(!confirm('Eliminar '+name+'?'))return;
+ var path=kind==='sse'?'/api/sse/delete':'/api/orchestrators/delete';
+ try{await api(path,{name:name});await reloadAfterMutation()}catch(e){notice(e.message,'err')}
+}
+async function setDefaultTarget(kind,name){
+ try{var r=await api('/api/default',{kind:kind,name:name});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await reloadAfterMutation()}catch(e){notice(e.message,'err')}
+}
+async function renderUsers(){
+ q('#workspace').innerHTML='<section class="panel"><h2>Usuarios del panel</h2><p class="help">Cargando...</p></section>';
+ try{
+  var r=await api('/api/users');
+  var rows=(r.users||[]).map(function(u){return '<div class="orch"><strong>'+esc(u.username)+'</strong> <span class="badge">'+esc(u.role)+'</span><span class="orch-actions"><button class="danger" onclick="delUser(\''+esc(u.username)+'\')">Eliminar</button></span></div>'}).join('')||'<p class="help">Sin usuarios todavía: se usa la contraseña única (EC_ADMIN_PASSWORD).</p>';
+  q('#workspace').innerHTML='<section class="panel"><h2>Usuarios del panel</h2><p class="help">Archivo <span class="mono">'+esc(r.file)+'</span> · roles: '+esc((r.roles||[]).join(', '))+'. Los hashes nunca se muestran ni se devuelven.</p>'+rows+
+  '<div class="group"><h3>Agregar o actualizar usuario</h3><div class="grid"><label>Usuario<input id="u-name"></label><label>Contraseña<input id="u-pass" type="password" autocomplete="new-password"></label><label>Rol<select id="u-role"><option>viewer</option><option>operator</option><option>admin</option></select></label></div><div class="actions"><button onclick="saveUser()">Guardar usuario</button></div></div>'+
+  '<div class="group"><h3>Cambiar contraseña</h3><div class="grid"><label>Usuario (vacío = mi sesión)<input id="p-user"></label><label>Contraseña actual<input id="p-old" type="password" autocomplete="current-password"></label><label>Nueva contraseña<input id="p-new" type="password" autocomplete="new-password"></label></div><div class="actions"><button onclick="changePass()">Cambiar contraseña</button></div></div></section>';
+ }catch(e){notice(e.message,'err')}
+}
+async function saveUser(){
+ try{var r=await api('/api/users',{username:q('#u-name').value.trim(),password:q('#u-pass').value,role:q('#u-role').value});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await renderUsers()}catch(e){notice(e.message,'err')}
+}
+async function delUser(name){
+ if(!confirm('Eliminar usuario '+name+'?'))return;
+ try{var r=await api('/api/users/delete',{username:name});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await renderUsers()}catch(e){notice(e.message,'err')}
+}
+async function changePass(){
+ try{var r=await api('/api/users/password',{username:q('#p-user').value.trim(),old_password:q('#p-old').value,new_password:q('#p-new').value});notice(r.message||r.error,r.ok?'ok':'err')}catch(e){notice(e.message,'err')}
+}
 function fieldHtml(f){
  var id='cfg-'+f.key, input='';
  if(f.kind==='boolean')input='<select id="'+id+'" data-key="'+f.key+'"><option value="true">true</option><option value="false">false</option></select>';

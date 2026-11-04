@@ -45,7 +45,7 @@ from .compat import CompatibilityEngine, load_profiles
 from .config import Settings
 from .dashboard import collect_dashboard_payload, render_dashboard_html
 from .dashboard_install import DashboardDeployError, RemoteDashboardDeployer
-from .multi_target import load_orchestrators_from_env, load_sse_from_env
+from .multi_target import load_orchestrators_from_env, load_sse_from_env, resolve_default_name
 from .orchestrator_client import OrchestratorClient
 from .overlay_workflow import (
     OverlayPlanStore,
@@ -214,8 +214,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     shared_clients: dict[str, OrchestratorClient] = {}
 
+    default_orchestrator_name = os.environ.get("EC_DEFAULT_ORCHESTRATOR", "").strip()
+
+    def _resolve_orchestrator_name(target: str) -> str:
+        if target.strip():
+            return target.strip()
+        resolved = resolve_default_name(orchestrator_targets, default_orchestrator_name)
+        return resolved or "default"
+
     def require_client(target: str = "") -> OrchestratorClient | None:
-        name = target.strip() or "default"
+        name = _resolve_orchestrator_name(target)
         if name in shared_clients:
             return shared_clients[name]
         target_settings = orchestrator_targets.get(name)
@@ -240,7 +248,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     def require_client_or_raise(target: str = "") -> OrchestratorClient:
         client = require_client(target)
         if client is None:
-            name = target.strip() or "default"
+            name = _resolve_orchestrator_name(target)
             raise SecurityError(f"Orchestrator target '{name}' is not configured or missing credentials.")
         return client
 
@@ -265,8 +273,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     shared_axis: dict[str, AxisSecurityClient] = {}
 
+    default_sse_name = os.environ.get("EC_DEFAULT_SSE", "").strip()
+
+    def _resolve_sse_name(target: str) -> str:
+        if target.strip():
+            return target.strip()
+        resolved = resolve_default_name(sse_targets, default_sse_name)
+        return resolved or "default"
+
     def require_axis(target: str = "") -> AxisSecurityClient:
-        name = target.strip() or "default"
+        name = _resolve_sse_name(target)
         if name in shared_axis:
             return shared_axis[name]
         if not sse_targets:

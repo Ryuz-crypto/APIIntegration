@@ -27,66 +27,84 @@ class Setting:
     minimum: float | None = None
     maximum: float | None = None
     help: str = ""
+    required: bool = False
+    depends_on: tuple[str, str] | None = None
+    step: str = ""
 
 
 SETTINGS = (
-    Setting("EC_ORCHESTRATOR_URL", "Orchestrator", "URL del Orchestrator", "url", help="URL HTTPS o HTTP del Orchestrator."),
-    Setting("EC_ORCHESTRATOR_API_KEY", "Orchestrator", "API key (X-Auth-Token)", "password", secret=True),
-    Setting("EC_ORCHESTRATOR_USER", "Orchestrator", "Usuario alternativo"),
-    Setting("EC_ORCHESTRATOR_PASSWORD", "Orchestrator", "Password alternativo", "password", secret=True),
-    Setting("EC_VERIFY_TLS", "Orchestrator", "Verificar TLS", "boolean", "true"),
-    Setting("EC_SSH_ENABLED", "SSH opcional", "Habilitar SSH", "boolean", "false", help="run_show_api no usa SSH."),
-    Setting("EC_SSH_HOST", "SSH opcional", "Host SSH predeterminado"),
-    Setting("EC_SSH_USER", "SSH opcional", "Usuario SSH"),
-    Setting("EC_SSH_PASSWORD", "SSH opcional", "Password SSH", "password", secret=True),
-    Setting("EC_SSH_ENABLE_PASSWORD", "SSH opcional", "Password enable", "password", secret=True),
-    Setting("EC_SSH_PORT", "SSH opcional", "Puerto SSH", "integer", "22", minimum=1, maximum=65535),
-    Setting("EC_SSH_AUTH_METHOD", "SSH opcional", "Método de autenticación", "choice", "auto", choices=("auto", "password", "keyboard-interactive")),
-    Setting("EC_AXIS_ENABLED", "Axis Security (SSE)", "Habilitar Axis Security", "boolean", "false", help="Plataforma SSE de Axis Security."),
-    Setting("EC_AXIS_ADMIN_TOKEN", "Axis Security (SSE)", "Token de administración (Bearer JWT)", "password", secret=True, help="Token JWT para admin-api.axissecurity.com."),
-    Setting("EC_AXIS_BASE_URL", "Axis Security (SSE)", "URL base de Axis", "url", "https://admin-api.axissecurity.com"),
-    Setting("EC_AXIS_VERIFY_TLS", "Axis Security (SSE)", "Verificar TLS de Axis", "boolean", "true"),
-    Setting("EC_AXIS_TIMEOUT", "Axis Security (SSE)", "Timeout Axis (segundos)", "number", "30", minimum=1, maximum=300),
-    Setting("EC_ALLOW_WRITE_TOOLS", "Seguridad", "Permitir tools de escritura", "boolean", "false"),
-    Setting("EC_ALLOW_DANGEROUS_WRITES", "Seguridad", "Permitir escrituras peligrosas", "boolean", "false"),
-    Setting("EC_MAX_WRITES_PER_MINUTE", "Seguridad", "Máximo de escrituras por minuto", "integer", "10", minimum=1, maximum=1000),
-    Setting("EC_MAX_OUTPUT_CHARS", "Seguridad", "Máximo de caracteres de salida", "integer", "12000", minimum=1000, maximum=1000000),
-    Setting("EC_API_CACHE_TTL", "Seguridad", "TTL de caché API (segundos)", "number", "30", minimum=0, maximum=86400),
-    Setting("EC_MCP_AUDIT_LOG", "Seguridad", "Archivo de auditoría", default="logs/mcp-audit.jsonl"),
-    Setting("EC_MCP_PROFILES_DIR", "Seguridad", "Directorio de perfiles"),
-    Setting("EC_MCP_AUTH_TOKEN", "Transporte MCP", "Bearer token MCP", "password", secret=True),
-    Setting("EC_MCP_HOST", "Transporte MCP", "IP de escucha MCP", default="127.0.0.1"),
-    Setting("EC_MCP_PORT", "Transporte MCP", "Puerto MCP", "integer", "8000", minimum=1, maximum=65535),
-    Setting("EC_MCP_ALLOWED_HOSTS", "Transporte MCP", "Hosts permitidos"),
-    Setting("EC_MCP_JSON_RESPONSE", "Transporte MCP", "Respuesta JSON", "boolean", "true"),
-    Setting("EC_MCP_STATELESS", "Transporte MCP", "Modo stateless", "boolean", "false"),
-    Setting("EC_MCP_BUILD_COMMIT", "Transporte MCP", "Commit de build"),
-    Setting("EC_ADMIN_HOST", "Panel web", "IP de escucha del panel", default="127.0.0.1"),
-    Setting("EC_ADMIN_PORT", "Panel web", "Puerto del panel", "integer", "8080", minimum=1, maximum=65535),
-    Setting("EC_ADMIN_PASSWORD", "Panel web", "Password del administrador", "password", secret=True),
-    Setting("EC_ADMIN_LOGIN_MAX_FAILURES", "Panel web", "Intentos fallidos antes del bloqueo", "integer", "5", minimum=1, maximum=100),
-    Setting("EC_ADMIN_LOGIN_WINDOW_SECONDS", "Panel web", "Ventana de bloqueo (segundos)", "number", "60", minimum=1, maximum=3600),
-    Setting("EC_ADMIN_PASSWORD_FILE", "Panel web", "Archivo de password"),
-    Setting("EC_ADMIN_STORE", "Panel web", "Archivo de orquestadores"),
-    Setting("EC_UPDATE_ALLOW_WEB", "Actualizaciones", "Permitir actualizaciones web", "boolean", "true"),
-    Setting("EC_UPDATE_REPOSITORY", "Actualizaciones", "Repositorio GitHub", default="Ryuz-crypto/APIIntegration", help="Formato owner/repository."),
-    Setting("EC_UPDATE_BRANCH", "Actualizaciones", "Rama de publicación", default="main"),
-    Setting("EC_UPDATE_GITHUB_USER", "Actualizaciones", "Usuario GitHub"),
-    Setting("EC_UPDATE_GITHUB_TOKEN", "Actualizaciones", "Token GitHub", "password", secret=True, help="Necesario para repositorios privados; nunca se devuelve al navegador."),
-    Setting("EC_UPDATE_PROJECT_DIR", "Actualizaciones", "Directorio instalado"),
-    Setting("EC_UPDATE_STATE_DIR", "Actualizaciones", "Directorio de estado", default="/var/lib/ec-mcp-update"),
-    Setting("EC_UPDATE_SERVICE_NAME", "Actualizaciones", "Servicio MCP", default="ec-mcp.service"),
-    Setting("EC_UPDATE_ADMIN_SERVICE_NAME", "Actualizaciones", "Servicio del panel", default="ec-mcp-admin.service"),
-    Setting("EC_DASHBOARD_REMOTE_ENABLED", "Dashboard remoto (SSH)", "Habilitar despliegue remoto", "boolean", "false", help="Instala y publica el dashboard en un servidor Ubuntu vía SSH."),
-    Setting("EC_DASHBOARD_REMOTE_HOST", "Dashboard remoto (SSH)", "IP/host del servidor Ubuntu"),
-    Setting("EC_DASHBOARD_REMOTE_USER", "Dashboard remoto (SSH)", "Usuario SSH"),
-    Setting("EC_DASHBOARD_REMOTE_PASSWORD", "Dashboard remoto (SSH)", "Password SSH", "password", secret=True, help="Requiere sudo en el servidor remoto (instala nginx)."),
-    Setting("EC_DASHBOARD_REMOTE_PORT", "Dashboard remoto (SSH)", "Puerto SSH", "integer", "22", minimum=1, maximum=65535),
-    Setting("EC_DASHBOARD_REMOTE_KEY_PATH", "Dashboard remoto (SSH)", "Ruta de llave privada (opcional)", help="Si se configura, se usa en lugar del password."),
-    Setting("EC_DASHBOARD_PORT", "Dashboard remoto (SSH)", "Puerto HTTP del dashboard en el remoto", "integer", "8090", minimum=1, maximum=65535),
-    Setting("EC_DASHBOARD_DIR", "Dashboard remoto (SSH)", "Directorio del dashboard en el remoto", default="/var/www/ec-mcp-dashboard"),
-    Setting("EC_DASHBOARD_REFRESH_SECONDS", "Dashboard remoto (SSH)", "Auto-refresh del dashboard (segundos)", "integer", "30", minimum=5, maximum=3600),
+    Setting("EC_ORCHESTRATOR_URL", "Orchestrator", "URL del Orchestrator", "url", required=True, step="orchestrator", help="URL HTTPS o HTTP del Orchestrator. Obligatoria para usar el Orchestrator."),
+    Setting("EC_ORCHESTRATOR_API_KEY", "Orchestrator", "API key (X-Auth-Token)", "password", secret=True, step="orchestrator", help="Obligatoria salvo que configures usuario+password."),
+    Setting("EC_ORCHESTRATOR_USER", "Orchestrator", "Usuario alternativo", step="orchestrator"),
+    Setting("EC_ORCHESTRATOR_PASSWORD", "Orchestrator", "Password alternativo", "password", secret=True, step="orchestrator"),
+    Setting("EC_VERIFY_TLS", "Orchestrator", "Verificar TLS", "boolean", "true", step="orchestrator"),
+    Setting("EC_SSH_ENABLED", "SSH opcional", "Habilitar SSH", "boolean", "false", step="ssh", help="run_show_api no usa SSH."),
+    Setting("EC_SSH_HOST", "SSH opcional", "Host SSH predeterminado", step="ssh", depends_on=("EC_SSH_ENABLED", "true")),
+    Setting("EC_SSH_USER", "SSH opcional", "Usuario SSH", step="ssh", depends_on=("EC_SSH_ENABLED", "true")),
+    Setting("EC_SSH_PASSWORD", "SSH opcional", "Password SSH", "password", secret=True, step="ssh", depends_on=("EC_SSH_ENABLED", "true")),
+    Setting("EC_SSH_ENABLE_PASSWORD", "SSH opcional", "Password enable", "password", secret=True, step="ssh", depends_on=("EC_SSH_ENABLED", "true")),
+    Setting("EC_SSH_PORT", "SSH opcional", "Puerto SSH", "integer", "22", minimum=1, maximum=65535, step="ssh", depends_on=("EC_SSH_ENABLED", "true")),
+    Setting("EC_SSH_AUTH_METHOD", "SSH opcional", "Método de autenticación", "choice", "auto", choices=("auto", "password", "keyboard-interactive"), step="ssh", depends_on=("EC_SSH_ENABLED", "true")),
+    Setting("EC_AXIS_ENABLED", "Axis Security (SSE)", "Habilitar Axis Security", "boolean", "false", step="sse", help="Plataforma SSE de Axis Security."),
+    Setting("EC_AXIS_ADMIN_TOKEN", "Axis Security (SSE)", "Token de administración (Bearer JWT)", "password", secret=True, step="sse", depends_on=("EC_AXIS_ENABLED", "true"), help="Token JWT para admin-api.axissecurity.com. Obligatoria si Axis está habilitado."),
+    Setting("EC_AXIS_BASE_URL", "Axis Security (SSE)", "URL base de Axis", "url", "https://admin-api.axissecurity.com", step="sse", depends_on=("EC_AXIS_ENABLED", "true")),
+    Setting("EC_AXIS_VERIFY_TLS", "Axis Security (SSE)", "Verificar TLS de Axis", "boolean", "true", step="sse", depends_on=("EC_AXIS_ENABLED", "true")),
+    Setting("EC_AXIS_TIMEOUT", "Axis Security (SSE)", "Timeout Axis (segundos)", "number", "30", minimum=1, maximum=300, step="sse", depends_on=("EC_AXIS_ENABLED", "true")),
+    Setting("EC_DEFAULT_ORCHESTRATOR", "Multi-target", "Orquestador por defecto", step="targets", help="Target usado cuando un tool no indica 'target'. Debe existir en el registro."),
+    Setting("EC_DEFAULT_SSE", "Multi-target", "Plataforma SSE por defecto", step="targets", help="Plataforma SSE usada cuando un tool no indica 'target'."),
+    Setting("EC_ALLOW_WRITE_TOOLS", "Seguridad", "Permitir tools de escritura", "boolean", "false", step="security"),
+    Setting("EC_ALLOW_DANGEROUS_WRITES", "Seguridad", "Permitir escrituras peligrosas", "boolean", "false", step="security"),
+    Setting("EC_MAX_WRITES_PER_MINUTE", "Seguridad", "Máximo de escrituras por minuto", "integer", "10", minimum=1, maximum=1000, step="security"),
+    Setting("EC_MAX_OUTPUT_CHARS", "Seguridad", "Máximo de caracteres de salida", "integer", "12000", minimum=1000, maximum=1000000, step="security"),
+    Setting("EC_API_CACHE_TTL", "Seguridad", "TTL de caché API (segundos)", "number", "30", minimum=0, maximum=86400, step="security"),
+    Setting("EC_MCP_AUDIT_LOG", "Seguridad", "Archivo de auditoría", default="logs/mcp-audit.jsonl", step="security"),
+    Setting("EC_MCP_PROFILES_DIR", "Seguridad", "Directorio de perfiles", step="security"),
+    Setting("EC_MCP_AUTH_TOKEN", "Transporte MCP", "Bearer token MCP", "password", secret=True, step="transport"),
+    Setting("EC_MCP_HOST", "Transporte MCP", "IP de escucha MCP", default="127.0.0.1", step="transport"),
+    Setting("EC_MCP_PORT", "Transporte MCP", "Puerto MCP", "integer", "8000", minimum=1, maximum=65535, step="transport"),
+    Setting("EC_MCP_ALLOWED_HOSTS", "Transporte MCP", "Hosts permitidos", step="transport"),
+    Setting("EC_MCP_JSON_RESPONSE", "Transporte MCP", "Respuesta JSON", "boolean", "true", step="transport"),
+    Setting("EC_MCP_STATELESS", "Transporte MCP", "Modo stateless", "boolean", "false", step="transport"),
+    Setting("EC_MCP_BUILD_COMMIT", "Transporte MCP", "Commit de build", step="transport"),
+    Setting("EC_ADMIN_HOST", "Panel web", "IP de escucha del panel", default="127.0.0.1", step="panel"),
+    Setting("EC_ADMIN_PORT", "Panel web", "Puerto del panel", "integer", "8080", minimum=1, maximum=65535, step="panel"),
+    Setting("EC_ADMIN_PASSWORD", "Panel web", "Password del administrador", "password", secret=True, step="panel", help="Obligatoria si el panel escucha en una IP no loopback."),
+    Setting("EC_ADMIN_USERS_FILE", "Panel web", "Archivo de usuarios del panel", step="panel", help="JSON 0600 con usuarios y roles; si no existe se usa EC_ADMIN_PASSWORD."),
+    Setting("EC_ADMIN_LOGIN_MAX_FAILURES", "Panel web", "Intentos fallidos antes del bloqueo", "integer", "5", minimum=1, maximum=100, step="panel"),
+    Setting("EC_ADMIN_LOGIN_WINDOW_SECONDS", "Panel web", "Ventana de bloqueo (segundos)", "number", "60", minimum=1, maximum=3600, step="panel"),
+    Setting("EC_ADMIN_PASSWORD_FILE", "Panel web", "Archivo de password", step="panel"),
+    Setting("EC_ADMIN_STORE", "Panel web", "Archivo de orquestadores", step="panel"),
+    Setting("EC_UPDATE_ALLOW_WEB", "Actualizaciones", "Permitir actualizaciones web", "boolean", "true", step="updates"),
+    Setting("EC_UPDATE_REPOSITORY", "Actualizaciones", "Repositorio GitHub", default="Ryuz-crypto/APIIntegration", step="updates", help="Formato owner/repository."),
+    Setting("EC_UPDATE_BRANCH", "Actualizaciones", "Rama de publicación", default="main", step="updates"),
+    Setting("EC_UPDATE_GITHUB_USER", "Actualizaciones", "Usuario GitHub", step="updates"),
+    Setting("EC_UPDATE_GITHUB_TOKEN", "Actualizaciones", "Token GitHub", "password", secret=True, step="updates", help="Necesario para repositorios privados; nunca se devuelve al navegador."),
+    Setting("EC_UPDATE_PROJECT_DIR", "Actualizaciones", "Directorio instalado", step="updates"),
+    Setting("EC_UPDATE_STATE_DIR", "Actualizaciones", "Directorio de estado", default="/var/lib/ec-mcp-update", step="updates"),
+    Setting("EC_UPDATE_SERVICE_NAME", "Actualizaciones", "Servicio MCP", default="ec-mcp.service", step="updates"),
+    Setting("EC_UPDATE_ADMIN_SERVICE_NAME", "Actualizaciones", "Servicio del panel", default="ec-mcp-admin.service", step="updates"),
+    Setting("EC_DASHBOARD_REMOTE_ENABLED", "Dashboard remoto (SSH)", "Habilitar despliegue remoto", "boolean", "false", step="dashboard", help="Instala y publica el dashboard en un servidor Ubuntu vía SSH."),
+    Setting("EC_DASHBOARD_REMOTE_HOST", "Dashboard remoto (SSH)", "IP/host del servidor Ubuntu", step="dashboard", depends_on=("EC_DASHBOARD_REMOTE_ENABLED", "true")),
+    Setting("EC_DASHBOARD_REMOTE_USER", "Dashboard remoto (SSH)", "Usuario SSH", step="dashboard", depends_on=("EC_DASHBOARD_REMOTE_ENABLED", "true")),
+    Setting("EC_DASHBOARD_REMOTE_PASSWORD", "Dashboard remoto (SSH)", "Password SSH", "password", secret=True, step="dashboard", depends_on=("EC_DASHBOARD_REMOTE_ENABLED", "true"), help="Requiere sudo en el servidor remoto (instala nginx)."),
+    Setting("EC_DASHBOARD_REMOTE_PORT", "Dashboard remoto (SSH)", "Puerto SSH", "integer", "22", minimum=1, maximum=65535, step="dashboard", depends_on=("EC_DASHBOARD_REMOTE_ENABLED", "true")),
+    Setting("EC_DASHBOARD_REMOTE_KEY_PATH", "Dashboard remoto (SSH)", "Ruta de llave privada (opcional)", step="dashboard", depends_on=("EC_DASHBOARD_REMOTE_ENABLED", "true"), help="Si se configura, se usa en lugar del password."),
+    Setting("EC_DASHBOARD_PORT", "Dashboard remoto (SSH)", "Puerto HTTP del dashboard en el remoto", "integer", "8090", minimum=1, maximum=65535, step="dashboard", depends_on=("EC_DASHBOARD_REMOTE_ENABLED", "true")),
+    Setting("EC_DASHBOARD_DIR", "Dashboard remoto (SSH)", "Directorio del dashboard en el remoto", default="/var/www/ec-mcp-dashboard", step="dashboard", depends_on=("EC_DASHBOARD_REMOTE_ENABLED", "true")),
+    Setting("EC_DASHBOARD_REFRESH_SECONDS", "Dashboard remoto (SSH)", "Auto-refresh del dashboard (segundos)", "integer", "30", minimum=5, maximum=3600, step="dashboard", depends_on=("EC_DASHBOARD_REMOTE_ENABLED", "true")),
 )
+
+STEP_TITLES = {
+    "orchestrator": "Orchestrator",
+    "ssh": "SSH opcional",
+    "sse": "Plataforma SSE",
+    "targets": "Targets por defecto (multi-orquestador / multi-SSE)",
+    "security": "Seguridad del MCP",
+    "transport": "Transporte MCP",
+    "panel": "Panel web",
+    "updates": "Actualizaciones",
+    "dashboard": "Dashboard remoto",
+}
 
 BY_KEY = {setting.key: setting for setting in SETTINGS}
 _REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -125,11 +143,23 @@ def public_config(path: Path | None = None) -> dict:
     for setting in SETTINGS:
         item = asdict(setting)
         item["choices"] = list(setting.choices)
+        item["depends_on"] = list(setting.depends_on) if setting.depends_on else None
         value = values.get(setting.key, setting.default)
         item["configured"] = bool(value) if setting.secret else True
         item["value"] = "" if setting.secret else value
         fields.append(item)
-    return {"fields": fields, "env_file": str(path or env_path()), "restart_required": True}
+    steps = []
+    seen = set()
+    for setting in SETTINGS:
+        if setting.step and setting.step not in seen:
+            seen.add(setting.step)
+            steps.append({"id": setting.step, "title": STEP_TITLES.get(setting.step, setting.step)})
+    return {
+        "fields": fields,
+        "steps": steps,
+        "env_file": str(path or env_path()),
+        "restart_required": True,
+    }
 
 
 def _validate(setting: Setting, raw: object) -> str:
@@ -165,22 +195,98 @@ def _validate(setting: Setting, raw: object) -> str:
     return value
 
 
-def update_env(values: dict[str, object], clear_secrets: list[str] | None = None, path: Path | None = None) -> Path:
-    target = path or env_path()
+def _env_or(effective: dict[str, str], key: str) -> str:
+    return effective.get(key) or os.environ.get(key, "")
+
+
+def _cross_field_errors(effective: dict[str, str]) -> list[str]:
+    """Reglas obligatorias entre varias variables sobre la configuración efectiva."""
+    errors: list[str] = []
+    url = effective.get("EC_ORCHESTRATOR_URL", "")
+    if url and not _env_or(effective, "EC_ORCHESTRATORS_JSON"):
+        has_key = effective.get("EC_ORCHESTRATOR_API_KEY", "")
+        has_user = effective.get("EC_ORCHESTRATOR_USER", "")
+        has_pass = effective.get("EC_ORCHESTRATOR_PASSWORD", "")
+        if not has_key and not (has_user and has_pass):
+            errors.append(
+                "EC_ORCHESTRATOR_URL está configurada pero falta EC_ORCHESTRATOR_API_KEY "
+                "o EC_ORCHESTRATOR_USER+EC_ORCHESTRATOR_PASSWORD (o EC_ORCHESTRATORS_JSON)"
+            )
+    if effective.get("EC_AXIS_ENABLED", "").lower() == "true" and not _env_or(effective, "EC_SSE_PLATFORMS_JSON"):
+        if not effective.get("EC_AXIS_ADMIN_TOKEN", ""):
+            errors.append("EC_AXIS_ENABLED=true requiere EC_AXIS_ADMIN_TOKEN (o EC_SSE_PLATFORMS_JSON)")
+        if not effective.get("EC_AXIS_BASE_URL", ""):
+            errors.append("EC_AXIS_ENABLED=true requiere EC_AXIS_BASE_URL (o EC_SSE_PLATFORMS_JSON)")
+    host = effective.get("EC_ADMIN_HOST", "127.0.0.1")
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        password_file = effective.get("EC_ADMIN_PASSWORD_FILE", "") or str(Path.cwd() / ".ec-admin-pass")
+        if not effective.get("EC_ADMIN_PASSWORD", "") and not Path(password_file).is_file():
+            errors.append("EC_ADMIN_HOST no es loopback: configura EC_ADMIN_PASSWORD o un EC_ADMIN_PASSWORD_FILE existente")
+    return errors
+
+
+def _collect_wanted(
+    values: dict[str, object], clear_secrets: list[str] | None, target: Path
+) -> tuple[dict[str, str], list[str]]:
     clear = set(clear_secrets or [])
     unknown = (set(values) | clear) - set(BY_KEY)
     if unknown:
-        raise ValueError("Variables no permitidas: " + ", ".join(sorted(unknown)))
+        return {}, ["Variables no permitidas: " + ", ".join(sorted(unknown))]
+    errors: list[str] = []
     wanted: dict[str, str] = {}
     for key, raw in values.items():
         setting = BY_KEY[key]
         if setting.secret and (raw is None or str(raw) == ""):
             continue
-        wanted[key] = _validate(setting, raw)
+        try:
+            wanted[key] = _validate(setting, raw)
+        except ValueError as exc:
+            errors.append(str(exc))
     for key in clear:
         if not BY_KEY[key].secret:
-            raise ValueError(f"{key}: sólo se pueden limpiar secretos")
-        wanted[key] = ""
+            errors.append(f"{key}: sólo se pueden limpiar secretos")
+        else:
+            wanted[key] = ""
+    if not errors:
+        effective = _effective_values(target)
+        effective.update(wanted)
+        for key in clear:
+            effective[key] = ""
+        errors.extend(_cross_field_errors(effective))
+    return wanted, errors
+
+
+def diff_env(
+    values: dict[str, object], clear_secrets: list[str] | None = None, path: Path | None = None
+) -> dict:
+    """Preview de cambios sobre el .env sin escribir: valida y lista el diff."""
+    target = path or env_path()
+    wanted, errors = _collect_wanted(values, clear_secrets, target)
+    current = _effective_values(target)
+    changes = []
+    for key, new in wanted.items():
+        setting = BY_KEY[key]
+        old = current.get(key, setting.default)
+        if old == new:
+            continue
+        cleared = key in set(clear_secrets or []) and new == ""
+        changes.append(
+            {
+                "key": key,
+                "old": "***" if setting.secret else old,
+                "new": "***" if setting.secret else new,
+                "secret": setting.secret,
+                "cleared": cleared,
+            }
+        )
+    return {"ok": not errors, "errors": errors, "changes": changes, "env_file": str(target)}
+
+
+def update_env(values: dict[str, object], clear_secrets: list[str] | None = None, path: Path | None = None) -> Path:
+    target = path or env_path()
+    wanted, errors = _collect_wanted(values, clear_secrets, target)
+    if errors:
+        raise ValueError("; ".join(errors))
 
     lines = target.read_text(encoding="utf-8").splitlines() if target.is_file() else []
     positions: dict[str, int] = {}

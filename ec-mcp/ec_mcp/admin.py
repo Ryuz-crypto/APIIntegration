@@ -11,7 +11,14 @@ Endpoints (all behind session cookie auth):
   GET  /api/state   orchestrators + non-secret config
   POST /api/orchestrators   add/update orchestrator entry
   POST /api/orchestrators/delete  remove entry
-  POST /api/apply   write selected orchestrator into .env and restart hint
+  POST /api/orchestrators/rename|duplicate  copy/rename registry entries
+  POST /api/sse[/delete|/rename|/duplicate]  same for SSE platforms
+  POST /api/apply   write selected target into .env (+ full registry blobs)
+  POST /api/default set the default Orchestrator/SSE target (EC_DEFAULT_*)
+  POST /api/probe   real health check of one registry target
+  GET  /api/wizard  wizard payload (steps, fields with required/depends_on)
+  POST /api/config/diff  validate + preview .env changes without writing
+  GET/POST /api/users[/delete|/password]  multi-user management (admin role)
 """
 
 from __future__ import annotations
@@ -25,14 +32,18 @@ import time
 from math import ceil
 from pathlib import Path
 
+import httpx
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Route
 
-from . import __version__
-from .admin_config import public_config, update_env
+from . import __version__, admin_users
+from .admin_config import diff_env, public_config, update_env
 from .admin_page import PAGE as _PAGE_TEMPLATE
-from .admin_services import services_status
+from .admin_services import ServiceProbeError, probe_axis, probe_orchestrator, services_status
+from .admin_users import UserError
+from .audit import AuditLog
+from .config import Settings
 from .multi_target import (
     RegistryError,
     load_registry,
@@ -49,9 +60,41 @@ from .web_update import check as check_update
 from .web_update import check_pending_request, queue_restart, queue_update
 from .web_update import status as update_status
 
-SESSIONS: dict[str, float] = {}
+SESSIONS: dict[str, dict] = {}
 SESSION_TTL = 3600.0
 LOGIN_FAILURES: dict[str, list[float]] = {}
+
+ROLE_PERMISSIONS = {
+    "viewer": {"read"},
+    "operator": {"read", "write", "restart", "update"},
+    "admin": {"read", "write", "restart", "update", "users"},
+}
+
+
+def _audit_panel(user: str | None, action: str, target: str, result: str, details: dict | None = None) -> None:
+    try:
+        AuditLog(Settings.from_env().audit_log_path).record(
+            tool="admin_panel",
+            action=action,
+            target=target,
+            result=result,
+            details=details or {},
+            user=user,
+        )
+    except (OSError, ValueError):
+        pass
+
+
+def _authorize(request, permission: str):
+    session = _check_session(request)
+    if not session:
+        return None, JSONResponse({"error": "unauthorized"}, status_code=401)
+    if not isinstance(session, dict):
+        session = {"user": "admin", "role": "admin"}
+    role = str(session.get("role", "admin"))
+    if permission not in ROLE_PERMISSIONS.get(role, set()):
+        return None, JSONResponse({"error": "forbidden", "required": permission, "role": role}, status_code=403)
+    return session, None
 
 
 def _positive_number(name: str, default: float) -> float:
@@ -128,13 +171,14 @@ def _verify_password(candidate: str, allow_first_run: bool = True) -> bool:
     return hmac.compare_digest(expected, candidate)
 
 
-def _check_session(request) -> bool:
+def _check_session(request):
     token = request.cookies.get("ec_admin_session", "")
     now = time.time()
-    if token and token in SESSIONS and now - SESSIONS[token] < SESSION_TTL:
-        SESSIONS[token] = now
-        return True
-    return False
+    session = SESSIONS.get(token)
+    if session and now - session.get("ts", 0) < SESSION_TTL:
+        session["ts"] = now
+        return session
+    return None
 
 
 async def home(request):
@@ -149,14 +193,23 @@ async def login_page(request):
 
 async def login_post(request):
     body = await request.json()
+    username = str(body.get("username") or "").strip()
     password = str(body.get("password") or "")
     host = os.environ.get("EC_ADMIN_HOST", "0.0.0.0")  # nosec B104
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
     failures = [t for t in LOGIN_FAILURES.get(client_ip, []) if now - t < LOGIN_WINDOW_SECONDS]
-    valid = bool(password) and _verify_password(password, allow_first_run=_loopback_only(host))
+    if admin_users.has_users():
+        role = admin_users.verify_user(username, password) if username and password else None
+        valid = role is not None
+        user_label = username or "(sin usuario)"
+    else:
+        role = "admin"
+        valid = bool(password) and _verify_password(password, allow_first_run=_loopback_only(host))
+        user_label = "admin"
     if valid:
         LOGIN_FAILURES.pop(client_ip, None)
+        _audit_panel(user_label, "login", "panel", "ok")
     elif len(failures) >= LOGIN_MAX_FAILURES:
         retry_after = max(1, ceil(LOGIN_WINDOW_SECONDS - (now - min(failures))))
         return JSONResponse(
@@ -172,23 +225,27 @@ async def login_post(request):
         failures.append(now)
         LOGIN_FAILURES[client_ip] = failures
         remaining = max(0, LOGIN_MAX_FAILURES - len(failures))
+        _audit_panel(user_label, "login_denied", "panel", "denied")
         return JSONResponse(
             {
                 "ok": False,
-                "error": f"Contraseña incorrecta. Intentos restantes: {remaining}.",
+                "error": f"Credenciales incorrectas. Intentos restantes: {remaining}.",
                 "remaining_attempts": remaining,
             },
         )
     token = secrets.token_urlsafe(32)
-    SESSIONS[token] = time.time()
-    response = JSONResponse({"ok": True})
+    role = role or "admin"
+    SESSIONS[token] = {"user": user_label, "role": role, "ts": now}
+    response = JSONResponse({"ok": True, "user": user_label, "role": role})
     response.set_cookie("ec_admin_session", token, httponly=True, samesite="lax", max_age=int(SESSION_TTL))
     return response
 
 
 async def logout_post(request):
     token = request.cookies.get("ec_admin_session", "")
-    SESSIONS.pop(token, None)
+    session = SESSIONS.pop(token, None)
+    if session:
+        _audit_panel(session.get("user"), "logout", "panel", "ok")
     response = JSONResponse({"ok": True})
     response.delete_cookie("ec_admin_session")
     return response
@@ -197,10 +254,13 @@ async def logout_post(request):
 def _public_state() -> dict:
     registry = load_registry()
     active = os.environ.get("EC_ORCHESTRATOR_URL", "")
+    default_orch = os.environ.get("EC_DEFAULT_ORCHESTRATOR", "").strip()
+    default_sse = os.environ.get("EC_DEFAULT_SSE", "").strip()
     orchestrators = []
     for name, entry in registry.list_orchestrators().items():
         item = public_orchestrator(name, entry)
         item["active"] = bool(active) and entry.get("url", "") == active
+        item["default"] = bool(default_orch) and name == default_orch
         orchestrators.append(item)
     sse_platforms = []
     for name, entry in registry.list_sse().items():
@@ -209,23 +269,30 @@ def _public_state() -> dict:
             item["active"] = os.environ.get("EC_AXIS_ENABLED", "false").lower() == "true"
         else:
             item["active"] = False
+        item["default"] = bool(default_sse) and name == default_sse
         sse_platforms.append(item)
     return {
         "orchestrators": orchestrators,
         "sse_platforms": sse_platforms,
         "ssh_enabled": os.environ.get("EC_SSH_ENABLED", "false").lower() == "true",
+        "default_orchestrator": default_orch,
+        "default_sse": default_sse,
     }
 
 
 async def api_state(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
-    return JSONResponse(_public_state())
+    session, denied = _authorize(request, "read")
+    if denied:
+        return denied
+    state = _public_state()
+    state["session"] = {"user": session["user"], "role": session["role"]}
+    return JSONResponse(state)
 
 
 async def api_save_orchestrator(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
     body = await request.json()
     name = str(body.get("name") or "").strip()
     entry = {
@@ -243,21 +310,25 @@ async def api_save_orchestrator(request):
         load_registry().save_orchestrator(name, entry)
     except RegistryError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
+    _audit_panel(session["user"], "save_orchestrator", name, "ok")
     return JSONResponse({"ok": True, "message": f"Orquestador '{name}' guardado. Usa 'Aplicar' para activarlo."})
 
 
 async def api_delete_orchestrator(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
     body = await request.json()
     name = str(body.get("name") or "")
     deleted = load_registry().delete_orchestrator(name)
+    _audit_panel(session["user"], "delete_orchestrator", name, "ok" if deleted else "missing")
     return JSONResponse({"ok": True, "deleted": deleted, "message": "Eliminado" if deleted else "No existía"})
 
 
 async def api_save_sse(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
     body = await request.json()
     name = str(body.get("name") or "").strip()
     entry = {
@@ -271,16 +342,101 @@ async def api_save_sse(request):
         load_registry().save_sse(name, entry)
     except RegistryError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
+    _audit_panel(session["user"], "save_sse", name, "ok")
     return JSONResponse({"ok": True, "message": f"Plataforma SSE '{name}' guardada."})
 
 
 async def api_delete_sse(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
     body = await request.json()
     name = str(body.get("name") or "")
     deleted = load_registry().delete_sse(name)
+    _audit_panel(session["user"], "delete_sse", name, "ok" if deleted else "missing")
     return JSONResponse({"ok": True, "deleted": deleted, "message": "Eliminada" if deleted else "No existía"})
+
+
+async def _registry_copy(request, method, label: str):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    body = await request.json()
+    name = str(body.get("name") or "").strip()
+    new_name = str(body.get("new_name") or "").strip()
+    try:
+        method(name, new_name)
+    except RegistryError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    _audit_panel(session["user"], method.__name__, f"{name} -> {new_name}", "ok")
+    return JSONResponse({"ok": True, "message": f"{label} '{name}' -> '{new_name}'"})
+
+
+async def api_rename_orchestrator(request):
+    return await _registry_copy(request, load_registry().rename_orchestrator, "Orquestador")
+
+
+async def api_duplicate_orchestrator(request):
+    return await _registry_copy(request, load_registry().duplicate_orchestrator, "Orquestador")
+
+
+async def api_rename_sse(request):
+    return await _registry_copy(request, load_registry().rename_sse, "Plataforma SSE")
+
+
+async def api_duplicate_sse(request):
+    return await _registry_copy(request, load_registry().duplicate_sse, "Plataforma SSE")
+
+
+async def api_default_target(request):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    body = await request.json()
+    kind = str(body.get("kind") or "").strip().lower()
+    name = str(body.get("name") or "").strip()
+    registry = load_registry()
+    if kind == "sse":
+        key = "EC_DEFAULT_SSE"
+        exists = registry.get_sse(name) if name else True
+    else:
+        key = "EC_DEFAULT_ORCHESTRATOR"
+        exists = registry.get_orchestrator(name) if name else True
+    if name and not exists:
+        return JSONResponse({"ok": False, "error": f"No existe el target '{name}'"}, status_code=404)
+    try:
+        update_env({key: name})
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    _audit_panel(session["user"], "default_target", f"{kind}:{name or '(auto)'}", "ok")
+    return JSONResponse({"ok": True, "message": f"Target por defecto: {name or '(automático)'}"})
+
+
+async def api_probe(request):
+    session, denied = _authorize(request, "read")
+    if denied:
+        return denied
+    body = await request.json()
+    kind = str(body.get("kind") or "orchestrator").strip().lower()
+    name = str(body.get("name") or "").strip()
+    registry = load_registry()
+    if kind == "sse":
+        entry = registry.get_sse(name)
+        probe = probe_axis
+    else:
+        entry = registry.get_orchestrator(name)
+        probe = probe_orchestrator
+    if not entry:
+        return JSONResponse({"ok": False, "error": f"No existe el target '{name}'"}, status_code=404)
+    try:
+        result = probe(entry)
+        payload = {"ok": True, "kind": kind, "name": name, "state": "up", **result}
+    except (ServiceProbeError, httpx.HTTPError, ValueError) as exc:
+        payload = {"ok": False, "kind": kind, "name": name, "state": "down", "error": str(exc)}
+    _audit_panel(
+        session["user"], "probe", f"{kind}:{name}", payload["state"], {"error": str(payload.get("error", ""))[:200]}
+    )
+    return JSONResponse(payload)
 
 
 ENV_KEYS = {
@@ -297,8 +453,9 @@ ENV_KEYS = {
 
 
 async def api_apply(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
     body = await request.json()
     name = str(body.get("name") or "").strip()
     kind = str(body.get("kind") or "orchestrator").strip().lower()
@@ -346,6 +503,9 @@ async def api_apply(request):
     # Persistir el registro completo como blobs JSON para el runtime multi-target.
     for key, value in registry.to_env_blob().items():
         wanted[key] = value
+    for key in ("EC_DEFAULT_ORCHESTRATOR", "EC_DEFAULT_SSE"):
+        if os.environ.get(key, "").strip():
+            wanted[key] = os.environ[key]
     env_path = Path(os.environ.get("EC_MCP_ENV_FILE", Path.cwd() / ".env"))
     lines = []
     if env_path.is_file():
@@ -365,6 +525,7 @@ async def api_apply(request):
         pass
     for key, value in wanted.items():
         os.environ[key] = value
+    _audit_panel(session["user"], "apply", target_label, "ok", {"env_file": str(env_path)})
     return JSONResponse(
         {
             "ok": True,
@@ -377,25 +538,60 @@ async def api_apply(request):
 
 
 async def api_services_status(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    _session, denied = _authorize(request, "read")
+    if denied:
+        return denied
     return JSONResponse(services_status(probe=True))
 
 
 async def api_config(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    _session, denied = _authorize(request, "read")
+    if denied:
+        return denied
     return JSONResponse(public_config())
 
 
+async def api_wizard(request):
+    session, denied = _authorize(request, "read")
+    if denied:
+        return denied
+    config = public_config()
+    state = _public_state()
+    state["session"] = {"user": session["user"], "role": session["role"]}
+    return JSONResponse(
+        {
+            "steps": config["steps"],
+            "fields": config["fields"],
+            "state": state,
+            "env_file": config["env_file"],
+        }
+    )
+
+
+async def api_config_diff(request):
+    _session, denied = _authorize(request, "read")
+    if denied:
+        return denied
+    try:
+        body = await request.json()
+        result = diff_env(body.get("values") or {}, body.get("clear_secrets") or [])
+    except (OSError, TypeError, ValueError) as exc:
+        return JSONResponse({"ok": False, "errors": [str(exc)], "changes": []}, status_code=400)
+    return JSONResponse(result, status_code=200 if result["ok"] else 400)
+
+
 async def api_save_config(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
     try:
         body = await request.json()
         path = update_env(body.get("values") or {}, body.get("clear_secrets") or [])
     except (OSError, TypeError, ValueError) as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    _audit_panel(
+        session["user"], "save_config", "env", "ok", {"changed": sorted((body.get("values") or {}).keys())[:50]}
+    )
     return JSONResponse(
         {
             "ok": True,
@@ -406,8 +602,9 @@ async def api_save_config(request):
 
 
 async def api_update_check(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    _session, denied = _authorize(request, "update")
+    if denied:
+        return denied
     try:
         return JSONResponse(check_update())
     except ValueError as exc:
@@ -415,38 +612,118 @@ async def api_update_check(request):
 
 
 async def api_update_status(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    _session, denied = _authorize(request, "read")
+    if denied:
+        return denied
     return JSONResponse(update_status())
 
 
 async def api_update_apply(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    session, denied = _authorize(request, "update")
+    if denied:
+        return denied
     try:
         body = await request.json()
         result = queue_update(str(body.get("remote_sha") or ""), str(body.get("confirmation") or ""))
     except (OSError, TypeError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
+    _audit_panel(session["user"], "update_apply", "panel", str(result.get("state", "")))
     return JSONResponse(result)
 
 
 async def api_restart(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    session, denied = _authorize(request, "restart")
+    if denied:
+        return denied
     try:
-        return JSONResponse(queue_restart())
+        result = queue_restart()
     except (OSError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
+    _audit_panel(session["user"], "restart", "panel", str(result.get("state", "")))
+    return JSONResponse(result)
 
 
 async def api_restart_result(request):
-    if not _check_session(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    _session, denied = _authorize(request, "read")
+    if denied:
+        return denied
     state = update_status()
     state.setdefault("state", "idle")
     state["request_pending"] = check_pending_request()
     return JSONResponse(state)
+
+
+async def api_users_list(request):
+    _session, denied = _authorize(request, "users")
+    if denied:
+        return denied
+    return JSONResponse(
+        {
+            "ok": True,
+            "users": admin_users.public_users(),
+            "file": str(admin_users.users_path()),
+            "multi_user": admin_users.has_users(),
+            "roles": list(admin_users.ROLES),
+        }
+    )
+
+
+async def api_users_save(request):
+    session, denied = _authorize(request, "users")
+    if denied:
+        return denied
+    body = await request.json()
+    username = str(body.get("username") or "").strip()
+    password = str(body.get("password") or "")
+    role = str(body.get("role") or "viewer")
+    try:
+        result = admin_users.upsert_user(username, password, role)
+    except UserError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    _audit_panel(session["user"], "user_save", username, f"role={result['role']}")
+    return JSONResponse({"ok": True, "message": f"Usuario '{username}' guardado con rol '{result['role']}'", **result})
+
+
+async def api_users_delete(request):
+    session, denied = _authorize(request, "users")
+    if denied:
+        return denied
+    body = await request.json()
+    username = str(body.get("username") or "").strip()
+    users = admin_users.load_users()
+    admins = [name for name, info in users.items() if str(info.get("role")) == "admin"]
+    if users.get(username, {}).get("role") == "admin" and len(admins) <= 1:
+        return JSONResponse({"ok": False, "error": "No se puede eliminar el último administrador"}, status_code=400)
+    deleted = admin_users.delete_user(username)
+    _audit_panel(session["user"], "user_delete", username, "ok" if deleted else "missing")
+    return JSONResponse({"ok": True, "deleted": deleted, "message": "Eliminado" if deleted else "No existía"})
+
+
+async def api_users_password(request):
+    session, denied = _authorize(request, "read")
+    if denied:
+        return denied
+    body = await request.json()
+    target_user = str(body.get("username") or "").strip() or session["user"]
+    old_password = str(body.get("old_password") or "")
+    new_password = str(body.get("new_password") or "")
+    if target_user != session["user"] and session.get("role") != "admin":
+        return JSONResponse({"ok": False, "error": "Solo un admin puede cambiar la contraseña de otro usuario"}, status_code=403)
+    try:
+        if admin_users.has_users():
+            if target_user == session["user"] and admin_users.verify_user(target_user, old_password) is None:
+                return JSONResponse({"ok": False, "error": "Contraseña actual incorrecta"}, status_code=400)
+            admin_users.set_password(target_user, new_password)
+        else:
+            if target_user != "admin":
+                return JSONResponse({"ok": False, "error": "En modo de contraseña única solo existe 'admin'"}, status_code=400)
+            if not _verify_password(old_password, allow_first_run=False):
+                return JSONResponse({"ok": False, "error": "Contraseña actual incorrecta"}, status_code=400)
+            update_env({"EC_ADMIN_PASSWORD": new_password})
+    except (UserError, OSError, TypeError, ValueError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    _audit_panel(session["user"], "user_password", target_user, "changed")
+    return JSONResponse({"ok": True, "message": f"Contraseña actualizada para '{target_user}'"})
 
 
 from starlette.responses import Response
@@ -466,17 +743,29 @@ def build_admin_app() -> Starlette:
             Route("/api/state", api_state, methods=["GET"]),
             Route("/api/orchestrators", api_save_orchestrator, methods=["POST"]),
             Route("/api/orchestrators/delete", api_delete_orchestrator, methods=["POST"]),
+            Route("/api/orchestrators/rename", api_rename_orchestrator, methods=["POST"]),
+            Route("/api/orchestrators/duplicate", api_duplicate_orchestrator, methods=["POST"]),
             Route("/api/sse", api_save_sse, methods=["POST"]),
             Route("/api/sse/delete", api_delete_sse, methods=["POST"]),
+            Route("/api/sse/rename", api_rename_sse, methods=["POST"]),
+            Route("/api/sse/duplicate", api_duplicate_sse, methods=["POST"]),
             Route("/api/apply", api_apply, methods=["POST"]),
+            Route("/api/default", api_default_target, methods=["POST"]),
+            Route("/api/probe", api_probe, methods=["POST"]),
             Route("/api/services/status", api_services_status, methods=["GET"]),
             Route("/api/config", api_config, methods=["GET"]),
             Route("/api/config", api_save_config, methods=["POST"]),
+            Route("/api/config/diff", api_config_diff, methods=["POST"]),
+            Route("/api/wizard", api_wizard, methods=["GET"]),
             Route("/api/update/check", api_update_check, methods=["POST"]),
             Route("/api/update/status", api_update_status, methods=["GET"]),
             Route("/api/update/apply", api_update_apply, methods=["POST"]),
             Route("/api/restart", api_restart, methods=["POST"]),
             Route("/api/restart/result", api_restart_result, methods=["GET"]),
+            Route("/api/users", api_users_list, methods=["GET"]),
+            Route("/api/users", api_users_save, methods=["POST"]),
+            Route("/api/users/delete", api_users_delete, methods=["POST"]),
+            Route("/api/users/password", api_users_password, methods=["POST"]),
         ]
     )
 
