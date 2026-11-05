@@ -294,7 +294,7 @@ async function loadAll(){
  catch(e){notice(e.message,'err')}
 }
 function renderOrchestrators(){
- var list=(STATE.orchestrators||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_probe')+'</button><button class="secondary" onclick="dupTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_dup')+'</button><button class="secondary" onclick="renTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_ren')+'</button><button class="secondary" onclick="setDefaultTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_default')+'</button><button class="secondary" onclick="editOrch(\'+'+esc(o.name)+'\')">'+t('btn_edit')+'</button><button class="danger" onclick="deleteOrch(\'+'+esc(o.name)+'\')">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">'+t('badge_active')+'</span>':'')+(o.default?'<span class="badge">'+t('badge_default')+'</span>':'')+'<br><span class="help">'+esc(o.url)+'</span> <span id="probe-orchestrator-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">'+t('no_orch')+'</p>';
+ var list=(STATE.orchestrators||[]).map(function(o){return '<div class=\"orch\"><span class=\"orch-actions\"><button class=\"secondary\" onclick=\"probeTarget(\'orchestrator\',\''+esc(o.name)+'\')\">'+t('btn_probe')+'</button><button class=\"secondary\" onclick=\"dupTarget(\'orchestrator\',\''+esc(o.name)+'\')\">'+t('btn_dup')+'</button><button class=\"secondary\" onclick=\"renTarget(\'orchestrator\',\''+esc(o.name)+'\')\">'+t('btn_ren')+'</button><button class=\"secondary\" onclick=\"setDefaultTarget(\'orchestrator\',\''+esc(o.name)+'\')\">'+t('btn_default')+'</button><button class=\"secondary\" onclick=\"editOrch(\''+esc(o.name)+'\')\">'+t('btn_edit')+'</button><button class=\"danger\" onclick=\"deleteOrch(\''+esc(o.name)+'\')\">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class=\"badge\">'+t('badge_active')+'</span>':'')+(o.default?'<span class=\"badge\">'+t('badge_default')+'</span>':'')+'<br><span class=\"help\">'+esc(o.url)+'</span> <span id=\"probe-orchestrator-'+esc(o.name)+'\"></span></div>'}).join('')||'<p class=\"help\">'+t('no_orch')+'</p>';
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_orch')+'</h2>'+list+
  '<div class="group"><h3>'+t('add_update')+'</h3>'+orchPickerHtml()+'<div class="grid"><label>'+t('f_name')+'<input id="o-name"></label><label>'+t('f_url')+'<input id="o-url" placeholder="https://orchestrator.example.com"></label><label>'+t('f_apikey')+'<input id="o-key" type="password"></label><label>'+t('f_user')+'<input id="o-user"></label><label>'+t('f_pass')+'<input id="o-password" type="password"></label><label>'+t('f_tls')+'<select id="o-tls"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select></label><label>'+t('f_ssh_user')+'<input id="o-ssh-user"></label><label>'+t('f_ssh_pass')+'<input id="o-ssh-password" type="password"></label><label>'+t('f_enable')+'<input id="o-enable" type="password"></label><label>'+t('f_ssh_host')+'<input id="o-ssh-host"></label></div><div class="actions"><button onclick="saveOrch()">'+t('btn_save')+'</button><button class="secondary" onclick="applyOrch()">'+t('apply_env')+'</button></div></div></section>';
 }
@@ -308,7 +308,7 @@ async function saveOrch(){
 async function deleteOrch(name){if(!confirm('Eliminar '+name+'?'))return;await api('/api/orchestrators/delete',{name:name});STATE=await api('/api/state');renderOrchestrators()}
 async function applyOrch(){try{var r=await api('/api/apply',{name:q('#o-name').value.trim(),kind:'orchestrator'});notice(r.message||r.error,r.ok?'ok':'err');CONFIG=await api('/api/config')}catch(e){notice(e.message,'err')}}
 function renderSse(){
- var list=(STATE.sse_platforms||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_probe')+'</button><button class="secondary" onclick="dupTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_dup')+'</button><button class="secondary" onclick="renTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_ren')+'</button><button class="secondary" onclick="setDefaultTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_default')+'</button><button class="secondary" onclick="editSse(\'+'+esc(o.name)+'\')">'+t('btn_edit')+'</button><button class="danger" onclick="deleteSse(\'+'+esc(o.name)+'\')">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">'+t('badge_active')+'</span>':'')+(o.default?'<span class="badge">'+t('badge_default')+'</span>':'')+' <span class="badge">'+esc(o.provider)+'</span><br><span class="help">'+esc(o.base_url)+'</span> <span id="probe-sse-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">'+t('no_sse')+'</p>';
+ var list=(STATE.sse_platforms||[]).map(function(o){return '<div class=\"orch\"><span class=\"orch-actions\"><button class=\"secondary\" onclick=\"probeTarget(\'sse\',\''+esc(o.name)+'\')\">'+t('btn_probe')+'</button><button class=\"secondary\" onclick=\"dupTarget(\'sse\',\''+esc(o.name)+'\')\">'+t('btn_dup')+'</button><button class=\"secondary\" onclick=\"renTarget(\'sse\',\''+esc(o.name)+'\')\">'+t('btn_ren')+'</button><button class=\"secondary\" onclick=\"setDefaultTarget(\'sse\',\''+esc(o.name)+'\')\">'+t('btn_default')+'</button><button class=\"secondary\" onclick=\"editSse(\''+esc(o.name)+'\')\">'+t('btn_edit')+'</button><button class=\"danger\" onclick=\"deleteSse(\''+esc(o.name)+'\')\">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class=\"badge\">'+t('badge_active')+'</span>':'')+(o.default?'<span class=\"badge\">'+t('badge_default')+'</span>':'')+' <span class=\"badge\">'+esc(o.provider)+'</span><br><span class=\"help\">'+esc(o.base_url)+'</span> <span id=\"probe-sse-'+esc(o.name)+'\"></span></div>'}).join('')||'<p class=\"help\">'+t('no_sse')+'</p>';
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_sse')+'</h2><p>Administra N plataformas SSE de forma independiente (p. ej. varias instancias de Axis Security). Cada una guarda su propio token y URL.</p>'+list+
  '<div class="group"><h3>'+t('add_update_sse')+'</h3>'+ssePickerHtml()+'<div class="grid"><label>'+t('f_name')+'<input id="s-name" placeholder="axis-prod"></label><label>'+t('f_provider')+'<select id="s-provider"><option>axis</option></select></label><label>'+t('f_baseurl')+'<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>'+t('f_token')+'<input id="s-token" type="password"></label><label>Verificar TLS<select id="s-tls"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select></label><label>'+t('f_timeout')+'<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">'+t('btn_save')+'</button><button class="secondary" onclick="applySse()">'+t('apply_env')+'</button></div></div></section>';
 }
@@ -454,13 +454,18 @@ async function probeTarget(kind,name){
  try{var r=await api('/api/probe',{kind:kind,name:name});if(node)node.innerHTML=' <span class="badge">'+(r.ok?'up':'down')+'</span>';notice((r.ok?t('probe_ok'):t('probe_fail'))+kind+' '+name+(r.error?' — '+r.error:''),r.ok?'ok':'err')}
  catch(e){notice(e.message,'err')}
 }
-async function dupTarget(kind,name){
- var nn=prompt('Nuevo nombre para duplicar '+name+':',name+'-copia');if(!nn)return;
+function nameDialogHtml(){return '<dialog id=\"name-dlg\" style=\"max-width:480px;width:calc(100% - 30px)\"><h3 id=\"name-dlg-title\"></h3><label>'+t('f_name')+'<input id=\"name-input\"></label><div class=\"actions\"><button onclick=\"submitName()\">'+t('custom_save')+'</button><button class=\"secondary\" onclick=\"closeName()\">'+t('custom_cancel')+'</button></div></dialog>'}
+function askName(kind,name,action,defval){if(!q('#name-dlg'))q('#app').innerHTML+=nameDialogHtml();q('#name-dlg-title').textContent=(action==='rename'?t('btn_ren'):t('btn_dup'))+' '+name;q('#name-input').value=defval;window.__nameAction={kind:kind,name:name,action:action};var d=q('#name-dlg');d.showModal?d.showModal():d.setAttribute('open','')}
+function closeName(){var d=q('#name-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
+async function submitName(){var a=window.__nameAction;if(!a)return;var nn=(q('#name-input')||{value:''}).value;closeName();if(!nn||!nn.trim())return;if(a.action==='rename')await renTarget(a.kind,a.name,nn.trim());else await dupTarget(a.kind,a.name,nn.trim())}
+async function dupTarget(kind,name,nn){
+ if(nn===undefined){askName(kind,name,'duplicate',name+'-copia');return}
  var path=kind==='sse'?'/api/sse/duplicate':'/api/orchestrators/duplicate';
  try{var r=await api(path,{name:name,new_name:nn.trim()});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await reloadAfterMutation()}catch(e){notice(e.message,'err')}
 }
-async function renTarget(kind,name){
- var nn=prompt('Renombrar '+name+' a:',name);if(!nn||nn.trim()===name)return;
+async function renTarget(kind,name,nn){
+ if(nn===undefined){askName(kind,name,'rename',name);return}
+ if(nn.trim()===name)return;
  var path=kind==='sse'?'/api/sse/rename':'/api/orchestrators/rename';
  try{var r=await api(path,{name:name,new_name:nn.trim()});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok)await reloadAfterMutation()}catch(e){notice(e.message,'err')}
 }
@@ -647,12 +652,33 @@ function renderConfig(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_config')+'</h2><p>'+t('saved_in')+'<span class="mono">'+esc(CONFIG.env_file)+'</span>. '+t('secrets_note')+'</p>'+targetsNavHtml()+html+blobsInfoHtml()+'<div class="actions"><button onclick="saveConfig()">'+t('btn_save_vars')+'</button><button class="secondary" onclick="restartServices()">'+t('btn_save_restart')+'</button></div></section>';
  CONFIG.fields.forEach(function(f){var el=q('#cfg-'+f.key);if(el&&!f.secret)el.value=f.value});
 }
+function collectConfig(){var values={},clear=[];CONFIG.fields.forEach(function(f){var el=q('#cfg-'+f.key);if(!el)return;if(!f.secret||el.value!=='')values[f.key]=el.value;var c=document.querySelector('[data-clear=\"'+f.key+'\"]');if(c&&c.checked)clear.push(f.key)});return {values:values,clear_secrets:clear}}
 async function saveConfig(restart){
- var values={},clear=[];
- CONFIG.fields.forEach(function(f){var el=q('#cfg-'+f.key);if(!el)return;if(!f.secret||el.value!=='')values[f.key]=el.value;var c=document.querySelector('[data-clear="'+f.key+'"]');if(c&&c.checked)clear.push(f.key)});
- try{var r=await api('/api/config',{values:values,clear_secrets:clear});notice(r.message||r.error,r.ok?'ok':'err');if(!r.ok)return;CONFIG=await api('/api/config');if(restart)await doRestart();else renderConfig()}catch(e){notice(e.message,'err')}
+ try{var r=await api('/api/config',collectConfig());notice(r.message||r.error,r.ok?'ok':'err');if(!r.ok)return;CONFIG=await api('/api/config');if(restart)await doRestart();else renderConfig()}catch(e){notice(e.message,'err')}
 }
-async function restartServices(){await saveConfig(true)}
+function restartDialogHtml(){
+ var orchs=(STATE&&STATE.orchestrators)||[],sses=(STATE&&STATE.sse_platforms)||[];
+ var defO=((orchs.find(function(o){return o.default})||orchs.find(function(o){return o.active})||{}).name)||'';
+ var defS=((sses.find(function(o){return o.default})||sses.find(function(o){return o.active})||{}).name)||'';
+ var oradio='<label class=\"clear\"><input type=\"radio\" name=\"rst-orch\" value=\"\"'+(defO?'':' checked')+'> —</label>'+orchs.map(function(o){return '<label class=\"clear\"><input type=\"radio\" name=\"rst-orch\" value=\"'+esc(o.name)+'\"'+(o.name===defO?' checked':'')+'> '+esc(o.name)+'</label>'}).join('');
+ var sradio='<label class=\"clear\"><input type=\"radio\" name=\"rst-sse\" value=\"\"'+(defS?'':' checked')+'> —</label>'+sses.map(function(o){return '<label class=\"clear\"><input type=\"radio\" name=\"rst-sse\" value=\"'+esc(o.name)+'\"'+(o.name===defS?' checked':'')+'> '+esc(o.name)+'</label>'}).join('');
+ return '<dialog id=\"restart-dlg\" style=\"max-width:560px;width:calc(100% - 30px)\"><h3>'+t('btn_save_restart')+'</h3><p class=\"help\">'+t('targets_h')+'</p><div class=\"group\"><h3>'+t('h2_orch')+'</h3>'+oradio+'</div><div class=\"group\"><h3>'+t('h2_sse')+'</h3>'+sradio+'</div><div class=\"actions\"><button onclick=\"submitRestart()\">'+t('btn_save_restart_short')+'</button><button class=\"secondary\" onclick=\"closeRestart()\">'+t('custom_cancel')+'</button></div></dialog>';
+}
+function openRestart(){if(!q('#restart-dlg'))q('#app').innerHTML+=restartDialogHtml();var d=q('#restart-dlg');d.showModal?d.showModal():d.setAttribute('open','')}
+function closeRestart(){var d=q('#restart-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
+async function restartServices(){openRestart()}
+async function submitRestart(){
+ var orch=(document.querySelector('input[name=\"rst-orch\"]:checked')||{value:''}).value||'';
+ var sse=(document.querySelector('input[name=\"rst-sse\"]:checked')||{value:''}).value||'';
+ closeRestart();
+ try{
+  var r=await api('/api/config',collectConfig());notice(r.message||r.error,r.ok?'ok':'err');if(!r.ok)return;
+  if(orch){var a=await api('/api/apply',{name:orch,kind:'orchestrator'});notice(a.message||a.error,a.ok?'ok':'err');if(!a.ok)return}
+  if(sse){var b=await api('/api/apply',{name:sse,kind:'sse'});notice(b.message||b.error,b.ok?'ok':'err');if(!b.ok)return}
+  CONFIG=await api('/api/config');STATE=await api('/api/state');renderConfig();
+  await doRestart();
+ }catch(e){notice(e.message,'err')}
+}
 async function doRestart(){try{var r=await api('/api/restart',{});notice(r.message||r.error,r.state==='pending'?'ok':'err');if(r.state==='pending')pollRestart(0)}catch(e){notice(e.message,'err')}}
 async function pollRestart(attempt){
  try{var s=await api('/api/restart/result');
