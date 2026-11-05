@@ -277,7 +277,7 @@ def test_public_config_has_english_labels_and_step_titles(env):
     assert by_key["EC_ADMIN_PASSWORD"]["label_en"] == "Administrator password"
     assert by_key["EC_ORCHESTRATOR_URL"]["help_en"]
     titles = {s["id"]: s for s in config["steps"]}
-    assert titles["orchestrator"]["title_en"] == "Orchestrator"
+    assert titles["orchestrator"]["title_en"] == "Main Orchestrator (.env)"
     assert titles["panel"]["title_en"] == "Web panel"
 
 
@@ -581,6 +581,21 @@ def test_panel_responses_are_not_cached(client):
             assert r.headers.get("cache-control") == "no-store, max-age=0"
     r = client.get("/api/state")
     assert r.headers.get("cache-control") == "no-store, max-age=0"
+
+
+def test_wizard_steps_have_human_titles_and_descriptions(env):
+    config = admin_config.public_config(env / ".env")
+    steps = {s["id"]: s for s in config["steps"]}
+    assert "Orchestrator principal" in steps["orchestrator"]["title"]
+    assert "agregar más" in steps["targets"]["title"]
+    assert all(s.get("desc") and s.get("desc_en") for s in config["steps"])
+    assert "registro" in steps["targets"]["desc"]
+
+
+def test_page_has_wizard_quick_chips():
+    assert "quickChipsHtml" in PAGE and "wizGoto" in PAGE
+    assert "q_add_orch" in PAGE and "targets_add_more" in PAGE
+    assert "desc_'+LANG" in PAGE
 
 
 def test_new_routes_registered():

@@ -100,10 +100,10 @@ SETTINGS = (
 )
 
 STEP_TITLES = {
-    "orchestrator": "Orchestrator",
+    "orchestrator": "Orchestrator principal (.env)",
     "ssh": "SSH opcional",
-    "sse": "Plataforma SSE",
-    "targets": "Targets por defecto (multi-orquestador / multi-SSE)",
+    "sse": "SSE (Axis) en .env",
+    "targets": "Targets: agregar más Orquestadores / SSE",
     "security": "Seguridad del MCP",
     "transport": "Transporte MCP",
     "panel": "Panel web",
@@ -112,15 +112,39 @@ STEP_TITLES = {
 }
 
 STEP_TITLES_EN = {
-    "orchestrator": "Orchestrator",
+    "orchestrator": "Main Orchestrator (.env)",
     "ssh": "Optional SSH",
-    "sse": "SSE platform",
-    "targets": "Default targets (multi-Orchestrator / multi-SSE)",
+    "sse": "SSE (Axis) in .env",
+    "targets": "Targets: add more Orchestrators / SSE",
     "security": "MCP security",
     "transport": "MCP transport",
     "panel": "Web panel",
     "updates": "Updates",
     "dashboard": "Remote dashboard",
+}
+
+STEP_DESCS = {
+    "orchestrator": "Conexión principal del MCP: URL y credenciales (API key o usuario+password) que quedan en .env. Es el Orchestrator por defecto si no hay targets guardados.",
+    "ssh": "Solo si usarás comandos ECOS por SSH además de la API. Off por defecto.",
+    "sse": "Plataforma SSE (Axis Security) única en .env. Para VARIAS plataformas SSE usa el paso Targets.",
+    "targets": "Aquí se agregan GUARDADOS en el registro: Orquestador #2, #3… y plataformas SSE adicionales, cada uno con su nombre, y se elige cuál queda por defecto. Se pueden probar, duplicar, renombrar y eliminar.",
+    "security": "Escrituras del MCP (off por defecto), límites y auditoría.",
+    "transport": "Host/puerto y auth del transporte MCP (HTTP/SSE/stdio).",
+    "panel": "Puerto del panel web, contraseña, bloqueo de login, usuarios multi-rol y certificados TLS.",
+    "updates": "Updater web desde GitHub (repo, rama, credenciales si es privado).",
+    "dashboard": "Despliegue del dashboard en OTRO servidor Linux por SSH.",
+}
+
+STEP_DESCS_EN = {
+    "orchestrator": "Main MCP connection: URL and credentials (API key or user+password) saved to .env. Used as default when no registry targets exist.",
+    "ssh": "Only if you will also run ECOS commands over SSH. Off by default.",
+    "sse": "Single SSE (Axis Security) platform in .env. For SEVERAL SSE platforms use the Targets step.",
+    "targets": "Saved in the registry here: Orchestrator #2, #3… and additional SSE platforms, each with its own name; pick the default one. You can test, duplicate, rename and delete them.",
+    "security": "MCP write tools (off by default), limits and audit log.",
+    "transport": "MCP transport host/port and auth (HTTP/SSE/stdio).",
+    "panel": "Web panel port, password, login lockout, multi-role users and TLS certificates.",
+    "updates": "Web updater from GitHub (repo, branch, credentials if private).",
+    "dashboard": "Deploy the dashboard on ANOTHER Linux server over SSH.",
 }
 
 EN_LABELS = {
@@ -283,6 +307,8 @@ def public_config(path: Path | None = None) -> dict:
                     "id": setting.step,
                     "title": STEP_TITLES.get(setting.step, setting.step),
                     "title_en": STEP_TITLES_EN.get(setting.step, setting.step),
+                    "desc": STEP_DESCS.get(setting.step, ""),
+                    "desc_en": STEP_DESCS_EN.get(setting.step, ""),
                 }
             )
     return {
