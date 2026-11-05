@@ -153,11 +153,11 @@ LOGIN_WINDOW_SECONDS = _positive_number("EC_ADMIN_LOGIN_WINDOW_SECONDS", 60.0)
 
 
 def _store_path() -> Path:
-    return Path(os.environ.get("EC_ADMIN_STORE", Path.cwd() / ".ec-admin.json"))
+    return Path(os.environ.get("EC_ADMIN_STORE") or Path.cwd() / ".ec-admin.json")
 
 
 def _backup_dir() -> Path:
-    return Path(os.environ.get("EC_ADMIN_BACKUP_DIR", Path.cwd() / ".ec-admin-backups"))
+    return Path(os.environ.get("EC_ADMIN_BACKUP_DIR") or Path.cwd() / ".ec-admin-backups")
 
 
 def _latest_backup(directory: Path) -> Path | None:
@@ -179,7 +179,7 @@ def _snapshot_backup(label: str) -> str | None:
             name = f"{ts}-{label}-{os.getpid()}"
             target = directory / name
         target.mkdir()
-        env_file = Path(os.environ.get("EC_MCP_ENV_FILE", Path.cwd() / ".env"))
+        env_file = Path(os.environ.get("EC_MCP_ENV_FILE") or Path.cwd() / ".env")
         store_file = _store_path()
         prev = _latest_backup(directory)
         env_changed: list[str] = []
@@ -224,7 +224,7 @@ def _restore_backup(name: str) -> dict:
     target = directory / name
     if not name or ".." in name or not target.is_dir():
         raise ValueError("Backup no encontrado")
-    env_file = Path(os.environ.get("EC_MCP_ENV_FILE", Path.cwd() / ".env"))
+    env_file = Path(os.environ.get("EC_MCP_ENV_FILE") or Path.cwd() / ".env")
     store_file = _store_path()
     restored = []
     if (target / "env").is_file():
@@ -264,7 +264,7 @@ def _admin_password() -> str | None:
 
 
 def _password_file() -> Path:
-    return Path(os.environ.get("EC_ADMIN_PASSWORD_FILE", Path.cwd() / ".ec-admin-pass"))
+    return Path(os.environ.get("EC_ADMIN_PASSWORD_FILE") or Path.cwd() / ".ec-admin-pass")
 
 
 def _loopback_only(host: str) -> bool:
@@ -656,7 +656,7 @@ async def api_apply(request):
     for key in ("EC_DEFAULT_ORCHESTRATOR", "EC_DEFAULT_SSE"):
         if os.environ.get(key, "").strip():
             wanted[key] = os.environ[key]
-    env_path = Path(os.environ.get("EC_MCP_ENV_FILE", Path.cwd() / ".env"))
+    env_path = Path(os.environ.get("EC_MCP_ENV_FILE") or Path.cwd() / ".env")
     lines = []
     if env_path.is_file():
         lines = env_path.read_text(encoding="utf-8").splitlines()
@@ -853,7 +853,7 @@ async def api_users_delete(request):
 
 
 def _tls_dir() -> Path:
-    return Path(os.environ.get("EC_ADMIN_TLS_DIR", Path.cwd() / ".ec-admin-tls"))
+    return Path(os.environ.get("EC_ADMIN_TLS_DIR") or Path.cwd() / ".ec-admin-tls")
 
 
 def _tls_paths() -> tuple[Path, Path]:
