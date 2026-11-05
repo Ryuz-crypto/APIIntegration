@@ -598,6 +598,41 @@ def test_page_has_wizard_quick_chips():
     assert "desc_'+LANG" in PAGE
 
 
+def test_probe_mcp_transport_reports_up_and_falls_back_to_loopback(monkeypatch):
+    from ec_mcp import admin_services
+
+    class FakeResp:
+        status_code = 200
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url):
+            assert "127.0.0.1" in url or "localhost" in url
+            return FakeResp()
+
+    monkeypatch.setattr(admin_services.httpx, "Client", FakeClient)
+    monkeypatch.setenv("EC_MCP_HOST", "0.0.0.0")
+    monkeypatch.setenv("EC_MCP_PORT", "8000")
+    result = admin_services.probe_mcp_transport()
+    assert result["state"] == "up" and result["status_code"] == 200
+    assert "127.0.0.1" in result["url"]
+
+
+def test_page_has_msp_wizard_home_donate_and_menu_fix():
+    assert "wizHomeHtml" in PAGE and "wizSkipAll" in PAGE and "stepSkippable" in PAGE
+    assert "DONATE_URL" in PAGE and "powered-footer" in PAGE
+    assert "overflow:hidden;transition:background" not in PAGE
+    assert "closeMenusOnOutsideClick" in PAGE
+
+
 def test_new_routes_registered():
     paths = {route.path for route in build_admin_app().routes}
     assert {
