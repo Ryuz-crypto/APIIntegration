@@ -185,6 +185,11 @@ var I18N7={es:{app_reset:'Restablecer apariencia',app_reset_done:'Apariencia res
 for(var k7 in I18N7.es){I18N.es[k7]=I18N7.es[k7]}
 for(var k7 in I18N7.en){I18N.en[k7]=I18N7.en[k7]}
 
+var I18N8={es:{q_add_orch:'+ Agregar otro Orchestrator',q_add_sse:'+ Agregar plataforma SSE',q_main_orch:'Orchestrator principal (.env)',q_sse_env:'SSE en .env',q_panel:'Panel web',targets_add_more:'aquí se agregan #2, #3…'},en:{q_add_orch:'+ Add another Orchestrator',q_add_sse:'+ Add SSE platform',q_main_orch:'Main Orchestrator (.env)',q_sse_env:'SSE in .env',q_panel:'Web panel',targets_add_more:'add more here (#2, #3…)'}};
+for(var k8 in I18N8.es){I18N.es[k8]=I18N8.es[k8]}
+for(var k8 in I18N8.en){I18N.en[k8]=I18N8.en[k8]}
+
+
 
 
 
@@ -299,11 +304,19 @@ function wizFieldHtml(f){
  var req=f.required?' <span class="req">*</span>':'';
  return '<div class="field" data-field="'+f.key+'" style="'+(wizDependsOk(f)?'':'display:none')+'"><label>'+esc(f['label_'+LANG]||f.label)+req+input+'</label>'+(f.secret?'<span class="secret-note">'+(f.configured?t('secret_set'):t('secret_unset'))+'</span>':'')+((f['help_'+LANG]||f.help)?'<span class="help">'+esc(f['help_'+LANG]||f.help)+'</span>':'')+'</div>';
 }
+
+function quickChipsHtml(steps){
+ var map=[['targets','q_add_orch'],['targets','q_add_sse'],['orchestrator','q_main_orch'],['sse','q_sse_env'],['panel','q_panel']];
+ var h='<div class="wizbar">';
+ map.forEach(function(m){var st=steps.find(function(x){return x.id===m[0]});if(st)h+='<button class="secondary" style="padding:4px 9px;font-size:.75rem" onclick="wizGoto(\''+m[0]+'\')">'+t(m[1])+'</button>'});
+ return h+'</div>';
+}
+function wizGoto(id){var i=WIZARD.steps.findIndex(function(x){return x.id===id});if(i>=0){WSTEP=i;wizRenderStep()}}
 function wizRenderStep(){
  var steps=WIZARD.steps,s=steps[WSTEP],fields=wizFields(s.id);
  var bar=steps.map(function(st,i){return '<span class="badge" style="'+(i===WSTEP?'border-color:#38bdf8;color:#bae6fd':'')+'">'+(i+1)+' '+esc(st['title_'+LANG]||st.title)+'</span>'}).join(' ');
  var targets=s.id==='targets'?wizTargetsHtml():'';
- q('#workspace').innerHTML='<section class="panel"><h2>'+t('wiz_step',{a:WSTEP+1,b:steps.length})+' '+esc(s['title_'+LANG]||s.title)+'</h2><div class="wizbar">'+bar+'</div>'+
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('wiz_step',{a:WSTEP+1,b:steps.length})+' '+esc(s['title_'+LANG]||s.title)+'</h2><div class="wizbar">'+bar+'</div>'+'<p class="help">'+esc(s['desc_'+LANG]||s.desc||'')+'</p>'+quickChipsHtml(steps)+
   (s.id==='targets'?'<p class="help">'+t('wiz_targets_help')+'</p>':'')+
   '<div class="group"><div class="grid">'+fields.map(wizFieldHtml).join('')+'</div></div>'+targets+
   '<div class="actions"><button class="secondary" onclick="wizBack()" '+(WSTEP===0?'disabled':'')+'>'+t('btn_back')+'</button><button onclick="wizNext()">'+(WSTEP===steps.length-1?t('btn_review'):t('btn_next'))+'</button></div></section>';
@@ -364,9 +377,9 @@ function wizTargetsHtml(){
  var st=WIZARD.state||{};
  var orch=(st.orchestrators||[]).map(function(o){return wizTargetRow(o,'orchestrator','url')}).join('')||'<p class="help">'+t('no_orch')+'</p>';
  var sse=(st.sse_platforms||[]).map(function(o){return wizTargetRow(o,'sse','base_url')}).join('')||'<p class="help">'+t('no_sse')+'</p>';
- return '<div class="group"><h3>Orquestadores</h3>'+orch+
+ return '<div class="group"><h3>'+t('h2_orch')+' · '+t('targets_add_more')+'</h3>'+orch+
   '<div class="grid" style="margin-top:10px"><label>'+t('f_name')+'<input id="wo-name" placeholder="prod"></label><label>'+t('f_url')+'<input id="wo-url" placeholder="https://orchestrator.example.com"></label><label>'+t('f_apikey')+'<input id="wo-key" type="password"></label><label>'+t('f_user')+'<input id="wo-user"></label><label>'+t('f_pass')+'<input id="wo-pass" type="password"></label></div><div class="actions"><button onclick="wizSaveOrch()">'+t('btn_save_orch')+'</button></div></div>'+
-  '<div class="group"><h3>Plataformas SSE</h3>'+sse+
+  '<div class="group"><h3>'+t('h2_sse')+' · '+t('targets_add_more')+'</h3>'+sse+
   '<div class="grid" style="margin-top:10px"><label>'+t('f_name')+'<input id="ws-name" placeholder="axis-prod"></label><label>'+t('f_baseurl')+'<input id="ws-url" placeholder="https://admin-api.axissecurity.com"></label><label>'+t('f_token')+'<input id="ws-token" type="password"></label><label>'+t('f_timeout')+'<input id="ws-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="wizSaveSse()">'+t('btn_save_sse')+'</button></div></div>';
 }
 async function reloadAfterMutation(){
