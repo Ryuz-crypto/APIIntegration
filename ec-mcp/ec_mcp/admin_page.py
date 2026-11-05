@@ -334,7 +334,7 @@ function wizRenderStep(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('wiz_step',{a:WSTEP+1,b:steps.length})+' '+esc(s['title_'+LANG]||s.title)+'</h2><div class="wizbar">'+bar+'</div>'+'<p class="help">'+esc(s['desc_'+LANG]||s.desc||'')+'</p>'+quickChipsHtml(steps)+
   (s.id==='targets'?'<p class="help">'+t('wiz_targets_help')+'</p>':'')+
   '<div class="group"><div class="grid">'+fields.map(wizFieldHtml).join('')+'</div></div>'+targets+
-  '<div class="actions">'+(WSTEP>=0&&stepSkippable(s)?'<button class="secondary" onclick="wizSkip()">'+t('btn_skip')+'</button>':'')+'<button class="secondary" onclick="wizBack()" '+(WSTEP===0?'disabled':'')+'>'+t('btn_back')+'</button><button onclick="wizNext()">'+(WSTEP===steps.length-1?t('btn_review'):t('btn_next'))+'</button></div></section>';
+  '<div class="actions">'+(WSTEP>=0?'<button class="secondary" onclick="wizHome()" title="'+t('wiz_home_title')+'">&#8962;</button>':'')+(WSTEP>=0&&stepSkippable(s)?'<button class="secondary" onclick="wizSkip()">'+t('btn_skip')+'</button>':'')+'<button class="secondary" onclick="wizBack()" '+(WSTEP===0?'disabled':'')+'>'+t('btn_back')+'</button><button onclick="wizNext()">'+(WSTEP===steps.length-1?t('btn_review'):t('btn_next'))+'</button></div></section>';
  fields.forEach(function(f){var el=q('#wiz-'+f.key);if(el){if(!f.secret)el.value=(WDRAFT[f.key]!==undefined?WDRAFT[f.key]:f.value);el.addEventListener('change',function(){WDRAFT[f.key]=el.value;wizRefreshDepends()})}});
  wizRefreshDepends();
 }
@@ -359,6 +359,7 @@ async function wizNext(){
  await wizReview();
 }
 function wizBack(){if(WSTEP>0){WSTEP--;wizRenderStep()}else if(WSTEP===0){WSTEP=-1;wizRenderStep()}}
+function wizHome(){WSTEP=-1;wizRenderStep()}
 function wizHomeHtml(){
  var orchs=STATE.orchestrators||[], sses=STATE.sse_platforms||[];
  var sdwan, sse;

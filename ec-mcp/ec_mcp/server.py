@@ -327,6 +327,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
         write_timestamps.append(now)
 
+    def require_sse_writes(operation: str = "") -> None:
+        if not settings.allow_sse_write_tools:
+            raise SecurityError("SSE (Axis) write tools are disabled (EC_ALLOW_SSE_WRITE_TOOLS != true)")
+        require_writes(operation)
+
     def json_result(payload, max_chars: int) -> str:
         # Reuse the closed serializer so every helper response remains valid JSON.
         return closed_json_result(payload, max_chars)[0]
@@ -3115,7 +3120,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Create an Axis Security application group (Tag). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true to apply. Remember to call axis_commit to persist."""
         try:
-            require_writes("axis_create_tag")
+            require_sse_writes("axis_create_tag")
             body = build_tag_body(name, json.loads(applications_json) if applications_json else None)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/Tags", "method": "POST", "body": body}}, settings.max_output_chars)
@@ -3131,7 +3136,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Update an Axis Security application group (Tag). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_update_tag")
+            require_sse_writes("axis_update_tag")
             body: dict[str, Any] = {}
             if name:
                 body["name"] = name
@@ -3153,7 +3158,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Delete an Axis Security application group (Tag). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_delete_tag")
+            require_sse_writes("axis_delete_tag")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Tags/{tag_id}", "method": "DELETE"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3198,7 +3203,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Create an Axis Security application (Web/Rdp/Ssh/Database/NetworkRange/Saas/...). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_create_application")
+            require_sse_writes("axis_create_application")
             body = build_application_body(
                 name, app_type, connector_zone_id,
                 enabled=enabled,
@@ -3220,7 +3225,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Update an Axis Security application. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_update_application")
+            require_sse_writes("axis_update_application")
             body: dict[str, Any] = {}
             if name:
                 body["name"] = name
@@ -3243,7 +3248,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Delete an Axis Security application. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_delete_application")
+            require_sse_writes("axis_delete_application")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Applications/{app_id}", "method": "DELETE"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3290,7 +3295,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Create an Axis Security connector; the response includes the installation command. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_create_connector")
+            require_sse_writes("axis_create_connector")
             body = build_connector_body(name, connector_zone_id, enabled=enabled, primary_public_ip=primary_public_ip)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/Connectors", "method": "POST", "body": body}}, settings.max_output_chars)
@@ -3306,7 +3311,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Update an Axis Security connector. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_update_connector")
+            require_sse_writes("axis_update_connector")
             body: dict[str, Any] = {"enabled": enabled}
             if name:
                 body["name"] = name
@@ -3326,7 +3331,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Delete an Axis Security connector. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_delete_connector")
+            require_sse_writes("axis_delete_connector")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Connectors/{connector_id}", "method": "DELETE"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3341,7 +3346,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Regenerate the installation command for an existing Axis Security connector. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_regenerate_connector")
+            require_sse_writes("axis_regenerate_connector")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Connectors/{connector_id}/regenerate", "method": "POST"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3377,7 +3382,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Create an Axis Security connector zone (Regular/InternetZone/ExternalPublicZone for Access/LogStreaming). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_create_connector_zone")
+            require_sse_writes("axis_create_connector_zone")
             body = build_connector_zone_body(name, zone_type, purpose, description=description)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/ConnectorZones", "method": "POST", "body": body}}, settings.max_output_chars)
@@ -3393,7 +3398,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Update an Axis Security connector zone. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_update_connector_zone")
+            require_sse_writes("axis_update_connector_zone")
             body: dict[str, Any] = {}
             if name:
                 body["name"] = name
@@ -3419,7 +3424,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Delete an Axis Security connector zone. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_delete_connector_zone")
+            require_sse_writes("axis_delete_connector_zone")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/ConnectorZones/{zone_id}", "method": "DELETE"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3455,7 +3460,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Create an Axis Security custom IP category (comma-separated IPs/CIDRs). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_create_ip_category")
+            require_sse_writes("axis_create_ip_category")
             body = build_ip_category_body(
                 name,
                 included_ips=[ip.strip() for ip in included_ips.split(",") if ip.strip()] or None,
@@ -3477,7 +3482,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Delete an Axis Security custom IP category. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_delete_ip_category")
+            require_sse_writes("axis_delete_ip_category")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/IpCategories/{category_id}", "method": "DELETE"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3513,7 +3518,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Create an Axis Security web category (comma-separated domains/URLs). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_create_web_category")
+            require_sse_writes("axis_create_web_category")
             body = build_web_category_body(
                 name,
                 included_domains=[d.strip() for d in included_domains.split(",") if d.strip()] or None,
@@ -3535,7 +3540,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Delete an Axis Security web category. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_delete_web_category")
+            require_sse_writes("axis_delete_web_category")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/WebCategories/{category_id}", "method": "DELETE"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3561,7 +3566,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Create an Axis Security SSL exclusion (Predefined/Custom). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_create_ssl_exclusion")
+            require_sse_writes("axis_create_ssl_exclusion")
             body = build_ssl_exclusion_body(
                 name, exclusion_type,
                 excluded_domains=[d.strip() for d in excluded_domains.split(",") if d.strip()] or None,
@@ -3581,7 +3586,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Delete an Axis Security SSL exclusion. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_delete_ssl_exclusion")
+            require_sse_writes("axis_delete_ssl_exclusion")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/SslExclusions/{exclusion_id}", "method": "DELETE"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3607,7 +3612,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Create an Axis Security user group. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_create_group")
+            require_sse_writes("axis_create_group")
             body = build_group_body(name, users=json.loads(users_json) if users_json else None, description=description)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/Groups", "method": "POST", "body": body}}, settings.max_output_chars)
@@ -3623,7 +3628,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Delete an Axis Security user group. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_delete_group")
+            require_sse_writes("axis_delete_group")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Groups/{group_id}", "method": "DELETE"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3659,7 +3664,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Create an Axis Security user. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_create_user")
+            require_sse_writes("axis_create_user")
             body = build_user_body(
                 user_name, email, first_name, last_name,
                 enabled=enabled,
@@ -3680,7 +3685,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Delete an Axis Security user. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_delete_user")
+            require_sse_writes("axis_delete_user")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Users/{user_id}", "method": "DELETE"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3716,7 +3721,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Create an Axis Security location. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_create_location")
+            require_sse_writes("axis_create_location")
             body = build_location_body(name)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/Locations", "method": "POST", "body": body}}, settings.max_output_chars)
@@ -3732,7 +3737,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Delete an Axis Security location. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_delete_location")
+            require_sse_writes("axis_delete_location")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Locations/{location_id}", "method": "DELETE"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3758,7 +3763,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Create an Axis Security sub-location (comma-separated CIDRs). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_create_sub_location")
+            require_sse_writes("axis_create_sub_location")
             body = build_sub_location_body(
                 name, location_id,
                 [ip.strip() for ip in ip_ranges.split(",") if ip.strip()],
@@ -3777,7 +3782,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Delete an Axis Security sub-location. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_delete_sub_location")
+            require_sse_writes("axis_delete_sub_location")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Locations/{location_id}/SubLocations/{sub_location_id}", "method": "DELETE"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3814,7 +3819,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Create an Axis Security tunnel (IPSec). auth_psk is the pre-shared key. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_create_tunnel")
+            require_sse_writes("axis_create_tunnel")
             body = build_tunnel_body(name, location_id, auth_id, auth_psk)
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": "/Tunnels", "method": "POST", "body": body}}, settings.max_output_chars)
@@ -3830,7 +3835,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Delete an Axis Security tunnel. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
-            require_writes("axis_delete_tunnel")
+            require_sse_writes("axis_delete_tunnel")
             if not confirm:
                 return json_result({"dry_run": True, "would_execute": {"path": f"/Tunnels/{tunnel_id}", "method": "DELETE"}}, settings.max_output_chars)
             axis = require_axis(target)
@@ -3866,7 +3871,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target: str = "") -> str:
         """Commit all pending Axis Security changes. Without confirm=true returns a dry-run notice; with confirm=true (and EC_ALLOW_WRITE_TOOLS=true) commits the staged changes."""
         try:
-            require_writes("axis_commit")
+            require_sse_writes("axis_commit")
             if not confirm:
                 return json_result(
                     {

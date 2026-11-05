@@ -44,6 +44,7 @@ class Settings:
     dashboard_refresh_seconds: int = 30
 
     allow_write_tools: bool = False
+    allow_sse_write_tools: bool = False
     allow_dangerous_writes: bool = False
     max_output_chars: int = 12000
     api_cache_ttl: float = 30.0
@@ -90,6 +91,7 @@ class Settings:
             dashboard_dir=os.environ.get("EC_DASHBOARD_DIR", "/var/www/ec-mcp-dashboard"),
             dashboard_refresh_seconds=int(os.environ.get("EC_DASHBOARD_REFRESH_SECONDS", "30")),
             allow_write_tools=os.environ.get("EC_ALLOW_WRITE_TOOLS", "false").lower() == "true",
+            allow_sse_write_tools=os.environ.get("EC_ALLOW_SSE_WRITE_TOOLS", "false").lower() == "true",
             allow_dangerous_writes=os.environ.get("EC_ALLOW_DANGEROUS_WRITES", "false").lower() == "true",
             max_writes_per_minute=int(os.environ.get("EC_MAX_WRITES_PER_MINUTE", "10")),
             max_output_chars=int(os.environ.get("EC_MAX_OUTPUT_CHARS", "12000")),
