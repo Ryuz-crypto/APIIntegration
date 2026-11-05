@@ -393,7 +393,7 @@ def load_sse_from_env(blob: str = "") -> dict[str, SseTarget]:
 
 
 def registry_path() -> Path:
-    return Path(os.environ.get("EC_ADMIN_STORE", Path.cwd() / ".ec-admin.json"))
+    return Path(os.environ.get("EC_ADMIN_STORE") or Path.cwd() / ".ec-admin.json")
 
 
 def load_registry() -> TargetRegistry:

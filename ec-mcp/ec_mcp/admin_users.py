@@ -34,7 +34,7 @@ class UserError(ValueError):
 
 
 def users_path() -> Path:
-    return Path(os.environ.get("EC_ADMIN_USERS_FILE", Path.cwd() / ".ec-admin-users.json"))
+    return Path(os.environ.get("EC_ADMIN_USERS_FILE") or Path.cwd() / ".ec-admin-users.json")
 
 
 def hash_password(password: str) -> str:

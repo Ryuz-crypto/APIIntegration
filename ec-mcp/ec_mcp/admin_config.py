@@ -262,7 +262,7 @@ _BRANCH = re.compile(r"^[A-Za-z0-9._/-]+$")
 
 
 def env_path() -> Path:
-    return Path(os.environ.get("EC_MCP_ENV_FILE", Path.cwd() / ".env"))
+    return Path(os.environ.get("EC_MCP_ENV_FILE") or Path.cwd() / ".env")
 
 
 def read_env(path: Path | None = None) -> dict[str, str]:
