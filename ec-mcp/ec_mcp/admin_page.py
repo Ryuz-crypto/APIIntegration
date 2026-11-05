@@ -157,7 +157,7 @@ function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_titl
 
 var DONATE_URL='https://github.com/sponsors/Ryuz-crypto';
 function footerHtml(){return '<footer class="powered-footer"><span>'+t('credits')+': ec-mcp · Ryuz-crypto</span><a class="donate" href="'+DONATE_URL+'" target="_blank" rel="noopener">☕ '+t('donate')+'</a></footer>'}
-function userChip(){return '<details class="menu"><summary class="chip">'+esc(ME&&ME.user?ME.user:'')+(ME&&ME.role&&ME.role!=='admin'?' · '+esc(ME.role):'')+'</summary><div class="menu-body"><button class="secondary" onclick="showTab(\'users\')">'+t('menu_users')+'</button><button class="secondary" onclick="openCustom()">'+t('menu_custom')+'</button><button class="danger" onclick="logout()">'+t('nav_out')+'</button></div></details>'}
+function userChip(){return '<details class="menu"><summary class="chip">'+esc(ME&&ME.user?ME.user:'')+(ME&&ME.role&&ME.role!=='admin'?' · '+esc(ME.role):'')+'</summary><div class="menu-body"><button class="secondary" onclick="showTab(\'users\')">'+t('menu_users')+'</button><button class="secondary" onclick="openBackups()">'+t('menu_backups')+'</button><button class="secondary" onclick="openCustom()">'+t('menu_custom')+'</button><button class="danger" onclick="logout()">'+t('nav_out')+'</button></div></details>'}
 
 function chromeHtml(){return '<span class="chrome"><button class="secondary" style="padding:4px 9px;font-size:.75rem" onclick="setLang(LANG===\'es\'?\'en\':\'es\')">'+(LANG==='es'?'EN':'ES')+'</button><button class="secondary" style="padding:4px 9px;font-size:.75rem" title="'+t('menu_custom')+'" onclick="openCustom()">&#9881;</button></span>'}
 function applySavedTheme(){
@@ -204,6 +204,11 @@ var I18N10={es:{tools_filter:'Filtrar por tecnología:',dom_all:'Todas',dom_sdwa
 for(var k10 in I18N10.es){I18N.es[k10]=I18N10.es[k10]}
 for(var k10 in I18N10.en){I18N.en[k10]=I18N10.en[k10]}
 
+var I18N11={es:{pick_existing:'Orquestador guardado:',new_entry:'nuevo',menu_backups:'Backups / Rollback',bak_title:'Backups y rollback',bak_desc:'Cada guardado crea un backup automático de .env y del registro (aquí se listan los cambios). Puedes crear backups manuales y restaurar (rollback) cualquiera; antes de restaurar, el estado actual se respalda solo.',bak_create:'Crear backup ahora',bak_restore:'Restaurar',bak_restore_confirm:'¿Restaurar el estado desde',bak_empty:'Sin backups todavía.'},en:{pick_existing:'Saved Orchestrator:',new_entry:'new',menu_backups:'Backups / Rollback',bak_title:'Backups and rollback',bak_desc:'Every save creates an automatic backup of .env and the registry (changes listed here). You can create manual backups and restore any of them; the current state is backed up automatically before restoring.',bak_create:'Create backup now',bak_restore:'Restore',bak_restore_confirm:'Restore state from',bak_empty:'No backups yet.'}};
+for(var k11 in I18N11.es){I18N.es[k11]=I18N11.es[k11]}
+for(var k11 in I18N11.en){I18N.en[k11]=I18N11.en[k11]}
+
+
 
 
 
@@ -219,7 +224,8 @@ function esc(v){return String(v==null?'':v).replace(/[&<>"]/g,function(c){return
 async function api(path,body){
  var options=body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)};
  var response=await fetch(path,options);
- var data=await response.json();
+ var data;
+ try{data=await response.json()}catch(e){data={ok:false,error:(await response.text()).slice(0,300)||('HTTP '+response.status)}}
  if(response.status===401){AUTHED=false;renderLogin();throw new Error('Sesión expirada');}
  return data;
 }
@@ -279,8 +285,11 @@ async function loadAll(){
 function renderOrchestrators(){
  var list=(STATE.orchestrators||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_probe')+'</button><button class="secondary" onclick="dupTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_dup')+'</button><button class="secondary" onclick="renTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_ren')+'</button><button class="secondary" onclick="setDefaultTarget(\'orchestrator\',\'+esc(o.name)+\')">'+t('btn_default')+'</button><button class="secondary" onclick="editOrch(\'+'+esc(o.name)+'\')">'+t('btn_edit')+'</button><button class="danger" onclick="deleteOrch(\'+'+esc(o.name)+'\')">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">'+t('badge_active')+'</span>':'')+(o.default?'<span class="badge">'+t('badge_default')+'</span>':'')+'<br><span class="help">'+esc(o.url)+'</span> <span id="probe-orchestrator-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">'+t('no_orch')+'</p>';
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_orch')+'</h2>'+list+
- '<div class="group"><h3>'+t('add_update')+'</h3><div class="grid"><label>'+t('f_name')+'<input id="o-name"></label><label>'+t('f_url')+'<input id="o-url" placeholder="https://orchestrator.example.com"></label><label>'+t('f_apikey')+'<input id="o-key" type="password"></label><label>'+t('f_user')+'<input id="o-user"></label><label>'+t('f_pass')+'<input id="o-password" type="password"></label><label>'+t('f_tls')+'<select id="o-tls"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select></label><label>'+t('f_ssh_user')+'<input id="o-ssh-user"></label><label>'+t('f_ssh_pass')+'<input id="o-ssh-password" type="password"></label><label>'+t('f_enable')+'<input id="o-enable" type="password"></label><label>'+t('f_ssh_host')+'<input id="o-ssh-host"></label></div><div class="actions"><button onclick="saveOrch()">'+t('btn_save')+'</button><button class="secondary" onclick="applyOrch()">'+t('apply_env')+'</button></div></div></section>';
+ '<div class="group"><h3>'+t('add_update')+'</h3>'+orchPickerHtml()+'<div class="grid"><label>'+t('f_name')+'<input id="o-name"></label><label>'+t('f_url')+'<input id="o-url" placeholder="https://orchestrator.example.com"></label><label>'+t('f_apikey')+'<input id="o-key" type="password"></label><label>'+t('f_user')+'<input id="o-user"></label><label>'+t('f_pass')+'<input id="o-password" type="password"></label><label>'+t('f_tls')+'<select id="o-tls"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select></label><label>'+t('f_ssh_user')+'<input id="o-ssh-user"></label><label>'+t('f_ssh_pass')+'<input id="o-ssh-password" type="password"></label><label>'+t('f_enable')+'<input id="o-enable" type="password"></label><label>'+t('f_ssh_host')+'<input id="o-ssh-host"></label></div><div class="actions"><button onclick="saveOrch()">'+t('btn_save')+'</button><button class="secondary" onclick="applyOrch()">'+t('apply_env')+'</button></div></div></section>';
 }
+
+function orchPickerHtml(){var l=STATE.orchestrators||[];if(!l.length)return '';return '<label style="margin:0 0 10px;display:flex;gap:8px;align-items:center">'+t('pick_existing')+'<select id="o-pick" style="width:auto;min-height:34px" onchange="if(this.value)editOrch(this.value)"><option value="">— '+t('new_entry')+' —</option>'+l.map(function(o){return '<option value="'+esc(o.name)+'">'+esc(o.name)+'</option>'}).join('')+'</select></label>'}
+function ssePickerHtml(){var l=STATE.sse_platforms||[];if(!l.length)return '';return '<label style="margin:0 0 10px;display:flex;gap:8px;align-items:center">'+t('pick_existing')+'<select id="s-pick" style="width:auto;min-height:34px" onchange="if(this.value)editSse(this.value)"><option value="">— '+t('new_entry')+' —</option>'+l.map(function(o){return '<option value="'+esc(o.name)+'">'+esc(o.name)+'</option>'}).join('')+'</select></label>'}
 function editOrch(name){var o=(STATE.orchestrators||[]).find(function(x){return x.name===name});if(!o)return;q('#o-name').value=o.name;q('#o-url').value=o.url;q('#o-tls').value=String(o.verify_tls);q('#o-ssh-user').value=o.ssh_user||'';q('#o-ssh-host').value=o.ssh_host||''}
 async function saveOrch(){
  try{var r=await api('/api/orchestrators',{name:q('#o-name').value.trim(),url:q('#o-url').value.trim(),api_key:q('#o-key').value,username:q('#o-user').value,password:q('#o-password').value,verify_tls:q('#o-tls').value==='true',ssh_user:q('#o-ssh-user').value,ssh_password:q('#o-ssh-password').value,ssh_enable_password:q('#o-enable').value,ssh_host:q('#o-ssh-host').value});notice(r.message||r.error,r.ok?'ok':'err');STATE=await api('/api/state');renderOrchestrators()}catch(e){notice(e.message,'err')}
@@ -290,7 +299,7 @@ async function applyOrch(){try{var r=await api('/api/apply',{name:q('#o-name').v
 function renderSse(){
  var list=(STATE.sse_platforms||[]).map(function(o){return '<div class="orch"><span class="orch-actions"><button class="secondary" onclick="probeTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_probe')+'</button><button class="secondary" onclick="dupTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_dup')+'</button><button class="secondary" onclick="renTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_ren')+'</button><button class="secondary" onclick="setDefaultTarget(\'sse\',\'+esc(o.name)+\')">'+t('btn_default')+'</button><button class="secondary" onclick="editSse(\'+'+esc(o.name)+'\')">'+t('btn_edit')+'</button><button class="danger" onclick="deleteSse(\'+'+esc(o.name)+'\')">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class="badge">'+t('badge_active')+'</span>':'')+(o.default?'<span class="badge">'+t('badge_default')+'</span>':'')+' <span class="badge">'+esc(o.provider)+'</span><br><span class="help">'+esc(o.base_url)+'</span> <span id="probe-sse-'+esc(o.name)+'"></span></div>'}).join('')||'<p class="help">'+t('no_sse')+'</p>';
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_sse')+'</h2><p>Administra N plataformas SSE de forma independiente (p. ej. varias instancias de Axis Security). Cada una guarda su propio token y URL.</p>'+list+
- '<div class="group"><h3>'+t('add_update_sse')+'</h3><div class="grid"><label>'+t('f_name')+'<input id="s-name" placeholder="axis-prod"></label><label>'+t('f_provider')+'<select id="s-provider"><option>axis</option></select></label><label>'+t('f_baseurl')+'<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>'+t('f_token')+'<input id="s-token" type="password"></label><label>Verificar TLS<select id="s-tls"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select></label><label>'+t('f_timeout')+'<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">'+t('btn_save')+'</button><button class="secondary" onclick="applySse()">'+t('apply_env')+'</button></div></div></section>';
+ '<div class="group"><h3>'+t('add_update_sse')+'</h3>'+ssePickerHtml()+'<div class="grid"><label>'+t('f_name')+'<input id="s-name" placeholder="axis-prod"></label><label>'+t('f_provider')+'<select id="s-provider"><option>axis</option></select></label><label>'+t('f_baseurl')+'<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>'+t('f_token')+'<input id="s-token" type="password"></label><label>Verificar TLS<select id="s-tls"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select></label><label>'+t('f_timeout')+'<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">'+t('btn_save')+'</button><button class="secondary" onclick="applySse()">'+t('apply_env')+'</button></div></div></section>';
 }
 function editSse(name){var o=(STATE.sse_platforms||[]).find(function(x){return x.name===name});if(!o)return;q('#s-name').value=o.name;q('#s-provider').value=o.provider;q('#s-url').value=o.base_url;q('#s-tls').value=String(o.verify_tls);q('#s-timeout').value=o.timeout}
 async function saveSse(){
@@ -594,6 +603,22 @@ async function dbgExport(){
 async function dbgClear(){
  if(!confirm(t('dbg_clear_confirm')))return;
  try{var r=await api('/api/debug/clear',{});notice(r.message||r.error,r.ok?'ok':'err');await dbgRefresh()}catch(e){notice(e.message,'err')}
+}
+
+async function openBackups(){if(!q('#bak-dlg'))q('#app').innerHTML+=backupsDialogHtml();var d=q('#bak-dlg');await loadBackups();d.showModal?d.showModal():d.setAttribute('open','')}
+function closeBackups(){var d=q('#bak-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
+function backupsDialogHtml(){return '<dialog id="bak-dlg" style="max-width:760px;width:calc(100% - 30px)"><h3>'+t('bak_title')+'</h3><p class="help">'+t('bak_desc')+'</p><div class="actions"><button onclick="createBackup()">'+t('bak_create')+'</button><button class="secondary" onclick="closeBackups()">'+t('custom_cancel')+'</button></div><div id="bak-list"><p class="help">'+t('checking')+'</p></div></dialog>'}
+async function loadBackups(){
+ try{
+  var r=await api('/api/backups');
+  var rows=(r.backups||[]).map(function(b){return '<div class="orch"><strong>'+esc(b.name)+'</strong> <span class="badge">'+esc(b.label||'')+'</span><br><span class="help">env: '+(b.env_changed&&b.env_changed.length?b.env_changed.slice(0,10).map(esc).join(', '):'—')+' · registro: '+(b.registry_changed&&b.registry_changed.length?b.registry_changed.map(esc).join(', '):'—')+'</span><span class="orch-actions"><button class="danger" onclick="restoreBackup(\''+esc(b.name)+'\')">'+t('bak_restore')+'</button></span></div>'}).join('')||'<p class="help">'+t('bak_empty')+'</p>';
+  q('#bak-list').innerHTML=rows;
+ }catch(e){notice(e.message,'err')}
+}
+async function createBackup(){try{var r=await api('/api/backups/create',{});notice(r.message||r.error,r.ok?'ok':'err');await loadBackups()}catch(e){notice(e.message,'err')}}
+async function restoreBackup(name){
+ if(!confirm(t('bak_restore_confirm')+' '+name+'?'))return;
+ try{var r=await api('/api/backups/restore',{name:name});notice(r.message||r.error,r.ok?'ok':'err');if(r.ok){STATE=await api('/api/state');CONFIG=await api('/api/config');await loadBackups();showTab(CURTAB)}}catch(e){notice(e.message,'err')}
 }
 function fieldHtml(f){
  var id='cfg-'+f.key, input='';
