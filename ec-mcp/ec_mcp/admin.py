@@ -93,6 +93,8 @@ class _DebugMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         started = time.time()
         response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
         path = request.url.path
         if path.startswith("/api/") or path == "/login":
             _debug_record(
