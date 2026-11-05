@@ -242,8 +242,7 @@ async function api(path,body){
 }
 function notice(message,type){var node=q('#notice');if(node)node.innerHTML='<div class="msg '+(type||'info')+'">'+esc(message)+'</div>'}
 function renderLogin(){
- q('#app').innerHTML='<section class="panel" style="max-width:440px;margin:12vh auto"><div class="brand"><h1>'+esc(siteName())+'</h1><p>'+t('login_title')+'</p></div>'+chromeHtml()+'<label style="margin-top:22px">'+t('u_name')+'<input id="login-user" autocomplete="username"></label><label style="margin-top:12px">'+t('login_pass')+'<input id="login-password" type="password" autocomplete="current-password"></label><div class="actions"><button onclick="login()">'+t('login_enter')+'</button></div><div id="notice"></div></section>';
- q('#login-password').addEventListener('keydown',function(e){if(e.key==='Enter')login()});
+ q('#app').innerHTML='<section class="panel" style="max-width:440px;margin:12vh auto">'+brandHtml()+chromeHtml()+'<form onsubmit="login();return false"><label style="margin-top:22px">'+t('u_name')+'<input id="login-user" autocomplete="username"></label><label style="margin-top:12px">'+t('login_pass')+'<input id="login-password" type="password" autocomplete="current-password"></label><div class="actions"><button type="submit">'+t('login_enter')+'</button></div></form><div id="notice"></div></section>';
  if(!q('#custom-dlg'))q('#app').innerHTML+=customDialogHtml();
 }
 async function login(){
@@ -696,5 +695,10 @@ async function checkUpdate(){
 }
 async function applyUpdate(sha,expected){var confirmation=q('#update-confirm').value;if(confirmation!==expected){notice('Escribe exactamente: '+expected,'err');return}try{var r=await api('/api/update/apply',{remote_sha:sha,confirmation:confirmation});notice(r.message||r.error,r.state==='pending'?'ok':'err');UPDATE.status=r;setTimeout(pollStatus,2000)}catch(e){notice(e.message,'err')}}
 async function pollStatus(){try{var s=await api('/api/update/status');UPDATE.status=s;renderUpdate();if(s.state==='pending'||s.state==='running')setTimeout(pollStatus,3000)}catch(e){notice(e.message,'err')}}
-renderLogin();
+async function boot(){
+ applySavedTheme();
+ try{var s=await api('/api/state');if(s&&s.session){ME={user:s.session.user,role:s.session.role};AUTHED=true;renderShell();await loadAll();return}}catch(e){}
+ renderLogin();
+}
+boot();
 </script></body></html>"""

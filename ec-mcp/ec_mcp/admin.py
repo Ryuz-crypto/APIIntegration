@@ -73,6 +73,39 @@ SESSIONS: dict[str, dict] = {}
 SESSION_TTL = 3600.0
 LOGIN_FAILURES: dict[str, list[float]] = {}
 
+
+def _sessions_path() -> Path:
+    return Path(os.environ.get("EC_ADMIN_SESSIONS_FILE") or Path.cwd() / ".ec-admin-sessions.json")
+
+
+def _load_sessions() -> None:
+    global SESSIONS
+    try:
+        path = _sessions_path()
+        if path.is_file():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                now = time.time()
+                SESSIONS = {
+                    str(k): v
+                    for k, v in data.items()
+                    if isinstance(v, dict) and now - float(v.get("ts", 0)) < SESSION_TTL
+                }
+    except (OSError, json.JSONDecodeError, ValueError, TypeError):
+        SESSIONS = {}
+
+
+def _save_sessions() -> None:
+    try:
+        path = _sessions_path()
+        path.write_text(json.dumps(SESSIONS), encoding="utf-8")
+        path.chmod(0o600)
+    except OSError:
+        pass
+
+
+_load_sessions()
+
 DEBUG_EVENTS: deque = deque(maxlen=500)
 
 
@@ -259,6 +292,36 @@ def _save_store(store: dict) -> None:
     path.chmod(0o600)
 
 
+def _sync_registry_blob() -> None:
+    """Espeja el registro en EC_ORCHESTRATORS_JSON / EC_SSE_PLATFORMS_JSON (.env + entorno)."""
+    try:
+        blob = load_registry().to_env_blob()
+        env_path = Path(os.environ.get("EC_MCP_ENV_FILE") or Path.cwd() / ".env")
+        lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.is_file() else []
+        for key in ("EC_ORCHESTRATORS_JSON", "EC_SSE_PLATFORMS_JSON"):
+            value = blob.get(key)
+            if value is None:
+                lines = [line for line in lines if not line.startswith(key + "=")]
+                os.environ.pop(key, None)
+                continue
+            set_line = f"{key}={value}"
+            for i, line in enumerate(lines):
+                if line.startswith(key + "="):
+                    lines[i] = set_line
+                    break
+            else:
+                lines.append(set_line)
+            os.environ[key] = value
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        try:
+            env_path.chmod(0o600)
+        except OSError:
+            pass
+    except OSError:
+        pass
+
+
 def _admin_password() -> str | None:
     return os.environ.get("EC_ADMIN_PASSWORD") or None
 
@@ -365,6 +428,7 @@ async def login_post(request):
     token = secrets.token_urlsafe(32)
     role = role or "admin"
     SESSIONS[token] = {"user": user_label, "role": role, "ts": now}
+    _save_sessions()
     response = JSONResponse({"ok": True, "user": user_label, "role": role})
     response.set_cookie("ec_admin_session", token, httponly=True, samesite="lax", max_age=int(SESSION_TTL))
     return response
@@ -373,6 +437,7 @@ async def login_post(request):
 async def logout_post(request):
     token = request.cookies.get("ec_admin_session", "")
     session = SESSIONS.pop(token, None)
+    _save_sessions()
     if session:
         _audit_panel(session.get("user"), "logout", "panel", "ok")
     response = JSONResponse({"ok": True})
@@ -442,6 +507,7 @@ async def api_save_orchestrator(request):
         }
         _snapshot_backup(f"save-orch:{name}")
         load_registry().save_orchestrator(name, entry)
+        _sync_registry_blob()
     except RegistryError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
     except Exception as exc:  # nunca devolver HTML plano al panel
@@ -458,6 +524,7 @@ async def api_delete_orchestrator(request):
         name = str(body.get("name") or "")
         _snapshot_backup(f"delete-orch:{name}")
         deleted = load_registry().delete_orchestrator(name)
+        _sync_registry_blob()
     except Exception as exc:
         return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
     _audit_panel(session["user"], "delete_orchestrator", name, "ok" if deleted else "missing")
@@ -480,6 +547,7 @@ async def api_save_sse(request):
         }
         _snapshot_backup(f"save-sse:{name}")
         load_registry().save_sse(name, entry)
+        _sync_registry_blob()
     except RegistryError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
     except Exception as exc:
@@ -496,6 +564,7 @@ async def api_delete_sse(request):
         name = str(body.get("name") or "")
         _snapshot_backup(f"delete-sse:{name}")
         deleted = load_registry().delete_sse(name)
+        _sync_registry_blob()
     except Exception as exc:
         return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
     _audit_panel(session["user"], "delete_sse", name, "ok" if deleted else "missing")
@@ -512,6 +581,7 @@ async def _registry_copy(request, method, label: str):
         new_name = str(body.get("new_name") or "").strip()
         _snapshot_backup(f"{method.__name__}:{name}->{new_name}")
         method(name, new_name)
+        _sync_registry_blob()
     except RegistryError as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     except Exception as exc:
