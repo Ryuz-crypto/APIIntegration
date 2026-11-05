@@ -677,6 +677,8 @@ def test_wizard_home_button_and_step_texts(env):
     assert "opcionalmente" in steps["targets"]["desc"]
     assert "opcional" in by_key["EC_DEFAULT_ORCHESTRATOR"]["label"]
     assert "wizHome" in PAGE
+    assert "function wizHome(){WSTEP=-1;q('#workspace').innerHTML=wizHomeHtml()}" in PAGE
+    assert "else if(WSTEP===0){wizHome()}" in PAGE
 
 
 def test_new_routes_registered():

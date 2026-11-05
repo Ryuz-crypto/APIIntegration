@@ -358,8 +358,8 @@ async function wizNext(){
  if(WSTEP<WIZARD.steps.length-1){WSTEP++;wizRenderStep();return}
  await wizReview();
 }
-function wizBack(){if(WSTEP>0){WSTEP--;wizRenderStep()}else if(WSTEP===0){WSTEP=-1;wizRenderStep()}}
-function wizHome(){WSTEP=-1;wizRenderStep()}
+function wizBack(){if(WSTEP>0){WSTEP--;wizRenderStep()}else if(WSTEP===0){wizHome()}}
+function wizHome(){WSTEP=-1;q('#workspace').innerHTML=wizHomeHtml()}
 function wizHomeHtml(){
  var orchs=STATE.orchestrators||[], sses=STATE.sse_platforms||[];
  var sdwan, sse;
