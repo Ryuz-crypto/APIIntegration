@@ -541,6 +541,38 @@ def test_page_has_debug_tab():
     assert ".tool-card>div{min-width:0" in PAGE
 
 
+def test_mcp_probe_url_uses_loopback_for_wildcard_host(monkeypatch):
+    from ec_mcp import admin_services
+
+    monkeypatch.setenv("EC_MCP_HOST", "0.0.0.0")
+    monkeypatch.setenv("EC_MCP_PORT", "8000")
+    monkeypatch.delenv("EC_MCP_TLS_CERT", raising=False)
+    assert admin_services.mcp_probe_url() == "http://127.0.0.1:8000/health"
+    monkeypatch.setenv("EC_MCP_HOST", "10.0.0.5")
+    assert admin_services.mcp_probe_url() == "http://10.0.0.5:8000/health"
+
+
+def test_tools_have_human_spanish_descriptions(client, env):
+    admin._TOOLS_CACHE = None
+    data = client.get("/api/tools").json()
+    by_name = {t["name"]: t for t in data["tools"]}
+    assert by_name["list_appliances"]["description_es"].startswith("Inventario real")
+    assert by_name["apply_change"]["description_es"]
+    assert by_name["axis_commit"]["description_es"]
+    assert by_name["list_cli_commands"]["description_es"] == ""
+    admin._TOOLS_CACHE = None
+
+
+def test_page_polish_fixes():
+    assert "opcional si hay varios" not in PAGE
+    assert "MCP para SASE" in PAGE
+    assert "resetCustom" in PAGE and "app_reset" in PAGE
+    assert "role!=='admin'" in PAGE
+    assert "cfg-target-sel" in PAGE
+    assert "accentbar" in PAGE
+    assert "description_es" in PAGE
+
+
 def test_new_routes_registered():
     paths = {route.path for route in build_admin_app().routes}
     assert {

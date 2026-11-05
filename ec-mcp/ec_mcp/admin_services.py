@@ -87,12 +87,19 @@ def probe_update_service() -> dict[str, Any]:
     return web_update.status()
 
 
-def probe_mcp_transport() -> dict[str, Any]:
-    """Check the local MCP transport listener from configuration."""
+def mcp_probe_url() -> str:
+    """URL de sondeo del transporte MCP; 0.0.0.0/:: se sustituye por loopback."""
     host = os.environ.get("EC_MCP_HOST", "127.0.0.1")
+    if host in ("0.0.0.0", "::", ""):  # nosec B104 - solo se sustituye por loopback para el sondeo local
+        host = "127.0.0.1"
     port = int(os.environ.get("EC_MCP_PORT", "8000"))
     scheme = "https" if os.environ.get("EC_MCP_TLS_CERT") else "http"
-    url = f"{scheme}://{host}:{port}/health"
+    return f"{scheme}://{host}:{port}/health"
+
+
+def probe_mcp_transport() -> dict[str, Any]:
+    """Check the local MCP transport listener from configuration."""
+    url = mcp_probe_url()
     started = _now()
     try:
         with httpx.Client(verify=True, timeout=PROBE_TIMEOUT) as client:
@@ -102,7 +109,7 @@ def probe_mcp_transport() -> dict[str, Any]:
             raise ServiceProbeError(f"HTTP {response.status_code} en {url}")
         return {"latency": elapsed, "status_code": response.status_code, "url": url}
     except httpx.HTTPError as exc:
-        raise ServiceProbeError(f"No hay respuesta del transporte MCP en {host}:{port}: {type(exc).__name__}") from exc
+        raise ServiceProbeError(f"No hay respuesta del transporte MCP en {url}: {type(exc).__name__}") from exc
 
 
 def services_status(probe: bool = True) -> dict[str, Any]:

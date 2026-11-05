@@ -957,6 +957,39 @@ async def api_tls_delete(request):
 _TOOLS_CACHE: list | None = None
 
 
+TOOL_DESC_ES = {
+    "list_appliances": "Inventario real del Orchestrator: nePk, nombre, IP, modelo, versión y estado de cada appliance. Úsala siempre primero.",
+    "orchestrator_info": "Información general del Orchestrator (versión, licencias, salud).",
+    "list_orchestrator_targets_tool": "Lista los Orchestrators configurados (multi-target) para usarlos como parámetro 'target'.",
+    "list_sse_targets_tool": "Lista las plataformas SSE (Axis) configuradas.",
+    "run_show_api": "Ejecuta un comando 'show ...' de ECOS por API del Orchestrator (o SSH si está habilitado). Solo lectura.",
+    "run_api_operation": "Ejecuta cualquier operación de la API del Orchestrator por su operation ID (usa list_api_operations para buscarla).",
+    "list_api_operations": "Busca operaciones de la API del Orchestrator por texto (search=...).",
+    "get_appliance_health": "Salud por appliance: CPU, memoria, disco, temperatura, alarmas y estado.",
+    "orchestrator_metrics": "Métricas del Orchestrator (throughput, túneles, sesiones).",
+    "get_firmware_compliance": "Cumplimiento de firmware de los appliances frente al Orchestrator.",
+    "apply_change": "Aplica un cambio de configuración vía API. Por defecto dry-run: devuelve exactamente qué se ejecutaría; con confirm=true y escrituras habilitadas lo aplica.",
+    "apply_overlay_plan": "Aplica un plan BIO/overlay preparado (clon). Requiere confirmación escrita.",
+    "prepare_ztp_adoption": "Prepara la adopción ZTP de un appliance (solo lectura; nunca escribe).",
+    "apply_ztp_plan": "Aplica un plan ZTP preparado con confirmación escrita y verificación posterior.",
+    "ask_sdwan_ai": "Pregunta en lenguaje natural al asistente SD-WAN AI (SASE Copilot) del Orchestrator.",
+    "axis_health": "Salud en vivo de una plataforma Axis Security (SSE).",
+    "axis_commit": "Publica en Axis todos los cambios pendientes (sin confirm=true solo muestra el preview).",
+    "axis_list_applications": "Lista aplicaciones (Tags) de Axis Security.",
+    "axis_create_application": "Crea una aplicación en Axis. Dry-run por defecto; requiere confirm=true para aplicar.",
+    "axis_update_application": "Actualiza una aplicación de Axis. Dry-run por defecto.",
+    "axis_delete_application": "Elimina una aplicación de Axis. Dry-run por defecto.",
+    "axis_create_connector": "Crea un conector de Axis; la respuesta trae el comando de instalación.",
+    "axis_connector_status": "Estado del conector Axis: red, memoria, disco, CPU y salud.",
+    "security_scan": "Escaneo de seguridad del Orchestrator/appliances (solo lectura).",
+    "telemetry_flows": "Flujos de tráfico recientes entre appliances.",
+    "get_alarm_history": "Historial de alarmas del Orchestrator.",
+    "dashboard_install": "Instala y publica el dashboard web local.",
+    "web_update_check": "Comprueba si hay una actualización nueva en GitHub (rama configurada).",
+    "wizard_probe": "Prueba la conexión real con un target guardado (Orchestrator o SSE).",
+}
+
+
 def _mcp_tools() -> list:
     global _TOOLS_CACHE
     if _TOOLS_CACHE is None:
@@ -966,7 +999,14 @@ def _mcp_tools() -> list:
         tool_manager = getattr(mcp, "_tool_manager", None)
         tools = list(tool_manager.list_tools()) if tool_manager is not None else []
         _TOOLS_CACHE = sorted(
-            ({"name": t.name, "description": (t.description or "").strip().splitlines()[0][:200]} for t in tools),
+            (
+                {
+                    "name": t.name,
+                    "description": (t.description or "").strip().splitlines()[0][:200],
+                    "description_es": TOOL_DESC_ES.get(t.name, ""),
+                }
+                for t in tools
+            ),
             key=lambda item: item["name"],
         )
     return _TOOLS_CACHE
@@ -988,7 +1028,7 @@ async def api_tools_list(request):
             "total": len(tools),
             "disabled": sorted(disabled),
             "tools": [
-                {"name": t["name"], "description": t["description"], "disabled": t["name"] in disabled}
+                {"name": t["name"], "description": t["description"], "description_es": t.get("description_es", ""), "disabled": t["name"] in disabled}
                 for t in tools
             ],
         }
