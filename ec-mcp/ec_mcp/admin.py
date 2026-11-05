@@ -240,11 +240,12 @@ async def login_post(request):
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
     failures = [t for t in LOGIN_FAILURES.get(client_ip, []) if now - t < LOGIN_WINDOW_SECONDS]
-    if admin_users.has_users():
-        role = admin_users.verify_user(username, password) if username and password else None
+    if username and admin_users.has_users():
+        role = admin_users.verify_user(username, password) if password else None
         valid = role is not None
-        user_label = username or "(sin usuario)"
+        user_label = username
     else:
+        # Sin username se usa la contraseña única (retrocompatible aunque exista archivo de usuarios).
         role = "admin"
         valid = bool(password) and _verify_password(password, allow_first_run=_loopback_only(host))
         user_label = "admin"
