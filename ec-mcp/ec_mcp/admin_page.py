@@ -9,7 +9,12 @@ PAGE = r"""<!doctype html>
 *{box-sizing:border-box}
 body{font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:var(--page-bg);color:var(--text);margin:0;min-height:100vh}
 main{max-width:1500px;margin:0 auto;padding-bottom:40px}
-header.topbar{min-height:68px;padding:12px 32px;display:flex;align-items:center;justify-content:space-between;gap:16px;color:#fff;background:var(--brand-header);border-bottom:4px solid var(--brand);transition:background .3s ease,border-color .3s ease}
+header.topbar{min-height:68px;padding:12px 32px;display:flex;align-items:center;justify-content:space-between;gap:16px;color:#fff;background:var(--brand-header);border-bottom:4px solid transparent;position:relative;overflow:hidden;transition:background .3s ease}
+header.topbar::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:linear-gradient(90deg,var(--brand),var(--cyan),var(--brand));background-size:200% 100%;animation:accentbar 7s linear infinite}
+@keyframes accentbar{to{background-position:200% 0}}
+nav button{transition:color .15s ease,border-color .15s ease}
+.tool-card{transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+.tool-card:hover{transform:translateY(-2px);border-left-color:var(--cyan);box-shadow:0 6px 16px rgba(16,42,67,.12)}
 .brand{display:flex;align-items:center;gap:10px;color:var(--cyan)}
 .logo{width:34px;height:34px;object-fit:contain}
 .brand strong{display:block;font-size:20px;color:#fff}
@@ -53,7 +58,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;word-break:break-all}
 .req{color:#a12449;font-weight:800}
 .diff{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
-.diff td{padding:8px 10px;border-bottom:1px solid #e3eaed;vertical-align:top}
+.diff td{padding:8px 10px;border-bottom:1px solid #e3eaed;vertical-align:top;word-break:break-word}.diff td.mono{word-break:break-all}
 .wizbar{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
 .sw{width:18px;height:18px;border-radius:50%;display:inline-block;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #8eabb7}
 .sw.active{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--brand)}
@@ -108,7 +113,7 @@ button:active{transform:scale(.97)}
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=0, WDRAFT={}, CURTAB='wizard';
 var LANG=localStorage.getItem('ec-lang')||'es';
 var ACCENTS=[{n:'HPE Green',c:'#01a982'},{n:'Cyan',c:'#00c8ff'},{n:'Blue',c:'#00739d'},{n:'Gold',c:'#f2b900'},{n:'Rose',c:'#d94f70'},{n:'Header teal',c:'#073b4c'}];
-var I18N={es:{nav_wizard:'Asistente',nav_orch:'Orquestadores',nav_sse:'Plataformas SSE',nav_svc:'Servicios',nav_config:'Variables',nav_update:'Actualizaciones',nav_users:'Usuarios',nav_out:'Salir',tagline:'Configuración, operación y actualizaciones sin SSH',login_title:'Control plane administrativo',login_user:'Usuario (opcional si hay varios)',login_pass:'Contraseña',login_enter:'Entrar',h2_orch:'Orquestadores',h2_sse:'Plataformas SSE (multi-tenant)',h2_svc:'Servicios',h2_config:'Variables del servicio',h2_update:'Actualizaciones desde GitHub',h2_users:'Usuarios del panel',h2_wizard:'Asistente de configuración',btn_save:'Guardar',btn_save_vars:'Guardar variables',btn_save_restart:'Guardar y reiniciar servicios',btn_save_restart_short:'Guardar y reiniciar',btn_recheck:'Volver a comprobar',btn_detect:'Detectar GitHub',btn_apply_update:'Aplicar actualización',btn_back:'Atrás',btn_next:'Siguiente',btn_review:'Revisar cambios',btn_probe:'Probar',btn_dup:'Duplicar',btn_ren:'Renombrar',btn_default:'Por defecto',btn_edit:'Editar',btn_delete:'Eliminar',btn_save_orch:'Guardar orquestador',btn_save_sse:'Guardar plataforma SSE',loading:'Cargando...',wiz_loading:'Cargando pasos...',secret_set:'Secreto configurado; no se muestra.',secret_unset:'Sin configurar.'},en:{nav_wizard:'Wizard',nav_orch:'Orchestrators',nav_sse:'SSE platforms',nav_svc:'Services',nav_config:'Settings',nav_update:'Updates',nav_users:'Users',nav_out:'Sign out',tagline:'Configuration, operations and updates without SSH',login_title:'Administrative control plane',login_user:'User (optional when there are several)',login_pass:'Password',login_enter:'Sign in',h2_orch:'Orchestrators',h2_sse:'SSE platforms (multi-tenant)',h2_svc:'Services',h2_config:'Service settings',h2_update:'Updates from GitHub',h2_users:'Panel users',h2_wizard:'Setup wizard',btn_save:'Save',btn_save_vars:'Save settings',btn_save_restart:'Save and restart services',btn_save_restart_short:'Save and restart',btn_recheck:'Re-check',btn_detect:'Check GitHub',btn_apply_update:'Apply update',btn_back:'Back',btn_next:'Next',btn_review:'Review changes',btn_probe:'Test',btn_dup:'Duplicate',btn_ren:'Rename',btn_default:'Default',btn_edit:'Edit',btn_delete:'Delete',btn_save_orch:'Save orchestrator',btn_save_sse:'Save SSE platform',loading:'Loading...',wiz_loading:'Loading steps...',secret_set:'Secret configured; never displayed.',secret_unset:'Not configured.'}};
+var I18N={es:{nav_wizard:'Asistente',nav_orch:'Orquestadores',nav_sse:'Plataformas SSE',nav_svc:'Servicios',nav_config:'Variables',nav_update:'Actualizaciones',nav_users:'Usuarios',nav_out:'Salir',tagline:'MCP para SASE · EdgeConnect SD-WAN',login_title:'Control plane administrativo',login_user:'Usuario',login_pass:'Contraseña',login_enter:'Entrar',h2_orch:'Orquestadores',h2_sse:'Plataformas SSE (multi-tenant)',h2_svc:'Servicios',h2_config:'Variables del servicio',h2_update:'Actualizaciones desde GitHub',h2_users:'Usuarios del panel',h2_wizard:'Asistente de configuración',btn_save:'Guardar',btn_save_vars:'Guardar variables',btn_save_restart:'Guardar y reiniciar servicios',btn_save_restart_short:'Guardar y reiniciar',btn_recheck:'Volver a comprobar',btn_detect:'Detectar GitHub',btn_apply_update:'Aplicar actualización',btn_back:'Atrás',btn_next:'Siguiente',btn_review:'Revisar cambios',btn_probe:'Probar',btn_dup:'Duplicar',btn_ren:'Renombrar',btn_default:'Por defecto',btn_edit:'Editar',btn_delete:'Eliminar',btn_save_orch:'Guardar orquestador',btn_save_sse:'Guardar plataforma SSE',loading:'Cargando...',wiz_loading:'Cargando pasos...',secret_set:'Secreto configurado; no se muestra.',secret_unset:'Sin configurar.'},en:{nav_wizard:'Wizard',nav_orch:'Orchestrators',nav_sse:'SSE platforms',nav_svc:'Services',nav_config:'Settings',nav_update:'Updates',nav_users:'Users',nav_out:'Sign out',tagline:'MCP for SASE · EdgeConnect SD-WAN',login_title:'Administrative control plane',login_user:'User',login_pass:'Password',login_enter:'Sign in',h2_orch:'Orchestrators',h2_sse:'SSE platforms (multi-tenant)',h2_svc:'Services',h2_config:'Service settings',h2_update:'Updates from GitHub',h2_users:'Panel users',h2_wizard:'Setup wizard',btn_save:'Save',btn_save_vars:'Save settings',btn_save_restart:'Save and restart services',btn_save_restart_short:'Save and restart',btn_recheck:'Re-check',btn_detect:'Check GitHub',btn_apply_update:'Apply update',btn_back:'Back',btn_next:'Next',btn_review:'Review changes',btn_probe:'Test',btn_dup:'Duplicate',btn_ren:'Rename',btn_default:'Default',btn_edit:'Edit',btn_delete:'Delete',btn_save_orch:'Save orchestrator',btn_save_sse:'Save SSE platform',loading:'Loading...',wiz_loading:'Loading steps...',secret_set:'Secret configured; never displayed.',secret_unset:'Not configured.'}};
 function t(k,v){var d=I18N[LANG]||I18N.es;var s=d[k]||I18N.es[k]||k;if(v){for(var x in v){s=s.split('{'+x+'}').join(v[x])}}return s}
 function setLang(l){LANG=l;localStorage.setItem('ec-lang',l);if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
 function setAccent(c){document.documentElement.style.setProperty('--brand',c);localStorage.setItem('ec-accent',c);if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
@@ -134,6 +139,7 @@ function pickIcon(ic){localStorage.setItem('ec-icon',ic);localStorage.removeItem
 function previewBrand(){var p=q('#brand-preview');if(!p||!p.style||!p.querySelector)return;p.style.setProperty('--preview-primary',localStorage.getItem('ec-accent')||'#01a982');p.style.setProperty('--preview-header',localStorage.getItem('ec-header')||'#073b4c');var ic=siteIcon();var logo=siteLogo();var pv=p.querySelector('.pv-brand');if(pv)pv.innerHTML=(logo?'<img class="logo" src="'+logo+'">':(ic?'<span class="logo">'+esc(ic)+'</span>':''))+'<div><strong>'+esc(q('#custom-name').value||siteName())+'</strong><span>'+t('tagline')+'</span></div>'}
 function refreshBrand(){if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
 function closeCustom(){var d=q('#custom-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
+function resetCustom(){['ec-accent','ec-header','ec-cyan','ec-icon','ec-logo','ec-site-name'].forEach(function(k){localStorage.removeItem(k)});applySavedTheme();openCustom();refreshBrand();notice(t('app_reset_done'),'ok')}
 function saveCustom(){
  var name=q('#custom-name')?q('#custom-name').value.trim():'';if(name)localStorage.setItem('ec-site-name',name);
  var a=q('#app-accent');if(a)localStorage.setItem('ec-accent',a.value);
@@ -143,8 +149,8 @@ function saveCustom(){
  if(f&&f.files&&f.files[0]){var r=new FileReader();r.onload=function(e){try{localStorage.setItem('ec-logo',String(e.target.result));localStorage.removeItem('ec-icon')}catch(err){notice(t('file_too_big'),'err')}applySavedTheme();closeCustom();refreshBrand()};r.readAsDataURL(f.files[0]);return}
  applySavedTheme();closeCustom();refreshBrand();
 }
-function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="previewBrand()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="previewBrand()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="previewBrand()"></label></div><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button></div></dialog>'}
-function userChip(){return '<details class="menu"><summary class="chip">'+esc(ME&&ME.user?ME.user:'')+' · '+esc(ME&&ME.role?ME.role:'')+'</summary><div class="menu-body"><button class="secondary" onclick="showTab(\'users\')">'+t('menu_users')+'</button><button class="secondary" onclick="openCustom()">'+t('menu_custom')+'</button><button class="danger" onclick="logout()">'+t('nav_out')+'</button></div></details>'}
+function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="previewBrand()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="previewBrand()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="previewBrand()"></label></div><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button><button class="danger" onclick="resetCustom()">'+t('app_reset')+'</button></div></dialog>'}
+function userChip(){return '<details class="menu"><summary class="chip">'+esc(ME&&ME.user?ME.user:'')+(ME&&ME.role&&ME.role!=='admin'?' · '+esc(ME.role):'')+'</summary><div class="menu-body"><button class="secondary" onclick="showTab(\'users\')">'+t('menu_users')+'</button><button class="secondary" onclick="openCustom()">'+t('menu_custom')+'</button><button class="danger" onclick="logout()">'+t('nav_out')+'</button></div></details>'}
 
 function chromeHtml(){return '<span class="chrome"><button class="secondary" style="padding:4px 9px;font-size:.75rem" onclick="setLang(LANG===\'es\'?\'en\':\'es\')">'+(LANG==='es'?'EN':'ES')+'</button><button class="secondary" style="padding:4px 9px;font-size:.75rem" title="'+t('menu_custom')+'" onclick="openCustom()">&#9881;</button></span>'}
 function applySavedTheme(){
@@ -175,6 +181,11 @@ var I18N6={es:{nav_debug:'Debug',dbg_title:'Depurador de solicitudes',dbg_desc:'
 for(var k6 in I18N6.es){I18N.es[k6]=I18N6.es[k6]}
 for(var k6 in I18N6.en){I18N.en[k6]=I18N6.en[k6]}
 
+var I18N7={es:{app_reset:'Restablecer apariencia',app_reset_done:'Apariencia restablecida a los valores por defecto'},en:{app_reset:'Reset look & feel',app_reset_done:'Appearance reset to defaults'}};
+for(var k7 in I18N7.es){I18N.es[k7]=I18N7.es[k7]}
+for(var k7 in I18N7.en){I18N.en[k7]=I18N7.en[k7]}
+
+
 
 
 
@@ -192,7 +203,7 @@ async function api(path,body){
 }
 function notice(message,type){var node=q('#notice');if(node)node.innerHTML='<div class="msg '+(type||'info')+'">'+esc(message)+'</div>'}
 function renderLogin(){
- q('#app').innerHTML='<section class="panel" style="max-width:440px;margin:12vh auto"><div class="brand"><h1>'+esc(siteName())+'</h1><p>'+t('login_title')+'</p></div>'+chromeHtml()+'<label style="margin-top:22px">'+t('login_user')+'<input id="login-user" autocomplete="username"></label><label style="margin-top:12px">'+t('login_pass')+'<input id="login-password" type="password" autocomplete="current-password"></label><div class="actions"><button onclick="login()">'+t('login_enter')+'</button></div><div id="notice"></div></section>';
+ q('#app').innerHTML='<section class="panel" style="max-width:440px;margin:12vh auto"><div class="brand"><h1>'+esc(siteName())+'</h1><p>'+t('login_title')+'</p></div>'+chromeHtml()+'<label style="margin-top:22px">'+t('u_name')+'<input id="login-user" autocomplete="username"></label><label style="margin-top:12px">'+t('login_pass')+'<input id="login-password" type="password" autocomplete="current-password"></label><div class="actions"><button onclick="login()">'+t('login_enter')+'</button></div><div id="notice"></div></section>';
  q('#login-password').addEventListener('keydown',function(e){if(e.key==='Enter')login()});
  if(!q('#custom-dlg'))q('#app').innerHTML+=customDialogHtml();
 }
@@ -227,7 +238,7 @@ function showTab(name){
 }
 async function renderServices(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">'+t('checking')+'</p></section>';
- try{var r=await api('/api/services/status');var h='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">'+t('svc_checked')+''+esc((r.checked_at||'').replace('T',' ').split('.')[0])+' UTC. Ningún servicio se muestra como activo sin comprobación.</p>';
+ try{var r=await api('/api/services/status');var h='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">'+t('svc_checked')+' '+esc((r.checked_at||'').replace('T',' ').split('.')[0])+' UTC. Ningún servicio se muestra como activo sin comprobación.</p>';
  var orch=(r.orchestrators||[]).map(function(s){return svcRow(t('orch_label')+': '+s.name,s)}).join('');
  var sse=(r.sse_platforms||[]).map(function(s){return svcRow(t('sse_label')+': '+s.name,s)}).join('');
  var up=svcRow(''+t('upd_worker')+'',r.update_worker||{});
@@ -421,7 +432,11 @@ function cfgTargets(){
 }
 function targetsNavHtml(){
  var ts=cfgTargets();if(!ts.length)return '';
- var h='<div class="wizbar"><button class="secondary" style="padding:5px 10px;font-size:.78rem'+'" onclick="cfgTab(\'global\')">'+t('global_vars')+'</button>';
+ if(ts.length>6){
+  var opts='<option value="global"'+(CFG_TAB==='global'?' selected':'')+'>'+t('global_vars')+'</option>'+ts.map(function(x){return '<option value="'+esc(x.id)+'"'+(CFG_TAB===x.id?' selected':'')+'>'+esc(x.label)+'</option>'}).join('');
+  return '<div class="wizbar"><label style="margin:0;display:flex;gap:8px;align-items:center">'+t('view_target')+'<select id="cfg-target-sel" style="width:auto;min-height:32px" onchange="cfgTab(this.value)">'+opts+'</select></label></div>';
+ }
+ var h='<div class="wizbar"><button class="secondary" style="padding:5px 10px;font-size:.78rem" onclick="cfgTab(\'global\')">'+t('global_vars')+'</button>';
  ts.forEach(function(x){h+='<button class="secondary" style="padding:5px 10px;font-size:.78rem" onclick="cfgTab(\''+esc(x.id)+'\')">'+esc(x.label)+'</button>'});
  return h+'</div>';
 }
@@ -479,7 +494,7 @@ async function renderTools(){
  try{
   var r=await api('/api/tools');
   var canWrite=ME&&ME.role!=='viewer';
-  var rows=r.tools.map(function(x){return '<div class="tool-card"><div><strong>'+esc(x.name)+'</strong><span class="help">'+esc(x.description)+'</span></div><label class="switch" title="'+(x.disabled?t('tool_off'):t('tool_on'))+'"><input type="checkbox" '+(x.disabled?'':'checked')+' '+(canWrite?'onchange="toggleTool(\''+esc(x.name)+'\',this.checked)"':'disabled')+'><span class="slider"></span></label></div>'}).join('');
+  var rows=r.tools.map(function(x){return '<div class="tool-card"><div><strong>'+esc(x.name)+'</strong><span class="help">'+esc((LANG==='es'&&x.description_es)?x.description_es:x.description)+'</span></div><label class="switch" title="'+(x.disabled?t('tool_off'):t('tool_on'))+'"><input type="checkbox" '+(x.disabled?'':'checked')+' '+(canWrite?'onchange="toggleTool(\''+esc(x.name)+'\',this.checked)"':'disabled')+'><span class="slider"></span></label></div>'}).join('');
   q('#workspace').innerHTML='<section class="panel"><h2>'+t('tools_title')+'</h2><p class="help">'+t('tools_desc')+'</p><p><span class="badge">'+r.total+'</span> '+t('tools_total')+' · <span class="badge">'+r.disabled.length+'</span> '+t('tools_disabled')+'</p><div class="actions"><button class="secondary" onclick="showAgentPrompt()">'+t('agent_btn')+'</button></div><div class="tools-grid" id="tools-list">'+rows+'</div></section>';
  }catch(e){notice(e.message,'err')}
 }

@@ -88,7 +88,7 @@ SETTINGS = (
     Setting("EC_UPDATE_STATE_DIR", "Actualizaciones", "Directorio de estado", default="/var/lib/ec-mcp-update", step="updates"),
     Setting("EC_UPDATE_SERVICE_NAME", "Actualizaciones", "Servicio MCP", default="ec-mcp.service", step="updates"),
     Setting("EC_UPDATE_ADMIN_SERVICE_NAME", "Actualizaciones", "Servicio del panel", default="ec-mcp-admin.service", step="updates"),
-    Setting("EC_DASHBOARD_REMOTE_ENABLED", "Dashboard remoto (SSH)", "Habilitar despliegue remoto", "boolean", "false", step="dashboard", help="Instala y publica el dashboard en un servidor Ubuntu vía SSH."),
+    Setting("EC_DASHBOARD_REMOTE_ENABLED", "Dashboard remoto (SSH)", "Habilitar despliegue remoto", "boolean", "false", step="dashboard", help="Permite conectarse por SSH a OTRO servidor Linux (Ubuntu) y desplegar ahí todo el dashboard web (nginx incluido), con llave privada opcional."),
     Setting("EC_DASHBOARD_REMOTE_HOST", "Dashboard remoto (SSH)", "IP/host del servidor Ubuntu", step="dashboard", depends_on=("EC_DASHBOARD_REMOTE_ENABLED", "true")),
     Setting("EC_DASHBOARD_REMOTE_USER", "Dashboard remoto (SSH)", "Usuario SSH", step="dashboard", depends_on=("EC_DASHBOARD_REMOTE_ENABLED", "true")),
     Setting("EC_DASHBOARD_REMOTE_PASSWORD", "Dashboard remoto (SSH)", "Password SSH", "password", secret=True, step="dashboard", depends_on=("EC_DASHBOARD_REMOTE_ENABLED", "true"), help="Requiere sudo en el servidor remoto (instala nginx)."),
@@ -221,7 +221,7 @@ EN_HELP = {
     "EC_UPDATE_GITHUB_TOKEN": "Needed for private repositories; never returned to the browser.",  # nosec B105
     "EC_ADMIN_PASSWORD": "Required when the panel listens on a non-loopback IP.",  # nosec B105
     "EC_ADMIN_USERS_FILE": "JSON 0600 with users and roles; falls back to EC_ADMIN_PASSWORD when absent.",
-    "EC_DASHBOARD_REMOTE_ENABLED": "Installs and publishes the dashboard on an Ubuntu server over SSH.",
+    "EC_DASHBOARD_REMOTE_ENABLED": "Connects over SSH to ANOTHER Linux (Ubuntu) server and deploys the whole web dashboard there (nginx included), with optional private key.",
     "EC_DASHBOARD_REMOTE_PASSWORD": "Requires sudo on the remote server (installs nginx).",  # nosec B105
     "EC_DASHBOARD_REMOTE_KEY_PATH": "When set, used instead of the password.",
     "EC_DEFAULT_ORCHESTRATOR": "Target used when a tool does not pass 'target'. Must exist in the registry.",
