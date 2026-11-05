@@ -573,6 +573,16 @@ def test_page_polish_fixes():
     assert "description_es" in PAGE
 
 
+def test_panel_responses_are_not_cached(client):
+    for path in ("/", "/login"):
+        r = client.get(path)
+        assert r.status_code in (200, 303)
+        if r.status_code == 200:
+            assert r.headers.get("cache-control") == "no-store, max-age=0"
+    r = client.get("/api/state")
+    assert r.headers.get("cache-control") == "no-store, max-age=0"
+
+
 def test_new_routes_registered():
     paths = {route.path for route in build_admin_app().routes}
     assert {
