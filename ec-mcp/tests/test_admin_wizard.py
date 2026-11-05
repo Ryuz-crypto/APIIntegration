@@ -204,6 +204,21 @@ def test_multi_user_login_roles_and_guards(env):
     assert a.post("/api/users", json={"username": "dave", "password": "x", "role": "superuser"}).status_code == 400
 
 
+def test_login_legacy_password_still_works_when_users_file_exists(env, monkeypatch):
+    # El server del usuario tiene .ec-admin-users.json en cwd: sin username debe
+    # seguir funcionando la contraseña única (retrocompatible).
+    admin_users.upsert_user("alice", "alicepw", "admin")
+    assert admin_users.has_users() is True
+    monkeypatch.setattr(admin, "_verify_password", lambda candidate, allow_first_run=True: candidate == "legacy-pw")
+    c = TestClient(build_admin_app())
+    r = c.post("/login", json={"password": "legacy-pw"})
+    assert r.status_code == 200 and r.json()["user"] == "admin"
+    r2 = c.post("/login", json={"username": "alice", "password": "alicepw"})
+    assert r2.status_code == 200 and r2.json()["user"] == "alice" and r2.json()["role"] == "admin"
+    r3 = c.post("/login", json={"username": "alice", "password": "mala"})
+    assert r3.status_code == 200 and r3.json()["ok"] is False
+
+
 def test_password_change_requires_current_password(env):
     admin_users.upsert_user("bob", "bobpw", "viewer")
     c = TestClient(build_admin_app())
