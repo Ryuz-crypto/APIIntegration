@@ -50,9 +50,10 @@ SETTINGS = (
     Setting("EC_AXIS_BASE_URL", "Axis Security (SSE)", "URL base de Axis", "url", "https://admin-api.axissecurity.com", step="sse", depends_on=("EC_AXIS_ENABLED", "true")),
     Setting("EC_AXIS_VERIFY_TLS", "Axis Security (SSE)", "Verificar TLS de Axis", "boolean", "true", step="sse", depends_on=("EC_AXIS_ENABLED", "true")),
     Setting("EC_AXIS_TIMEOUT", "Axis Security (SSE)", "Timeout Axis (segundos)", "number", "30", minimum=1, maximum=300, step="sse", depends_on=("EC_AXIS_ENABLED", "true")),
-    Setting("EC_DEFAULT_ORCHESTRATOR", "Multi-target", "Orquestador por defecto", step="targets", help="Target usado cuando un tool no indica 'target'. Debe existir en el registro."),
-    Setting("EC_DEFAULT_SSE", "Multi-target", "Plataforma SSE por defecto", step="targets", help="Plataforma SSE usada cuando un tool no indica 'target'."),
-    Setting("EC_ALLOW_WRITE_TOOLS", "Seguridad", "Permitir tools de escritura", "boolean", "false", step="security"),
+    Setting("EC_DEFAULT_ORCHESTRATOR", "Multi-target", "Orquestador por defecto (opcional)", step="targets", help="Solo si hay varios targets: el que se usa cuando un tool no indica 'target'. Si no hay, no importa."),
+    Setting("EC_DEFAULT_SSE", "Multi-target", "SSE por defecto (opcional)", step="targets", help="Solo si hay varias plataformas SSE."),
+    Setting("EC_ALLOW_WRITE_TOOLS", "Seguridad", "Permitir escrituras en EdgeConnect (Orchestrator/appliances)", "boolean", "false", step="security", help="Gobierna las tools de escritura de EdgeConnect (API/SSH). Independiente de SSE."),
+    Setting("EC_ALLOW_SSE_WRITE_TOOLS", "Seguridad", "Permitir escrituras en HPE SSE (Axis)", "boolean", "false", step="security", help="Gobierna las tools de escritura de Axis Security (axis_create/update/delete/commit). Independiente de EdgeConnect."),
     Setting("EC_ALLOW_DANGEROUS_WRITES", "Seguridad", "Permitir escrituras peligrosas", "boolean", "false", step="security"),
     Setting("EC_MAX_WRITES_PER_MINUTE", "Seguridad", "Máximo de escrituras por minuto", "integer", "10", minimum=1, maximum=1000, step="security"),
     Setting("EC_MAX_OUTPUT_CHARS", "Seguridad", "Máximo de caracteres de salida", "integer", "12000", minimum=1000, maximum=1000000, step="security"),
@@ -125,9 +126,9 @@ STEP_TITLES_EN = {
 
 STEP_DESCS = {
     "orchestrator": "Conexión principal del MCP: URL y credenciales (API key o usuario+password) que quedan en .env. Es el Orchestrator por defecto si no hay targets guardados.",
-    "ssh": "Solo si usarás comandos ECOS por SSH además de la API. Off por defecto.",
+    "ssh": "Sirve para ejecutar comandos ECOS directamente en los appliances EdgeConnect por SSH (además de la API del Orchestrator). Off por defecto.",
     "sse": "Plataforma SSE (Axis Security) única en .env. Para VARIAS plataformas SSE usa el paso Targets.",
-    "targets": "Aquí se agregan GUARDADOS en el registro: Orquestador #2, #3… y plataformas SSE adicionales, cada uno con su nombre, y se elige cuál queda por defecto. Se pueden probar, duplicar, renombrar y eliminar.",
+    "targets": "Aquí se agregan GUARDADOS en el registro: Orquestador #2, #3… y plataformas SSE adicionales, cada uno con su nombre. Si hay varios, opcionalmente marca uno como por defecto; si no hay, no pasa nada. Se pueden probar, duplicar, renombrar y eliminar.",
     "security": "Escrituras del MCP (off por defecto), límites y auditoría.",
     "transport": "Host/puerto y auth del transporte MCP (HTTP/SSE/stdio).",
     "panel": "Puerto del panel web, contraseña, bloqueo de login, usuarios multi-rol y certificados TLS.",
@@ -137,9 +138,9 @@ STEP_DESCS = {
 
 STEP_DESCS_EN = {
     "orchestrator": "Main MCP connection: URL and credentials (API key or user+password) saved to .env. Used as default when no registry targets exist.",
-    "ssh": "Only if you will also run ECOS commands over SSH. Off by default.",
+    "ssh": "Used to run ECOS commands directly on EdgeConnect appliances over SSH (in addition to the Orchestrator API). Off by default.",
     "sse": "Single SSE (Axis Security) platform in .env. For SEVERAL SSE platforms use the Targets step.",
-    "targets": "Saved in the registry here: Orchestrator #2, #3… and additional SSE platforms, each with its own name; pick the default one. You can test, duplicate, rename and delete them.",
+    "targets": "Saved in the registry here: Orchestrator #2, #3… and additional SSE platforms, each with its own name. If there are several, optionally mark one as default; if there are none, nothing happens. You can test, duplicate, rename and delete them.",
     "security": "MCP write tools (off by default), limits and audit log.",
     "transport": "MCP transport host/port and auth (HTTP/SSE/stdio).",
     "panel": "Web panel port, password, login lockout, multi-role users and TLS certificates.",
@@ -165,9 +166,10 @@ EN_LABELS = {
     "EC_AXIS_BASE_URL": "Axis base URL",
     "EC_AXIS_VERIFY_TLS": "Verify Axis TLS",
     "EC_AXIS_TIMEOUT": "Axis timeout (seconds)",
-    "EC_DEFAULT_ORCHESTRATOR": "Default Orchestrator",
-    "EC_DEFAULT_SSE": "Default SSE platform",
-    "EC_ALLOW_WRITE_TOOLS": "Allow write tools",
+    "EC_DEFAULT_ORCHESTRATOR": "Default Orchestrator (optional)",
+    "EC_DEFAULT_SSE": "Default SSE platform (optional)",
+    "EC_ALLOW_WRITE_TOOLS": "Allow EdgeConnect writes (Orchestrator/appliances)",
+    "EC_ALLOW_SSE_WRITE_TOOLS": "Allow HPE SSE (Axis) writes",
     "EC_ALLOW_DANGEROUS_WRITES": "Allow dangerous writes",
     "EC_MAX_WRITES_PER_MINUTE": "Max writes per minute",
     "EC_MAX_OUTPUT_CHARS": "Max output characters",
@@ -248,8 +250,10 @@ EN_HELP = {
     "EC_DASHBOARD_REMOTE_ENABLED": "Connects over SSH to ANOTHER Linux (Ubuntu) server and deploys the whole web dashboard there (nginx included), with optional private key.",
     "EC_DASHBOARD_REMOTE_PASSWORD": "Requires sudo on the remote server (installs nginx).",  # nosec B105
     "EC_DASHBOARD_REMOTE_KEY_PATH": "When set, used instead of the password.",
-    "EC_DEFAULT_ORCHESTRATOR": "Target used when a tool does not pass 'target'. Must exist in the registry.",
-    "EC_DEFAULT_SSE": "SSE platform used when a tool does not pass 'target'.",
+    "EC_DEFAULT_ORCHESTRATOR": "Only when several targets exist: used when a tool passes no 'target'. Otherwise irrelevant.",
+    "EC_DEFAULT_SSE": "Only when several SSE platforms exist.",
+    "EC_ALLOW_WRITE_TOOLS": "Governs EdgeConnect write tools (API/SSH). Independent from SSE.",
+    "EC_ALLOW_SSE_WRITE_TOOLS": "Governs Axis Security write tools (axis_create/update/delete/commit). Independent from EdgeConnect.",
 }
 
 BY_KEY = {setting.key: setting for setting in SETTINGS}

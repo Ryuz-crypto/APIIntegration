@@ -633,6 +633,52 @@ def test_page_has_msp_wizard_home_donate_and_menu_fix():
     assert "closeMenusOnOutsideClick" in PAGE
 
 
+def test_sse_writes_have_independent_gate(monkeypatch):
+    from ec_mcp import server
+    from ec_mcp.config import Settings
+    from ec_mcp.security import SecurityError
+
+    monkeypatch.setenv("EC_ALLOW_WRITE_TOOLS", "true")
+    monkeypatch.setenv("EC_ALLOW_SSE_WRITE_TOOLS", "false")
+    monkeypatch.setenv("EC_ORCHESTRATORS_JSON", '{"p":{"url":"https://o.example.com","api_key":"k"}}')
+    monkeypatch.setenv("EC_SSE_PLATFORMS_JSON", '{"axis":{"provider":"axis","base_url":"https://a.example.com","admin_token":"t"}}')
+    import asyncio
+
+    def axis_fn():
+        srv = server.create_server(Settings.from_env())
+        tool = srv._tool_manager._tools["axis_create_tag"]
+        return getattr(tool, "fn", tool)
+
+    async def call():
+        try:
+            r = axis_fn()(name="x", applications_json="[]", confirm=True)
+            if asyncio.iscoroutine(r):
+                r = await r
+            return str(r)
+        except SecurityError as exc:
+            return str(exc)
+        except Exception as exc:
+            return f"other:{type(exc).__name__}:{exc}"
+
+    out = asyncio.run(call())
+    assert "EC_ALLOW_SSE_WRITE_TOOLS" in out, out
+    monkeypatch.setenv("EC_ALLOW_SSE_WRITE_TOOLS", "true")
+    out2 = asyncio.run(call())
+    assert "EC_ALLOW_SSE_WRITE_TOOLS" not in out2, out2
+
+
+def test_wizard_home_button_and_step_texts(env):
+    config = admin_config.public_config(env / ".env")
+    by_key = {f["key"]: f for f in config["fields"]}
+    assert by_key["EC_ALLOW_WRITE_TOOLS"]["label"].startswith("Permitir escrituras en EdgeConnect")
+    assert by_key["EC_ALLOW_SSE_WRITE_TOOLS"]["label_en"] == "Allow HPE SSE (Axis) writes"
+    steps = {s["id"]: s for s in config["steps"]}
+    assert "EdgeConnect" in steps["ssh"]["desc"]
+    assert "opcionalmente" in steps["targets"]["desc"]
+    assert "opcional" in by_key["EC_DEFAULT_ORCHESTRATOR"]["label"]
+    assert "wizHome" in PAGE
+
+
 def test_new_routes_registered():
     paths = {route.path for route in build_admin_app().routes}
     assert {
