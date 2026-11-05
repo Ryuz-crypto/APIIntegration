@@ -84,7 +84,7 @@ button:active{transform:scale(.97)}
 .tools-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-top:14px}
 .tool-card{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border:1px solid var(--line);border-left:4px solid var(--brand);border-radius:5px;background:#f9fcfc}
 .tool-card strong{font-size:12.5px;word-break:break-all}
-.tool-card .help{margin-top:3px}
+.tool-card>div{min-width:0;flex:1}.tool-card .help{display:block;margin-top:3px;word-break:break-word}.tool-card .switch{margin-left:10px}
 .switch{position:relative;display:inline-block;width:40px;height:22px;flex:0 0 auto}
 .switch input{opacity:0;width:0;height:0}
 .slider{position:absolute;inset:0;background:#c3d2d9;border-radius:999px;transition:background .2s ease;cursor:pointer}
@@ -171,6 +171,11 @@ var I18N5={es:{app_accent:'Color de acento',app_header:'Color de cabecera',app_c
 for(var k5 in I18N5.es){I18N.es[k5]=I18N5.es[k5]}
 for(var k5 in I18N5.en){I18N.en[k5]=I18N5.en[k5]}
 
+var I18N6={es:{nav_debug:'Debug',dbg_title:'Depurador de solicitudes',dbg_desc:'Solicitudes en tiempo real del panel (API) y de las tools MCP (audit log). Se actualiza cada 2 s.',dbg_filter:'Filtrar (texto)…',dbg_pause:'Pausar',dbg_resume:'Reanudar',dbg_refresh:'Actualizar',dbg_export:'Exportar',dbg_clear:'Limpiar logs',dbg_time:'Hora',dbg_source:'Fuente',dbg_action:'Acción',dbg_target:'Target',dbg_result:'Resultado',dbg_lat:'Latencia',dbg_tool:'MCP tool',dbg_api:'API panel',dbg_empty:'Sin eventos todavía.',dbg_exported:'Exportado.',dbg_clear_confirm:'¿Borrar el audit log y vaciar el búfer de eventos? Esta acción libera almacenamiento y no se puede deshacer.'},en:{nav_debug:'Debug',dbg_title:'Request debugger',dbg_desc:'Real-time panel API requests and MCP tool calls (audit log). Refreshes every 2 s.',dbg_filter:'Filter (text)…',dbg_pause:'Pause',dbg_resume:'Resume',dbg_refresh:'Refresh',dbg_export:'Export',dbg_clear:'Clear logs',dbg_time:'Time',dbg_source:'Source',dbg_action:'Action',dbg_target:'Target',dbg_result:'Result',dbg_lat:'Latency',dbg_tool:'MCP tool',dbg_api:'Panel API',dbg_empty:'No events yet.',dbg_exported:'Exported.',dbg_clear_confirm:'Delete the audit log and empty the event buffer? This frees storage and cannot be undone.'}};
+for(var k6 in I18N6.es){I18N.es[k6]=I18N6.es[k6]}
+for(var k6 in I18N6.en){I18N.en[k6]=I18N6.en[k6]}
+
+
 
 
 
@@ -198,7 +203,7 @@ async function login(){
 async function logout(){await api('/logout',{});AUTHED=false;renderLogin()}
 function renderShell(){
  q('#app').innerHTML='<header class="topbar">'+brandHtml()+'<div class="topbar-actions"><span class="version">__EC_MCP_VERSION__</span>'+userChip()+chromeHtml()+'</div></header>'+
- '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button id="tab-orch" onclick="showTab(\'orch\')">'+t('nav_orch')+'</button><button id="tab-sse" onclick="showTab(\'sse\')">'+t('nav_sse')+'</button><button id="tab-svc" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button><button id="tab-config" onclick="showTab(\'config\')">'+t('nav_config')+'</button><button id="tab-tls" onclick="showTab(\'tls\')">'+t('nav_tls')+'</button><button id="tab-tools" onclick="showTab(\'tools\')">'+t('nav_tools')+'</button><button id="tab-update" onclick="showTab(\'update\')">'+t('nav_update')+'</button><button id="tab-users" onclick="showTab(\'users\')">'+t('nav_users')+'</button></nav>'+
+ '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button id="tab-orch" onclick="showTab(\'orch\')">'+t('nav_orch')+'</button><button id="tab-sse" onclick="showTab(\'sse\')">'+t('nav_sse')+'</button><button id="tab-svc" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button><button id="tab-config" onclick="showTab(\'config\')">'+t('nav_config')+'</button><button id="tab-tls" onclick="showTab(\'tls\')">'+t('nav_tls')+'</button><button id="tab-tools" onclick="showTab(\'tools\')">'+t('nav_tools')+'</button><button id="tab-debug" onclick="showTab(\'debug\')">'+t('nav_debug')+'</button><button id="tab-update" onclick="showTab(\'update\')">'+t('nav_update')+'</button><button id="tab-users" onclick="showTab(\'users\')">'+t('nav_users')+'</button></nav>'+
  '<div id="notice"></div><section id="workspace"></section>'+customDialogHtml();
  if(ME&&ME.role!=='admin'){var ub=q('#tab-users');if(ub)ub.style.display='none'}
  showTab('wizard');
@@ -217,6 +222,8 @@ function showTab(name){
  if(name==='users')renderUsers();
  if(name==='tls')renderTls();
  if(name==='tools')renderTools();
+ if(name==='debug')renderDebug();
+ if(name!=='debug'&&typeof dbgStop==='function')dbgStop();
 }
 async function renderServices(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">'+t('checking')+'</p></section>';
@@ -485,6 +492,34 @@ async function showAgentPrompt(){
 function agentDialogHtml(){return '<dialog id="agent-dlg" style="max-width:780px;width:calc(100% - 30px)"><h3>'+t('agent_title')+'</h3><p class="help">'+t('agent_desc')+'</p><pre id="agent-text" style="max-height:52vh;overflow:auto;background:#f6f8f9;border:1px solid var(--line);border-radius:4px;padding:12px;font-size:11px;white-space:pre-wrap"></pre><div class="actions"><button onclick="copyAgent()">'+t('copy')+'</button><button class="secondary" onclick="closeAgent()">'+t('custom_cancel')+'</button></div></dialog>'}
 function copyAgent(){var el=q('#agent-text');if(el&&navigator.clipboard){navigator.clipboard.writeText(el.textContent)}notice(t('copied'),'ok')}
 function closeAgent(){var d=q('#agent-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
+var DBG_TIMER=null,DBG_PAUSED=false,DBG_Q='';
+async function renderDebug(){
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('dbg_title')+'</h2><p class="help">'+t('dbg_desc')+'</p><div class="actions" style="align-items:center"><input id="dbg-q" placeholder="'+t('dbg_filter')+'" oninput="dbgApplyFilter()" style="max-width:300px;min-height:34px;margin-top:0"><button class="secondary" onclick="dbgTogglePause()" id="dbg-pause">'+t('dbg_pause')+'</button><button class="secondary" onclick="dbgRefresh()">'+t('dbg_refresh')+'</button><button class="secondary" onclick="dbgExport()">'+t('dbg_export')+'</button><button class="danger" onclick="dbgClear()">'+t('dbg_clear')+'</button></div><div id="dbg-table"><p class="help">'+t('checking')+'</p></div></section>';
+ await dbgRefresh();
+ if(!DBG_TIMER)DBG_TIMER=setInterval(function(){if(!DBG_PAUSED)dbgRefresh()},2500);
+}
+function dbgStop(){if(DBG_TIMER){clearInterval(DBG_TIMER);DBG_TIMER=null}}
+function dbgApplyFilter(){DBG_Q=(q('#dbg-q')||{}).value||'';dbgRefresh()}
+function dbgTogglePause(){DBG_PAUSED=!DBG_PAUSED;var b=q('#dbg-pause');if(b)b.textContent=DBG_PAUSED?t('dbg_resume'):t('dbg_pause')}
+async function dbgRefresh(){
+ try{
+  var r=await api('/api/debug/events?limit=200&q='+encodeURIComponent(DBG_Q));
+  var rows=(r.events||[]).map(function(e){return '<tr><td class="mono" style="white-space:nowrap">'+esc(String(e.ts_iso||'').replace('T',' ').slice(0,19))+'</td><td><span class="badge">'+(e.source==='mcp-tool'?t('dbg_tool'):t('dbg_api'))+'</span></td><td class="mono">'+esc(e.action)+'</td><td class="mono">'+esc(e.target||'')+'</td><td>'+esc(e.result||'')+'</td><td style="white-space:nowrap">'+(e.latency||0).toFixed(2)+'s</td></tr>'}).join('')||'<tr><td colspan="6" class="help">'+t('dbg_empty')+'</td></tr>';
+  q('#dbg-table').innerHTML='<table class="diff"><tr><th>'+t('dbg_time')+'</th><th>'+t('dbg_source')+'</th><th>'+t('dbg_action')+'</th><th>'+t('dbg_target')+'</th><th>'+t('dbg_result')+'</th><th>'+t('dbg_lat')+'</th></tr>'+rows+'</table>';
+ }catch(e){notice(e.message,'err')}
+}
+async function dbgExport(){
+ try{
+  var r=await fetch('/api/debug/export');
+  var blob=await r.blob();
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ec-mcp-debug.jsonl';a.click();URL.revokeObjectURL(a.href);
+  notice(t('dbg_exported'),'ok');
+ }catch(e){notice(e.message,'err')}
+}
+async function dbgClear(){
+ if(!confirm(t('dbg_clear_confirm')))return;
+ try{var r=await api('/api/debug/clear',{});notice(r.message||r.error,r.ok?'ok':'err');await dbgRefresh()}catch(e){notice(e.message,'err')}
+}
 function fieldHtml(f){
  var id='cfg-'+f.key, input='';
  if(f.kind==='boolean')input='<select id="'+id+'" data-key="'+f.key+'"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select>';

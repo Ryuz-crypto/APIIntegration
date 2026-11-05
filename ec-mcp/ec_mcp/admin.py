@@ -34,12 +34,16 @@ import shutil
 import subprocess  # nosec B404 - se usa con argv fijo y binario resuelto
 import tempfile
 import time
+from collections import deque
 from math import ceil
 from pathlib import Path
 
 import httpx
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse, RedirectResponse
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 from . import __version__, admin_users
@@ -68,6 +72,38 @@ from .web_update import status as update_status
 SESSIONS: dict[str, dict] = {}
 SESSION_TTL = 3600.0
 LOGIN_FAILURES: dict[str, list[float]] = {}
+
+DEBUG_EVENTS: deque = deque(maxlen=500)
+
+
+def _debug_record(source: str, action: str, target: str, result: str, latency: float = 0.0) -> None:
+    DEBUG_EVENTS.append(
+        {
+            "ts": time.time(),
+            "source": source,
+            "action": action[:200],
+            "target": target[:200],
+            "result": result[:200],
+            "latency": round(latency, 3),
+        }
+    )
+
+
+class _DebugMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        started = time.time()
+        response = await call_next(request)
+        path = request.url.path
+        if path.startswith("/api/") or path == "/login":
+            _debug_record(
+                "panel-api",
+                f"{request.method} {path}",
+                request.client.host if request.client else "",
+                str(response.status_code),
+                time.time() - started,
+            )
+        return response
+
 
 ROLE_PERMISSIONS = {
     "viewer": {"read"},
@@ -1024,6 +1060,143 @@ async def api_agent_prompt(request):
     )
 
 
+def _audit_tail(limit: int) -> list[dict]:
+    path = Settings.from_env().audit_log_path
+    entries: list[dict] = []
+    if path.is_file():
+        try:
+            tail = path.read_bytes()[-262144:]
+            for line in tail.decode("utf-8", "replace").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+        except OSError:
+            pass
+    return entries[-limit:]
+
+
+def _debug_events_payload(limit: int, query: str = "", source: str = "") -> list[dict]:
+    from datetime import UTC, datetime
+
+    events: list[dict] = []
+    for e in DEBUG_EVENTS:
+        events.append(
+            {
+                "ts": e["ts"],
+                "ts_iso": datetime.fromtimestamp(e["ts"], UTC).isoformat(),
+                "source": e["source"],
+                "action": e["action"],
+                "target": e["target"],
+                "result": e["result"],
+                "latency": e["latency"],
+            }
+        )
+    for a in _audit_tail(2000):
+        ts_raw = a.get("timestamp", "")
+        try:
+            ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00")).timestamp()
+        except (ValueError, TypeError):
+            ts = 0.0
+        events.append(
+            {
+                "ts": ts,
+                "ts_iso": ts_raw,
+                "source": "mcp-tool",
+                "action": str(a.get("action", "")),
+                "target": str(a.get("target", "")),
+                "result": str(a.get("result", "")),
+                "latency": 0.0,
+                "tool": str(a.get("tool", "")),
+                "user": str(a.get("user", "")),
+            }
+        )
+    if query:
+        events = [e for e in events if query in json.dumps(e).lower()]
+    if source:
+        events = [e for e in events if e["source"] == source]
+    events.sort(key=lambda e: e["ts"], reverse=True)
+    return events[:limit]
+
+
+async def api_debug_events(request):
+    _session, denied = _authorize(request, "read")
+    if denied:
+        return denied
+    params = request.query_params
+    try:
+        limit = min(max(int(params.get("limit") or 200), 1), 500)
+    except ValueError:
+        limit = 200
+    events = _debug_events_payload(limit, (params.get("q") or "").strip().lower(), (params.get("source") or "").strip())
+    return JSONResponse({"ok": True, "events": events, "buffer": len(DEBUG_EVENTS)})
+
+
+async def api_debug_export(request):
+    session, denied = _authorize(request, "read")
+    if denied:
+        return denied
+    from datetime import UTC, datetime
+
+    fmt = (request.query_params.get("format") or "jsonl").lower()
+    events = _debug_events_payload(5000)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    if fmt == "csv":
+        import csv
+        import io
+
+        out = io.StringIO()
+        writer = csv.writer(out)
+        writer.writerow(["ts", "source", "tool", "action", "target", "result", "latency_s", "user"])
+        for e in events:
+            writer.writerow(
+                [e["ts_iso"], e["source"], e.get("tool", ""), e["action"], e["target"], e["result"], e["latency"], e.get("user", "")]
+            )
+        body = out.getvalue()
+        media = "text/csv"
+        filename = f"ec-mcp-debug-{stamp}.csv"
+    else:
+        body = "\n".join(json.dumps(e, ensure_ascii=False) for e in events) + "\n"
+        media = "application/x-ndjson"
+        filename = f"ec-mcp-debug-{stamp}.jsonl"
+    _audit_panel(session["user"], "debug_export", filename, "ok", {"events": len(events), "format": fmt})
+    return Response(
+        body,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+async def api_debug_clear(request):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    path = Settings.from_env().audit_log_path
+    size_before = path.stat().st_size if path.is_file() else 0
+    _audit_panel(session["user"], "debug_clear", str(path), "ok", {"bytes_before": size_before})
+    _debug_record("panel-api", "debug_clear", str(path), f"truncated {size_before}B")
+    removed: list[str] = []
+    if path.is_file():
+        path.write_text("", encoding="utf-8")
+        removed.append(str(path))
+    for old in path.parent.glob(path.name + ".*"):
+        if old.is_file() and old.suffix in {".old", ".bak", ".1"}:
+            old.unlink(missing_ok=True)
+            removed.append(str(old))
+    DEBUG_EVENTS.clear()
+    return JSONResponse(
+        {
+            "ok": True,
+            "removed": removed,
+            "bytes_before": size_before,
+            "message": f"Logs limpiados ({size_before} bytes liberados del audit log y búfer vaciado).",
+        }
+    )
+
+
 async def api_users_password(request):
     session, denied = _authorize(request, "read")
     if denied:
@@ -1051,7 +1224,6 @@ async def api_users_password(request):
     return JSONResponse({"ok": True, "message": f"Contraseña actualizada para '{target_user}'"})
 
 
-from starlette.responses import Response
 
 
 def HTMLResponseMin(content: str) -> Response:
@@ -1060,6 +1232,7 @@ def HTMLResponseMin(content: str) -> Response:
 
 def build_admin_app() -> Starlette:
     return Starlette(
+        middleware=[Middleware(_DebugMiddleware)],
         routes=[
             Route("/", home, methods=["GET"]),
             Route("/login", login_page, methods=["GET"]),
@@ -1097,6 +1270,9 @@ def build_admin_app() -> Starlette:
             Route("/api/tools", api_tools_list, methods=["GET"]),
             Route("/api/tools/toggle", api_tools_toggle, methods=["POST"]),
             Route("/api/agent-prompt", api_agent_prompt, methods=["GET"]),
+            Route("/api/debug/events", api_debug_events, methods=["GET"]),
+            Route("/api/debug/export", api_debug_export, methods=["GET"]),
+            Route("/api/debug/clear", api_debug_clear, methods=["POST"]),
         ]
     )
 

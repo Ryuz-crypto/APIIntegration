@@ -289,11 +289,12 @@ La interfaz está en **español e inglés** (botón ES/EN en la cabecera, se
 recuerda en `localStorage`) y usa el look and feel del dashboard de WAN_SIM:
 paleta HPE viva (`--green:#01a982`, cabecera teal `#073b4c` con borde inferior
 verde, acentos cian `#00c8ff`, fondo claro `#edf5f6`, paneles blancos con
-borde superior de acento y pestañas con subrayado). Los círculos de la
-cabecera son una **paleta de colores** (verde/cian/azul/dorado/rosa/teal) que
-cambia el acento de toda la página. Con el engranaje (**Personalizar**)….se
-puede cambiar el **nombre del sitio** (`ec-mcp control plane`) y subir un
-**icono PNG** (se guarda en `localStorage`). La cabecera muestra la versión y
+borde superior de acento y pestañas con subrayado). Con el engranaje
+(**Personalizar**, estilo panel Appearance de WAN_SIM) se configura el nombre
+del sitio, **tres colores** (acento, cabecera, acento secundario) con
+`input[type=color]`, el **icono** (presets o PNG subido) y **vista previa en
+vivo** de la cabecera; se guarda en `localStorage` y la página incluye
+transiciones y animaciones suaves. La cabecera muestra la versión y
 el usuario/rol conectado con menú propio; los avisos se limpian al cambiar de
 pestaña. En **Variables**, los grupos van ordenados por paso del asistente y
 son colapsables, con contador de campos por grupo.
@@ -303,9 +304,19 @@ las variables globales, permite ver la configuración guardada de cada
 Orquestador/SSE por nombre (URL, usuario, TLS, flags de secretos), junto al
 estado de los blobs `EC_ORCHESTRATORS_JSON` / `EC_SSE_PLATFORMS_JSON`.
 
-La pestaña **Tools** (`/api/tools`, `/api/tools/toggle`) lista las 125 tools MCP
-con interruptores para activar/desactivar (se guarda en `EC_MCP_DISABLED_TOOLS`,
-aplica al reiniciar y también es editable en Variables). El botón **Sugerencia
+La pestaña **Debug** (`/api/debug/events`, `/api/debug/export`,
+`/api/debug/clear`) muestra en tiempo real (cada 2 s, con filtro) las
+solicitudes del panel (middleware propio, fuente `panel-api`) y las llamadas a
+tools MCP leídas del audit log (`EC_MCP_AUDIT_LOG`, fuente `mcp-tool`), con
+hora/fuente/acción/target/resultado/latencia. Permite **exportar** (JSONL o
+CSV como adjunto) y **limpiar los logs** (trunca el audit log y vacía el búfer,
+registrado en auditoría) para liberar almacenamiento. En Tools, las tarjetas
+usan sliders en cuadrícula sin encimarse.
+
+La pestaña **Tools** (`/api/tools`, `/api/tools/toggle`) muestra las 125 tools
+MCP en **cuadrícula con sliders** (switch) para activar/desactivar sin bajar la
+página; se guarda en `EC_MCP_DISABLED_TOOLS`, aplica al reiniciar y también es
+editable en Variables. El botón **Sugerencia
 para AI Agent** (`/api/agent-prompt`) muestra el prompt completo para el agente,
 incluyendo los skills de `ec-mcp/docs/` (`EDGECONNECT_NOC_OPS_SKILL.md`,
 `AI_AGENT_SKILL_RECOMMENDATIONS.md`, `EDGECONNECT_EXPERT_SKILL.md`).

@@ -475,6 +475,57 @@ def test_page_has_tools_tab_and_clean_chrome():
     assert '()"' + chr(39) + '>' not in PAGE  # patrón del bug "false": comilla antes del >
 
 
+def test_debug_events_export_clear(client, env):
+    from ec_mcp.audit import AuditLog
+
+    admin.DEBUG_EVENTS.clear()
+    client.get("/api/state")
+    client.get("/api/tools")
+    r = client.get("/api/debug/events?limit=50")
+    assert r.status_code == 200
+    events = r.json()["events"]
+    api_events = [e for e in events if e["source"] == "panel-api"]
+    assert any("GET /api/state" in e["action"] for e in api_events)
+    # tool MCP desde el audit log
+    audit = AuditLog(env / "audit.jsonl")
+    audit.record("my_tool", "read", "orch:prod", "ok", user="admin")
+    r = client.get("/api/debug/events?limit=50&q=my_tool")
+    tool_events = [e for e in r.json()["events"] if e["source"] == "mcp-tool"]
+    assert tool_events and tool_events[0]["tool"] == "my_tool" and tool_events[0]["user"] == "admin"
+    # export
+    ex = client.get("/api/debug/export")
+    assert ex.status_code == 200
+    assert "attachment" in ex.headers.get("content-disposition", "")
+    assert "my_tool" in ex.text
+    ex_csv = client.get("/api/debug/export?format=csv")
+    assert ex_csv.headers["content-type"].startswith("text/csv")
+    assert "mcp-tool" in ex_csv.text
+    # clear
+    assert (env / "audit.jsonl").stat().st_size > 0
+    cleared = client.post("/api/debug/clear")
+    assert cleared.json()["ok"] is True
+    assert cleared.json()["bytes_before"] > 0
+    assert (env / "audit.jsonl").read_text(encoding="utf-8") == ""
+    # el middleware registra el propio clear tras ejecutarse: solo quedan eventos panel-api
+    remaining = client.get("/api/debug/events").json()["events"]
+    assert all(e["source"] == "panel-api" for e in remaining)
+
+
+def test_debug_clear_forbidden_for_viewer(env):
+    admin_users.upsert_user("bob", "bobpw", "viewer")
+    c = TestClient(build_admin_app())
+    c.post("/login", json={"username": "bob", "password": "bobpw"})
+    assert c.post("/api/debug/clear").status_code == 403
+    assert c.get("/api/debug/events").status_code == 200
+
+
+def test_page_has_debug_tab():
+    assert "renderDebug" in PAGE
+    assert "nav_debug" in PAGE
+    assert "/api/debug/events" in PAGE and "/api/debug/export" in PAGE and "/api/debug/clear" in PAGE
+    assert ".tool-card>div{min-width:0" in PAGE
+
+
 def test_new_routes_registered():
     paths = {route.path for route in build_admin_app().routes}
     assert {
@@ -485,6 +536,9 @@ def test_new_routes_registered():
         "/api/tools",
         "/api/tools/toggle",
         "/api/agent-prompt",
+        "/api/debug/events",
+        "/api/debug/export",
+        "/api/debug/clear",
         "/api/config/diff",
         "/api/probe",
         "/api/default",
