@@ -50,6 +50,7 @@ button.danger:hover{background:#c22c58}
 button:disabled{opacity:.5;cursor:not-allowed}
 .badge{display:inline-block;padding:3px 8px;border:1px solid var(--line);border-radius:4px;font-size:11px;font-weight:700;background:#edf2f4;color:#4e6672}
 .orch{padding:12px 14px;border:1px solid var(--line);border-radius:5px;margin:8px 0;background:#fff}
+.orch::after{content:\"\";display:table;clear:both}
 .orch-actions{float:right;display:flex;gap:6px}
 .orch-actions button{min-height:31px;padding:5px 8px;font-size:12px}
 .secret-note{font-size:11px;color:#0f766e}
@@ -621,7 +622,7 @@ function backupsDialogHtml(){return '<dialog id="bak-dlg" style="max-width:760px
 async function loadBackups(){
  try{
   var r=await api('/api/backups');
-  var rows=(r.backups||[]).map(function(b){return '<div class="orch"><strong>'+esc(b.name)+'</strong> <span class="badge">'+esc(b.label||'')+'</span><br><span class="help">env: '+(b.env_changed&&b.env_changed.length?b.env_changed.slice(0,10).map(esc).join(', '):'—')+' · registro: '+(b.registry_changed&&b.registry_changed.length?b.registry_changed.map(esc).join(', '):'—')+'</span><span class="orch-actions"><button class="danger" onclick="restoreBackup(\''+esc(b.name)+'\')">'+t('bak_restore')+'</button></span></div>'}).join('')||'<p class="help">'+t('bak_empty')+'</p>';
+  var rows=(r.backups||[]).map(function(b){return '<div class="orch"><span class="orch-actions"><button class="danger" onclick="restoreBackup(\''+esc(b.name)+'\')">'+t('bak_restore')+'</button></span><strong>'+esc(b.name)+'</strong> <span class="badge">'+esc(b.label||'')+'</span><br><span class="help">env: '+(b.env_changed&&b.env_changed.length?b.env_changed.slice(0,10).map(esc).join(', '):'—')+' · registro: '+(b.registry_changed&&b.registry_changed.length?b.registry_changed.map(esc).join(', '):'—')+'</span></div>'}).join('')||'<p class="help">'+t('bak_empty')+'</p>';
   q('#bak-list').innerHTML=rows;
  }catch(e){notice(e.message,'err')}
 }
