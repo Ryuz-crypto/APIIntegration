@@ -8,6 +8,7 @@ the structured audit log without secrets.
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import UTC, datetime
 from typing import Any
@@ -44,18 +45,27 @@ def probe_orchestrator(entry: dict[str, Any]) -> dict[str, Any]:
     if not url:
         raise ServiceProbeError("El orquestador no tiene URL configurada.")
     verify_tls = entry.get("verify_tls", True)
-    headers: dict[str, str] = {}
     api_key = entry.get("api_key")
     username = entry.get("username")
     password = entry.get("password")
-    if api_key:
-        headers["X-Auth-Token"] = str(api_key)
-    elif username:
-        headers["X-Auth-User"] = str(username)
-        headers["X-Auth-Pass"] = str(password or "")
+    token = str(api_key) if api_key else ""
     started = _now()
     with httpx.Client(base_url=url, verify=verify_tls, timeout=PROBE_TIMEOUT) as client:
-        response = client.get("/gms/rest/system/healthcheck", headers=headers)
+        if not token and username:
+            login_resp = client.post(
+                "/gms/rest/authentication/login",
+                json={"user": str(username), "password": str(password or "")},
+            )
+            if login_resp.status_code != 200:
+                raise ServiceProbeError(f"HTTP {login_resp.status_code} en el login del orquestador.")
+            try:
+                login_data = login_resp.json()
+            except json.JSONDecodeError:
+                login_data = {}
+            token = str(login_data.get("sessionCookie") or login_data.get("token") or login_resp.text or "")
+        if not token:
+            raise ServiceProbeError("Configura API key o usuario/contraseña en el orquestador.")
+        response = client.get("/gms/rest/gmsserver/briefInfo", headers={"X-Auth-Token": token})
     elapsed = (_now() - started).total_seconds()
     if response.status_code != 200:
         raise ServiceProbeError(f"HTTP {response.status_code} al consultar el orquestador.")

@@ -81,7 +81,7 @@ def test_services_status_marks_down_without_fabricating_ready(tmp_path: Path, mo
 
     class _Registry:
         def list_orchestrators(self):
-            return {"prod": {"url": "https://orch.example.com"}}
+            return {"prod": {"url": "https://orch.example.com", "api_key": "k"}}
 
         def list_sse(self):
             return {"axis": {"base_url": "https://axis.example.com", "admin_token": "tok"}}
