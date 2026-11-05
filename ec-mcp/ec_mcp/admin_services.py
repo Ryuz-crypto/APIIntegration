@@ -98,18 +98,28 @@ def mcp_probe_url() -> str:
 
 
 def probe_mcp_transport() -> dict[str, Any]:
-    """Check the local MCP transport listener from configuration."""
-    url = mcp_probe_url()
+    """Check the local MCP transport listener; falls back to loopback if needed."""
+    candidates = [mcp_probe_url()]
+    fallback = mcp_probe_url()
+    if "127.0.0.1" not in fallback and "localhost" not in fallback:
+        candidates.append(fallback.replace(f"://{os.environ.get('EC_MCP_HOST', '')}", "://127.0.0.1"))
     started = _now()
-    try:
-        with httpx.Client(verify=True, timeout=PROBE_TIMEOUT) as client:
-            response = client.get(url)
-        elapsed = (_now() - started).total_seconds()
-        if response.status_code != 200:
-            raise ServiceProbeError(f"HTTP {response.status_code} en {url}")
-        return {"latency": elapsed, "status_code": response.status_code, "url": url}
-    except httpx.HTTPError as exc:
-        raise ServiceProbeError(f"No hay respuesta del transporte MCP en {url}: {type(exc).__name__}") from exc
+    last_error = ""
+    for url in candidates:
+        try:
+            with httpx.Client(verify=True, timeout=PROBE_TIMEOUT) as client:
+                response = client.get(url)
+            if response.status_code == 200:
+                return {
+                    "state": "up",
+                    "latency": (_now() - started).total_seconds(),
+                    "status_code": response.status_code,
+                    "url": url,
+                }
+            last_error = f"HTTP {response.status_code} en {url}"
+        except httpx.HTTPError as exc:
+            last_error = f"{url}: {type(exc).__name__}"
+    raise ServiceProbeError(f"No hay respuesta del transporte MCP ({last_error})")
 
 
 def services_status(probe: bool = True) -> dict[str, Any]:

@@ -9,7 +9,7 @@ PAGE = r"""<!doctype html>
 *{box-sizing:border-box}
 body{font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:var(--page-bg);color:var(--text);margin:0;min-height:100vh}
 main{max-width:1500px;margin:0 auto;padding-bottom:40px}
-header.topbar{min-height:68px;padding:12px 32px;display:flex;align-items:center;justify-content:space-between;gap:16px;color:#fff;background:var(--brand-header);border-bottom:4px solid transparent;position:relative;overflow:hidden;transition:background .3s ease}
+header.topbar{min-height:68px;padding:12px 32px;display:flex;align-items:center;justify-content:space-between;gap:16px;color:#fff;background:var(--brand-header);border-bottom:4px solid transparent;position:relative;transition:background .3s ease}
 header.topbar::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:linear-gradient(90deg,var(--brand),var(--cyan),var(--brand));background-size:200% 100%;animation:accentbar 7s linear infinite}
 @keyframes accentbar{to{background-position:200% 0}}
 nav button{transition:color .15s ease,border-color .15s ease}
@@ -66,7 +66,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .chip{display:flex;align-items:center;background:rgba(255,255,255,.08);border:1px solid #4f7080;color:#bffce8;border-radius:4px;padding:6px 10px;font-size:12px;cursor:pointer;list-style:none}
 .chip:hover{border-color:var(--cyan);color:#fff}
 details.menu{position:relative}
-details.menu .menu-body{position:absolute;right:0;top:36px;background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 24px rgba(7,59,76,.25);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:200px;z-index:20}
+details.menu .menu-body{z-index:50;position:absolute;right:0;top:36px;background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:0 8px 24px rgba(7,59,76,.25);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:200px;z-index:20}
 details.menu .menu-body button{width:100%;justify-content:flex-start}
 dialog{border:1px solid var(--line);border-top:5px solid var(--gold);border-radius:6px;background:#fff;color:var(--text);max-width:520px;width:calc(100% - 30px);padding:22px;box-shadow:0 20px 60px rgba(4,31,42,.35)}
 dialog::backdrop{background:rgba(7,59,76,.68)}
@@ -108,9 +108,13 @@ button:active{transform:scale(.97)}
 .brand-preview span{display:block;color:#d7eff3;font-size:12px}
 .brand-preview .logo{width:34px;height:34px;object-fit:contain;font-size:26px;background:transparent}
 @media(max-width:900px){.tools-grid{grid-template-columns:1fr 1fr}.color-controls{grid-template-columns:1fr}}
+
+.powered-footer{display:flex;align-items:center;justify-content:center;gap:14px;padding:18px 32px 26px;color:#5f7681;font-size:11px}
+.donate{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;background:var(--gold);color:#4a3400;font-weight:800;text-decoration:none;border:1px solid #d9a900;transition:transform .12s ease,box-shadow .12s ease}
+.donate:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(242,185,0,.4)}
 </style></head><body><main id="app">Cargando...</main>
 <script>
-var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=0, WDRAFT={}, CURTAB='wizard';
+var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, CURTAB='wizard';
 var LANG=localStorage.getItem('ec-lang')||'es';
 var ACCENTS=[{n:'HPE Green',c:'#01a982'},{n:'Cyan',c:'#00c8ff'},{n:'Blue',c:'#00739d'},{n:'Gold',c:'#f2b900'},{n:'Rose',c:'#d94f70'},{n:'Header teal',c:'#073b4c'}];
 var I18N={es:{nav_wizard:'Asistente',nav_orch:'Orquestadores',nav_sse:'Plataformas SSE',nav_svc:'Servicios',nav_config:'Variables',nav_update:'Actualizaciones',nav_users:'Usuarios',nav_out:'Salir',tagline:'MCP para SASE · EdgeConnect SD-WAN',login_title:'Control plane administrativo',login_user:'Usuario',login_pass:'Contraseña',login_enter:'Entrar',h2_orch:'Orquestadores',h2_sse:'Plataformas SSE (multi-tenant)',h2_svc:'Servicios',h2_config:'Variables del servicio',h2_update:'Actualizaciones desde GitHub',h2_users:'Usuarios del panel',h2_wizard:'Asistente de configuración',btn_save:'Guardar',btn_save_vars:'Guardar variables',btn_save_restart:'Guardar y reiniciar servicios',btn_save_restart_short:'Guardar y reiniciar',btn_recheck:'Volver a comprobar',btn_detect:'Detectar GitHub',btn_apply_update:'Aplicar actualización',btn_back:'Atrás',btn_next:'Siguiente',btn_review:'Revisar cambios',btn_probe:'Probar',btn_dup:'Duplicar',btn_ren:'Renombrar',btn_default:'Por defecto',btn_edit:'Editar',btn_delete:'Eliminar',btn_save_orch:'Guardar orquestador',btn_save_sse:'Guardar plataforma SSE',loading:'Cargando...',wiz_loading:'Cargando pasos...',secret_set:'Secreto configurado; no se muestra.',secret_unset:'Sin configurar.'},en:{nav_wizard:'Wizard',nav_orch:'Orchestrators',nav_sse:'SSE platforms',nav_svc:'Services',nav_config:'Settings',nav_update:'Updates',nav_users:'Users',nav_out:'Sign out',tagline:'MCP for SASE · EdgeConnect SD-WAN',login_title:'Administrative control plane',login_user:'User',login_pass:'Password',login_enter:'Sign in',h2_orch:'Orchestrators',h2_sse:'SSE platforms (multi-tenant)',h2_svc:'Services',h2_config:'Service settings',h2_update:'Updates from GitHub',h2_users:'Panel users',h2_wizard:'Setup wizard',btn_save:'Save',btn_save_vars:'Save settings',btn_save_restart:'Save and restart services',btn_save_restart_short:'Save and restart',btn_recheck:'Re-check',btn_detect:'Check GitHub',btn_apply_update:'Apply update',btn_back:'Back',btn_next:'Next',btn_review:'Review changes',btn_probe:'Test',btn_dup:'Duplicate',btn_ren:'Rename',btn_default:'Default',btn_edit:'Edit',btn_delete:'Delete',btn_save_orch:'Save orchestrator',btn_save_sse:'Save SSE platform',loading:'Loading...',wiz_loading:'Loading steps...',secret_set:'Secret configured; never displayed.',secret_unset:'Not configured.'}};
@@ -150,6 +154,9 @@ function saveCustom(){
  applySavedTheme();closeCustom();refreshBrand();
 }
 function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="previewBrand()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="previewBrand()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="previewBrand()"></label></div><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button><button class="danger" onclick="resetCustom()">'+t('app_reset')+'</button></div></dialog>'}
+
+var DONATE_URL='https://github.com/sponsors/Ryuz-crypto';
+function footerHtml(){return '<footer class="powered-footer"><span>'+t('credits')+': ec-mcp · Ryuz-crypto</span><a class="donate" href="'+DONATE_URL+'" target="_blank" rel="noopener">☕ '+t('donate')+'</a></footer>'}
 function userChip(){return '<details class="menu"><summary class="chip">'+esc(ME&&ME.user?ME.user:'')+(ME&&ME.role&&ME.role!=='admin'?' · '+esc(ME.role):'')+'</summary><div class="menu-body"><button class="secondary" onclick="showTab(\'users\')">'+t('menu_users')+'</button><button class="secondary" onclick="openCustom()">'+t('menu_custom')+'</button><button class="danger" onclick="logout()">'+t('nav_out')+'</button></div></details>'}
 
 function chromeHtml(){return '<span class="chrome"><button class="secondary" style="padding:4px 9px;font-size:.75rem" onclick="setLang(LANG===\'es\'?\'en\':\'es\')">'+(LANG==='es'?'EN':'ES')+'</button><button class="secondary" style="padding:4px 9px;font-size:.75rem" title="'+t('menu_custom')+'" onclick="openCustom()">&#9881;</button></span>'}
@@ -189,6 +196,11 @@ var I18N8={es:{q_add_orch:'+ Agregar otro Orchestrator',q_add_sse:'+ Agregar pla
 for(var k8 in I18N8.es){I18N.es[k8]=I18N8.es[k8]}
 for(var k8 in I18N8.en){I18N.en[k8]=I18N8.en[k8]}
 
+var I18N9={es:{credits:'Créditos',donate:'Donar al proyecto',wiz_home_title:'¿Qué quieres configurar?',wiz_home_desc:'Plataforma multi-servicio (MSP): SD-WAN, SSE, SSH y variables generales, cada una en el wizard o de forma independiente.',wiz_orchs_saved:'Orquestadores guardados',wiz_sse_saved:'Plataformas SSE guardadas',wiz_no_orch:'Aún no hay Orchestrator guardado.',wiz_no_sse:'Aún no hay plataforma SSE guardada.',wiz_setup_first:'Configurar mi primer Orchestrator',wiz_setup_sse:'Configurar Axis SSE',wiz_general:'Variables generales',wiz_general_desc:'Seguridad, transporte, panel, actualizaciones y dashboard. Si ya funcionan, puedes saltarlas.',wiz_edit_general:'Editar variables generales',wiz_skip_done:'Saltar (ya están configuradas)',wiz_start:'Ir al paso a paso',btn_skip:'Saltar este paso'},en:{credits:'Credits',donate:'Donate to the project',wiz_home_title:'What do you want to set up?',wiz_home_desc:'Multi-service (MSP) platform: SD-WAN, SSE, SSH and general variables, each in the wizard or independently.',wiz_orchs_saved:'saved Orchestrators',wiz_sse_saved:'saved SSE platforms',wiz_no_orch:'No Orchestrator saved yet.',wiz_no_sse:'No SSE platform saved yet.',wiz_setup_first:'Set up my first Orchestrator',wiz_setup_sse:'Set up Axis SSE',wiz_general:'General variables',wiz_general_desc:'Security, transport, panel, updates and dashboard. If they already work, you can skip them.',wiz_edit_general:'Edit general variables',wiz_skip_done:'Skip (already configured)',wiz_start:'Go step by step',btn_skip:'Skip this step'}};
+for(var k9 in I18N9.es){I18N.es[k9]=I18N9.es[k9]}
+for(var k9 in I18N9.en){I18N.en[k9]=I18N9.en[k9]}
+
+
 
 
 
@@ -217,10 +229,12 @@ async function login(){
  catch(e){notice(e.message,'err')}
 }
 async function logout(){await api('/logout',{});AUTHED=false;renderLogin()}
+function closeMenusOnOutsideClick(){document.addEventListener('click',function(e){if(!e.target.closest||!e.target.closest('details.menu')){document.querySelectorAll('details.menu').forEach(function(d){d.removeAttribute('open')})}})}
+if(document.addEventListener)closeMenusOnOutsideClick();
 function renderShell(){
  q('#app').innerHTML='<header class="topbar">'+brandHtml()+'<div class="topbar-actions"><span class="version">__EC_MCP_VERSION__</span>'+userChip()+chromeHtml()+'</div></header>'+
  '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button id="tab-orch" onclick="showTab(\'orch\')">'+t('nav_orch')+'</button><button id="tab-sse" onclick="showTab(\'sse\')">'+t('nav_sse')+'</button><button id="tab-svc" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button><button id="tab-config" onclick="showTab(\'config\')">'+t('nav_config')+'</button><button id="tab-tls" onclick="showTab(\'tls\')">'+t('nav_tls')+'</button><button id="tab-tools" onclick="showTab(\'tools\')">'+t('nav_tools')+'</button><button id="tab-debug" onclick="showTab(\'debug\')">'+t('nav_debug')+'</button><button id="tab-update" onclick="showTab(\'update\')">'+t('nav_update')+'</button><button id="tab-users" onclick="showTab(\'users\')">'+t('nav_users')+'</button></nav>'+
- '<div id="notice"></div><section id="workspace"></section>'+customDialogHtml();
+ '<div id="notice"></div><section id="workspace"></section>'+customDialogHtml()+footerHtml();
  if(ME&&ME.role!=='admin'){var ub=q('#tab-users');if(ub)ub.style.display='none'}
  showTab('wizard');
 }
@@ -283,9 +297,10 @@ async function renderWizard(){
  if(!WIZARD){
   q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_wizard')+'</h2><p class="help">'+t('wiz_loading')+'</p></section>';
   try{WIZARD=await api('/api/wizard')}catch(e){notice(e.message,'err');return}
-  WSTEP=0;WDRAFT={};
+  WSTEP=-1;WDRAFT={};
   WIZARD.fields.forEach(function(f){WDRAFT[f.key]=f.secret?'':f.value});
  }
+ if(WSTEP<0){q('#workspace').innerHTML=wizHomeHtml();return}
  wizRenderStep();
 }
 function wizFields(stepId){return WIZARD.fields.filter(function(f){return f.step===stepId})}
@@ -319,7 +334,7 @@ function wizRenderStep(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('wiz_step',{a:WSTEP+1,b:steps.length})+' '+esc(s['title_'+LANG]||s.title)+'</h2><div class="wizbar">'+bar+'</div>'+'<p class="help">'+esc(s['desc_'+LANG]||s.desc||'')+'</p>'+quickChipsHtml(steps)+
   (s.id==='targets'?'<p class="help">'+t('wiz_targets_help')+'</p>':'')+
   '<div class="group"><div class="grid">'+fields.map(wizFieldHtml).join('')+'</div></div>'+targets+
-  '<div class="actions"><button class="secondary" onclick="wizBack()" '+(WSTEP===0?'disabled':'')+'>'+t('btn_back')+'</button><button onclick="wizNext()">'+(WSTEP===steps.length-1?t('btn_review'):t('btn_next'))+'</button></div></section>';
+  '<div class="actions">'+(WSTEP>=0&&stepSkippable(s)?'<button class="secondary" onclick="wizSkip()">'+t('btn_skip')+'</button>':'')+'<button class="secondary" onclick="wizBack()" '+(WSTEP===0?'disabled':'')+'>'+t('btn_back')+'</button><button onclick="wizNext()">'+(WSTEP===steps.length-1?t('btn_review'):t('btn_next'))+'</button></div></section>';
  fields.forEach(function(f){var el=q('#wiz-'+f.key);if(el){if(!f.secret)el.value=(WDRAFT[f.key]!==undefined?WDRAFT[f.key]:f.value);el.addEventListener('change',function(){WDRAFT[f.key]=el.value;wizRefreshDepends()})}});
  wizRefreshDepends();
 }
@@ -343,7 +358,23 @@ async function wizNext(){
  if(WSTEP<WIZARD.steps.length-1){WSTEP++;wizRenderStep();return}
  await wizReview();
 }
-function wizBack(){if(WSTEP>0){WSTEP--;wizRenderStep()}}
+function wizBack(){if(WSTEP>0){WSTEP--;wizRenderStep()}else if(WSTEP===0){WSTEP=-1;wizRenderStep()}}
+function wizHomeHtml(){
+ var orchs=STATE.orchestrators||[], sses=STATE.sse_platforms||[];
+ var sdwan, sse;
+ if(orchs.length){sdwan='<p><strong>'+orchs.length+'</strong> '+t('wiz_orchs_saved')+': '+orchs.map(function(o){return '<span class="badge">'+esc(o.name)+(o.default?' ('+t('badge_default')+')':'')+'</span>'}).join(' ')+'</p><div class="actions"><button onclick="wizGoto(\'targets\')">'+t('q_add_orch')+'</button><button class="secondary" onclick="showTab(\'orch\')">'+t('btn_edit')+'</button></div>'}
+ else{sdwan='<p class="help">'+t('wiz_no_orch')+'</p><div class="actions"><button onclick="wizGoto(\'orchestrator\')">'+t('wiz_setup_first')+'</button></div>'}
+ if(sses.length){sse='<p><strong>'+sses.length+'</strong> '+t('wiz_sse_saved')+': '+sses.map(function(o){return '<span class="badge">'+esc(o.name)+'</span>'}).join(' ')+'</p><div class="actions"><button onclick="wizGoto(\'targets\')">'+t('q_add_sse')+'</button><button class="secondary" onclick="showTab(\'sse\')">'+t('btn_edit')+'</button></div>'}
+ else{sse='<p class="help">'+t('wiz_no_sse')+'</p><div class="actions"><button onclick="wizGoto(\'sse\')">'+t('wiz_setup_sse')+'</button></div>'}
+ return '<section class="panel"><h2>'+t('wiz_home_title')+'</h2><p class="help">'+t('wiz_home_desc')+'</p>'+
+ '<div class="grid"><div class="group"><h3>SD-WAN · Orchestrator</h3>'+sdwan+'</div><div class="group"><h3>SSE · Axis Security</h3>'+sse+'</div></div>'+
+ '<div class="group"><h3>'+t('wiz_general')+'</h3><p class="help">'+t('wiz_general_desc')+'</p><div class="actions"><button class="secondary" onclick="wizGoto(\'security\')">'+t('wiz_edit_general')+'</button><button class="secondary" onclick="wizSkipAll()">'+t('wiz_skip_done')+'</button></div></div>'+
+ '<div class="actions"><button onclick="WSTEP=0;wizRenderStep()">'+t('wiz_start')+'</button></div></section>';
+}
+function wizSkipAll(){WSTEP=WIZARD.steps.length-1;wizReview()}
+function stepSkippable(s){var fs=wizFields(s.id);if(!fs.length)return false;return fs.every(function(f){return f.secret?f.configured:!!f.value})}
+function wizSkip(){if(WSTEP<WIZARD.steps.length-1){WSTEP++;wizRenderStep()}else{wizReview()}}
+
 async function wizReview(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('review_title')+'</h2><p class="help">'+t('review_desc')+'<span class="mono">'+esc(WIZARD.env_file)+'</span>'+t('review_nowrite')+'</p><div id="wiz-diff">Comprobando...</div><div class="actions"><button class="secondary" onclick="wizBack()">'+t('btn_back')+'</button><button onclick="wizSave(false)">'+t('btn_save_vars')+'</button><button onclick="wizSave(true)">'+t('btn_save_restart_short')+'</button></div></section>';
  try{
