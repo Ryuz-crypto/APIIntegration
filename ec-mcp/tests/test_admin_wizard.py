@@ -681,6 +681,19 @@ def test_wizard_home_button_and_step_texts(env):
     assert "else if(WSTEP===0){wizHome()}" in PAGE
 
 
+def test_tools_have_domain_classification(client, env):
+    admin._TOOLS_CACHE = None
+    data = client.get("/api/tools").json()
+    assert data["domains"].get("sse", 0) > 0
+    assert data["domains"].get("sdwan", 0) > 0
+    by_name = {t["name"]: t for t in data["tools"]}
+    assert by_name["axis_commit"]["domain"] == "sse"
+    assert by_name["list_appliances"]["domain"] == "sdwan"
+    assert by_name["apply_change"]["domain"] == "sdwan"
+    admin._TOOLS_CACHE = None
+    assert "tools-dom" in PAGE and "filterTools" in PAGE and "dom_sse" in PAGE
+
+
 def test_new_routes_registered():
     paths = {route.path for route in build_admin_app().routes}
     assert {

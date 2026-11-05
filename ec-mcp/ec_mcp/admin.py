@@ -992,6 +992,17 @@ TOOL_DESC_ES = {
 }
 
 
+PANEL_TOOLS = {"dashboard_install", "web_update_check", "web_update_apply", "admin_probe", "admin_restart"}
+
+
+def _tool_domain(name: str) -> str:
+    if name.startswith("axis_") or name.startswith("sse_"):
+        return "sse"
+    if name in PANEL_TOOLS:
+        return "panel"
+    return "sdwan"
+
+
 def _mcp_tools() -> list:
     global _TOOLS_CACHE
     if _TOOLS_CACHE is None:
@@ -1006,6 +1017,7 @@ def _mcp_tools() -> list:
                     "name": t.name,
                     "description": (t.description or "").strip().splitlines()[0][:200],
                     "description_es": TOOL_DESC_ES.get(t.name, ""),
+                    "domain": _tool_domain(t.name),
                 }
                 for t in tools
             ),
@@ -1024,13 +1036,17 @@ async def api_tools_list(request):
         return denied
     disabled = _disabled_tools()
     tools = _mcp_tools()
+    domains = {}
+    for t in tools:
+        domains[t["domain"]] = domains.get(t["domain"], 0) + 1
     return JSONResponse(
         {
             "ok": True,
             "total": len(tools),
             "disabled": sorted(disabled),
+            "domains": domains,
             "tools": [
-                {"name": t["name"], "description": t["description"], "description_es": t.get("description_es", ""), "disabled": t["name"] in disabled}
+                {"name": t["name"], "description": t["description"], "description_es": t.get("description_es", ""), "domain": t["domain"], "disabled": t["name"] in disabled}
                 for t in tools
             ],
         }
