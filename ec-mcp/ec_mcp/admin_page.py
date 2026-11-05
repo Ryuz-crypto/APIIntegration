@@ -200,6 +200,11 @@ var I18N9={es:{credits:'Créditos',donate:'Donar al proyecto',wiz_home_title:'¿
 for(var k9 in I18N9.es){I18N.es[k9]=I18N9.es[k9]}
 for(var k9 in I18N9.en){I18N.en[k9]=I18N9.en[k9]}
 
+var I18N10={es:{tools_filter:'Filtrar por tecnología:',dom_all:'Todas',dom_sdwan:'SD-WAN · EdgeConnect',dom_sse:'HPE SSE · Axis',dom_panel:'Panel / Admin'},en:{tools_filter:'Filter by technology:',dom_all:'All',dom_sdwan:'SD-WAN · EdgeConnect',dom_sse:'HPE SSE · Axis',dom_panel:'Panel / Admin'}};
+for(var k10 in I18N10.es){I18N.es[k10]=I18N10.es[k10]}
+for(var k10 in I18N10.en){I18N.en[k10]=I18N10.en[k10]}
+
+
 
 
 
@@ -534,14 +539,24 @@ async function delTls(){
  if(!confirm(t('tls_delete')+'?'))return;
  try{var r=await api('/api/tls/delete',{});notice(r.message||r.error,r.ok?'ok':'err');await renderTls()}catch(e){notice(e.message,'err')}
 }
+var TOOLS_ALL=[],TOOLS_DOM='all';
 async function renderTools(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tools_title')+'</h2><p class="help">'+t('tools_desc')+'</p><p class="help">'+t('checking')+'</p></section>';
  try{
   var r=await api('/api/tools');
-  var canWrite=ME&&ME.role!=='viewer';
-  var rows=r.tools.map(function(x){return '<div class="tool-card"><div><strong>'+esc(x.name)+'</strong><span class="help">'+esc((LANG==='es'&&x.description_es)?x.description_es:x.description)+'</span></div><label class="switch" title="'+(x.disabled?t('tool_off'):t('tool_on'))+'"><input type="checkbox" '+(x.disabled?'':'checked')+' '+(canWrite?'onchange="toggleTool(\''+esc(x.name)+'\',this.checked)"':'disabled')+'><span class="slider"></span></label></div>'}).join('');
-  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tools_title')+'</h2><p class="help">'+t('tools_desc')+'</p><p><span class="badge">'+r.total+'</span> '+t('tools_total')+' · <span class="badge">'+r.disabled.length+'</span> '+t('tools_disabled')+'</p><div class="actions"><button class="secondary" onclick="showAgentPrompt()">'+t('agent_btn')+'</button></div><div class="tools-grid" id="tools-list">'+rows+'</div></section>';
+  TOOLS_ALL=r.tools||[];
+  var d=r.domains||{};
+  var opts='<option value="all">'+t('dom_all')+' ('+r.total+')</option><option value="sdwan">SD-WAN · EdgeConnect ('+(d.sdwan||0)+')</option><option value="sse">HPE SSE · Axis ('+(d.sse||0)+')</option><option value="panel">'+t('dom_panel')+' ('+(d.panel||0)+')</option>';
+  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tools_title')+'</h2><p class="help">'+t('tools_desc')+'</p><p><span class="badge">'+r.total+'</span> '+t('tools_total')+' · <span class="badge">'+r.disabled.length+'</span> '+t('tools_disabled')+'</p><div class="actions" style="align-items:center"><label style="margin:0;display:flex;gap:8px;align-items:center;font-weight:700">'+t('tools_filter')+'<select id="tools-dom" style="width:auto;min-height:34px" onchange="filterTools(this.value)">'+opts+'</select></label><button class="secondary" onclick="showAgentPrompt()">'+t('agent_btn')+'</button></div><div class="tools-grid" id="tools-list"></div></section>';
+  renderToolsGrid();
  }catch(e){notice(e.message,'err')}
+}
+function filterTools(v){TOOLS_DOM=v;renderToolsGrid()}
+function renderToolsGrid(){
+ var canWrite=ME&&ME.role!=='viewer';
+ var list=TOOLS_ALL.filter(function(x){return TOOLS_DOM==='all'||x.domain===TOOLS_DOM});
+ var rows=list.map(function(x){return '<div class="tool-card"><div><strong>'+esc(x.name)+'</strong> <span class="badge">'+(x.domain==='sse'?t('dom_sse'):x.domain==='panel'?t('dom_panel'):t('dom_sdwan'))+'</span><span class="help">'+esc((LANG==='es'&&x.description_es)?x.description_es:x.description)+'</span></div><label class="switch" title="'+(x.disabled?t('tool_off'):t('tool_on'))+'"><input type="checkbox" '+(x.disabled?'':'checked')+' '+(canWrite?'onchange="toggleTool(\''+esc(x.name)+'\',this.checked)"':'disabled')+'><span class="slider"></span></label></div>'}).join('')||'<p class="help">'+t('dbg_empty')+'</p>';
+ q('#tools-list').innerHTML=rows;
 }
 async function toggleTool(name,enabled){
  try{var r=await api('/api/tools/toggle',{name:name,enabled:enabled});notice(r.ok?((enabled?t('tool_on'):t('tool_off'))+' '+name):(r.error||'Error'),r.ok?'ok':'err');if(r.ok)await renderTools()}catch(e){notice(e.message,'err')}
