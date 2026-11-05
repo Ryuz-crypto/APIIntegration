@@ -24,6 +24,7 @@ def env(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("EC_MCP_ENV_FILE", str(tmp_path / ".env"))
     monkeypatch.setenv("EC_MCP_AUDIT_LOG", str(tmp_path / "audit.jsonl"))
     monkeypatch.setenv("EC_ADMIN_TLS_DIR", str(tmp_path / ".ec-admin-tls"))
+    monkeypatch.setenv("EC_ADMIN_BACKUP_DIR", str(tmp_path / ".ec-admin-backups"))
     (tmp_path / ".env").write_text("EC_MCP_PORT=8000\n", encoding="utf-8")
     admin.SESSIONS.clear()
     admin.LOGIN_FAILURES.clear()
@@ -694,6 +695,39 @@ def test_tools_have_domain_classification(client, env):
     assert "tools-dom" in PAGE and "filterTools" in PAGE and "dom_sse" in PAGE
 
 
+def test_save_creates_backup_and_rollback_restores(client, env):
+    client.post("/api/orchestrators", json={"name": "prod", "url": "https://p.example.com", "api_key": "k1"})
+    client.post("/api/orchestrators", json={"name": "lab", "url": "https://l.example.com", "api_key": "k2"})
+    listing = client.get("/api/backups").json()
+    assert listing["ok"] is True and len(listing["backups"]) >= 2
+    last = listing["backups"][0]
+    assert last["label"].startswith("save-orch:")
+    # el backup registra el cambio respecto al backup anterior
+    assert any("prod" in b["registry_changed"] or b["registry_changed"] == ["modificado"] for b in listing["backups"])
+    # backup manual
+    created = client.post("/api/backups/create")
+    assert created.json()["ok"] is True
+    # borrar lab y luego rollback al backup que lo tenía
+    client.post("/api/orchestrators/delete", json={"name": "lab"})
+    from ec_mcp.multi_target import load_registry
+
+    assert "lab" not in load_registry().list_orchestrators()
+    after_delete = client.get("/api/backups").json()["backups"]
+    assert any("lab" in b["registry_changed"] for b in after_delete)
+    # el backup pre-borrado (etiqueta delete-orch) es el que contiene a lab
+    pre_delete = next(b for b in after_delete if b["label"].startswith("delete-orch"))
+    restored = client.post("/api/backups/restore", json={"name": pre_delete["name"]})
+    assert restored.json()["ok"] is True
+    assert "lab" in load_registry().list_orchestrators()
+    assert client.post("/api/backups/restore", json={"name": "../nope"}).status_code == 400
+
+
+def test_page_has_pickers_and_backups_menu():
+    assert "o-pick" in PAGE and "s-pick" in PAGE
+    assert "openBackups" in PAGE and "menu_backups" in PAGE and "/api/backups/restore" in PAGE
+    assert "HTTP '+response.status" in PAGE
+
+
 def test_new_routes_registered():
     paths = {route.path for route in build_admin_app().routes}
     assert {
@@ -707,6 +741,9 @@ def test_new_routes_registered():
         "/api/debug/events",
         "/api/debug/export",
         "/api/debug/clear",
+        "/api/backups",
+        "/api/backups/create",
+        "/api/backups/restore",
         "/api/config/diff",
         "/api/probe",
         "/api/default",

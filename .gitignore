@@ -27,3 +27,4 @@ logs/
 *.log
 audit*.log
 .ec-admin-users.json
+.ec-admin-backups/

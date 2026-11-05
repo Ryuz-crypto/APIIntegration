@@ -156,6 +156,91 @@ def _store_path() -> Path:
     return Path(os.environ.get("EC_ADMIN_STORE", Path.cwd() / ".ec-admin.json"))
 
 
+def _backup_dir() -> Path:
+    return Path(os.environ.get("EC_ADMIN_BACKUP_DIR", Path.cwd() / ".ec-admin-backups"))
+
+
+def _latest_backup(directory: Path) -> Path | None:
+    entries = sorted(p for p in directory.iterdir() if p.is_dir()) if directory.is_dir() else []
+    return entries[-1] if entries else None
+
+
+def _snapshot_backup(label: str) -> str | None:
+    """Copia .env y el registro a .ec-admin-backups/<ts>-<label>/ con meta de cambios."""
+    try:
+        from datetime import UTC, datetime
+
+        directory = _backup_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        name = f"{ts}-{label}"
+        target = directory / name
+        if target.exists():
+            name = f"{ts}-{label}-{os.getpid()}"
+            target = directory / name
+        target.mkdir()
+        env_file = Path(os.environ.get("EC_MCP_ENV_FILE", Path.cwd() / ".env"))
+        store_file = _store_path()
+        prev = _latest_backup(directory)
+        env_changed: list[str] = []
+        registry_changed: list[str] = []
+        if prev is not None:
+            prev_env = prev / "env"
+            prev_reg = prev / "registry.json"
+            if env_file.is_file() and prev_env.is_file():
+                old = dict(line.split("=", 1) for line in prev_env.read_text(encoding="utf-8").splitlines() if "=" in line)
+                new = dict(line.split("=", 1) for line in env_file.read_text(encoding="utf-8").splitlines() if "=" in line)
+                env_changed = sorted(k for k in set(old) | set(new) if old.get(k) != new.get(k))
+            if store_file.is_file():
+                new_r = json.loads(store_file.read_text(encoding="utf-8"))
+                new_names = set(new_r.get("orchestrators", {})) | set(new_r.get("sse_platforms", {}))
+                if prev_reg.is_file():
+                    old_r = json.loads(prev_reg.read_text(encoding="utf-8"))
+                    old_names = set(old_r.get("orchestrators", {})) | set(old_r.get("sse_platforms", {}))
+                    registry_changed = sorted(old_names ^ new_names) or (["modificado"] if old_r != new_r else [])
+                else:
+                    registry_changed = sorted(new_names)  # primer backup con registro
+            if env_file.is_file() and prev is not None and not prev_env.is_file():
+                new = dict(line.split("=", 1) for line in env_file.read_text(encoding="utf-8").splitlines() if "=" in line)
+                env_changed = sorted(new)
+        if env_file.is_file():
+            shutil.copy2(env_file, target / "env")
+        if store_file.is_file():
+            shutil.copy2(store_file, target / "registry.json")
+        (target / "meta.json").write_text(
+            json.dumps({"ts": ts, "label": label, "env_changed": env_changed, "registry_changed": registry_changed}, indent=2),
+            encoding="utf-8",
+        )
+        backups = sorted(p for p in directory.iterdir() if p.is_dir())
+        for old in backups[:-50]:
+            shutil.rmtree(old, ignore_errors=True)
+        return name
+    except OSError:
+        return None
+
+
+def _restore_backup(name: str) -> dict:
+    directory = _backup_dir()
+    target = directory / name
+    if not name or ".." in name or not target.is_dir():
+        raise ValueError("Backup no encontrado")
+    env_file = Path(os.environ.get("EC_MCP_ENV_FILE", Path.cwd() / ".env"))
+    store_file = _store_path()
+    restored = []
+    if (target / "env").is_file():
+        shutil.copy2(target / "env", env_file)
+        restored.append("env")
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            if line.strip() and not line.strip().startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                os.environ[key.strip()] = value.strip()
+    if (target / "registry.json").is_file():
+        shutil.copy2(target / "registry.json", store_file)
+        store_file.chmod(0o600)
+        restored.append("registry")
+    return {"restored": restored}
+
+
 def _load_store() -> dict:
     path = _store_path()
     if not path.is_file():
@@ -341,34 +426,40 @@ async def api_save_orchestrator(request):
     session, denied = _authorize(request, "write")
     if denied:
         return denied
-    body = await request.json()
-    name = str(body.get("name") or "").strip()
-    entry = {
-        "url": str(body.get("url") or "").strip(),
-        "verify_tls": body.get("verify_tls", True),
-        "api_key": body.get("api_key") or None,
-        "username": body.get("username") or None,
-        "password": body.get("password") or None,
-        "ssh_user": body.get("ssh_user") or None,
-        "ssh_password": body.get("ssh_password") or None,
-        "ssh_enable_password": body.get("ssh_enable_password") or None,
-        "ssh_host": body.get("ssh_host") or None,
-    }
     try:
+        body = await request.json()
+        name = str(body.get("name") or "").strip()
+        entry = {
+            "url": str(body.get("url") or "").strip(),
+            "verify_tls": body.get("verify_tls", True),
+            "api_key": body.get("api_key") or None,
+            "username": body.get("username") or None,
+            "password": body.get("password") or None,
+            "ssh_user": body.get("ssh_user") or None,
+            "ssh_password": body.get("ssh_password") or None,
+            "ssh_enable_password": body.get("ssh_enable_password") or None,
+            "ssh_host": body.get("ssh_host") or None,
+        }
+        _snapshot_backup(f"save-orch:{name}")
         load_registry().save_orchestrator(name, entry)
     except RegistryError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
+    except Exception as exc:  # nunca devolver HTML plano al panel
+        return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
     _audit_panel(session["user"], "save_orchestrator", name, "ok")
-    return JSONResponse({"ok": True, "message": f"Orquestador '{name}' guardado. Usa 'Aplicar' para activarlo."})
-
+    return JSONResponse({"ok": True, "message": f"Orquestador '{name}' guardado (backup creado). Usa 'Aplicar' para activarlo."})
 
 async def api_delete_orchestrator(request):
     session, denied = _authorize(request, "write")
     if denied:
         return denied
-    body = await request.json()
-    name = str(body.get("name") or "")
-    deleted = load_registry().delete_orchestrator(name)
+    try:
+        body = await request.json()
+        name = str(body.get("name") or "")
+        _snapshot_backup(f"delete-orch:{name}")
+        deleted = load_registry().delete_orchestrator(name)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
     _audit_panel(session["user"], "delete_orchestrator", name, "ok" if deleted else "missing")
     return JSONResponse({"ok": True, "deleted": deleted, "message": "Eliminado" if deleted else "No existía"})
 
@@ -377,30 +468,36 @@ async def api_save_sse(request):
     session, denied = _authorize(request, "write")
     if denied:
         return denied
-    body = await request.json()
-    name = str(body.get("name") or "").strip()
-    entry = {
-        "provider": body.get("provider") or "axis",
-        "base_url": str(body.get("base_url") or "").strip(),
-        "admin_token": body.get("admin_token") or None,
-        "verify_tls": body.get("verify_tls", True),
-        "timeout": body.get("timeout"),
-    }
     try:
+        body = await request.json()
+        name = str(body.get("name") or "").strip()
+        entry = {
+            "provider": body.get("provider") or "axis",
+            "base_url": str(body.get("base_url") or "").strip(),
+            "admin_token": body.get("admin_token") or None,
+            "verify_tls": body.get("verify_tls", True),
+            "timeout": body.get("timeout"),
+        }
+        _snapshot_backup(f"save-sse:{name}")
         load_registry().save_sse(name, entry)
     except RegistryError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
     _audit_panel(session["user"], "save_sse", name, "ok")
-    return JSONResponse({"ok": True, "message": f"Plataforma SSE '{name}' guardada."})
-
+    return JSONResponse({"ok": True, "message": f"Plataforma SSE '{name}' guardada (backup creado)."})
 
 async def api_delete_sse(request):
     session, denied = _authorize(request, "write")
     if denied:
         return denied
-    body = await request.json()
-    name = str(body.get("name") or "")
-    deleted = load_registry().delete_sse(name)
+    try:
+        body = await request.json()
+        name = str(body.get("name") or "")
+        _snapshot_backup(f"delete-sse:{name}")
+        deleted = load_registry().delete_sse(name)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
     _audit_panel(session["user"], "delete_sse", name, "ok" if deleted else "missing")
     return JSONResponse({"ok": True, "deleted": deleted, "message": "Eliminada" if deleted else "No existía"})
 
@@ -409,13 +506,16 @@ async def _registry_copy(request, method, label: str):
     session, denied = _authorize(request, "write")
     if denied:
         return denied
-    body = await request.json()
-    name = str(body.get("name") or "").strip()
-    new_name = str(body.get("new_name") or "").strip()
     try:
+        body = await request.json()
+        name = str(body.get("name") or "").strip()
+        new_name = str(body.get("new_name") or "").strip()
+        _snapshot_backup(f"{method.__name__}:{name}->{new_name}")
         method(name, new_name)
     except RegistryError as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
     _audit_panel(session["user"], method.__name__, f"{name} -> {new_name}", "ok")
     return JSONResponse({"ok": True, "message": f"{label} '{name}' -> '{new_name}'"})
 
@@ -453,6 +553,7 @@ async def api_default_target(request):
     if name and not exists:
         return JSONResponse({"ok": False, "error": f"No existe el target '{name}'"}, status_code=404)
     try:
+        _snapshot_backup(f"default:{kind}:{name}")
         update_env({key: name})
     except ValueError as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
@@ -548,6 +649,7 @@ async def api_apply(request):
             "EC_SSH_HOST": entry.get("ssh_host") or "",
         }
         target_label = f"Orquestador '{name}'"
+    _snapshot_backup(f"apply:{kind}:{name}")
     # Persistir el registro completo como blobs JSON para el runtime multi-target.
     for key, value in registry.to_env_blob().items():
         wanted[key] = value
@@ -634,9 +736,12 @@ async def api_save_config(request):
         return denied
     try:
         body = await request.json()
+        _snapshot_backup("save-config")
         path = update_env(body.get("values") or {}, body.get("clear_secrets") or [])
     except (OSError, TypeError, ValueError) as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
     _audit_panel(
         session["user"], "save_config", "env", "ok", {"changed": sorted((body.get("values") or {}).keys())[:50]}
     )
@@ -1256,6 +1361,61 @@ async def api_debug_clear(request):
     )
 
 
+async def api_backups_list(request):
+    _session, denied = _authorize(request, "read")
+    if denied:
+        return denied
+    directory = _backup_dir()
+    items = []
+    if directory.is_dir():
+        for entry in sorted((p for p in directory.iterdir() if p.is_dir()), reverse=True):
+            meta = {}
+            meta_file = entry / "meta.json"
+            if meta_file.is_file():
+                try:
+                    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    meta = {}
+            items.append(
+                {
+                    "name": entry.name,
+                    "ts": meta.get("ts", entry.name),
+                    "label": meta.get("label", ""),
+                    "env_changed": meta.get("env_changed", []),
+                    "registry_changed": meta.get("registry_changed", []),
+                    "has_env": (entry / "env").is_file(),
+                    "has_registry": (entry / "registry.json").is_file(),
+                }
+            )
+    return JSONResponse({"ok": True, "dir": str(directory), "backups": items})
+
+
+async def api_backups_create(request):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    name = _snapshot_backup("manual")
+    if not name:
+        return JSONResponse({"ok": False, "error": "No se pudo crear el backup"}, status_code=500)
+    _audit_panel(session["user"], "backup_create", name, "ok")
+    return JSONResponse({"ok": True, "name": name, "message": f"Backup '{name}' creado."})
+
+
+async def api_backups_restore(request):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    try:
+        body = await request.json()
+        name = str(body.get("name") or "").strip()
+        _snapshot_backup(f"pre-restore:{name}")
+        result = _restore_backup(name)
+    except (ValueError, OSError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    _audit_panel(session["user"], "backup_restore", name, "ok", result)
+    return JSONResponse({"ok": True, "restored": result["restored"], "message": f"Rollback aplicado desde '{name}'. Reinicia los servicios para aplicar .env."})
+
+
 async def api_users_password(request):
     session, denied = _authorize(request, "read")
     if denied:
@@ -1332,6 +1492,9 @@ def build_admin_app() -> Starlette:
             Route("/api/debug/events", api_debug_events, methods=["GET"]),
             Route("/api/debug/export", api_debug_export, methods=["GET"]),
             Route("/api/debug/clear", api_debug_clear, methods=["POST"]),
+            Route("/api/backups", api_backups_list, methods=["GET"]),
+            Route("/api/backups/create", api_backups_create, methods=["POST"]),
+            Route("/api/backups/restore", api_backups_restore, methods=["POST"]),
         ]
     )
 
