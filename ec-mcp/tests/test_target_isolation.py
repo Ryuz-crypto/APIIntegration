@@ -212,3 +212,108 @@ def test_resolve_appliance_network_path_matches_inventory_ips():
     assert path_by_wan.target_ip == "203.0.113.10"
     with pytest.raises(SecurityError):
         resolve_appliance_network_path("198.51.100.99", settings, inventory)
+
+
+def test_apply_change_omitted_target_warns_in_multi_target(monkeypatch):
+    text, _ = _run_tool(
+        "apply_change",
+        {"operation_id": "orchestrator.savechanges73", "body_json": "{}"},
+        monkeypatch,
+        allow_writes=True,
+    )
+    payload = json.loads(text)
+    assert payload["dry_run"] is True
+    assert "target omitted in a multi-target deployment" in payload["would_execute"]["warning"]
+    assert payload["would_execute"]["target"] in {"orch-a", "orch-b"}
+
+
+def test_apply_change_simulated_confirm_uses_same_client(monkeypatch):
+    created = []
+
+    def factory(settings, engine=None, client=None, *, target_name="default"):
+        fake = FakeTargetClient(settings, target_name=target_name)
+        created.append(fake)
+        return fake
+
+    monkeypatch.setenv("EC_ORCHESTRATORS_JSON", TARGETS_BLOB)
+    monkeypatch.setenv("EC_ALLOW_WRITE_TOOLS", "true")
+    original = server_module.OrchestratorClient
+    server_module.OrchestratorClient = factory
+    try:
+        result = asyncio.run(
+            server_module.create_server().call_tool(
+                "apply_change",
+                {
+                    "operation_id": "orchestrator.savechanges73",
+                    "body_json": json.dumps({"nePks": ["9.NE"]}),
+                    "verify_operation_id": "orchestrator.getalarmsconfig7",
+                    "confirm": True,
+                    "target": "orch-b",
+                },
+            )
+        )
+    finally:
+        server_module.OrchestratorClient = original
+    payload = json.loads(result.content[0].text)
+    assert payload["applied"] is True
+    assert payload["read_after_write"] is not None
+    write_clients = {c.target_name for c in created if any(op == "orchestrator.savechanges73" for op, _ in c.calls)}
+    verify_clients = {c.target_name for c in created if any(op == "orchestrator.getalarmsconfig7" for op, _ in c.calls)}
+    assert write_clients == {"orch-b"}
+    assert verify_clients == {"orch-b"}
+
+
+def test_orchestrator_info_reports_effective_ssh_state_per_target(monkeypatch):
+    monkeypatch.setenv("EC_SSH_ENABLED", "true")
+    text, _ = _run_tool("orchestrator_info", {"target": "orch-a"}, monkeypatch)
+    payload = json.loads(text)
+    assert payload["ssh_enabled"] is False
+    assert payload["ssh_enabled_global"] is True
+
+    blob_with_ssh = json.dumps(
+        {
+            "orch-a": {"url": "https://a.example.com", "api_key": "k", "ssh_user": "u", "ssh_password": "p"},
+        }
+    )
+    monkeypatch.setenv("EC_ORCHESTRATORS_JSON", blob_with_ssh)
+    original = server_module.OrchestratorClient
+    server_module.OrchestratorClient = lambda *a, **k: FakeTargetClient(*a, **k)
+    try:
+        result = asyncio.run(server_module.create_server().call_tool("orchestrator_info", {"target": "orch-a"}))
+    finally:
+        server_module.OrchestratorClient = original
+    payload = json.loads(result.content[0].text)
+    assert payload["ssh_enabled"] is True
+    assert payload["ssh_enabled_global"] is True
+
+
+def test_call_read_api_warns_on_seconds_scale_alarm_window(monkeypatch):
+    text, _ = _run_tool(
+        "call_read_api",
+        {"operation_id": "orchestrator.alarmgms25", "start_time": "1780348800", "end_time": "1788297600", "target": "orch-a"},
+        monkeypatch,
+    )
+    payload = json.loads(text)
+    assert "epoch SECONDS" in payload["request_echo"]["warning"]
+
+    text, _ = _run_tool(
+        "call_read_api",
+        {"operation_id": "orchestrator.alarmgms25", "start_time": "1780348800000", "end_time": "1788297600000", "target": "orch-a"},
+        monkeypatch,
+    )
+    payload = json.loads(text)
+    assert "warning" not in payload["request_echo"]
+
+
+def test_get_appliance_infrastructure_sends_traffictype(monkeypatch):
+    text, created = _run_tool(
+        "get_appliance_infrastructure",
+        {"appliance_id": "1.NE", "target": "orch-a"},
+        monkeypatch,
+    )
+    assert not text.startswith("Error:")
+    queries = [dict(query) for _, query in created[0].calls]
+    assert any(
+        query.get("trafficType") == "all_traffic" and query.get("granularity") == "hour"
+        for query in queries
+    )

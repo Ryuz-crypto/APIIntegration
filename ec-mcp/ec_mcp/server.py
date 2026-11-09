@@ -893,7 +893,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 "active_profile": matched,
                 "available_profiles": engine.versions,
                 "write_tools_enabled": settings.allow_write_tools,
-                "ssh_enabled": settings.ssh_enabled,
+                "ssh_enabled": orchestrator_targets.get(_resolve_orchestrator_name(target), settings).ssh_enabled,
+                "ssh_enabled_global": settings.ssh_enabled,
                 "cli_commands_available": total_commands(),
                 "appliance_count": len(appliances),
                 "appliances": [
@@ -1593,7 +1594,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         max_chars: int = 0,
         target: str = "",
     ) -> str:
-        """Invoke a read-only Orchestrator/Appliance API operation by stable operation ID. Use list_api_operations(search=...) to find operation IDs, or list_appliances to get the appliances with their nePk. appliance_id accepts nePk, name, IP, serial, comma-separated list, or 'all' for every registered appliance (uses groupByNE when supported). Param formats: granularity=minute|5minute|hour|day (never numeric); start_time/end_time=epoch seconds (alarm endpoints) or epoch ms depending on endpoint — see the error hints. For list responses use fields (comma-separated columns), offset/limit and max_chars to page through data; the response is always complete valid JSON with pagination metadata (total_count, next_offset) — never a cut string. target: named Orchestrator from list_orchestrator_targets_tool (default target when empty)."""
+        """Invoke a read-only Orchestrator/Appliance API operation by stable operation ID. Use list_api_operations(search=...) to find operation IDs, or list_appliances to get the appliances with their nePk. appliance_id accepts nePk, name, IP, serial, comma-separated list, or 'all' for every registered appliance (uses groupByNE when supported). Param formats: granularity=minute|5minute|hour|day (never numeric); start_time/end_time units depend on the endpoint: /alarm/gms (from/to) uses EPOCH MILLISECONDS; most /stats/ timeseries endpoints use epoch ms too; some endpoints use epoch seconds — see the error hints. A window that looks like epoch seconds (< 1e12) on a from/to endpoint triggers an explicit warning in request_echo. For list responses use fields (comma-separated columns), offset/limit and max_chars to page through data; the response is always complete valid JSON with pagination metadata (total_count, next_offset) — never a cut string. target: named Orchestrator from list_orchestrator_targets_tool (default target when empty)."""
         try:
             client = require_client(target)
             if client is None:
@@ -1760,15 +1761,25 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 paginated, _ = paginate_data(payload, max(0, offset), limit or None, field_list)
                 payload = paginated
             budget = max(2000, min(max_chars or settings.max_output_chars, 50000))
-            wrapper = {
-                "data": payload,
-                "request_echo": {
-                    "operation_id": operation_id,
-                    "resolved_path": "/appliance/rest" if used_appliance_proxy else operation.path,
-                    "query_used": {k: str(v) for k, v in query_params.items()},
-                    **({"via_appliance_proxy": True} if used_appliance_proxy else {}),
-                },
+            echo: dict[str, Any] = {
+                "operation_id": operation_id,
+                "resolved_path": "/appliance/rest" if used_appliance_proxy else operation.path,
+                "query_used": {k: str(v) for k, v in query_params.items()},
+                **({"via_appliance_proxy": True} if used_appliance_proxy else {}),
             }
+            if "from" in query_params and "to" in query_params:
+                try:
+                    looks_like_seconds = any(
+                        0 < int(float(str(query_params[k]))) < 10**12 for k in ("from", "to")
+                    )
+                except (TypeError, ValueError):
+                    looks_like_seconds = False
+                if looks_like_seconds:
+                    echo["warning"] = (
+                        "from/to look like epoch SECONDS; this endpoint expects epoch MILLISECONDS. "
+                        "A seconds-scale window on a milliseconds endpoint returns no data silently."
+                    )
+            wrapper = {"data": payload, "request_echo": echo}
             result_text, truncated = closed_json_result(wrapper, budget)
             parsed = json.loads(result_text)
             parsed["truncated"] = truncated
@@ -4761,6 +4772,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 "body": body,
                 "confirmed": confirm,
             }
+            if not target.strip() and len(orchestrator_targets) > 1:
+                audit_entry["warning"] = (
+                    f"target omitted in a multi-target deployment; using the default "
+                    f"'{getattr(client, 'target_name', 'default')}'. Pass target explicitly to "
+                    f"avoid operating the wrong Orchestrator."
+                )
             audit_public_entry = {k: v for k, v in audit_entry.items() if k != "body"}
             if isinstance(body, dict):
                 audit_public_entry["body_keys"] = sorted(body.keys())
@@ -4919,6 +4936,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                             ORCHESTRATOR_APPLIANCE_PERFORMANCE_READ,
                             nePk=ne_pk,
                             granularity="hour",
+                            trafficType="all_traffic",
                             startTime=str(int((time.time() - 3600) * 1000)),
                             endTime=str(int(time.time() * 1000)),
                         )
