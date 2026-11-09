@@ -243,7 +243,11 @@ def resolve_appliance_address(
             str(appliance.get("nePk") or "").lower(),
             str(appliance.get("name") or "").lower(),
             str(appliance.get("serial_number") or "").lower(),
+            str(appliance.get("ip") or "").lower(),
+            str(appliance.get("lan_ip") or "").lower(),
         }
+        for wan_ip in appliance.get("wan_ips") or []:
+            identifiers.add(str(wan_ip).lower())
         if lowered in identifiers:
             if prefer_network == "lan":
                 for field in ("lan_ip", "ip"):
@@ -296,7 +300,11 @@ def resolve_appliance_network_path(
             str(appliance.get("nePk") or "").lower(),
             str(appliance.get("name") or "").lower(),
             str(appliance.get("serial_number") or "").lower(),
+            str(appliance.get("ip") or "").lower(),
+            str(appliance.get("lan_ip") or "").lower(),
         }
+        for wan_ip in appliance.get("wan_ips") or []:
+            identifiers.add(str(wan_ip).lower())
         if lowered in identifiers:
             return classify_network_path(appliance, settings.orchestrator_url)
     raise SecurityError(
