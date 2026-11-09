@@ -348,21 +348,26 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         budget = max_chars - 256
         if isinstance(payload.get("versions"), dict):
             shrunk = json.loads(text)
+            version_entries = [
+                b for b in shrunk.get("versions", {}).values() if isinstance(b, dict)
+            ]
             total_entries = sum(
                 len(b.get("operations", {}))
-                for b in shrunk.get("versions", {}).values()
+                for b in version_entries
                 if isinstance(b.get("operations"), dict)
             )
             if total_entries:
                 base_overhead = len(text) - sum(
                     len(json.dumps(b.get("operations", {}), ensure_ascii=False, default=str))
-                    for b in shrunk.get("versions", {}).values()
+                    for b in version_entries
                     if isinstance(b.get("operations"), dict)
                 )
                 per_entry = (len(text) - base_overhead) / max(1, total_entries)
                 keep_total = max(1, int((budget - base_overhead) / max(per_entry, 1)))
                 for v in list(shrunk.get("versions", {})):
                     body = shrunk["versions"][v]
+                    if not isinstance(body, dict):
+                        continue
                     entries = body.get("operations")
                     if not isinstance(entries, dict) or not entries:
                         continue
@@ -440,7 +445,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             "interface_name": interface_name,
             **extras,
         }
-        for alias, canonical in (("startTime", "start_time"), ("endTime", "end_time"), ("nePk", "appliance_id"), ("ne", "appliance_id"), ("name", "appliance_id")):
+        for alias, canonical in (
+            ("startTime", "start_time"),
+            ("endTime", "end_time"),
+            ("from", "start_time"),
+            ("to", "end_time"),
+            ("nePk", "appliance_id"),
+            ("ne", "appliance_id"),
+            ("name", "appliance_id"),
+        ):
             if alias in source and not source.get(canonical):
                 source[canonical] = source[alias]
             if alias not in source and source.get(canonical):
@@ -1205,18 +1218,32 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             targets = resolve_ne_pks(client, appliance_id)
             rows = []
             total_tunnels = 0
+            failed = 0
             for ne_pk in targets:
                 try:
                     tunnels = brownout_state(kpi_get(client, "brownout", ne_pk))
                     total_tunnels += len(tunnels)
                     rows.append({"nePk": ne_pk, "tunnels": tunnels})
                 except Exception as error:
+                    failed += 1
                     rows.append({"nePk": ne_pk, "error": str(error)[:200]})
             payload = {"appliances": rows, "total_count": len(rows)}
-            if total_tunnels == 0:
+            if failed and failed == len(rows):
+                payload["status"] = "ERROR"
+                payload["reason"] = "All appliance brownout queries failed; see per-appliance errors."
+            elif failed:
+                payload["status"] = "PARTIAL"
+                payload["reason"] = f"{failed} of {len(rows)} appliance brownout queries failed; see per-appliance errors."
+            elif total_tunnels == 0:
                 payload["status"] = "SKIPPED_NO_ENTITY"
                 payload["reason"] = "No tunnel brownout entities were reported by the lab."
-            audit.record("get_brownout_state", "read", settings.orchestrator_url, "ok", details={"tunnels": total_tunnels})
+            audit.record(
+                "get_brownout_state",
+                "read",
+                getattr(client, "target_name", "default"),
+                "ok" if not failed else f"partial: {failed} failed",
+                details={"tunnels": total_tunnels, "failed_appliances": failed},
+            )
             return json_result(payload, settings.max_output_chars)
         except Exception as error:
             audit.record("get_brownout_state", "read", appliance_id, f"error: {error}")
@@ -1564,10 +1591,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         offset: int = 0,
         limit: int = 0,
         max_chars: int = 0,
+        target: str = "",
     ) -> str:
-        """Invoke a read-only Orchestrator/Appliance API operation by stable operation ID. Use list_api_operations(search=...) to find operation IDs, or list_appliances to get the appliances with their nePk. appliance_id accepts nePk, name, IP, serial, comma-separated list, or 'all' for every registered appliance (uses groupByNE when supported). Param formats: granularity=minute|5minute|hour|day (never numeric); start_time/end_time=epoch seconds (alarm endpoints) or epoch ms depending on endpoint — see the error hints. For list responses use fields (comma-separated columns), offset/limit and max_chars to page through data; the response is always complete valid JSON with pagination metadata (total_count, next_offset) — never a cut string."""
+        """Invoke a read-only Orchestrator/Appliance API operation by stable operation ID. Use list_api_operations(search=...) to find operation IDs, or list_appliances to get the appliances with their nePk. appliance_id accepts nePk, name, IP, serial, comma-separated list, or 'all' for every registered appliance (uses groupByNE when supported). Param formats: granularity=minute|5minute|hour|day (never numeric); start_time/end_time=epoch seconds (alarm endpoints) or epoch ms depending on endpoint — see the error hints. For list responses use fields (comma-separated columns), offset/limit and max_chars to page through data; the response is always complete valid JSON with pagination metadata (total_count, next_offset) — never a cut string. target: named Orchestrator from list_orchestrator_targets_tool (default target when empty)."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
@@ -1744,7 +1772,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             result_text, truncated = closed_json_result(wrapper, budget)
             parsed = json.loads(result_text)
             parsed["truncated"] = truncated
-            audit.record("call_read_api", operation_id, settings.orchestrator_url, "ok")
+            audit.record(
+                "call_read_api",
+                operation_id,
+                getattr(client, "target_name", "default"),
+                "ok",
+                details={"resolved_path": wrapper["request_echo"]["resolved_path"]},
+            )
             return json.dumps(parsed, ensure_ascii=False, default=str)
         except Exception as error:
             audit.record("call_read_api", operation_id, settings.orchestrator_url, f"error: {error}")
@@ -1767,9 +1801,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         return json_result(payload, settings.max_output_chars * 8)
 
     @mcp.tool()
-    def run_show_command(command: str, host: str = "") -> str:
-        """Run a whitelisted read-only ECOS 'show' command on an EdgeConnect appliance over SSH. Use list_cli_commands to discover the official monitoring commands."""
-        target = host or settings.ssh_host
+    def run_show_command(command: str, host: str = "", target: str = "") -> str:
+        """Run a whitelisted read-only ECOS 'show' command on an EdgeConnect appliance over SSH. Use list_cli_commands to discover the official monitoring commands. target: named Orchestrator from list_orchestrator_targets_tool whose inventory and SSH credentials are used (default target when empty)."""
+        ssh_target = host or settings.ssh_host
         try:
             risk = classify_cli_command(command)
             if risk is None:
@@ -1780,7 +1814,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     "are allowed in run_show_command; use run_cli_command with confirm=true "
                     "for configuration changes."
                 )
-            pool = ApplianceSshPool(settings)
+            pool = ApplianceSshPool(orchestrator_targets.get(_resolve_orchestrator_name(target), settings))
             try:
                 session = pool.get(host or None)
                 output = session.run_show(command)
@@ -1789,25 +1823,25 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             audit.record(
                 "run_show_command",
                 command,
-                target,
+                ssh_target,
                 "ok",
-                details={"risk": risk, "transport": "ssh"},
+                details={"risk": risk, "transport": "ssh", "orchestrator_target": _resolve_orchestrator_name(target)},
             )
             return output
         except Exception as error:
-            audit.record("run_show_command", command, target, f"error: {error}")
+            audit.record("run_show_command", command, ssh_target, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()
-    def run_show_api(command: str, appliance_id: str) -> str:
-        """Run an official read-only ECOS show command through the Orchestrator appliance API."""
+    def run_show_api(command: str, appliance_id: str, target: str = "") -> str:
+        """Run an official read-only ECOS show command through the Orchestrator appliance API. target: named Orchestrator from list_orchestrator_targets_tool (default target when empty)."""
         try:
             risk = classify_cli_command(command)
             if risk != "read":
                 raise SecurityError(
                     "Only commands classified as read-only in the official ECOS CLI catalog are allowed"
                 )
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
@@ -1834,9 +1868,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def run_cli_command(command: str, host: str = "", confirm: bool = False) -> str:
-        """Run any official ECOS CLI command from the CLI Reference on an appliance over SSH. Monitoring/troubleshooting commands execute directly; configuration/administration/negation commands are dry-run by default and require confirm=true plus EC_ALLOW_WRITE_TOOLS=true. Use list_cli_commands to discover the 1367 available commands."""
-        target = host or settings.ssh_host
+    def run_cli_command(command: str, host: str = "", confirm: bool = False, target: str = "") -> str:
+        """Run any official ECOS CLI command from the CLI Reference on an appliance over SSH. Monitoring/troubleshooting commands execute directly; configuration/administration/negation commands are dry-run by default and require confirm=true plus EC_ALLOW_WRITE_TOOLS=true. Use list_cli_commands to discover the 1367 available commands. target: named Orchestrator from list_orchestrator_targets_tool whose inventory and SSH credentials are used (default target when empty)."""
+        ssh_target = host or settings.ssh_host
         pool = None
         try:
             risk = classify_cli_command(command)
@@ -1845,7 +1879,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if risk == "write":
                 require_writes()
                 if not confirm:
-                    audit.record("run_cli_command", command, target, "dry-run", dry_run=True)
+                    audit.record("run_cli_command", command, ssh_target, "dry-run", dry_run=True)
                     return json_result(
                         {
                             "dry_run": True,
@@ -1855,25 +1889,34 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         },
                         settings.max_output_chars,
                     )
-            session = (pool := ApplianceSshPool(settings)).get(host or None)
+            session = (
+                pool := ApplianceSshPool(orchestrator_targets.get(_resolve_orchestrator_name(target), settings))
+            ).get(host or None)
             if risk == "read":
                 output = session.run_show(command)
             else:
                 output = session.run_raw(command)
-            audit.record("run_cli_command", command, target, "ok", dry_run=False, details={"risk": risk})
+            audit.record(
+                "run_cli_command",
+                command,
+                ssh_target,
+                "ok",
+                dry_run=False,
+                details={"risk": risk, "orchestrator_target": _resolve_orchestrator_name(target)},
+            )
             return output
         except Exception as error:
-            audit.record("run_cli_command", command, target, f"error: {error}")
+            audit.record("run_cli_command", command, ssh_target, f"error: {error}")
             return f"Error: {error}"
         finally:
             if pool is not None:
                 pool.close_all()
 
     @mcp.tool()
-    def get_ssh_network_path(appliance_id: str = "") -> str:
-        """Show how the MCP server would reach an appliance over SSH: LAN (direct, same subnet) or WAN (via the appliance WAN interface IP, not the public/NAT egress IP). Read-only diagnostic; use before run_show_command/run_cli_command to confirm reachability. If the path is WAN, an inbound forwarding rule (port-forward/DNAT for TCP/22) is required on the appliance; use ensure_ssh_inbound_forwarding to create it."""
+    def get_ssh_network_path(appliance_id: str = "", target: str = "") -> str:
+        """Show how the MCP server would reach an appliance over SSH: LAN (direct, same subnet) or WAN (via the appliance WAN interface IP, not the public/NAT egress IP). Read-only diagnostic; use before run_show_command/run_cli_command to confirm reachability. If the path is WAN, an inbound forwarding rule (port-forward/DNAT for TCP/22) is required on the appliance; use ensure_ssh_inbound_forwarding to create it. target: named Orchestrator from list_orchestrator_targets_tool (default target when empty)."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             inventory = client.list_appliances()
@@ -1889,8 +1932,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     },
                     settings.max_output_chars,
                 )
-            path = resolve_appliance_network_path(appliance_id, settings, inventory)
+            path = resolve_appliance_network_path(
+                appliance_id, orchestrator_targets.get(_resolve_orchestrator_name(target), settings), inventory
+            )
             payload = {
+                "orchestrator_target": getattr(client, "target_name", "default"),
                 "appliance": {
                     "nePk": appliance.get("nePk"),
                     "name": appliance.get("name"),
@@ -2996,10 +3042,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_site_to_site_tunnels(appliance_id: str = "all", include_third_party: bool = True) -> str:
-        """Read site-to-site tunnel state: standard tunnelsConfigAndState, bonded tunnel state, and (optionally) third-party/SSE VGW tunnels. Use for tunnel flow review and troubleshooting."""
+    def get_site_to_site_tunnels(appliance_id: str = "all", include_third_party: bool = True, target: str = "") -> str:
+        """Read site-to-site tunnel state: standard tunnelsConfigAndState, bonded tunnel state, and (optionally) third-party/SSE VGW tunnels. Use for tunnel flow review and troubleshooting. target: named Orchestrator from list_orchestrator_targets_tool (default target when empty)."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
@@ -3909,11 +3955,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool()
     def dashboard_snapshot() -> str:
-        """Collect a compact dashboard payload (EdgeConnect inventory/reachability/WAN/tunnels/alarms/HA + Axis health/connectors/tunnels). Read-only. Returns JSON ready to render or deploy."""
+        """Collect a compact dashboard payload (EdgeConnect inventory/reachability/WAN/tunnels/alarms/HA + Axis health/connectors/tunnels). Read-only. Returns JSON ready to render or deploy. Uses the DEFAULT Orchestrator target only; the effective target name is reported in the payload as orchestrator_target."""
         try:
             client = require_client()
             axis = require_axis_client()
             payload = collect_current_dashboard_payload(client, axis)
+            payload["orchestrator_target"] = getattr(client, "target_name", "default")
             audit.record("dashboard_snapshot", "read", settings.orchestrator_url, "ok")
             return json_result(payload, settings.max_output_chars)
         except Exception as error:
@@ -4545,10 +4592,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def propose_remediation(appliance_id: str = "all", date: str = "", policy: str = "containment_proposed") -> str:
-        """Build structured, dry-run remediation proposals for detected incidents: reruns the correlation of correlate_incidents and, for each finding, returns evidence, scope, risk, reversal plan, candidate policy and the exact read-only next step. NEVER applies anything; applying always requires the existing confirmed write tools (block_threat/apply_change/run_cli_command with confirm=true) plus human approval. policy: observation|containment_proposed|controlled_change|emergency."""
+    def propose_remediation(appliance_id: str = "all", date: str = "", policy: str = "containment_proposed", target: str = "") -> str:
+        """Build structured, dry-run remediation proposals for detected incidents: reruns the correlation of correlate_incidents and, for each finding, returns evidence, scope, risk, reversal plan, candidate policy and the exact read-only next step. NEVER applies anything; applying always requires the existing confirmed write tools (block_threat/apply_change/run_cli_command with confirm=true) plus human approval. policy: observation|containment_proposed|controlled_change|emergency. target: named Orchestrator from list_orchestrator_targets_tool (default target when empty)."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if policy not in POLICY_TEMPLATES:
@@ -4609,7 +4656,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             audit.record(
                 "propose_remediation",
                 appliance_id,
-                "proposals_built",
+                getattr(client, "target_name", "default"),
+                f"proposals_built: {len(proposals)}",
                 dry_run=True,
                 details={"policy": policy, "proposal_count": len(proposals), "date": date},
             )
@@ -4643,11 +4691,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         extra_query_params_json: str = "",
         verify_operation_id: str = "",
         confirm: bool = False,
+        target: str = "",
     ) -> str:
-        """Apply a configuration change through the Orchestrator/Appliance API. Dry-run by default: without confirm=true it returns the exact method, path and body that would be executed. Effective permissions are those of the authenticated user. Use list_api_operations to discover available write operations and their required parameters. Some upstream endpoints accept array bodies declared as arrays in body_example; those are accepted here. Pass verify_operation_id (a GET operation) to read-after-write and fail loudly if the write left no trace. Upstream throttles writes (~10/min); on repeated write failures wait 60s before retrying."""
+        """Apply a configuration change through the Orchestrator/Appliance API. Dry-run by default: without confirm=true it returns the exact method, path, body and target Orchestrator that would be used. Effective permissions are those of the authenticated user. Use list_api_operations to discover available write operations and their required parameters. Some upstream endpoints accept array bodies declared as arrays in body_example; those are accepted here. Pass verify_operation_id (a GET operation) to read-after-write and fail loudly if the write left no trace. target: named Orchestrator from list_orchestrator_targets_tool; the same target is used for preparation, execution and verification (default target when empty). Upstream throttles writes (~10/min); on repeated write failures wait 60s before retrying."""
         try:
             require_writes(operation_id)
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
@@ -4708,6 +4757,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             audit_entry = {
                 **operation_details(version, operation_id),
                 "resolved_path": operation.path,
+                "target": getattr(client, "target_name", "default"),
                 "body": body,
                 "confirmed": confirm,
             }
@@ -4719,7 +4769,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             else:
                 audit_public_entry["body_keys"] = []
             if not confirm:
-                audit.record("apply_change", operation_id, operation.path, "dry-run", dry_run=True, details=audit_public_entry)
+                audit.record(
+                    "apply_change",
+                    operation_id,
+                    getattr(client, "target_name", "default"),
+                    "dry-run",
+                    dry_run=True,
+                    details=audit_public_entry,
+                )
                 return json_result({"dry_run": True, "would_execute": audit_entry}, settings.max_output_chars)
             if operation_id.startswith("appliance."):
                 ne_pk = resolve_ne_pk(client, appliance_id)
@@ -4739,7 +4796,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     json_body=body,
                     **query_params,
                 )
-            audit.record("apply_change", operation_id, operation.path, "ok", dry_run=False, details=audit_public_entry)
+            audit.record(
+                "apply_change",
+                operation_id,
+                getattr(client, "target_name", "default"),
+                "ok",
+                dry_run=False,
+                details=audit_public_entry,
+            )
             verification = None
             verification_error = None
             if verify_operation_id:
@@ -4850,7 +4914,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     entry["cpu_timeseries"] = {"error": str(error)}
                 try:
                     entry["performance_timeseries"] = summarize_performance_timeseries(
-                        client.call(version, ORCHESTRATOR_APPLIANCE_PERFORMANCE_READ, nePk=ne_pk)
+                        client.call(
+                            version,
+                            ORCHESTRATOR_APPLIANCE_PERFORMANCE_READ,
+                            nePk=ne_pk,
+                            granularity="hour",
+                            startTime=str(int((time.time() - 3600) * 1000)),
+                            endTime=str(int(time.time() * 1000)),
+                        )
                     )
                 except Exception as error:
                     entry["performance_timeseries"] = {"error": str(error)}
@@ -4872,10 +4943,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         name: str = "",
         filter_mode: str = "all",
         count: int = 10,
+        target: str = "",
     ) -> str:
-        """Read REAL-TIME per-second statistics directly from an EdgeConnect appliance via POST /stats/realtimeStats through the Orchestrator appliance proxy (reached over the managed SD-WAN network; no direct WAN access to the appliance is required). target_type: tunnel | port | port_pair | boosted_tunnel | shaper; name filters the target (empty = all); filter_mode: all | average | peak; count = number of per-second samples."""
+        """Read REAL-TIME per-second statistics directly from an EdgeConnect appliance via POST /stats/realtimeStats through the Orchestrator appliance proxy (reached over the managed SD-WAN network; no direct WAN access to the appliance is required). target_type: tunnel | port | port_pair | boosted_tunnel | shaper; name filters the target (empty = all); filter_mode: all | average | peak; count = number of per-second samples. target: named Orchestrator from list_orchestrator_targets_tool (default target when empty)."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
@@ -4901,12 +4973,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def ask_sdwan_ai(question: str, chat_id: str = "", max_events: int = 2000) -> str:
-        """Ask the Orchestrator's built-in SD-WAN AI assistant (SASE Copilot) a natural-language question about the SD-WAN fabric (POST /sdwanai/search, streaming SSE consumed to completion). Returns the assistant's answer plus chat_id/msg_id for conversation continuity. Requires the SASE Copilot feature enabled on the Orchestrator (check get_sase_copilot_status) and a READ_WRITE API role."""
+    def ask_sdwan_ai(question: str, chat_id: str = "", max_events: int = 2000, target: str = "") -> str:
+        """Ask the Orchestrator's built-in SD-WAN AI assistant (SASE Copilot) a natural-language question about the SD-WAN fabric (POST /sdwanai/search, streaming SSE consumed to completion). Returns the assistant's answer plus chat_id/msg_id for conversation continuity. Requires the SASE Copilot feature enabled on the Orchestrator (check get_sase_copilot_status) and a READ_WRITE API role. target: named Orchestrator from list_orchestrator_targets_tool (default target when empty)."""
         try:
             if not question or not question.strip():
                 return json_result({"error": "PARAM_REQUIRED", "required_params": ["question"]}, settings.max_output_chars)
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
@@ -4971,10 +5043,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_sase_copilot_status() -> str:
-        """Check whether the SASE Copilot (SD-WAN AI assistant) feature is enabled on the Orchestrator (GET /sdwanai/enableSaseCopilot). The feature is stored as an advanced property and defaults to false; if disabled, ask_sdwan_ai will fail."""
+    def get_sase_copilot_status(target: str = "") -> str:
+        """Check whether the SASE Copilot (SD-WAN AI assistant) feature is enabled on the Orchestrator (GET /sdwanai/enableSaseCopilot). The feature is stored as an advanced property and defaults to false; if disabled, ask_sdwan_ai will fail. target: named Orchestrator from list_orchestrator_targets_tool (default target when empty)."""
         try:
-            client = require_client()
+            client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
