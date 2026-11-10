@@ -216,6 +216,8 @@ body{background:var(--console-bg,#071d29)}
  dialog{max-height:90vh;overflow:auto}.monitor-grid{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
 }
 @media(max-width:380px){.color-controls{grid-template-columns:1fr}.topbar-actions{justify-content:flex-start}}
+ .topology-card{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:4px;min-width:0;height:auto}.topology-card strong,.topology-card small,.topology-detail{width:100%;line-height:1.45;overflow-wrap:anywhere}
+.topology-stack{min-width:0}.topology-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px}.topology-group{min-width:0;border:1px solid #326674;border-radius:10px;padding:12px;background:#092a36}.topology-group h3{margin:0 0 10px;color:#fff;font-size:14px}.topology-list{display:grid;gap:10px;max-height:410px;overflow-y:auto;padding:2px}.topology-filter{max-width:360px;background:#f7fbfc;color:#102a43;margin:0 0 12px}.topology-card[hidden]{display:none}.diagnostic-commands{max-height:300px;min-height:80px}
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='home', TOPOLOGY_STATUS=null, TOPOLOGY_BUSY=false;
@@ -243,6 +245,8 @@ function openCustom(){
  q('#app-page-bg').value=localStorage.getItem('ec-page-bg')||'#071d29';
  q('#app-panel-bg').value=localStorage.getItem('ec-panel-bg')||'#0d2c38';
  q('#app-card-bg').value=localStorage.getItem('ec-card-bg')||'#103542';
+ q('#app-panel-fg').value=localStorage.getItem('ec-panel-fg')||contrastText(q('#app-panel-bg').value);
+ q('#app-card-fg').value=localStorage.getItem('ec-card-fg')||contrastText(q('#app-card-bg').value);
  renderIconPicker();
  previewBrand();
  d.showModal?d.showModal():d.setAttribute('open','');
@@ -252,19 +256,22 @@ function pickIcon(ic){localStorage.setItem('ec-icon',ic);localStorage.removeItem
 function previewBrand(){var p=q('#brand-preview');if(!p||!p.style||!p.querySelector)return;p.style.setProperty('--preview-primary',localStorage.getItem('ec-accent')||'#01a982');p.style.setProperty('--preview-header',localStorage.getItem('ec-header')||'#073b4c');var ic=siteIcon();var logo=siteLogo();var pv=p.querySelector('.pv-brand');if(pv)pv.innerHTML=(logo?'<img class="logo" src="'+logo+'">':(ic?'<span class="logo">'+esc(ic)+'</span>':''))+'<div><strong>'+esc(q('#custom-name').value||siteName())+'</strong><span>'+t('tagline')+'</span></div>'}
 function refreshBrand(){if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
 function closeCustom(){var d=q('#custom-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
-function resetCustom(){['ec-accent','ec-header','ec-cyan','ec-icon','ec-logo','ec-site-name','ec-effect','ec-page-bg','ec-panel-bg','ec-card-bg'].forEach(function(k){localStorage.removeItem(k)});applySavedTheme();openCustom();refreshBrand();notice(t('app_reset_done'),'ok')}
+function resetCustom(){['ec-accent','ec-header','ec-cyan','ec-icon','ec-logo','ec-site-name','ec-effect','ec-page-bg','ec-panel-bg','ec-card-bg','ec-panel-fg','ec-card-fg'].forEach(function(k){localStorage.removeItem(k)});applySavedTheme();openCustom();refreshBrand();notice(t('app_reset_done'),'ok')}
+function colorLuminance(hex){var c=[1,3,5].map(function(i){var v=parseInt(hex.slice(i,i+2),16)/255;return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]}
 function saveCustom(){
+ var pairs=[['panel-bg','panel-fg'],['card-bg','card-fg']];
+ for(var pair of pairs){var bg=colorLuminance(q('#app-'+pair[0]).value),fg=colorLuminance(q('#app-'+pair[1]).value);if((Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)<4.5){alert(LANG==='es'?'El contraste entre fondo y texto debe ser al menos 4.5:1.':'Background and text contrast must be at least 4.5:1.');return}}
  var name=q('#custom-name')?q('#custom-name').value.trim():'';if(name)localStorage.setItem('ec-site-name',name);
  var a=q('#app-accent');if(a)localStorage.setItem('ec-accent',a.value);
  var h=q('#app-header');if(h)localStorage.setItem('ec-header',h.value);
  var c=q('#app-cyan');if(c)localStorage.setItem('ec-cyan',c.value);
- ['page-bg','panel-bg','card-bg'].forEach(function(k){var el=q('#app-'+k);if(el)localStorage.setItem('ec-'+k,el.value)});
+ ['page-bg','panel-bg','card-bg','panel-fg','card-fg'].forEach(function(k){var el=q('#app-'+k);if(el)localStorage.setItem('ec-'+k,el.value)});
  var effect=q('#app-effect');if(effect)localStorage.setItem('ec-effect',effect.value);
  var f=q('#custom-logo');
  if(f&&f.files&&f.files[0]){var r=new FileReader();r.onload=function(e){try{localStorage.setItem('ec-logo',String(e.target.result));localStorage.removeItem('ec-icon')}catch(err){notice(t('file_too_big'),'err')}applySavedTheme();closeCustom();refreshBrand()};r.readAsDataURL(f.files[0]);return}
  applySavedTheme();closeCustom();refreshBrand();
 }
-function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><label>Estilo de animación<select id="app-effect"><option value="flow">Flujo</option><option value="pulse">Pulso</option><option value="quiet">Sin animación</option></select></label><p class="help">Los colores pueden personalizarse abajo. Los efectos son decorativos y se aplican a este navegador.</p><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="previewBrand()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="previewBrand()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="previewBrand()"></label><label>'+(LANG==='es'?'Fondo de página':'Page background')+'<input type="color" id="app-page-bg"></label><label>'+(LANG==='es'?'Fondo de paneles':'Panel background')+'<input type="color" id="app-panel-bg"></label><label>'+(LANG==='es'?'Fondo de tarjetas':'Card background')+'<input type="color" id="app-card-bg"></label></div><p class="help">'+(LANG==='es'?'El texto se ajusta automáticamente al fondo. Guarda para aplicar los cambios.':'Text adjusts automatically to the background. Save to apply changes.')+'</p><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button><button class="danger" onclick="resetCustom()">'+t('app_reset')+'</button></div></dialog>'}
+function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><label>Estilo de animación<select id="app-effect"><option value="flow">Flujo</option><option value="pulse">Pulso</option><option value="quiet">Sin animación</option></select></label><p class="help">Los colores pueden personalizarse abajo. Los efectos son decorativos y se aplican a este navegador.</p><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="previewBrand()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="previewBrand()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="previewBrand()"></label><label>'+(LANG==='es'?'Fondo de página':'Page background')+'<input type="color" id="app-page-bg"></label><label>'+(LANG==='es'?'Fondo de paneles':'Panel background')+'<input type="color" id="app-panel-bg"></label><label>'+(LANG==='es'?'Fondo de tarjetas':'Card background')+'<input type="color" id="app-card-bg"></label><label>'+(LANG==='es'?'Texto de paneles':'Panel text')+'<input type="color" id="app-panel-fg"></label><label>'+(LANG==='es'?'Texto de tarjetas':'Card text')+'<input type="color" id="app-card-fg"></label></div><p class="help">'+(LANG==='es'?'Elige colores con suficiente contraste. Guarda para aplicar los cambios.':'Choose colors with sufficient contrast. Save to apply changes.')+'</p><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button><button class="danger" onclick="resetCustom()">'+t('app_reset')+'</button></div></dialog>'}
 
 var DONATE_URL='https://github.com/sponsors/Ryuz-crypto';
 function footerHtml(){return '<footer class="powered-footer"><span>'+t('credits')+': ec-mcp · Ryuz-crypto</span><a class="donate" href="'+DONATE_URL+'" target="_blank" rel="noopener">☕ '+t('donate')+'</a></footer>'}
@@ -284,7 +291,7 @@ function applySavedTheme(){
  root.setProperty('--brand',localStorage.getItem('ec-accent')||'#01a982');
  root.setProperty('--brand-header',localStorage.getItem('ec-header')||'#073b4c');
  root.setProperty('--cyan',localStorage.getItem('ec-cyan')||'#00c8ff');
- [['page-bg','#071d29'],['panel-bg','#0d2c38'],['card-bg','#103542']].forEach(function(pair){var c=localStorage.getItem('ec-'+pair[0])||pair[1];if(!/^#[0-9a-f]{6}$/i.test(c))c=pair[1];root.setProperty('--'+(pair[0]==='page-bg'?'console-bg':pair[0]),c);if(pair[0]!=='page-bg')root.setProperty('--'+pair[0].replace('-bg','-fg'),contrastText(c))});
+ [['page-bg','#071d29'],['panel-bg','#0d2c38'],['card-bg','#103542']].forEach(function(pair){var c=localStorage.getItem('ec-'+pair[0])||pair[1];if(!/^#[0-9a-f]{6}$/i.test(c))c=pair[1];root.setProperty('--'+(pair[0]==='page-bg'?'console-bg':pair[0]),c);if(pair[0]!=='page-bg'){var fg=localStorage.getItem('ec-'+pair[0].replace('-bg','-fg'));root.setProperty('--'+pair[0].replace('-bg','-fg'),/^#[0-9a-f]{6}$/i.test(fg||'')?fg:contrastText(c))}});
 }
 applySavedTheme();
 
@@ -348,7 +355,7 @@ for(var kl in I18N_L.ja){I18N.ja=I18N.ja||{};I18N.ja[kl]=I18N_L.ja[kl]}
 
 
 
-I18N.he={nav_wizard:'אשף הגדרה',nav_orch:'אורקסטרטורים',nav_sse:'פלטפורמות SSE',nav_svc:'שירותים',nav_config:'הגדרות',nav_update:'עדכונים',nav_users:'משתמשים',nav_tools:'כלים',nav_tls:'תעודות',nav_debug:'אבחון',nav_out:'יציאה',tagline:'ניהול EdgeConnect SD-WAN ו-SSE',login_title:'מרכז ניהול',login_user:'שם משתמש',login_pass:'סיסמה',login_enter:'כניסה',u_name:'שם משתמש',h2_orch:'אורקסטרטורים',h2_sse:'פלטפורמות SSE',h2_svc:'שירותים',h2_config:'הגדרות השירות',h2_update:'עדכונים',h2_wizard:'אשף הגדרה',btn_save:'שמירה',btn_save_vars:'שמירת הגדרות',btn_save_restart:'שמירה והפעלה מחדש',btn_save_restart_short:'שמירה והפעלה מחדש',btn_recheck:'בדיקה חוזרת',btn_probe:'בדיקה',btn_edit:'עריכה',btn_delete:'מחיקה',btn_next:'הבא',btn_back:'הקודם',btn_review:'סקירת שינויים',loading:'טוען...',yes:'כן',no:'לא',menu_custom:'התאמה אישית',top_home:'ראשי',top_heading:'מרכז תפעול EdgeConnect',top_caption:'מפת תצורה לוגית; הקווים אינם מציגים תעבורה או חיבורים פעילים.',top_sub:'ניהול חיבורי SD-WAN ו-SSE במקום אחד.',top_map:'מפת חיבורים',top_check:'בדיקת חיבורים',top_checking:'בודק…',top_last:'בדיקה אחרונה: ',top_none:'טרם נבדק',top_connected:'מחובר',top_problem:'קיימת בעיה',top_ai:'עוזרי בינה מלאכותית',top_sessions:'גישה ותקשורת · החיבורים לא נבדקו',top_panel_ver:'גרסת הממשק: ',top_info:'מידע נוסף',top_open:'פתיחת הגדרות',top_missing:'לא נשמרו יעדים',top_first:'הגדרת חיבור ראשון',top_unavailable:'גרסאות היעדים ומספר ההתקנים אינם זמינים בתצוגה זו.',top_default:'יעד ברירת מחדל',top_saved:'יעד שמור',top_platform:'פלטפורמה שמורה',secret_set:'הסוד מוגדר ואינו מוצג',secret_unset:'לא הוגדר סוד'};
+I18N.he={nav_wizard:'אשף הגדרה',nav_orch:'אורקסטרטורים',nav_sse:'פלטפורמות SSE',nav_svc:'שירותים',nav_config:'הגדרות',nav_update:'עדכונים',nav_users:'משתמשים',nav_tools:'כלים',nav_tls:'תעודות',nav_debug:'אבחון',nav_out:'יציאה',tagline:'ניהול EdgeConnect SD-WAN ו-SSE',login_title:'מרכז ניהול',login_user:'שם משתמש',login_pass:'סיסמה',login_enter:'כניסה',u_name:'שם משתמש',h2_orch:'אורקסטרטורים',h2_sse:'פלטפורמות SSE',h2_svc:'שירותים',h2_config:'הגדרות השירות',h2_update:'עדכונים',h2_wizard:'אשף הגדרה',btn_save:'שמירה',btn_save_vars:'שמירת הגדרות',btn_save_restart:'שמירה והפעלה מחדש',btn_save_restart_short:'שמירה והפעלה מחדש',btn_recheck:'בדיקה חוזרת',btn_probe:'בדיקה',btn_edit:'עריכה',btn_delete:'מחיקה',btn_next:'הבא',btn_back:'הקודם',btn_review:'סקירת שינויים',loading:'טוען...',yes:'כן',no:'לא',menu_custom:'התאמה אישית',top_home:'ראשי',top_heading:'מרכז תפעול SASE',top_caption:'מפת תצורה לוגית; הקווים אינם מציגים תעבורה או חיבורים פעילים.',top_sub:'ניהול חיבורי SD-WAN ו-SSE במקום אחד.',top_map:'מפת חיבורים',top_check:'בדיקת חיבורים',top_checking:'בודק…',top_last:'בדיקה אחרונה: ',top_none:'טרם נבדק',top_connected:'מחובר',top_problem:'קיימת בעיה',top_ai:'עוזרי בינה מלאכותית',top_sessions:'גישה ותקשורת · החיבורים לא נבדקו',top_panel_ver:'גרסת הממשק: ',top_info:'מידע נוסף',top_open:'פתיחת הגדרות',top_missing:'לא נשמרו יעדים',top_first:'הגדרת חיבור ראשון',top_unavailable:'גרסאות היעדים ומספר ההתקנים אינם זמינים בתצוגה זו.',top_default:'יעד ברירת מחדל',top_saved:'יעד שמור',top_platform:'פלטפורמה שמורה',secret_set:'הסוד מוגדר ואינו מוצג',secret_unset:'לא הוגדר סוד'};
 
 function q(s){return document.querySelector(s)}
 function esc(v){return String(v==null?'':v).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
@@ -381,6 +388,9 @@ function renderShell(){
 }
 function showTab(name){
  CURTAB=name;
+ var ws=q('#workspace');
+ if(ws&&ws.animate&&localStorage.getItem('ec-effect')!=='quiet'&&!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches))
+  ws.animate([{opacity:.45,transform:'translateY(8px) scale(.995)'},{opacity:1,transform:'none'}],{duration:260,easing:'ease-out'});
  var ntc=q('#notice');if(ntc)ntc.innerHTML='';
  document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active-tab')});
  var tab=q('#tab-'+name);if(tab)tab.classList.add('active-tab');
@@ -427,17 +437,20 @@ function renderTopology(){
  var orchs=STATE.orchestrators||[],sses=STATE.sse_platforms||[],mcp=TOPOLOGY_STATUS&&TOPOLOGY_STATUS.mcp_transport;
  var check=TOPOLOGY_STATUS&&TOPOLOGY_STATUS.checked_at?TOPOLOGY_STATUS.checked_at:(LANG==='es'?'Sin comprobar':'Not checked');
  var missing=LANG==='es'?'Todavía no hay destinos guardados.':'No saved targets yet.';
- var cards=orchs.map(function(o){return topologyCard('orch',o)}).join('')+sses.map(function(o){return topologyCard('sse',o)}).join('');
- if(!cards)cards='<button type="button" class="topology-card" onclick="showTab(\'wizard\')"><span class="tag">Setup</span><strong>'+esc(missing)+'</strong><small>'+(LANG==='es'?'Configurar primera conexión':'Configure first connection')+'</small></button>';
- var heading=LANG==='he'?t('top_heading'):(LANG==='es'?'Centro de operaciones EdgeConnect':'EdgeConnect operations center');
+ var oc=orchs.map(function(o){return topologyCard('orch',o)}).join(''),sc=sses.map(function(o){return topologyCard('sse',o)}).join('');
+ var empty='<p class="topology-caption">'+esc(missing)+'</p>';
+ var cards='<div class="topology-group"><h3>SD-WAN · Orchestrators ('+orchs.length+')</h3><div class="topology-list">'+(oc||empty)+'</div></div><div class="topology-group"><h3>SSE · Plataformas ('+sses.length+')</h3><div class="topology-list">'+(sc||empty)+'</div></div>';
+ var heading=LANG==='he'?t('top_heading'):(LANG==='es'?'Centro de operaciones de SASE':'SASE operations center');
  var caption=LANG==='he'?t('top_caption'):(LANG==='es'?'Mapa lógico de configuración. Las líneas no representan tráfico ni sesiones activas.':'Logical configuration map. Lines do not represent traffic or active sessions.');
  var statusCaption=LANG==='es'?'Última comprobación: ':'Last checked: ';
  q('#workspace').innerHTML='<section class="topology"><div class="topology-hero"><div class="topology-eyebrow">EdgeConnect MCP · CONTROL CENTER</div><h1>'+heading+'</h1><p>'+(LANG==='he'?t('top_sub'):(LANG==='es'?'Administra tus conexiones SD-WAN y SSE desde un solo lugar.':'Manage SD-WAN and SSE connections in one place.'))+'</p></div>'+
  '<div class="topology-body"><div class="topology-head"><div><h2>'+(LANG==='he'?t('top_map'):(LANG==='es'?'Mapa de conexiones':'Connection map'))+'</h2><p class="topology-caption">'+caption+'</p></div><button type="button" onclick="refreshTopology()" '+(TOPOLOGY_BUSY?'disabled':'')+'>'+(TOPOLOGY_BUSY?(LANG==='es'?'Comprobando…':'Checking…'):(LANG==='he'?t('top_check'):(LANG==='es'?'Comprobar conexiones':'Check connections')))+'</button></div>'+
  '<div class="topology-flow"><button type="button" class="topology-card" onclick="showTab(\'config\')" title="Transporte y acceso · sesiones no verificadas"><span class="tag">CLIENT</span><strong>'+(LANG==='he'?t('top_ai'):(LANG==='es'?'Asistentes IA':'AI assistants'))+'</strong><small>'+(LANG==='he'?t('top_sessions'):(LANG==='es'?'Transporte y acceso · sesiones no verificadas':'Transport and access · sessions not verified'))+'</small></button><div class="topology-arrow" aria-hidden="true">→</div>'+
- '<button type="button" class="topology-card" onclick="showTab(\'svc\')" title="'+esc(statusCaption+check)+'"><span class="tag">MCP SERVER</span><strong>EdgeConnect MCP</strong><small>'+(LANG==='he'?t('top_panel_ver'):(LANG==='es'?'Versión del panel: ':'Panel version: '))+'__EC_MCP_VERSION__</small>'+topologyBadge(mcp)+'</button><div class="topology-arrow" aria-hidden="true">→</div><div class="topology-stack">'+cards+'</div></div>'+
+ '<button type="button" class="topology-card" onclick="showTab(\'svc\')" title="'+esc(statusCaption+check)+'"><span class="tag">MCP SERVER</span><strong>EdgeConnect MCP</strong><small>'+(LANG==='he'?t('top_panel_ver'):(LANG==='es'?'Versión del panel: ':'Panel version: '))+'__EC_MCP_VERSION__</small>'+topologyBadge(mcp)+'</button><div class="topology-arrow" aria-hidden="true">→</div><div class="topology-stack"><label for="topology-filter" class="topology-caption">'+(LANG==='es'?'Buscar destinos':'Search targets')+'</label><input class="topology-filter" id="topology-filter" type="search" oninput="filterTopology(this.value)" placeholder="'+(LANG==='es'?'Nombre del destino':'Target name')+'"><div class="topology-groups">'+cards+'</div></div></div>'+
  '<p class="topology-caption">'+esc(statusCaption+check)+'. '+(LANG==='es'?'La versión de cada conexión y el número de appliances no están disponibles en este mapa.':'Connection versions and appliance counts are not available in this map.')+'</p><div class="topology-actions"><button type="button" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button type="button" class="secondary" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button></div></div></section>';
 }
+
+function filterTopology(value){var term=String(value||'').toLocaleLowerCase();document.querySelectorAll('.topology-card[data-kind]').forEach(function(card){card.hidden=!String(card.dataset.name||'').toLocaleLowerCase().includes(term)})}
 
 async function renderServices(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">'+t('checking')+'</p></section>';
@@ -762,11 +775,12 @@ function copyAgent(){var el=q('#agent-text');if(el&&navigator.clipboard){navigat
 function closeAgent(){var d=q('#agent-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
 var DBG_TIMER=null,DBG_PAUSED=false,DBG_Q='';
 async function renderDebug(){
- q('#workspace').innerHTML='<section class="panel"><h2>'+t('dbg_title')+'</h2><p class="help">'+t('dbg_desc')+'</p><div class="actions" style="align-items:center"><input id="dbg-q" placeholder="'+t('dbg_filter')+'" oninput="dbgApplyFilter()" style="max-width:300px;min-height:34px;margin-top:0"><button class="secondary" onclick="dbgTogglePause()" id="dbg-pause">'+t('dbg_pause')+'</button><button class="secondary" onclick="dbgRefresh()">'+t('dbg_refresh')+'</button><button class="secondary" onclick="dbgExport()">'+t('dbg_export')+'</button><button class="danger" onclick="dbgClear()">'+t('dbg_clear')+'</button></div><div id="host-monitor" class="monitor-grid" aria-live="polite"></div><div class="actions"><button class="secondary" onclick="downloadAudit(\'csv\')">CSV</button><button class="secondary" onclick="downloadAudit(\'xlsx\')">Excel</button><button class="secondary" onclick="downloadAudit(\'pdf\')">PDF</button></div><p class="help">Informes para administradores: hasta 500 eventos disponibles. Los campos no registrados se muestran vacíos; no se infiere el usuario.</p><details class="group"><summary>Diagnóstico Linux (solo lectura)</summary><p class="help">Ejecuta estos comandos manualmente en el servidor. No se ejecutan desde el panel. Revisa y oculta secretos antes de compartir salidas.</p><pre class="diagnostic-commands">systemctl --no-pager status ec-mcp ec-mcp-admin\njournalctl -u ec-mcp-admin -n 100 --no-pager\nss -lntp</pre></details><p class="help">API del panel: método, ruta, estado y duración. La auditoría MCP muestra la acción registrada; no garantiza capturar cada solicitud upstream. No se muestran cuerpos, cabeceras ni credenciales.</p><div id="dbg-table"><p class="help">'+t('checking')+'</p></div></section>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('dbg_title')+'</h2><p class="help">'+t('dbg_desc')+'</p><div class="actions" style="align-items:center"><input id="dbg-q" placeholder="'+t('dbg_filter')+'" oninput="dbgApplyFilter()" style="max-width:300px;min-height:34px;margin-top:0"><button class="secondary" onclick="dbgTogglePause()" id="dbg-pause">'+t('dbg_pause')+'</button><button class="secondary" onclick="dbgRefresh()">'+t('dbg_refresh')+'</button><button class="secondary" onclick="dbgExport()">'+t('dbg_export')+'</button><button class="danger" onclick="dbgClear()">'+t('dbg_clear')+'</button></div><div id="host-monitor" class="monitor-grid" aria-live="polite"></div><div class="actions"><button class="secondary" onclick="downloadAudit(\'csv\')">CSV</button><button class="secondary" onclick="downloadAudit(\'xlsx\')">Excel</button></div><p class="help">Informes para administradores: hasta 500 eventos disponibles. Los campos no registrados se muestran vacíos; no se infiere el usuario.</p><details class="group"><summary>Diagnóstico Linux (solo lectura · administrador)</summary><p class="help">Comandos predefinidos; salida limitada y tiempo máximo de 10 segundos. Revisa la salida antes de compartirla.</p><div class="actions"><button class="secondary" onclick="runDiagnostic(\'uptime\')">Carga / uptime</button><button class="secondary" onclick="runDiagnostic(\'memory\')">Memoria</button><button class="secondary" onclick="runDiagnostic(\'disk\')">Disco</button></div><pre id="diagnostic-output" class="diagnostic-commands" aria-live="polite"></pre></details><p class="help">API del panel: método, ruta, estado y duración. La auditoría MCP muestra la acción registrada; no garantiza capturar cada solicitud upstream. No se muestran cuerpos, cabeceras ni credenciales.</p><div id="dbg-table"><p class="help">'+t('checking')+'</p></div></section>';
  await dbgRefresh();
  if(!DBG_TIMER)DBG_TIMER=setInterval(function(){if(!DBG_PAUSED)dbgRefresh()},2500);
 }
-function dbgStop(){if(DBG_TIMER){clearInterval(DBG_TIMER);DBG_TIMER=null}}
+var DIAG_ABORT=null;
+function dbgStop(){if(DIAG_ABORT){DIAG_ABORT.abort();DIAG_ABORT=null}if(DBG_TIMER){clearInterval(DBG_TIMER);DBG_TIMER=null}}
 function dbgApplyFilter(){DBG_Q=(q('#dbg-q')||{}).value||'';dbgRefresh()}
 function dbgTogglePause(){DBG_PAUSED=!DBG_PAUSED;var b=q('#dbg-pause');if(b)b.textContent=DBG_PAUSED?t('dbg_resume'):t('dbg_pause')}
 async function dbgRefresh(){
@@ -798,6 +812,19 @@ async function refreshHostMonitor(){
  }catch(e){var node=q('#host-monitor');if(node)node.textContent='Métricas no disponibles: '+e.message}
  finally{HOST_MONITOR_BUSY=false}
 }
+async function runDiagnostic(command){
+ var output=q('#diagnostic-output');if(!output)return;
+ if(DIAG_ABORT)DIAG_ABORT.abort();var controller=new AbortController();DIAG_ABORT=controller;output.textContent='Ejecutando…\n';
+ try{
+  var response=await fetch('/api/diagnostics/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:command}),signal:controller.signal});
+  if(!response.ok)throw Error('HTTP '+response.status);
+  if(!response.body||!response.body.getReader){output.textContent+=await response.text();return}
+  var reader=response.body.getReader(),decoder=new TextDecoder();
+  while(true){var part=await reader.read();if(part.done)break;output.textContent+=decoder.decode(part.value,{stream:true});output.scrollTop=output.scrollHeight}
+  output.textContent+=decoder.decode();
+ }catch(e){if(e.name!=='AbortError')output.textContent+='\n'+e.message}
+ finally{if(DIAG_ABORT===controller)DIAG_ABORT=null}
+}
 async function downloadAudit(format){
  try{var response=await fetch('/api/audit/report?format='+encodeURIComponent(format));if(!response.ok)throw Error('HTTP '+response.status);var blob=await response.blob();var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ec-mcp-auditoria.'+format;a.click();URL.revokeObjectURL(a.href)}
  catch(e){notice(e.message,'err')}
@@ -822,10 +849,11 @@ function backupsDialogHtml(){return '<dialog id="bak-dlg" style="max-width:760px
 async function loadBackups(){
  try{
   var r=await api('/api/backups');
-  var rows=(r.backups||[]).map(function(b){return '<div class="orch"><span class="orch-actions"><button class="danger" onclick="restoreBackup(\''+esc(b.name)+'\')">'+t('bak_restore')+'</button></span><strong>'+esc(b.name)+'</strong> <span class="badge">'+esc(b.label||'')+'</span><br><span class="help">env: '+(b.env_changed&&b.env_changed.length?b.env_changed.slice(0,10).map(esc).join(', '):'—')+' · registro: '+(b.registry_changed&&b.registry_changed.length?b.registry_changed.map(esc).join(', '):'—')+'</span></div>'}).join('')||'<p class="help">'+t('bak_empty')+'</p>';
+  var rows=(r.backups||[]).map(function(b){return '<div class="orch"><span class="orch-actions"><button class="danger" onclick="restoreBackup(\''+esc(b.name)+'\')">'+t('bak_restore')+'</button>'+(ME&&ME.role==='admin'?'<button class="danger" data-name="'+esc(b.name)+'" onclick="deleteBackup(this.dataset.name)">'+(LANG==='es'?'Eliminar':'Delete')+'</button>':'')+'</span><strong>'+esc(b.name)+'</strong> <span class="badge">'+esc(b.label||'')+'</span><br><span class="help">env: '+(b.env_changed&&b.env_changed.length?b.env_changed.slice(0,10).map(esc).join(', '):'—')+' · registro: '+(b.registry_changed&&b.registry_changed.length?b.registry_changed.map(esc).join(', '):'—')+'</span></div>'}).join('')||'<p class="help">'+t('bak_empty')+'</p>';
   q('#bak-list').innerHTML=rows;
  }catch(e){notice(e.message,'err')}
 }
+async function deleteBackup(name){if(!confirm((LANG==='es'?'¿Eliminar definitivamente el backup ':'Permanently delete backup ')+name+'?'))return;try{var r=await api('/api/backups/delete',{name:name});notice(r.message||r.error,r.ok?'ok':'err');await loadBackups()}catch(e){notice(e.message,'err')}}
 async function createBackup(){try{var r=await api('/api/backups/create',{});notice(r.message||r.error,r.ok?'ok':'err');await loadBackups()}catch(e){notice(e.message,'err')}}
 async function restoreBackup(name){
  if(!confirm(t('bak_restore_confirm')+' '+name+'?'))return;
