@@ -280,6 +280,38 @@ html[data-effect="quiet"] .sase-link:after{animation:none}
 @media(max-width:700px){.sase-flow{grid-template-columns:1fr;gap:0}.sase-link{width:2px;height:22px;justify-self:center}.sase-link:after{left:-3px;top:0;animation:sase-travel-v 3s linear infinite}@keyframes sase-travel-v{from{top:0}to{top:calc(100% - 8px)}}.sase-node{min-height:0}.topology-groups{grid-template-columns:1fr}.sase-search{max-width:none;flex-basis:100%}}
 @media(prefers-reduced-motion:reduce){.sase-link:after{animation:none}.sase-node{transition:none}}
 
+
+/* Decorative holographic interface; no animated element represents live telemetry. */
+.topology-hero{min-height:280px}
+.topology-hero>h1,.topology-hero>p,.topology-hero>.topology-eyebrow,.topology-hero>.sase-hero-meta{position:relative;z-index:2}
+.topology-hero>p{max-width:min(55%,55ch)}
+.sase-holo{position:absolute;right:5%;top:50%;width:250px;aspect-ratio:1;transform:translateY(-50%);pointer-events:none;z-index:0;filter:drop-shadow(0 0 16px #32fbd04a)}
+.sase-holo:before,.sase-holo:after,.sase-orbit,.sase-core,.sase-holo-grid{content:"";position:absolute;border-radius:50%;inset:0}
+.sase-holo:before{border:1px solid #66ffe477;box-shadow:inset 0 0 30px #00d9c026,0 0 25px #00d8b32b;background:repeating-conic-gradient(from 0deg,#80f8dc 0deg 1deg,transparent 1deg 14deg);mask:radial-gradient(transparent 67%,#000 69% 72%,transparent 74%);animation:sase-rotate 24s linear infinite}
+.sase-holo:after{inset:12%;border:1px dashed #5cf5d78a;box-shadow:0 0 14px #45f3d04d,inset 0 0 22px #45f3d024;animation:sase-rotate 16s linear infinite reverse}
+.sase-holo-grid{inset:23%;border:1px solid #55f1d999;background:linear-gradient(90deg,transparent 49.6%,#69f7df4f 50%,transparent 50.4%),linear-gradient(transparent 49.6%,#69f7df4f 50%,transparent 50.4%),radial-gradient(circle,#0d6a6870,#052734bb 75%);box-shadow:inset 0 0 28px #58f9d337}
+.sase-holo-grid:before{content:"";position:absolute;inset:20%;border:1px solid #6bfce080;border-radius:50%}
+.sase-orbit{inset:6%;border:1px solid transparent;border-top-color:#adffef;border-left-color:#3df5d4;animation:sase-rotate 5.5s linear infinite}
+.sase-orbit:after{content:"";position:absolute;top:12%;left:15%;width:7px;height:7px;background:#ddfff6;border-radius:50%;box-shadow:0 0 15px 5px #32f4d6}
+.sase-orbit.alt{inset:18%;border-color:transparent;border-right-color:#91fff0;border-bottom-color:#6df9df;animation-duration:8s;animation-direction:reverse}
+.sase-orbit.alt:after{left:auto;top:auto;right:12%;bottom:13%;width:5px;height:5px}
+.sase-core{inset:39%;display:grid;place-items:center;color:#ddfff8;font-weight:900;font-size:12px;letter-spacing:.1em;background:#0b5c5d;border:1px solid #a9fff0;box-shadow:0 0 22px #56f9d680,inset 0 0 15px #c2fff234;animation:sase-breathe 3.2s ease-in-out infinite}
+@keyframes sase-rotate{to{transform:rotate(360deg)}}
+@keyframes sase-breathe{50%{box-shadow:0 0 35px #61ffe0ba,inset 0 0 20px #d8fff667;transform:scale(1.08)}}
+.sase-link{height:3px;background:linear-gradient(90deg,#35a79c,#a8ffec,#35a79c);box-shadow:0 0 12px #54f8d980}
+.sase-link:after{width:10px;height:10px;top:-4px;box-shadow:0 0 8px #e6fff9,0 0 20px 5px #48f4d2}
+.sase-node,.topology-list .topology-card,.panel .group{transition:transform .25s ease,border-color .25s ease,box-shadow .25s ease,background .25s ease}
+.sase-node:hover,.topology-list .topology-card:hover{transform:translateY(-4px);box-shadow:0 0 0 1px #83ffe5,0 0 25px #22ebc03d,0 18px 30px #0005}
+.sase-filterbar button:hover,nav button:hover{box-shadow:inset 0 -2px #76ffdf,0 0 16px #41e9cb40}
+.panel{position:relative}
+.panel:before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,var(--brand),var(--cyan),transparent);background-size:200% 100%;animation:sase-line 4s linear infinite;pointer-events:none}
+@keyframes sase-line{to{background-position:200% 0}}
+.panel .group:focus-within{border-color:var(--cyan);box-shadow:0 0 0 1px #52f5dd70,0 0 22px #3eead03a}
+.panel input:focus,.panel select:focus,.panel textarea:focus{box-shadow:0 0 0 3px #47e9d75c,0 0 20px #32eacb40}
+html[data-effect="quiet"] .sase-holo *,html[data-effect="quiet"] .sase-holo:before,html[data-effect="quiet"] .sase-holo:after,html[data-effect="quiet"] .panel:before{animation:none}
+@media(max-width:700px){.topology-hero{min-height:225px}.topology-hero>p{max-width:75%}.sase-holo{width:150px;right:-25px;top:38%;opacity:.38}.sase-link{width:3px;height:24px}.sase-link:after{top:0;left:-4px}}
+@media(prefers-reduced-motion:reduce){.sase-holo *, .sase-holo:before,.sase-holo:after,.panel:before{animation:none}.sase-node,.topology-list .topology-card,.panel .group{transition:none}}
+
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='home', TOPOLOGY_STATUS=null, TOPOLOGY_BUSY=false;
@@ -300,7 +332,7 @@ function openCustom(){
  var d=q('#custom-dlg');if(!d){q('#app').innerHTML+=customDialogHtml();d=q('#custom-dlg')}
  if(!d)return;
  q('#custom-name').value=siteName();
- q('#app-effect').value=localStorage.getItem('ec-effect')||'flow';
+ q('#app-effect').value=localStorage.getItem('ec-effect')||'sci-fi';
  q('#app-accent').value=localStorage.getItem('ec-accent')||'#01a982';
  q('#app-header').value=localStorage.getItem('ec-header')||'#073b4c';
  q('#app-cyan').value=localStorage.getItem('ec-cyan')||'#00c8ff';
@@ -333,7 +365,7 @@ function saveCustom(){
  if(f&&f.files&&f.files[0]){var r=new FileReader();r.onload=function(e){try{localStorage.setItem('ec-logo',String(e.target.result));localStorage.removeItem('ec-icon')}catch(err){notice(t('file_too_big'),'err')}applySavedTheme();closeCustom();refreshBrand()};r.readAsDataURL(f.files[0]);return}
  applySavedTheme();closeCustom();refreshBrand();
 }
-function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><label>Estilo de animación<select id="app-effect"><option value="flow">Flujo</option><option value="pulse">Pulso</option><option value="quiet">Sin animación</option></select></label><p class="help">Los colores pueden personalizarse abajo. Los efectos son decorativos y se aplican a este navegador.</p><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="previewBrand()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="previewBrand()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="previewBrand()"></label><label>'+(LANG==='es'?'Fondo de página':'Page background')+'<input type="color" id="app-page-bg"></label><label>'+(LANG==='es'?'Fondo de paneles':'Panel background')+'<input type="color" id="app-panel-bg"></label><label>'+(LANG==='es'?'Fondo de tarjetas':'Card background')+'<input type="color" id="app-card-bg"></label><label>'+(LANG==='es'?'Texto de paneles':'Panel text')+'<input type="color" id="app-panel-fg"></label><label>'+(LANG==='es'?'Texto de tarjetas':'Card text')+'<input type="color" id="app-card-fg"></label></div><p class="help">'+(LANG==='es'?'Elige colores con suficiente contraste. Guarda para aplicar los cambios.':'Choose colors with sufficient contrast. Save to apply changes.')+'</p><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button><button class="danger" onclick="resetCustom()">'+t('app_reset')+'</button></div></dialog>'}
+function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><label>Estilo de animación<select id="app-effect"><option value="sci-fi">Sci-fi · Holográfico</option><option value="flow">Flujo</option><option value="pulse">Pulso</option><option value="quiet">Sin animación</option></select></label><p class="help">Los colores pueden personalizarse abajo. Los efectos son decorativos y se aplican a este navegador.</p><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="previewBrand()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="previewBrand()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="previewBrand()"></label><label>'+(LANG==='es'?'Fondo de página':'Page background')+'<input type="color" id="app-page-bg"></label><label>'+(LANG==='es'?'Fondo de paneles':'Panel background')+'<input type="color" id="app-panel-bg"></label><label>'+(LANG==='es'?'Fondo de tarjetas':'Card background')+'<input type="color" id="app-card-bg"></label><label>'+(LANG==='es'?'Texto de paneles':'Panel text')+'<input type="color" id="app-panel-fg"></label><label>'+(LANG==='es'?'Texto de tarjetas':'Card text')+'<input type="color" id="app-card-fg"></label></div><p class="help">'+(LANG==='es'?'Elige colores con suficiente contraste. Guarda para aplicar los cambios.':'Choose colors with sufficient contrast. Save to apply changes.')+'</p><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button><button class="danger" onclick="resetCustom()">'+t('app_reset')+'</button></div></dialog>'}
 
 var DONATE_URL='https://github.com/sponsors/Ryuz-crypto';
 function footerHtml(){return '<footer class="powered-footer"><span>'+t('credits')+': ec-mcp · Ryuz-crypto</span><a class="donate" href="'+DONATE_URL+'" target="_blank" rel="noopener">☕ '+t('donate')+'</a></footer>'}
@@ -452,7 +484,7 @@ function showTab(name){
  CURTAB=name;
  var ws=q('#workspace');
  if(ws&&ws.animate&&localStorage.getItem('ec-effect')!=='quiet'&&!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches))
-  ws.animate([{opacity:.45,transform:'translateY(8px) scale(.995)'},{opacity:1,transform:'none'}],{duration:260,easing:'ease-out'});
+  ws.animate([{opacity:.25,transform:'translateY(14px) scale(.99)',filter:'blur(4px)'},{opacity:1,transform:'none',filter:'blur(0)'}],{duration:420,easing:'cubic-bezier(.2,.8,.2,1)'});
  var ntc=q('#notice');if(ntc)ntc.innerHTML='';
  document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active-tab')});
  var tab=q('#tab-'+name);if(tab)tab.classList.add('active-tab');
@@ -507,7 +539,7 @@ function renderTopology(){
  var statusCaption=es?'Última comprobación: ':'Last checked: ';
  var group=function(kind,title,count,items){return '<section class="topology-group" data-group="'+kind+'"><div class="sase-group-head"><h3>'+title+'</h3><span class="sase-count">'+count+'</span></div><div class="topology-list">'+(items||empty)+'</div></section>'};
  var filter=function(kind,label,count){return '<button type="button" data-filter="'+kind+'" aria-pressed="'+(SASE_KIND===kind)+'" onclick="setSaseKind(this.dataset.filter)">'+label+' <span>'+count+'</span></button>'};
- q('#workspace').innerHTML='<section class="topology"><div class="topology-hero"><div class="topology-eyebrow">SASE · CONTROL CENTER</div><h1>'+heading+'</h1><p>'+(LANG==='he'?t('top_sub'):(es?'Una vista clara de tus conexiones SD-WAN y SSE.':'A clear view of your SD-WAN and SSE connections.'))+'</p><div class="sase-hero-meta"><span class="sase-pill">MCP · __EC_MCP_VERSION__</span><span class="sase-pill">'+orchs.length+' Orchestrators</span><span class="sase-pill">'+sses.length+' SSE</span></div></div>'+
+ q('#workspace').innerHTML='<section class="topology"><div class="topology-hero"><div class="sase-holo" aria-hidden="true"><span class="sase-holo-grid"></span><span class="sase-orbit"></span><span class="sase-orbit alt"></span><span class="sase-core">SASE</span></div><div class="topology-eyebrow">SASE · CONTROL CENTER</div><h1>'+heading+'</h1><p>'+(LANG==='he'?t('top_sub'):(es?'Una vista clara de tus conexiones SD-WAN y SSE.':'A clear view of your SD-WAN and SSE connections.'))+'</p><div class="sase-hero-meta"><span class="sase-pill">MCP · __EC_MCP_VERSION__</span><span class="sase-pill">'+orchs.length+' Orchestrators</span><span class="sase-pill">'+sses.length+' SSE</span></div></div>'+
  '<div class="topology-body"><div class="topology-head"><div><h2>'+(LANG==='he'?t('top_map'):(es?'Mapa de conexiones':'Connection map'))+'</h2><p class="topology-caption">'+caption+'</p></div><button type="button" onclick="refreshTopology()" '+(TOPOLOGY_BUSY?'disabled':'')+'>'+(TOPOLOGY_BUSY?(es?'Comprobando…':'Checking…'):(LANG==='he'?t('top_check'):(es?'Comprobar conexiones':'Check connections')))+'</button></div>'+
  '<div class="sase-flow"><button type="button" class="sase-node" onclick="showTab(\'config\')"><span class="tag">01 · CLIENT</span><strong>'+(LANG==='he'?t('top_ai'):(es?'Asistentes de IA':'AI assistants'))+'</strong><small>'+(LANG==='he'?t('top_sessions'):(es?'Acceso y transporte · sesiones no verificadas':'Access and transport · sessions not verified'))+'</small></button><div class="sase-link" aria-hidden="true"></div>'+
  '<button type="button" class="sase-node" onclick="showTab(\'svc\')" title="'+esc(statusCaption+check)+'"><span class="tag">02 · MCP SERVER</span><strong>EdgeConnect MCP</strong><small>'+(LANG==='he'?t('top_panel_ver'):(es?'Versión del panel: ':'Panel version: '))+'__EC_MCP_VERSION__</small>'+topologyBadge(mcp)+'</button><div class="sase-link" aria-hidden="true"></div>'+
