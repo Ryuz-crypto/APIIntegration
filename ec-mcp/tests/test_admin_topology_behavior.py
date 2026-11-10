@@ -22,6 +22,7 @@ globalThis.localStorage = {getItem:()=>null, setItem:()=>{}};
 globalThis.document = {
  documentElement:{dataset:{},style:{setProperty:()=>{}}},
  querySelector: key => key === '#workspace' ? workspace : null,
+ querySelectorAll: () => [],
  addEventListener:()=>{}
 };
 globalThis.window = globalThis;
@@ -32,6 +33,8 @@ assert(workspace.innerHTML.includes('&lt;unsafe&gt;'));
 assert(!workspace.innerHTML.includes('<unsafe>'));
 assert(workspace.innerHTML.includes('Sin comprobar'));
 assert(workspace.innerHTML.includes('sesiones no verificadas'));
+assert(workspace.innerHTML.includes('Buscar por nombre'));
+assert(workspace.innerHTML.includes('data-filter="sse"'));
 assert(!workspace.innerHTML.includes('topology-status up'));
 TOPOLOGY_STATUS = {
  checked_at:'2026-01-01T00:00:00Z',
@@ -43,7 +46,7 @@ renderTopology();
 assert(workspace.innerHTML.includes('Conectado'));
 assert(workspace.innerHTML.includes('Con problemas'));
 assert(workspace.innerHTML.includes('HTTP 403'));
-assert(workspace.innerHTML.includes('no representan tráfico'));
+assert(workspace.innerHTML.includes('no representa tráfico'));
 renderLogin = () => {};
 setLang('he');
 assert.equal(document.documentElement.lang, 'he');
