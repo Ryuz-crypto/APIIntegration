@@ -383,9 +383,16 @@ async def login_page(request):
 
 
 async def login_post(request):
-    body = await request.json()
-    username = str(body.get("username") or "").strip()
-    password = str(body.get("password") or "")
+    try:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError("invalid login")
+        username = str(body.get("username") or "").strip()
+        password = str(body.get("password") or "")
+        if len(username) > 64 or len(password) > admin_users.MAX_PASSWORD_LENGTH:
+            raise ValueError("invalid login")
+    except (ValueError, TypeError):
+        return JSONResponse({"ok": False, "error": "Solicitud de autenticación inválida."}, status_code=400)
     host = os.environ.get("EC_ADMIN_HOST", "0.0.0.0")  # nosec B104
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
@@ -430,7 +437,7 @@ async def login_post(request):
     SESSIONS[token] = {"user": user_label, "role": role, "ts": now}
     _save_sessions()
     response = JSONResponse({"ok": True, "user": user_label, "role": role})
-    response.set_cookie("ec_admin_session", token, httponly=True, samesite="lax", max_age=int(SESSION_TTL))
+    response.set_cookie("ec_admin_session", token, httponly=True, secure=request.url.scheme == "https" or os.environ.get("EC_ADMIN_TLS_ENABLED", "").lower() == "true", samesite="lax", max_age=int(SESSION_TTL))
     return response
 
 

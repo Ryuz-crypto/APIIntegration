@@ -20,7 +20,7 @@ const assert = require('node:assert/strict');
 const workspace = {innerHTML:''};
 globalThis.localStorage = {getItem:()=>null, setItem:()=>{}};
 globalThis.document = {
- documentElement:{style:{setProperty:()=>{}}},
+ documentElement:{dataset:{},style:{setProperty:()=>{}}},
  querySelector: key => key === '#workspace' ? workspace : null,
  addEventListener:()=>{}
 };

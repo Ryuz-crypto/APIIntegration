@@ -20,6 +20,7 @@ import hmac
 import json
 import os
 import re
+import secrets
 from pathlib import Path
 from typing import Any
 
@@ -37,8 +38,36 @@ def users_path() -> Path:
     return Path(os.environ.get("EC_ADMIN_USERS_FILE") or Path.cwd() / ".ec-admin-users.json")
 
 
+PBKDF2_ITERATIONS = 600_000
+MAX_PASSWORD_LENGTH = 1024
+
+
 def hash_password(password: str) -> str:
-    return "sha256:" + hashlib.sha256(password.encode("utf-8")).hexdigest()
+    if not password or len(password) > MAX_PASSWORD_LENGTH:
+        raise UserError("La contraseña debe tener entre 1 y 1024 caracteres")
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt), PBKDF2_ITERATIONS)
+    return f"pbkdf2_sha256:{PBKDF2_ITERATIONS}:{salt}:{digest.hex()}"
+
+
+def verify_password_hash(password: str, expected: str) -> bool:
+    if not password or len(password) > MAX_PASSWORD_LENGTH:
+        return False
+    if expected.startswith("sha256:"):
+        candidate = "sha256:" + hashlib.sha256(password.encode("utf-8")).hexdigest()
+        return hmac.compare_digest(expected, candidate)
+    try:
+        algorithm, count, salt, digest = expected.split(":")
+        iterations = int(count)
+        if algorithm != "pbkdf2_sha256" or not 100_000 <= iterations <= 2_000_000:
+            return False
+        salt_bytes = bytes.fromhex(salt)
+        if len(salt_bytes) != 16 or len(digest) != 64:
+            return False
+        candidate = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt_bytes, iterations).hex()
+        return hmac.compare_digest(digest, candidate)
+    except (TypeError, ValueError):
+        return False
 
 
 def load_users() -> dict[str, dict[str, Any]]:
@@ -92,8 +121,8 @@ def verify_user(username: str, password: str) -> str | None:
     expected = str(info.get("password_hash") or "")
     if not expected:
         return None
-    candidate = hash_password(password)
-    if hmac.compare_digest(expected, candidate):
+    if verify_password_hash(password, expected):
+        # Existing SHA-256 records remain usable; changing the password upgrades them.
         return validate_role(str(info.get("role", "viewer")))
     return None
 
