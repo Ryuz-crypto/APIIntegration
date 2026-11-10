@@ -218,6 +218,68 @@ body{background:var(--console-bg,#071d29)}
 @media(max-width:380px){.color-controls{grid-template-columns:1fr}.topbar-actions{justify-content:flex-start}}
  .topology-card{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:4px;min-width:0;height:auto}.topology-card strong,.topology-card small,.topology-detail{width:100%;line-height:1.45;overflow-wrap:anywhere}
 .topology-stack{min-width:0}.topology-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px}.topology-group{min-width:0;border:1px solid #326674;border-radius:10px;padding:12px;background:#092a36}.topology-group h3{margin:0 0 10px;color:#fff;font-size:14px}.topology-list{display:grid;gap:10px;max-height:410px;overflow-y:auto;padding:2px}.topology-filter{max-width:360px;background:#f7fbfc;color:#102a43;margin:0 0 12px}.topology-card[hidden]{display:none}.diagnostic-commands{max-height:300px;min-height:80px}
+
+/* SASE overview: a compact logical flow above a full-width destination inventory. */
+.topology{border-radius:20px;border:1px solid #24515e;background:#071923;box-shadow:0 24px 60px #020c1470}
+.topology-hero{isolation:isolate;overflow:hidden;padding:clamp(24px,3.2vw,44px);background:radial-gradient(ellipse at 82% 20%,#1aa99638,transparent 43%),linear-gradient(122deg,#071d2a 4%,#0a3b49 63%,#07524e)}
+.topology-hero:before,.topology-hero:after{content:"";position:absolute;pointer-events:none;z-index:-1;border:1px solid #5cf2d823;border-radius:50%;width:380px;height:380px;right:4%;top:-210px}
+.topology-hero:after{width:500px;height:500px;right:0;top:-270px;border-color:#5cf2d815}
+.topology-hero{background-size:140% 140%;animation:sase-ambient 14s ease-in-out infinite alternate}
+@keyframes sase-ambient{from{background-position:0% 20%}to{background-position:100% 70%}}
+html[data-effect="quiet"] .topology-hero{animation:none}
+@media(prefers-reduced-motion:reduce){.topology-hero{animation:none}}
+.topology-hero h1{max-width:18ch;letter-spacing:-.035em;font-weight:750}
+.topology-hero p{line-height:1.65}
+.sase-hero-meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.sase-pill{display:inline-flex;align-items:center;gap:8px;border:1px solid #79d8cf46;border-radius:999px;padding:6px 11px;background:#061d2870;color:#d7f7f2;font-size:11px;font-weight:700;letter-spacing:.02em}
+.sase-pill:before{content:"";width:6px;height:6px;border-radius:50%;background:#5ce5c8;box-shadow:0 0 10px #5ce5c8}
+.topology-body{padding:clamp(20px,3vw,34px);background:radial-gradient(ellipse at 90% 0%,#0c596342,transparent 38%),#081f2b}
+.topology-head{align-items:flex-start;margin-bottom:18px}
+.topology-head h2{font-size:22px;letter-spacing:-.02em}
+.topology-caption{line-height:1.55;margin:6px 0;color:#bdd4d9}
+.sase-flow{display:grid;grid-template-columns:minmax(0,1fr) 44px minmax(0,1fr) 44px minmax(0,1fr);align-items:center;gap:0;margin:22px 0 28px}
+.sase-node{position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:8px;width:100%;min-height:156px;text-align:start;padding:18px;border:1px solid #396773;border-radius:14px;background:linear-gradient(155deg,#103b47,#0a2b38);color:#f2ffff;box-shadow:0 12px 26px #0003}
+.sase-node:hover,.sase-node:focus-visible{background:linear-gradient(155deg,#164b56,#0c3440);border-color:#72e8d0;box-shadow:0 0 0 1px #62e5cd70,0 14px 30px #0004;transform:translateY(-2px)}
+.sase-node .tag{font-size:10px;letter-spacing:.12em;color:#7cebd4;font-weight:800}
+.sase-node strong{font-size:16px;line-height:1.3;overflow-wrap:anywhere}
+.sase-node small{font-size:12px;line-height:1.5;color:#c4dde1}
+.sase-node .topology-status{margin-top:auto}
+.sase-link{height:2px;position:relative;background:linear-gradient(90deg,#386f72,#57ddc3,#386f72)}
+.sase-link:after{content:"";position:absolute;left:0;top:-3px;width:8px;height:8px;border-radius:50%;background:#b2ffec;box-shadow:0 0 14px #62f3d1;animation:sase-travel 3s linear infinite}
+@keyframes sase-travel{from{left:0;opacity:.45}50%{opacity:1}to{left:calc(100% - 8px);opacity:.45}}
+.sase-inventory{border:1px solid #285460;border-radius:16px;background:#0a2935;padding:clamp(16px,2.5vw,24px)}
+.sase-inventory-head{display:flex;align-items:end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:18px}
+.sase-inventory-head h3{margin:0;color:#f2ffff;font-size:18px}
+.sase-search{display:block;flex:1 1 240px;max-width:340px;margin:0;color:#c6dfe2;font-size:12px}
+.sase-search input{margin-top:7px;background:#071d29;color:#f2ffff;border:1px solid #5b8390;border-radius:9px;min-height:42px}
+.sase-search input::placeholder{color:#9ebbc1}
+.sase-filterbar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.sase-filterbar button{min-height:34px;padding:6px 12px;border:1px solid #3d6874;background:#103642;color:#d9f1f0;border-radius:999px;font-size:12px}
+.sase-filterbar button[aria-pressed="true"]{background:#c9fff1;color:#07352f;border-color:#c9fff1}
+.topology-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:14px}
+.topology-group{background:#0b303b;border:1px solid #285762;border-radius:13px;padding:16px;min-width:0}
+.topology-group[hidden],.topology-card[hidden]{display:none}
+.sase-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.topology-group h3{display:flex;align-items:center;gap:9px;margin:0;color:#f1ffff;font-size:14px}
+.sase-count{border:1px solid #3f7881;border-radius:999px;padding:3px 9px;font-size:11px;color:#bcebe1}
+.topology-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:10px;max-height:480px;overflow:auto;padding:2px}
+.topology-list .topology-card{min-height:158px;margin:0;display:flex;flex-direction:column;justify-content:flex-start;gap:5px;border-radius:10px;padding:14px;background:#103c48;color:#f2ffff}
+.topology-list .topology-card strong{font-size:14px;line-height:1.35;margin:2px 0;overflow-wrap:anywhere}
+.topology-list .topology-card small{font-size:12px;line-height:1.45}
+.topology-list .topology-card .topology-status{margin-top:auto}
+.topology-list .topology-card .topology-detail{margin-top:4px;line-height:1.4}
+.topology-list .topology-card[hidden]{display:none}
+.topology-groups:has(>.topology-group[hidden]){grid-template-columns:minmax(0,1fr)}
+.topology-list{scrollbar-width:thin;scrollbar-color:#4b9296 #0a2935}
+.topology-list::-webkit-scrollbar{width:8px;height:8px}.topology-list::-webkit-scrollbar-thumb{background:#4b9296;border-radius:8px}.topology-list::-webkit-scrollbar-track{background:#0a2935}
+.sase-empty{display:none;margin:12px 0 0;color:#c3d9dc;font-size:13px}
+.sase-footer{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-top:18px}
+.sase-footer .topology-actions{margin-top:0}
+html[data-effect="quiet"] .sase-link:after{animation:none}
+@media(max-width:900px){.sase-flow{grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr) 28px minmax(0,1fr)}.sase-node{padding:14px}}
+@media(max-width:700px){.sase-flow{grid-template-columns:1fr;gap:0}.sase-link{width:2px;height:22px;justify-self:center}.sase-link:after{left:-3px;top:0;animation:sase-travel-v 3s linear infinite}@keyframes sase-travel-v{from{top:0}to{top:calc(100% - 8px)}}.sase-node{min-height:0}.topology-groups{grid-template-columns:1fr}.sase-search{max-width:none;flex-basis:100%}}
+@media(prefers-reduced-motion:reduce){.sase-link:after{animation:none}.sase-node{transition:none}}
+
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='home', TOPOLOGY_STATUS=null, TOPOLOGY_BUSY=false;
@@ -433,24 +495,37 @@ async function refreshTopology(){
  catch(e){TOPOLOGY_STATUS=null;notice(e.message,'err')}
  finally{TOPOLOGY_BUSY=false;if(CURTAB==='home')renderTopology()}
 }
+var SASE_KIND='all',SASE_SEARCH='';
 function renderTopology(){
  var orchs=STATE.orchestrators||[],sses=STATE.sse_platforms||[],mcp=TOPOLOGY_STATUS&&TOPOLOGY_STATUS.mcp_transport;
- var check=TOPOLOGY_STATUS&&TOPOLOGY_STATUS.checked_at?TOPOLOGY_STATUS.checked_at:(LANG==='es'?'Sin comprobar':'Not checked');
- var missing=LANG==='es'?'Todavía no hay destinos guardados.':'No saved targets yet.';
+ var es=LANG==='es',check=TOPOLOGY_STATUS&&TOPOLOGY_STATUS.checked_at?TOPOLOGY_STATUS.checked_at:(es?'Sin comprobar':'Not checked');
+ var missing=es?'Aún no hay conexiones configuradas.':'No connections configured yet.';
  var oc=orchs.map(function(o){return topologyCard('orch',o)}).join(''),sc=sses.map(function(o){return topologyCard('sse',o)}).join('');
  var empty='<p class="topology-caption">'+esc(missing)+'</p>';
- var cards='<div class="topology-group"><h3>SD-WAN · Orchestrators ('+orchs.length+')</h3><div class="topology-list">'+(oc||empty)+'</div></div><div class="topology-group"><h3>SSE · Plataformas ('+sses.length+')</h3><div class="topology-list">'+(sc||empty)+'</div></div>';
- var heading=LANG==='he'?t('top_heading'):(LANG==='es'?'Centro de operaciones de SASE':'SASE operations center');
- var caption=LANG==='he'?t('top_caption'):(LANG==='es'?'Mapa lógico de configuración. Las líneas no representan tráfico ni sesiones activas.':'Logical configuration map. Lines do not represent traffic or active sessions.');
- var statusCaption=LANG==='es'?'Última comprobación: ':'Last checked: ';
- q('#workspace').innerHTML='<section class="topology"><div class="topology-hero"><div class="topology-eyebrow">EdgeConnect MCP · CONTROL CENTER</div><h1>'+heading+'</h1><p>'+(LANG==='he'?t('top_sub'):(LANG==='es'?'Administra tus conexiones SD-WAN y SSE desde un solo lugar.':'Manage SD-WAN and SSE connections in one place.'))+'</p></div>'+
- '<div class="topology-body"><div class="topology-head"><div><h2>'+(LANG==='he'?t('top_map'):(LANG==='es'?'Mapa de conexiones':'Connection map'))+'</h2><p class="topology-caption">'+caption+'</p></div><button type="button" onclick="refreshTopology()" '+(TOPOLOGY_BUSY?'disabled':'')+'>'+(TOPOLOGY_BUSY?(LANG==='es'?'Comprobando…':'Checking…'):(LANG==='he'?t('top_check'):(LANG==='es'?'Comprobar conexiones':'Check connections')))+'</button></div>'+
- '<div class="topology-flow"><button type="button" class="topology-card" onclick="showTab(\'config\')" title="Transporte y acceso · sesiones no verificadas"><span class="tag">CLIENT</span><strong>'+(LANG==='he'?t('top_ai'):(LANG==='es'?'Asistentes IA':'AI assistants'))+'</strong><small>'+(LANG==='he'?t('top_sessions'):(LANG==='es'?'Transporte y acceso · sesiones no verificadas':'Transport and access · sessions not verified'))+'</small></button><div class="topology-arrow" aria-hidden="true">→</div>'+
- '<button type="button" class="topology-card" onclick="showTab(\'svc\')" title="'+esc(statusCaption+check)+'"><span class="tag">MCP SERVER</span><strong>EdgeConnect MCP</strong><small>'+(LANG==='he'?t('top_panel_ver'):(LANG==='es'?'Versión del panel: ':'Panel version: '))+'__EC_MCP_VERSION__</small>'+topologyBadge(mcp)+'</button><div class="topology-arrow" aria-hidden="true">→</div><div class="topology-stack"><label for="topology-filter" class="topology-caption">'+(LANG==='es'?'Buscar destinos':'Search targets')+'</label><input class="topology-filter" id="topology-filter" type="search" oninput="filterTopology(this.value)" placeholder="'+(LANG==='es'?'Nombre del destino':'Target name')+'"><div class="topology-groups">'+cards+'</div></div></div>'+
- '<p class="topology-caption">'+esc(statusCaption+check)+'. '+(LANG==='es'?'La versión de cada conexión y el número de appliances no están disponibles en este mapa.':'Connection versions and appliance counts are not available in this map.')+'</p><div class="topology-actions"><button type="button" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button type="button" class="secondary" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button></div></div></section>';
+ var heading=LANG==='he'?t('top_heading'):(es?'Centro de operaciones de SASE':'SASE operations center');
+ var caption=LANG==='he'?t('top_caption'):(es?'Vista lógica de la configuración. La animación no representa tráfico ni sesiones activas.':'Logical configuration view. Animation does not represent live traffic or sessions.');
+ var statusCaption=es?'Última comprobación: ':'Last checked: ';
+ var group=function(kind,title,count,items){return '<section class="topology-group" data-group="'+kind+'"><div class="sase-group-head"><h3>'+title+'</h3><span class="sase-count">'+count+'</span></div><div class="topology-list">'+(items||empty)+'</div></section>'};
+ var filter=function(kind,label,count){return '<button type="button" data-filter="'+kind+'" aria-pressed="'+(SASE_KIND===kind)+'" onclick="setSaseKind(this.dataset.filter)">'+label+' <span>'+count+'</span></button>'};
+ q('#workspace').innerHTML='<section class="topology"><div class="topology-hero"><div class="topology-eyebrow">SASE · CONTROL CENTER</div><h1>'+heading+'</h1><p>'+(LANG==='he'?t('top_sub'):(es?'Una vista clara de tus conexiones SD-WAN y SSE.':'A clear view of your SD-WAN and SSE connections.'))+'</p><div class="sase-hero-meta"><span class="sase-pill">MCP · __EC_MCP_VERSION__</span><span class="sase-pill">'+orchs.length+' Orchestrators</span><span class="sase-pill">'+sses.length+' SSE</span></div></div>'+
+ '<div class="topology-body"><div class="topology-head"><div><h2>'+(LANG==='he'?t('top_map'):(es?'Mapa de conexiones':'Connection map'))+'</h2><p class="topology-caption">'+caption+'</p></div><button type="button" onclick="refreshTopology()" '+(TOPOLOGY_BUSY?'disabled':'')+'>'+(TOPOLOGY_BUSY?(es?'Comprobando…':'Checking…'):(LANG==='he'?t('top_check'):(es?'Comprobar conexiones':'Check connections')))+'</button></div>'+
+ '<div class="sase-flow"><button type="button" class="sase-node" onclick="showTab(\'config\')"><span class="tag">01 · CLIENT</span><strong>'+(LANG==='he'?t('top_ai'):(es?'Asistentes de IA':'AI assistants'))+'</strong><small>'+(LANG==='he'?t('top_sessions'):(es?'Acceso y transporte · sesiones no verificadas':'Access and transport · sessions not verified'))+'</small></button><div class="sase-link" aria-hidden="true"></div>'+
+ '<button type="button" class="sase-node" onclick="showTab(\'svc\')" title="'+esc(statusCaption+check)+'"><span class="tag">02 · MCP SERVER</span><strong>EdgeConnect MCP</strong><small>'+(LANG==='he'?t('top_panel_ver'):(es?'Versión del panel: ':'Panel version: '))+'__EC_MCP_VERSION__</small>'+topologyBadge(mcp)+'</button><div class="sase-link" aria-hidden="true"></div>'+
+ '<button type="button" class="sase-node" onclick="document.getElementById(\'sase-inventory\').scrollIntoView({behavior: \'auto\', block: \'start\'})"><span class="tag">03 · CONNECTIONS</span><strong>'+(es?'Destinos configurados':'Configured targets')+'</strong><small>'+orchs.length+' Orchestrators · '+sses.length+' SSE</small></button></div>'+
+ '<section class="sase-inventory" id="sase-inventory"><div class="sase-inventory-head"><div><h3>'+(es?'Tus conexiones':'Your connections')+'</h3><p class="topology-caption">'+(es?'Busca un destino y ábrelo para administrarlo.':'Find a destination and open it to manage it.')+'</p></div><label class="sase-search" for="topology-filter">'+(es?'Buscar por nombre':'Search by name')+'<input id="topology-filter" type="search" value="'+esc(SASE_SEARCH)+'" oninput="filterTopology(this.value)" placeholder="'+(es?'Buscar conexión…':'Search connections…')+'"></label></div>'+
+ '<div class="sase-filterbar" aria-label="'+(es?'Filtrar conexiones':'Filter connections')+'">'+filter('all',es?'Todas':'All',orchs.length+sses.length)+filter('orch','SD-WAN',orchs.length)+filter('sse','SSE',sses.length)+'</div><div class="topology-groups">'+group('orch','SD-WAN · Orchestrators',orchs.length,oc)+group('sse','SSE · '+(es?'Plataformas':'Platforms'),sses.length,sc)+'</div><p class="sase-empty" id="sase-empty" role="status">'+(es?'No encontramos conexiones con ese nombre.':'No connections match that name.')+'</p></section>'+
+ '<div class="sase-footer"><p class="topology-caption">'+esc(statusCaption+check)+'. '+(es?'Las plataformas SSE no indican tenants descubiertos.':'SSE platforms do not indicate discovered tenants.')+'</p><div class="topology-actions"><button type="button" class="secondary" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button type="button" class="secondary" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button></div></div></div></section>';
+ applySaseFilter();
 }
-
-function filterTopology(value){var term=String(value||'').toLocaleLowerCase();document.querySelectorAll('.topology-card[data-kind]').forEach(function(card){card.hidden=!String(card.dataset.name||'').toLocaleLowerCase().includes(term)})}
+function setSaseKind(kind){SASE_KIND=kind;applySaseFilter()}
+function filterTopology(value){SASE_SEARCH=String(value||'');applySaseFilter()}
+function applySaseFilter(){
+ var term=SASE_SEARCH.trim().toLocaleLowerCase(),visible=0;
+ document.querySelectorAll('.topology-card[data-kind]').forEach(function(card){var show=(SASE_KIND==='all'||card.dataset.kind===SASE_KIND)&&String(card.dataset.name||'').toLocaleLowerCase().includes(term);card.hidden=!show;if(show)visible++});
+ document.querySelectorAll('.topology-group[data-group]').forEach(function(group){var kind=group.dataset.group,has=!!group.querySelector('.topology-card[data-kind]:not([hidden])');group.hidden=(SASE_KIND!=='all'&&SASE_KIND!==kind)||(!!term&&!has)});
+ document.querySelectorAll('.sase-filterbar button[data-filter]').forEach(function(button){button.setAttribute('aria-pressed',String(button.dataset.filter===SASE_KIND))});
+ var empty=q('#sase-empty');if(empty)empty.style.display=term&&visible===0?'block':'none';
+}
 
 async function renderServices(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">'+t('checking')+'</p></section>';
