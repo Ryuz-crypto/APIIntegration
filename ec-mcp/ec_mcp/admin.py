@@ -23,6 +23,7 @@ Endpoints (all behind session cookie auth):
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -43,7 +44,7 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, RedirectResponse, Response
+from starlette.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from . import __version__, admin_users
@@ -1533,6 +1534,91 @@ async def api_backups_create(request):
     return JSONResponse({"ok": True, "name": name, "message": f"Backup '{name}' creado."})
 
 
+async def api_backups_delete(request):
+    session, denied = _authorize(request, "users")
+    if denied:
+        return denied
+    try:
+        body = await request.json()
+        name = body.get("name", "") if isinstance(body, dict) else ""
+        if not isinstance(name, str) or not name or name in {".", ".."} or "/" in name or chr(92) in name:
+            raise ValueError("Nombre de backup inválido")
+        root = _backup_dir().resolve()
+        target = root / name
+        if target.is_symlink() or not target.is_dir() or target.resolve().parent != root:
+            raise ValueError("Backup no encontrado")
+        shutil.rmtree(target)
+    except (ValueError, OSError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    _audit_panel(session["user"], "backup_delete", name, "ok")
+    return JSONResponse({"ok": True, "message": f"Backup '{name}' eliminado."})
+
+
+# Only fixed, bounded, read-only commands; no shell or user-supplied arguments.
+_DIAGNOSTIC_COMMANDS = {
+    "uptime": ("/usr/bin/uptime",),
+    "memory": ("/usr/bin/free", "-h"),
+    "disk": ("/usr/bin/df", "-h"),
+}
+_DIAGNOSTIC_LOCK = asyncio.Lock()
+
+
+async def api_diagnostic_run(request):
+    session, denied = _authorize(request, "users")
+    if denied:
+        return denied
+    try:
+        body = await request.json()
+        name = body.get("command") if isinstance(body, dict) else None
+    except ValueError:
+        name = None
+    if not isinstance(name, str) or name not in _DIAGNOSTIC_COMMANDS:
+        return JSONResponse({"error": "Diagnóstico no permitido"}, status_code=400)
+    if _DIAGNOSTIC_LOCK.locked():
+        return JSONResponse({"error": "Ya hay un diagnóstico en ejecución"}, status_code=429)
+    await _DIAGNOSTIC_LOCK.acquire()
+    _audit_panel(session["user"], "diagnostic_run", name, "started")
+
+    async def output():
+        process = None
+        result = "error"
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *_DIAGNOSTIC_COMMANDS[name], stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT, limit=8192,
+            )
+            total = 0
+            async with asyncio.timeout(10):
+                while True:
+                    line = await process.stdout.readline()
+                    if not line:
+                        break
+                    total += len(line)
+                    if total > 32768:
+                        yield b"\n[Salida limitada]\n"
+                        break
+                    yield line
+                await process.wait()
+            result = "ok" if process.returncode == 0 else "error"
+            yield f"\n[Fin: {result}]\n".encode()
+        except (OSError, ValueError, TimeoutError):
+            yield b"\n[Diagnostico no disponible o tiempo agotado]\n"
+        finally:
+            try:
+                if process is not None and process.returncode is None:
+                    try:
+                        process.kill()
+                    except ProcessLookupError:
+                        pass
+                    await process.wait()
+                _audit_panel(session["user"], "diagnostic_run", name, result)
+            finally:
+                _DIAGNOSTIC_LOCK.release()
+
+    return StreamingResponse(output(), media_type="text/plain; charset=utf-8",
+                             headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+
+
 async def api_backups_restore(request):
     session, denied = _authorize(request, "write")
     if denied:
@@ -1629,6 +1715,8 @@ def build_admin_app() -> Starlette:
             Route("/api/backups", api_backups_list, methods=["GET"]),
             Route("/api/backups/create", api_backups_create, methods=["POST"]),
             Route("/api/backups/restore", api_backups_restore, methods=["POST"]),
+            Route("/api/backups/delete", api_backups_delete, methods=["POST"]),
+            Route("/api/diagnostics/run", api_diagnostic_run, methods=["POST"]),
         ]
     )
 
