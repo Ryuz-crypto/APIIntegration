@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 import zipfile
 from html import escape
+
+from .security import redact_secrets
 
 COLUMNS = ("ts_iso", "source", "tool", "action", "target", "result", "user")
 
