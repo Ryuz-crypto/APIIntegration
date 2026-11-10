@@ -158,6 +158,28 @@ nav button.active-tab{color:#fff;background:#104b55;border-bottom-color:#52e7c1}
 @media(max-width:900px){.topology-arrow{width:2px;height:26px;justify-self:center;transform:none}.topology-arrow:after{left:-3px;animation:topology-flow-vertical 2.8s linear infinite}@keyframes topology-flow-vertical{from{top:0}to{top:calc(100% - 8px)}}}
 @media(prefers-reduced-motion:reduce){.topology-arrow:after{animation:none}}
 
+
+/* Shared console styling: preserved semantic controls and per-tool switches. */
+body{background:#071d29;color:#e5f5f5}
+.panel{background:#0d2c38;border-color:#275462;color:#e5f5f5;box-shadow:0 14px 35px rgba(0,0,0,.18)}
+.panel h1,.panel h2,.panel h3{color:#f0fffc}
+.panel .help,.panel p{color:#c4dde1}
+.panel label{color:#d5eaed}
+.panel .group,.panel details.group{background:#103542;border-color:#315e69}
+.panel input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),.panel select{background:#071f2b;color:#f1ffff;border-color:#4e7480}
+.panel .tool-card{background:#103542;border-color:#315e69;color:#f1ffff}
+.panel table.diff td,.panel table.diff th{color:#e5f5f5;border-color:#315e69}
+.panel .badge{color:#a4ead8}
+.panel .brand strong{color:#f1ffff}.panel .brand span{color:#c4dde1}
+.tools-search{display:flex;align-items:end;gap:14px;flex-wrap:wrap;margin:16px 0}
+.tools-search label:first-child{flex:1;min-width:220px}.tools-search label:nth-child(2){min-width:180px}
+.tool-card{min-width:0}.tool-card strong{overflow-wrap:anywhere}.tools-grid{gap:12px}
+.diagnostic-commands{white-space:pre-wrap;background:#071f2b;color:#d6f5ee;padding:14px;border-radius:8px;overflow:auto}
+html[data-effect="quiet"] .topology-arrow:after,html[data-effect="quiet"] header.topbar::after{animation:none}
+html[data-effect="pulse"] .topology-card{animation:panel-glow 4s ease-in-out infinite}
+@keyframes panel-glow{0%,100%{box-shadow:0 6px 18px rgba(0,0,0,.18)}50%{box-shadow:0 0 18px rgba(1,169,130,.28)}}
+@media(prefers-reduced-motion:reduce){html[data-effect="pulse"] .topology-card{animation:none}}
+
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='home', TOPOLOGY_STATUS=null, TOPOLOGY_BUSY=false;
@@ -178,6 +200,7 @@ function openCustom(){
  var d=q('#custom-dlg');if(!d){q('#app').innerHTML+=customDialogHtml();d=q('#custom-dlg')}
  if(!d)return;
  q('#custom-name').value=siteName();
+ q('#app-effect').value=localStorage.getItem('ec-effect')||'flow';
  q('#app-accent').value=localStorage.getItem('ec-accent')||'#01a982';
  q('#app-header').value=localStorage.getItem('ec-header')||'#073b4c';
  q('#app-cyan').value=localStorage.getItem('ec-cyan')||'#00c8ff';
@@ -190,17 +213,18 @@ function pickIcon(ic){localStorage.setItem('ec-icon',ic);localStorage.removeItem
 function previewBrand(){var p=q('#brand-preview');if(!p||!p.style||!p.querySelector)return;p.style.setProperty('--preview-primary',localStorage.getItem('ec-accent')||'#01a982');p.style.setProperty('--preview-header',localStorage.getItem('ec-header')||'#073b4c');var ic=siteIcon();var logo=siteLogo();var pv=p.querySelector('.pv-brand');if(pv)pv.innerHTML=(logo?'<img class="logo" src="'+logo+'">':(ic?'<span class="logo">'+esc(ic)+'</span>':''))+'<div><strong>'+esc(q('#custom-name').value||siteName())+'</strong><span>'+t('tagline')+'</span></div>'}
 function refreshBrand(){if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
 function closeCustom(){var d=q('#custom-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
-function resetCustom(){['ec-accent','ec-header','ec-cyan','ec-icon','ec-logo','ec-site-name'].forEach(function(k){localStorage.removeItem(k)});applySavedTheme();openCustom();refreshBrand();notice(t('app_reset_done'),'ok')}
+function resetCustom(){['ec-accent','ec-header','ec-cyan','ec-icon','ec-logo','ec-site-name','ec-effect'].forEach(function(k){localStorage.removeItem(k)});applySavedTheme();openCustom();refreshBrand();notice(t('app_reset_done'),'ok')}
 function saveCustom(){
  var name=q('#custom-name')?q('#custom-name').value.trim():'';if(name)localStorage.setItem('ec-site-name',name);
  var a=q('#app-accent');if(a)localStorage.setItem('ec-accent',a.value);
  var h=q('#app-header');if(h)localStorage.setItem('ec-header',h.value);
  var c=q('#app-cyan');if(c)localStorage.setItem('ec-cyan',c.value);
+ var effect=q('#app-effect');if(effect)localStorage.setItem('ec-effect',effect.value);
  var f=q('#custom-logo');
  if(f&&f.files&&f.files[0]){var r=new FileReader();r.onload=function(e){try{localStorage.setItem('ec-logo',String(e.target.result));localStorage.removeItem('ec-icon')}catch(err){notice(t('file_too_big'),'err')}applySavedTheme();closeCustom();refreshBrand()};r.readAsDataURL(f.files[0]);return}
  applySavedTheme();closeCustom();refreshBrand();
 }
-function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="previewBrand()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="previewBrand()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="previewBrand()"></label></div><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button><button class="danger" onclick="resetCustom()">'+t('app_reset')+'</button></div></dialog>'}
+function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><label>Estilo de animación<select id="app-effect"><option value="flow">Flujo</option><option value="pulse">Pulso</option><option value="quiet">Sin animación</option></select></label><p class="help">Los colores pueden personalizarse abajo. Los efectos son decorativos y se aplican a este navegador.</p><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="previewBrand()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="previewBrand()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="previewBrand()"></label></div><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button><button class="danger" onclick="resetCustom()">'+t('app_reset')+'</button></div></dialog>'}
 
 var DONATE_URL='https://github.com/sponsors/Ryuz-crypto';
 function footerHtml(){return '<footer class="powered-footer"><span>'+t('credits')+': ec-mcp · Ryuz-crypto</span><a class="donate" href="'+DONATE_URL+'" target="_blank" rel="noopener">☕ '+t('donate')+'</a></footer>'}
@@ -210,6 +234,7 @@ function chromeHtml(){return '<span class="chrome">'+langSelectHtml()+'<button c
 function langSelectHtml(){return '<select id="lang-sel" title="Idioma / Language" style="min-height:30px;padding:3px 6px;border-radius:4px;border:1px solid #4f7080;background:#fff;color:#102a43" onchange="setLang(this.value)">'+LANGS.map(function(l){return '<option value="'+l[0]+'"'+(LANG===l[0]?' selected':'')+'>'+l[1]+'</option>'}).join('')+'</select>'}
 function applySavedTheme(){
  var root=document.documentElement.style;
+ document.documentElement.dataset.effect=localStorage.getItem('ec-effect')||'flow';
  root.setProperty('--brand',localStorage.getItem('ec-accent')||'#01a982');
  root.setProperty('--brand-header',localStorage.getItem('ec-header')||'#073b4c');
  root.setProperty('--cyan',localStorage.getItem('ec-cyan')||'#00c8ff');
@@ -658,7 +683,7 @@ async function delTls(){
  if(!confirm(t('tls_delete')+'?'))return;
  try{var r=await api('/api/tls/delete',{});notice(r.message||r.error,r.ok?'ok':'err');await renderTls()}catch(e){notice(e.message,'err')}
 }
-var TOOLS_ALL=[],TOOLS_DOM='all';
+var TOOLS_ALL=[],TOOLS_DOM='all',TOOLS_QUERY='',TOOLS_STATE='all';
 async function renderTools(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tools_title')+'</h2><p class="help">'+t('tools_desc')+'</p><p class="help">'+t('checking')+'</p></section>';
  try{
@@ -666,16 +691,18 @@ async function renderTools(){
   TOOLS_ALL=r.tools||[];
   var d=r.domains||{};
   var opts='<option value="all">'+t('dom_all')+' ('+r.total+')</option><option value="sdwan">SD-WAN · EdgeConnect ('+(d.sdwan||0)+')</option><option value="sse">HPE SSE · Axis ('+(d.sse||0)+')</option><option value="panel">'+t('dom_panel')+' ('+(d.panel||0)+')</option>';
-  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tools_title')+'</h2><p class="help">'+t('tools_desc')+'</p><p><span class="badge">'+r.total+'</span> '+t('tools_total')+' · <span class="badge">'+r.disabled.length+'</span> '+t('tools_disabled')+'</p><div class="actions" style="align-items:center"><label style="margin:0;display:flex;gap:8px;align-items:center;font-weight:700">'+t('tools_filter')+'<select id="tools-dom" style="width:auto;min-height:34px" onchange="filterTools(this.value)">'+opts+'</select></label><button class="secondary" onclick="showAgentPrompt()">'+t('agent_btn')+'</button></div><div class="tools-grid" id="tools-list"></div></section>';
-  renderToolsGrid();
+  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tools_title')+'</h2><p class="help">'+t('tools_desc')+'</p><p><span class="badge">'+r.total+'</span> '+t('tools_total')+' · <span class="badge">'+r.disabled.length+'</span> '+t('tools_disabled')+'</p><div class="actions" style="align-items:center"><label style="margin:0;display:flex;gap:8px;align-items:center;font-weight:700">'+t('tools_filter')+'<select id="tools-dom" style="width:auto;min-height:34px" onchange="filterTools(this.value)">'+opts+'</select></label><button class="secondary" onclick="showAgentPrompt()">'+t('agent_btn')+'</button></div><div class="tools-search"><label>Buscar herramienta<input id="tools-search" type="search" placeholder="Nombre o descripción" oninput="filterToolsQuery(this.value)"></label><label>Estado<select id="tools-state" onchange="filterToolsState(this.value)"><option value="all">Todas</option><option value="enabled">Habilitadas</option><option value="disabled">Deshabilitadas</option></select></label><span id="tools-count" class="help" aria-live="polite"></span></div><div class="tools-grid" id="tools-list"></div></section>';
+  q('#tools-dom').value=TOOLS_DOM;q('#tools-state').value=TOOLS_STATE;q('#tools-search').value=TOOLS_QUERY;renderToolsGrid();
  }catch(e){notice(e.message,'err')}
 }
 function filterTools(v){TOOLS_DOM=v;renderToolsGrid()}
+function filterToolsQuery(v){TOOLS_QUERY=v.toLowerCase().trim();renderToolsGrid()}
+function filterToolsState(v){TOOLS_STATE=v;renderToolsGrid()}
 function renderToolsGrid(){
  var canWrite=ME&&ME.role!=='viewer';
- var list=TOOLS_ALL.filter(function(x){return TOOLS_DOM==='all'||x.domain===TOOLS_DOM});
+ var list=TOOLS_ALL.filter(function(x){var domain=TOOLS_DOM==='all'||x.domain===TOOLS_DOM;var state=TOOLS_STATE==='all'||(TOOLS_STATE==='enabled'?!x.disabled:x.disabled);var search=!TOOLS_QUERY||(x.name+' '+(x.description||'')+' '+(x.description_es||'')).toLowerCase().includes(TOOLS_QUERY);return domain&&state&&search});
  var rows=list.map(function(x){return '<div class="tool-card"><div><strong>'+esc(x.name)+'</strong> <span class="badge">'+(x.domain==='sse'?t('dom_sse'):x.domain==='panel'?t('dom_panel'):t('dom_sdwan'))+'</span><span class="help">'+esc((LANG==='es'&&x.description_es)?x.description_es:x.description)+'</span></div><label class="switch" title="'+(x.disabled?t('tool_off'):t('tool_on'))+'"><input type="checkbox" '+(x.disabled?'':'checked')+' '+(canWrite?'onchange="toggleTool(\''+esc(x.name)+'\',this.checked)"':'disabled')+'><span class="slider"></span></label></div>'}).join('')||'<p class="help">'+t('dbg_empty')+'</p>';
- q('#tools-list').innerHTML=rows;
+ q('#tools-list').innerHTML=rows;var count=q('#tools-count');if(count)count.textContent=list.length+' / '+TOOLS_ALL.length;
 }
 async function toggleTool(name,enabled){
  try{var r=await api('/api/tools/toggle',{name:name,enabled:enabled});notice(r.ok?((enabled?t('tool_on'):t('tool_off'))+' '+name):(r.error||'Error'),r.ok?'ok':'err');if(r.ok)await renderTools()}catch(e){notice(e.message,'err')}
@@ -688,7 +715,7 @@ function copyAgent(){var el=q('#agent-text');if(el&&navigator.clipboard){navigat
 function closeAgent(){var d=q('#agent-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
 var DBG_TIMER=null,DBG_PAUSED=false,DBG_Q='';
 async function renderDebug(){
- q('#workspace').innerHTML='<section class="panel"><h2>'+t('dbg_title')+'</h2><p class="help">'+t('dbg_desc')+'</p><div class="actions" style="align-items:center"><input id="dbg-q" placeholder="'+t('dbg_filter')+'" oninput="dbgApplyFilter()" style="max-width:300px;min-height:34px;margin-top:0"><button class="secondary" onclick="dbgTogglePause()" id="dbg-pause">'+t('dbg_pause')+'</button><button class="secondary" onclick="dbgRefresh()">'+t('dbg_refresh')+'</button><button class="secondary" onclick="dbgExport()">'+t('dbg_export')+'</button><button class="danger" onclick="dbgClear()">'+t('dbg_clear')+'</button></div><div id="dbg-table"><p class="help">'+t('checking')+'</p></div></section>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('dbg_title')+'</h2><p class="help">'+t('dbg_desc')+'</p><div class="actions" style="align-items:center"><input id="dbg-q" placeholder="'+t('dbg_filter')+'" oninput="dbgApplyFilter()" style="max-width:300px;min-height:34px;margin-top:0"><button class="secondary" onclick="dbgTogglePause()" id="dbg-pause">'+t('dbg_pause')+'</button><button class="secondary" onclick="dbgRefresh()">'+t('dbg_refresh')+'</button><button class="secondary" onclick="dbgExport()">'+t('dbg_export')+'</button><button class="danger" onclick="dbgClear()">'+t('dbg_clear')+'</button></div><details class="group"><summary>Diagnóstico Linux (solo lectura)</summary><p class="help">Ejecuta estos comandos manualmente en el servidor. No se ejecutan desde el panel. Revisa y oculta secretos antes de compartir salidas.</p><pre class="diagnostic-commands">systemctl --no-pager status ec-mcp ec-mcp-admin\njournalctl -u ec-mcp-admin -n 100 --no-pager\nss -lntp</pre></details><p class="help">API del panel: método, ruta, estado y duración. La auditoría MCP muestra la acción registrada; no garantiza capturar cada solicitud upstream. No se muestran cuerpos, cabeceras ni credenciales.</p><div id="dbg-table"><p class="help">'+t('checking')+'</p></div></section>';
  await dbgRefresh();
  if(!DBG_TIMER)DBG_TIMER=setInterval(function(){if(!DBG_PAUSED)dbgRefresh()},2500);
 }
@@ -698,7 +725,7 @@ function dbgTogglePause(){DBG_PAUSED=!DBG_PAUSED;var b=q('#dbg-pause');if(b)b.te
 async function dbgRefresh(){
  try{
   var r=await api('/api/debug/events?limit=200&q='+encodeURIComponent(DBG_Q));
-  var rows=(r.events||[]).map(function(e){return '<tr><td class="mono" style="white-space:nowrap">'+esc(String(e.ts_iso||'').replace('T',' ').slice(0,19))+'</td><td><span class="badge">'+(e.source==='mcp-tool'?t('dbg_tool'):t('dbg_api'))+'</span></td><td class="mono">'+esc(e.action)+'</td><td class="mono">'+esc(e.target||'')+'</td><td>'+esc(e.result||'')+'</td><td style="white-space:nowrap">'+(e.latency||0).toFixed(2)+'s</td></tr>'}).join('')||'<tr><td colspan="6" class="help">'+t('dbg_empty')+'</td></tr>';
+  var rows=(r.events||[]).map(function(e){return '<tr><td class="mono" style="white-space:nowrap">'+esc(String(e.ts_iso||'').replace('T',' ').slice(0,19))+'</td><td><span class="badge">'+(e.source==='mcp-tool'?t('dbg_tool'):t('dbg_api'))+'</span></td><td class="mono">'+esc(e.tool?e.tool+' · '+e.action:e.action)+'</td><td class="mono">'+esc(e.target||'')+'</td><td>'+esc(e.result||'')+'</td><td style="white-space:nowrap">'+(e.latency||0).toFixed(2)+'s</td></tr>'}).join('')||'<tr><td colspan="6" class="help">'+t('dbg_empty')+'</td></tr>';
   q('#dbg-table').innerHTML='<table class="diff"><tr><th>'+t('dbg_time')+'</th><th>'+t('dbg_source')+'</th><th>'+t('dbg_action')+'</th><th>'+t('dbg_target')+'</th><th>'+t('dbg_result')+'</th><th>'+t('dbg_lat')+'</th></tr>'+rows+'</table>';
  }catch(e){notice(e.message,'err')}
 }
