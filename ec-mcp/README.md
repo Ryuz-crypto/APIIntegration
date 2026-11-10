@@ -313,6 +313,23 @@ CSV como adjunto) y **limpiar los logs** (trunca el audit log y vacía el búfer
 registrado en auditoría) para liberar almacenamiento. En Tools, las tarjetas
 usan sliders en cuadrícula sin encimarse.
 
+En Debug, los administradores también pueden consultar **CPU, RAM, disco y
+tamaño del log de auditoría** y descargar hasta 500 eventos disponibles como
+CSV, Excel (.xlsx) o PDF. La CPU necesita dos muestras; la primera puede
+indicar «no disponible». La RAM usa `/proc/meminfo` y el disco corresponde al
+sistema de archivos del directorio de trabajo del servicio. El tamaño del log
+es el archivo de auditoría activo, no el total de todos los logs del sistema.
+
+El medidor de actividad cuenta eventos MCP observados en el último minuto
+dentro de las últimas 500 entradas accesibles; **no mide concurrencia ni la
+capacidad del servidor**. La lectura del log está limitada a sus últimos 8 MiB,
+por lo que pueden aparecer menos de 500 eventos. No todas las llamadas registran
+usuario, Orchestrator u operación API: los campos ausentes se dejan vacíos y
+no se infieren. El registro no garantiza capturar todas las solicitudes upstream.
+Los informes aplican redacción de patrones y protección contra fórmulas, pero
+deben revisarse antes de compartirlos porque pueden contener datos operativos.
+El PDF es un resumen y acorta campos largos; CSV y Excel permiten mayor detalle.
+
 La pestaña **Tools** (`/api/tools`, `/api/tools/toggle`) muestra las 125 tools
 MCP en **cuadrícula con sliders** (switch) para activar/desactivar sin bajar la
 página; se guarda en `EC_MCP_DISABLED_TOOLS`, aplica al reiniciar y también es
