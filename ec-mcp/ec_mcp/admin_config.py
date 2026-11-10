@@ -375,7 +375,7 @@ def tls_preflight_errors(effective: dict[str, str]) -> list[str]:
             return [f"El archivo de {label} TLS no existe o no es legible por el servicio del panel."]
     try:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.load_cert_chain(certfile=cert, keyfile=key)
+        context.load_cert_chain(certfile=str(Path(cert).expanduser()), keyfile=str(Path(key).expanduser()))
     except (OSError, ssl.SSLError, ValueError):
         return ["No se pudo cargar el certificado y la llave TLS; revisa que sean válidos, coincidan y sean legibles."]
     return []
