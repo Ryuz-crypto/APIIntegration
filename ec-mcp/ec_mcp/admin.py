@@ -1364,7 +1364,7 @@ def _debug_events_payload(limit: int, query: str = "", source: str = "") -> list
                 "action": str(a.get("action", "")),
                 "target": str(a.get("target", "")),
                 "result": str(a.get("result", "")),
-                "latency": 0.0,
+                "latency": None,
                 "tool": str(a.get("tool", "")),
                 "user": str(a.get("user", "")),
             }
