@@ -101,22 +101,63 @@ Para transporte remoto usa `https://TU-HOST/mcp` con el Bearer token de `EC_MCP_
 - Las escrituras están deshabilitadas por defecto (`EC_ALLOW_WRITE_TOOLS=false`); habilítalas expresamente cuando las necesites.
 - Lectura por API del Orchestrator sin SSH: `run_show_api(command="show arp", appliance_id="0.NE")`.
 
-### Actualizar a 8.2.0
+### Actualizar a la versión más reciente de `main`
+
+Este procedimiento actualiza una instalación existente; conserva `.env` y no reinstala las unidades de systemd. Ejecuta los bloques **en orden** y detente si algún comando falla.
+
+**1. Confirma la carpeta y revisa cambios locales.** Sustituye la ruta si tu instalación está en otro lugar:
 
 ```bash
 cd ~/APIIntegration
-git status --short          # no continúes con cambios sin respaldar
-git fetch origin
-git switch --detach origin/main
-cd ec-mcp
-./scripts/install.sh --non-interactive
-./scripts/install_service.sh
-./scripts/install_admin_service.sh
-sudo systemctl daemon-reload && sudo systemctl restart ec-mcp ec-mcp-admin
-./.venv/bin/python -c "import ec_mcp; assert ec_mcp.__version__ == '8.2.0'; print(ec_mcp.__version__)"
+pwd -P
+git status -sb
+sudo systemctl show ec-mcp-admin -p WorkingDirectory -p ExecStart --no-pager
+sudo systemctl show ec-mcp -p WorkingDirectory -p ExecStart --no-pager
 ```
 
-Antes de actualizar: respalda `.env`, configuración administrativa, logs y estado ZTP, y termina las operaciones en curso. La guía completa con recuperación está en [Upgrade por terminal](ec-mcp/README.md#upgrade-por-terminal).
+Las rutas `WorkingDirectory` y `ExecStart` deben apuntar a la instalación que vas a actualizar, normalmente `APIIntegration/ec-mcp` y su `.venv`. Si no coinciden, detente y localiza la instalación usada por los servicios. Si `git status` muestra cambios locales o archivos sin seguimiento, respáldalos o revísalos antes de continuar; no uses `git reset --hard`.
+
+**2. Respalda configuración y estado.** Este respaldo contiene secretos; mantenlo privado:
+
+```bash
+umask 077
+mkdir -p "$HOME/ec-mcp-backups"
+QA_BACKUP_DIR="$(mktemp -d "$HOME/ec-mcp-backups/actualizacion-XXXXXXXX")"
+git rev-parse HEAD > "$QA_BACKUP_DIR/commit-anterior.txt"
+for item in .env .ec-admin.json .ec-admin-pass .ec-admin-backups logs; do
+  if [ -e "ec-mcp/$item" ]; then cp -a "ec-mcp/$item" "$QA_BACKUP_DIR/"; fi
+done
+printf 'Respaldo: %s\n' "$QA_BACKUP_DIR"
+```
+
+Respalda también las rutas externas de configuración, registro, auditoría y estado ZTP que uses. Los planes en memoria pueden perderse al reiniciar; termina o documenta las operaciones pendientes antes de actualizar.
+
+**3. Descarga `main` y actualiza el paquete.**
+
+```bash
+git fetch origin
+git switch main
+git merge --ff-only origin/main
+git rev-parse HEAD
+cd ec-mcp
+./.venv/bin/pip install -r requirements-stable.txt -e .
+./.venv/bin/python -c "import ec_mcp, ec_mcp.admin_page; print('Versión:', ec_mcp.__version__); print('Panel:', ec_mcp.admin_page.__file__)"
+```
+
+Si `git switch` o `git merge --ff-only` falla, **detente**: puede haber cambios locales o commits divergentes. No fuerces el cambio; revisa la situación y conserva tu respaldo. La ruta impresa del panel debe pertenecer a la carpeta verificada en el paso 1.
+
+**4. Reinicia y verifica.** El reinicio interrumpe brevemente ambos servicios:
+
+```bash
+sudo systemctl restart ec-mcp ec-mcp-admin
+systemctl is-active ec-mcp ec-mcp-admin
+git rev-parse --short HEAD
+sudo journalctl -u ec-mcp-admin -n 30 --no-pager
+```
+
+Ambos servicios deben indicar `active`. Accede al panel con el puerto que ya tienes configurado y recarga el navegador con `Ctrl+F5`. Confirma también la build servida mediante `orchestrator_info()` desde el cliente MCP: la versión puede permanecer igual entre commits, por lo que es importante comparar el SHA. Si una unidad no existe o un servicio no arranca, revisa su `systemctl status` y journal antes de hacer más cambios.
+
+Para una guía de respaldo y recuperación más amplia, consulta [Upgrade por terminal](ec-mcp/README.md#upgrade-por-terminal).
 
 ### Reporte de bugs
 
