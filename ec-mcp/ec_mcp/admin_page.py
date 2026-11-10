@@ -1,8 +1,8 @@
-"""Self-contained administration page for ec-mcp 3.0."""
+"""Self-contained administration page for ec-mcp."""
 
 PAGE = r"""<!doctype html>
 <html lang="es"><head><meta charset="utf-8">
-<title>ec-mcp 3.0 control plane</title>
+<title>EdgeConnect MCP · Centro de administración</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 :root{color-scheme:light;--green:#01a982;--ink:#102a43;--cyan:#00c8ff;--brand-header:#073b4c;--blue:#00739d;--rose:#d94f70;--gold:#f2b900;--line:#c8d6df;--page-bg:#edf5f6;--surface:#fff;--text:#102a43;--muted:#5d7480;--brand:var(--green);--brand-header:#073b4c;--cyan:#00c8ff}
@@ -115,9 +115,29 @@ button:active{transform:scale(.97)}
 .powered-footer{display:flex;align-items:center;justify-content:center;gap:14px;padding:18px 32px 26px;color:#5f7681;font-size:11px}
 .donate{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;background:var(--gold);color:#4a3400;font-weight:800;text-decoration:none;border:1px solid #d9a900;transition:transform .12s ease,box-shadow .12s ease}
 .donate:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(242,185,0,.4)}
+
+/* Overview: a logical map, not a live traffic graph. */
+.topology{margin:20px 32px 0;background:#f3f9fa;color:#102a43;border-radius:14px;border:1px solid #c8dadd;overflow:hidden}
+.topology-hero{background:linear-gradient(120deg,#073b4c,#075b65 58%,#087d75);color:white;padding:30px;position:relative}
+.topology-hero h1{font-size:clamp(24px,3vw,38px);line-height:1.15;margin:4px 0 8px}.topology-hero p{max-width:70ch;color:#d5eff0;margin:0}
+.topology-eyebrow{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#76edd5}
+.topology-body{padding:24px 28px}.topology-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.topology-head h2{margin:0;font-size:20px}
+.topology-flow{display:grid;grid-template-columns:minmax(160px,1fr) 36px minmax(180px,1fr) 36px minmax(240px,1.5fr);align-items:center;gap:8px;margin:22px 0}
+.topology-stack{display:grid;gap:10px}.topology-arrow{text-align:center;color:#078a78;font-size:24px;font-weight:800}
+.topology-card{width:100%;text-align:left;border:1px solid #c9dddd;border-radius:10px;background:#fff;color:#153746;padding:16px;min-height:112px;box-shadow:0 5px 16px rgba(7,59,76,.06);cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.topology-card:hover{transform:translateY(-3px);box-shadow:0 12px 25px rgba(7,59,76,.14);border-color:#01a982}
+.topology-card strong,.topology-card small{display:block}.topology-card strong{font-size:15px;margin:6px 0}.topology-card small{color:#526d76;line-height:1.45;overflow-wrap:anywhere}
+.topology-card .tag{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#067865}
+.topology-status{display:inline-flex;align-items:center;gap:6px;border-radius:20px;padding:4px 8px;margin-top:9px;font-size:11px;font-weight:700;background:#edf2f3;color:#4c626b}
+.topology-status:before{content:"";width:7px;height:7px;border-radius:50%;background:#879ba0}
+.topology-status.up{background:#daf7eb;color:#096546}.topology-status.up:before{background:#0c9c68}
+.topology-status.down{background:#fde9ed;color:#a32a47}.topology-status.down:before{background:#cf4665}
+.topology-caption{font-size:12px;color:#526d76;line-height:1.5}.topology-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+@media(max-width:900px){.topology{margin:16px}.topology-flow{grid-template-columns:1fr}.topology-arrow{transform:rotate(90deg)}.topology-hero{padding:23px}.topology-body{padding:20px}}
+
 </style></head><body><main id="app">Cargando...</main>
 <script>
-var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='wizard';
+var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='home', TOPOLOGY_STATUS=null, TOPOLOGY_BUSY=false;
 var LANG=localStorage.getItem('ec-lang')||'es';
 var ACCENTS=[{n:'HPE Green',c:'#01a982'},{n:'Cyan',c:'#00c8ff'},{n:'Blue',c:'#00739d'},{n:'Gold',c:'#f2b900'},{n:'Rose',c:'#d94f70'},{n:'Header teal',c:'#073b4c'}];
 var I18N={es:{nav_wizard:'Asistente',nav_orch:'Orquestadores',nav_sse:'Plataformas SSE',nav_svc:'Servicios',nav_config:'Variables',nav_update:'Actualizaciones',nav_users:'Usuarios',nav_out:'Salir',tagline:'MCP para SASE · EdgeConnect SD-WAN',login_title:'Control plane administrativo',login_user:'Usuario',login_pass:'Contraseña',login_enter:'Entrar',h2_orch:'Orquestadores',h2_sse:'Plataformas SSE (multi-tenant)',h2_svc:'Servicios',h2_config:'Variables del servicio',h2_update:'Actualizaciones desde GitHub',h2_users:'Usuarios del panel',h2_wizard:'Asistente de configuración',btn_save:'Guardar',btn_save_vars:'Guardar variables',btn_save_restart:'Guardar y reiniciar servicios',btn_save_restart_short:'Guardar y reiniciar',btn_recheck:'Volver a comprobar',btn_detect:'Detectar GitHub',btn_apply_update:'Aplicar actualización',btn_back:'Atrás',btn_next:'Siguiente',btn_review:'Revisar cambios',btn_probe:'Probar',btn_dup:'Duplicar',btn_ren:'Renombrar',btn_default:'Por defecto',btn_edit:'Editar',btn_delete:'Eliminar',btn_save_orch:'Guardar orquestador',btn_save_sse:'Guardar plataforma SSE',loading:'Cargando...',wiz_loading:'Cargando pasos...',secret_set:'Secreto configurado; no se muestra.',secret_unset:'Sin configurar.'},en:{nav_wizard:'Wizard',nav_orch:'Orchestrators',nav_sse:'SSE platforms',nav_svc:'Services',nav_config:'Settings',nav_update:'Updates',nav_users:'Users',nav_out:'Sign out',tagline:'MCP for SASE · EdgeConnect SD-WAN',login_title:'Administrative control plane',login_user:'User',login_pass:'Password',login_enter:'Sign in',h2_orch:'Orchestrators',h2_sse:'SSE platforms (multi-tenant)',h2_svc:'Services',h2_config:'Service settings',h2_update:'Updates from GitHub',h2_users:'Panel users',h2_wizard:'Setup wizard',btn_save:'Save',btn_save_vars:'Save settings',btn_save_restart:'Save and restart services',btn_save_restart_short:'Save and restart',btn_recheck:'Re-check',btn_detect:'Check GitHub',btn_apply_update:'Apply update',btn_back:'Back',btn_next:'Next',btn_review:'Review changes',btn_probe:'Test',btn_dup:'Duplicate',btn_ren:'Rename',btn_default:'Default',btn_edit:'Edit',btn_delete:'Delete',btn_save_orch:'Save orchestrator',btn_save_sse:'Save SSE platform',loading:'Loading...',wiz_loading:'Loading steps...',secret_set:'Secret configured; never displayed.',secret_unset:'Not configured.'}};
@@ -125,7 +145,7 @@ function t(k,v){var d=I18N[LANG]||I18N.es;var s=d[k]||I18N.en[k]||I18N.es[k]||k;
 function setLang(l){LANG=l;localStorage.setItem('ec-lang',l);if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
 function setAccent(c){document.documentElement.style.setProperty('--brand',c);localStorage.setItem('ec-accent',c);if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
 
-function siteName(){return localStorage.getItem('ec-site-name')||'ec-mcp control plane'}
+function siteName(){return localStorage.getItem('ec-site-name')||'EdgeConnect MCP'}
 function siteLogo(){return localStorage.getItem('ec-logo')||''}
 function siteIcon(){return localStorage.getItem('ec-icon')||''}
 function brandHtml(){var ic=siteIcon();var logo=siteLogo();return '<div class="brand">'+(logo?'<img class="logo" src="'+logo+'" alt="logo">':(ic?'<span class="logo">'+esc(ic)+'</span>':''))+'<div><strong>'+esc(siteName())+'</strong><span>'+t('tagline')+'</span></div></div>'}
@@ -256,16 +276,17 @@ function closeMenusOnOutsideClick(){document.addEventListener('click',function(e
 if(document.addEventListener)closeMenusOnOutsideClick();
 function renderShell(){
  q('#app').innerHTML='<header class="topbar">'+brandHtml()+'<div class="topbar-actions"><span class="version">__EC_MCP_VERSION__</span>'+userChip()+chromeHtml()+'</div></header>'+
- '<nav><button id="tab-wizard" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button id="tab-orch" onclick="showTab(\'orch\')">'+t('nav_orch')+'</button><button id="tab-sse" onclick="showTab(\'sse\')">'+t('nav_sse')+'</button><button id="tab-svc" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button><button id="tab-config" onclick="showTab(\'config\')">'+t('nav_config')+'</button><button id="tab-tls" onclick="showTab(\'tls\')">'+t('nav_tls')+'</button><button id="tab-tools" onclick="showTab(\'tools\')">'+t('nav_tools')+'</button><button id="tab-debug" onclick="showTab(\'debug\')">'+t('nav_debug')+'</button><button id="tab-update" onclick="showTab(\'update\')">'+t('nav_update')+'</button><button id="tab-users" onclick="showTab(\'users\')">'+t('nav_users')+'</button></nav>'+
+ '<nav aria-label="Navegación principal"><button id="tab-home" onclick="showTab(\'home\')">'+(LANG==='es'?'Inicio':'Home')+'</button><button id="tab-wizard" onclick="showTab(\'wizard\')">'+t('nav_wizard')+'</button><button id="tab-orch" onclick="showTab(\'orch\')">'+t('nav_orch')+'</button><button id="tab-sse" onclick="showTab(\'sse\')">'+t('nav_sse')+'</button><button id="tab-svc" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button><button id="tab-config" onclick="showTab(\'config\')">'+t('nav_config')+'</button><button id="tab-tls" onclick="showTab(\'tls\')">'+t('nav_tls')+'</button><button id="tab-tools" onclick="showTab(\'tools\')">'+t('nav_tools')+'</button><button id="tab-debug" onclick="showTab(\'debug\')">'+t('nav_debug')+'</button><button id="tab-update" onclick="showTab(\'update\')">'+t('nav_update')+'</button><button id="tab-users" onclick="showTab(\'users\')">'+t('nav_users')+'</button></nav>'+
  '<div id="notice"></div><section id="workspace"></section>'+customDialogHtml()+footerHtml();
  if(ME&&ME.role!=='admin'){var ub=q('#tab-users');if(ub)ub.style.display='none'}
- showTab('wizard');
+ showTab('home');
 }
 function showTab(name){
  CURTAB=name;
  var ntc=q('#notice');if(ntc)ntc.innerHTML='';
  document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active-tab')});
  var tab=q('#tab-'+name);if(tab)tab.classList.add('active-tab');
+ if(name==='home')renderTopology();
  if(name==='wizard')renderWizard();
  if(name==='orch')renderOrchestrators();
  if(name==='sse')renderSse();
@@ -278,6 +299,48 @@ function showTab(name){
  if(name==='debug')renderDebug();
  if(name!=='debug'&&typeof dbgStop==='function')dbgStop();
 }
+
+function topologyState(entry){
+ if(!entry)return {label:LANG==='es'?'Sin comprobar':'Not checked',cls:'unknown'};
+ if(entry.state==='up')return {label:LANG==='es'?'Conectado':'Connected',cls:'up'};
+ if(entry.state==='down')return {label:LANG==='es'?'Con problemas':'Problem detected',cls:'down'};
+ return {label:LANG==='es'?'Sin comprobar':'Not checked',cls:'unknown'};
+}
+function topologyBadge(entry){var st=topologyState(entry);return '<span class="topology-status '+st.cls+'">'+esc(st.label)+'</span>'}
+function topologyEntry(kind,name){var items=TOPOLOGY_STATUS&&(kind==='orch'?TOPOLOGY_STATUS.orchestrators:TOPOLOGY_STATUS.sse_platforms)||[];return items.find(function(x){return x.name===name})}
+function topologyCard(kind,item){
+ var isOrch=kind==='orch',entry=topologyEntry(kind,item.name),sub=isOrch?'Orchestrator':'Axis / SSE';
+ var detail=entry&&entry.error?entry.error:(isOrch?(item.default?(LANG==='es'?'Destino predeterminado':'Default target'):(LANG==='es'?'Destino guardado':'Saved target')):(LANG==='es'?'Plataforma guardada':'Saved platform'));
+ var when=entry&&entry.checked_at?entry.checked_at:(LANG==='es'?'Sin comprobación':'Not checked');
+ var hint=(LANG==='es'?'Última comprobación: ':'Last check: ')+when;
+ return '<button type="button" class="topology-card" data-kind="'+kind+'" data-name="'+esc(item.name)+'" onclick="openTopologyTarget(this)" title="'+esc(hint)+'" aria-label="'+esc(sub+': '+item.name+'. '+hint)+'"><span class="tag">'+esc(sub)+'</span><strong>'+esc(item.name)+'</strong><small>'+esc(detail)+'</small>'+topologyBadge(entry)+'</button>';
+}
+function openTopologyTarget(button){
+ var kind=button.dataset.kind,name=button.dataset.name;
+ if(kind==='orch'){showTab('orch');editOrch(name)}else{showTab('sse');editSse(name)}
+}
+async function refreshTopology(){
+ if(TOPOLOGY_BUSY)return;TOPOLOGY_BUSY=true;renderTopology();
+ try{var r=await api('/api/services/status');if(r.error||r.ok===false)throw Error(r.error||'Status unavailable');TOPOLOGY_STATUS=r}
+ catch(e){TOPOLOGY_STATUS=null;notice(e.message,'err')}
+ finally{TOPOLOGY_BUSY=false;if(CURTAB==='home')renderTopology()}
+}
+function renderTopology(){
+ var orchs=STATE.orchestrators||[],sses=STATE.sse_platforms||[],mcp=TOPOLOGY_STATUS&&TOPOLOGY_STATUS.mcp_transport;
+ var check=TOPOLOGY_STATUS&&TOPOLOGY_STATUS.checked_at?TOPOLOGY_STATUS.checked_at:(LANG==='es'?'Sin comprobar':'Not checked');
+ var missing=LANG==='es'?'Todavía no hay destinos guardados.':'No saved targets yet.';
+ var cards=orchs.map(function(o){return topologyCard('orch',o)}).join('')+sses.map(function(o){return topologyCard('sse',o)}).join('');
+ if(!cards)cards='<button type="button" class="topology-card" onclick="showTab(\\'wizard\\')"><span class="tag">Setup</span><strong>'+esc(missing)+'</strong><small>'+(LANG==='es'?'Configurar primera conexión':'Configure first connection')+'</small></button>';
+ var heading=LANG==='es'?'Tu ecosistema, en una vista':'Your ecosystem at a glance';
+ var caption=LANG==='es'?'Mapa lógico de configuración. Las líneas no representan tráfico ni sesiones activas.':'Logical configuration map. Lines do not represent traffic or active sessions.';
+ var statusCaption=LANG==='es'?'Última comprobación: ':'Last checked: ';
+ q('#workspace').innerHTML='<section class="topology"><div class="topology-hero"><div class="topology-eyebrow">EdgeConnect MCP · CONTROL CENTER</div><h1>'+heading+'</h1><p>'+(LANG==='es'?'Administra tus conexiones SD-WAN y SSE desde un solo lugar.':'Manage SD-WAN and SSE connections in one place.')+'</p></div>'+
+ '<div class="topology-body"><div class="topology-head"><div><h2>'+(LANG==='es'?'Mapa de conexiones':'Connection map')+'</h2><p class="topology-caption">'+caption+'</p></div><button type="button" onclick="refreshTopology()" '+(TOPOLOGY_BUSY?'disabled':'')+'>'+(TOPOLOGY_BUSY?(LANG==='es'?'Comprobando…':'Checking…'):(LANG==='es'?'Comprobar conexiones':'Check connections'))+'</button></div>'+
+ '<div class="topology-flow"><button type="button" class="topology-card" onclick="showTab(\\'config\\')"><span class="tag">CLIENT</span><strong>'+(LANG==='es'?'Asistentes IA':'AI assistants')+'</strong><small>'+(LANG==='es'?'Transporte y acceso · sesiones no verificadas':'Transport and access · sessions not verified')+'</small></button><div class="topology-arrow" aria-hidden="true">→</div>'+
+ '<button type="button" class="topology-card" onclick="showTab(\\'svc\\')" title="'+esc(statusCaption+check)+'"><span class="tag">MCP SERVER</span><strong>EdgeConnect MCP</strong><small>'+(LANG==='es'?'Versión del panel: ':'Panel version: ')+'__EC_MCP_VERSION__</small>'+topologyBadge(mcp)+'</button><div class="topology-arrow" aria-hidden="true">→</div><div class="topology-stack">'+cards+'</div></div>'+
+ '<p class="topology-caption">'+esc(statusCaption+check)+'. '+(LANG==='es'?'La versión de cada conexión y el número de appliances no están disponibles en este mapa.':'Connection versions and appliance counts are not available in this map.')+'</p><div class="topology-actions"><button type="button" onclick="showTab(\\'wizard\\')">'+t('nav_wizard')+'</button><button type="button" class="secondary" onclick="showTab(\\'svc\\')">'+t('nav_svc')+'</button></div></div></section>';
+}
+
 async function renderServices(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">'+t('checking')+'</p></section>';
  try{var r=await api('/api/services/status');var h='<section class="panel"><h2>'+t('h2_svc')+'</h2><p class="help">'+t('svc_checked')+' '+esc((r.checked_at||'').replace('T',' ').split('.')[0])+' UTC. Ningún servicio se muestra como activo sin comprobación.</p>';
