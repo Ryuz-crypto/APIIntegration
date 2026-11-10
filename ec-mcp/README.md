@@ -1,8 +1,8 @@
 # ec-mcp — EdgeConnect SD-WAN MCP server
 
-**Versión: 9.1.0** en `main`. La validación de esta versión en el entorno real queda pendiente.
+**Versión: 9.2.0** en `main`. La validación de esta versión en el entorno real queda pendiente. La [preparación de auditoría](docs/AUDITORIA-9.2.md) no implementa ni certifica no repudio.
 
-Estado actual: **9.1.0 estable** en `main`. Esta línea concentra el soporte vigente y añade: retiro del componente DashboardAPI-EC (el repositorio se enfoca en `ec-mcp`), multi-Orchestrator y multi-SSE (multi-tenant), estado real de servicios en el panel con auditoría estructurada (#88 Fases 1–3: SSH fiable, sondas reales de servicios, detección y remediación asistida con propuestas dry-run).
+Estado actual: **9.2.0 estable** en `main`. Esta línea concentra el soporte vigente y añade: retiro del componente DashboardAPI-EC (el repositorio se enfoca en `ec-mcp`), multi-Orchestrator y multi-SSE (multi-tenant), estado real de servicios en el panel con auditoría estructurada (#88 Fases 1–3: SSH fiable, sondas reales de servicios, detección y remediación asistida con propuestas dry-run).
 
 Esta entrega añade la capa de telemetría (PR #70): KPIs de infraestructura del Orchestrator (platform info, GMS server, disco, particiones BD, stats collectors), KPIs por appliance desde el Orchestrator (CPU/performance timeseries, interface state) y estadísticas real-time del appliance (`POST /stats/realtimeStats`, `POST /health`, disk usage) a través del proxy `/appliance/rest`, que alcanza los equipos por la red gestionada SD-WAN sin acceso WAN directo.
 
@@ -615,7 +615,7 @@ La última llamada debe devolver `applied: true`,
 
 ## Upgrade por terminal
 
-Procedimiento para actualizar a **9.1.0 estable desde `main`**. Actualiza solamente el servidor MCP; no requiere cambiar firmware ni modificar configuración de red en los appliances. Sustituye `~/APIIntegration` por la ruta real de la instalación.
+Procedimiento para actualizar a **9.2.0 estable desde `main`**. Actualiza solamente el servidor MCP; no requiere cambiar firmware ni modificar configuración de red en los appliances. Sustituye `~/APIIntegration` por la ruta real de la instalación.
 
 ### 1. Preparar y respaldar
 
@@ -657,7 +657,7 @@ git fetch origin
 git switch --detach origin/main
 cd ec-mcp
 ./scripts/install.sh --non-interactive
-./.venv/bin/python -c "from ec_mcp import __version__; assert __version__ == '9.1.0'; print(__version__)"
+./.venv/bin/python -c "from ec_mcp import __version__; assert __version__ == '9.2.0'; print(__version__)"
 ```
 
 El instalador conserva `.env` y usa `requirements-stable.txt` para instalar runtime y QA, incluido pytest. Revisa las claves nuevas de `.env.example` y añade solo las que falten; no reemplaces el archivo ni regeneres secretos, conexiones o puertos. La configuración del proceso/systemd prevalece sobre `.env`.
@@ -686,7 +686,7 @@ curl -fsS http://127.0.0.1:8000/health
 curl -I http://127.0.0.1:9090/login
 ```
 
-Sustituye 8000/9090 por tus puertos. `/health` comprueba el transporte; valida también `orchestrator_info()`, `list_appliances()` y `run_show_api(command="show version", appliance_id="<nePk-real>")` desde el cliente. Confirma versión 9.1.0, inventario real, respuesta por API y funcionamiento del login del panel antes de habilitar escrituras. En stdio, reinicia el cliente MCP.
+Sustituye 8000/9090 por tus puertos. `/health` comprueba el transporte; valida también `orchestrator_info()`, `list_appliances()` y `run_show_api(command="show version", appliance_id="<nePk-real>")` desde el cliente. Confirma versión 9.2.0, inventario real, respuesta por API y funcionamiento del login del panel antes de habilitar escrituras. En stdio, reinicia el cliente MCP.
 
 ### 4. Recuperar si falla
 
@@ -773,7 +773,7 @@ overlay que no haya sido creado por el mismo plan.
 
 ## Flujo transaccional de adopción ZTP
 
-La versión estable **9.1.0** extiende el patrón transaccional a la adopción
+La versión estable **9.2.0** extiende el patrón transaccional a la adopción
 de equipos descubiertos por ZTP, siguiendo el modelo real de preconfiguración
 del Orchestrator: la preconfiguración es un documento YAML con nombre propio
 que se crea vía `createpreconfiguration247_1` y se aplica al equipo descubierto
@@ -840,7 +840,7 @@ aprobado ni enviar cuerpos vacíos.
 
 ## Suite de seguridad y troubleshooting
 
-La versión estable `9.1.0` añade herramientas curadas de solo lectura sobre el
+La versión estable `9.2.0` añade herramientas curadas de solo lectura sobre el
 catálogo crudo, agrupadas por dominio:
 
 | Herramienta | Dominio | Descripción |
@@ -862,7 +862,7 @@ dry-run ni confirmación. Para cambios de configuración de seguridad usa
 
 ## Mejoras de operación e inconsistencias en desarrollo
 
-La base estable 9.1.0 conserva los workflows MCP existentes. El roadmap ZTP de la UI administrativa sigue pendiente. Estas correcciones deben pasar por pruebas de regresión antes de integrarse en `main`:
+La base estable 9.2.0 conserva los workflows MCP existentes. El roadmap ZTP de la UI administrativa sigue pendiente. Estas correcciones deben pasar por pruebas de regresión antes de integrarse en `main`:
 
 - Evitar repetir POST/PUT/PATCH/DELETE ante una respuesta vacía o por fallback de rutas.
 - Verificar adopción ZTP solo con tareas confirmadas, inventario fresco y salida de discovered.

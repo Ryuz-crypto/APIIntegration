@@ -10,7 +10,7 @@ from html import escape
 
 from .security import redact_secrets
 
-COLUMNS = ("ts_iso", "source", "tool", "action", "target", "result", "user")
+COLUMNS = ("ts_iso", "source", "tool", "action", "target", "result", "user", "event_id")
 
 
 def safe_cell(value: object) -> str:
@@ -64,7 +64,7 @@ def xlsx_report(events: list[dict]) -> bytes:
 def pdf_report(events: list[dict]) -> bytes:
     """Produce a simple paginated text summary; long fields are abbreviated."""
     rows = rows_for_export(events)
-    lines = ["AUDITORIA MCP - hasta 500 eventos", "UTC | origen | tool | accion | destino | resultado | usuario"]
+    lines = ["AUDITORIA MCP - hasta 500 eventos", "UTC | origen | tool | accion | destino | resultado | usuario | event_id"]
     for row in rows:
         lines.append(" | ".join(value[:28] for value in row))
     pages = [lines[i:i + 45] for i in range(0, len(lines), 45)] or [lines]

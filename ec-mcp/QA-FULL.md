@@ -1,6 +1,6 @@
-# Protocolo completo de QA — ec-mcp 9.1.0
+# Protocolo completo de QA — ec-mcp 9.2.0
 
-Usa [QA-BATTERY.md](QA-BATTERY.md) para T0–T6 y esta guía para ampliar cobertura. Referencia vigente: `main`, paquete `9.1.0`, y **SHA completo de la build aprobada para la sesión**. Ningún resultado de este documento declara que se haya ejecutado la prueba.
+Usa [QA-BATTERY.md](QA-BATTERY.md) para T0–T6 y esta guía para ampliar cobertura. Referencia vigente: `main`, paquete `9.2.0`, y **SHA completo de la build aprobada para la sesión**. Ningún resultado de este documento declara que se haya ejecutado la prueba.
 
 ## Preparación y reglas
 
@@ -89,7 +89,7 @@ Las pruebas de cambios reales, rollback de configuración y ampliación de permi
 
 ```text
 Fecha UTC / responsable / entorno:
-Build esperada: 9.1.0 SHA=<...>; build servida=<...>; T0=<estado>
+Build esperada: 9.2.0 SHA=<...>; build servida=<...>; T0=<estado>
 Orchestrator versión=<...> perfil=<...>; SSH=<...>; candados=<...>
 Caso: <T/A/B/C/D/E + número>
 Invocación y alcance: <...>

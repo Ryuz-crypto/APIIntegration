@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,8 @@ class AuditLog:
         user: str | None = None,
     ) -> dict[str, Any]:
         entry = {
+            "event_id": str(uuid.uuid4()),
+            "schema": "ec-mcp.audit.v1",
             "timestamp": datetime.now(UTC).isoformat(),
             "tool": tool,
             "action": redact_secrets(str(action), []),

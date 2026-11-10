@@ -516,15 +516,15 @@ def test_debug_events_export_clear(client, env):
     ex_csv = client.get("/api/debug/export?format=csv")
     assert ex_csv.headers["content-type"].startswith("text/csv")
     assert "mcp-tool" in ex_csv.text
-    # clear
-    assert (env / "audit.jsonl").stat().st_size > 0
+    # Clear only the temporary buffer; the persistent audit trail remains.
+    before = (env / "audit.jsonl").read_text(encoding="utf-8")
+    assert before
     cleared = client.post("/api/debug/clear")
     assert cleared.json()["ok"] is True
-    assert cleared.json()["bytes_before"] > 0
-    assert (env / "audit.jsonl").read_text(encoding="utf-8") == ""
-    # el middleware registra el propio clear tras ejecutarse: solo quedan eventos panel-api
+    after = (env / "audit.jsonl").read_text(encoding="utf-8")
+    assert after.startswith(before)
     remaining = client.get("/api/debug/events").json()["events"]
-    assert all(e["source"] == "panel-api" for e in remaining)
+    assert any(e.get("tool") == "my_tool" for e in remaining)
 
 
 def test_debug_clear_forbidden_for_viewer(env):

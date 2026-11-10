@@ -1390,6 +1390,7 @@ def _debug_events_payload(limit: int, query: str = "", source: str = "") -> list
             {
                 "ts": ts,
                 "ts_iso": ts_raw,
+                "event_id": str(a.get("event_id", "")),
                 "source": "panel-audit" if a.get("tool") == "admin_panel" else "mcp-tool",
                 "action": str(a.get("action", "")),
                 "target": str(a.get("target", "")),
@@ -1500,27 +1501,31 @@ async def api_debug_clear(request):
     session, denied = _authorize(request, "write")
     if denied:
         return denied
-    path = Settings.from_env().audit_log_path
-    size_before = path.stat().st_size if path.is_file() else 0
-    _audit_panel(session["user"], "debug_clear", str(path), "ok", {"bytes_before": size_before})
-    _debug_record("panel-api", "debug_clear", str(path), f"truncated {size_before}B")
-    removed: list[str] = []
-    if path.is_file():
-        path.write_text("", encoding="utf-8")
-        removed.append(str(path))
-    for old in path.parent.glob(path.name + ".*"):
-        if old.is_file() and old.suffix in {".old", ".bak", ".1"}:
-            old.unlink(missing_ok=True)
-            removed.append(str(old))
     DEBUG_EVENTS.clear()
-    return JSONResponse(
-        {
-            "ok": True,
-            "removed": removed,
-            "bytes_before": size_before,
-            "message": f"Logs limpiados ({size_before} bytes liberados del audit log y búfer vaciado).",
-        }
-    )
+    _audit_panel(session["user"], "debug_buffer_clear", "memory", "ok")
+    return JSONResponse({
+        "ok": True,
+        "removed": [],
+        "message": "Búfer de depuración en memoria limpiado. El registro de auditoría se conserva.",
+    })
+
+
+async def api_audit_snapshot(request):
+    session, denied = _authorize(request, "users")
+    if denied:
+        return denied
+    from starlette.concurrency import run_in_threadpool
+
+    from .audit_evidence import audit_snapshot
+
+    _audit_panel(session["user"], "audit_snapshot", "active_audit_file", "requested")
+    try:
+        snapshot = await run_in_threadpool(audit_snapshot, Settings.from_env().audit_log_path)
+    except FileNotFoundError:
+        return JSONResponse({"ok": False, "error": "Registro de auditoría no disponible"}, status_code=404)
+    except (OSError, ValueError):
+        return JSONResponse({"ok": False, "error": "No se pudo crear una captura estable del registro"}, status_code=409)
+    return JSONResponse({"ok": True, "snapshot": snapshot}, headers={"Cache-Control": "no-store"})
 
 
 async def api_backups_list(request):
@@ -1759,6 +1764,7 @@ def build_admin_app() -> Starlette:
             Route("/api/agent-prompt", api_agent_prompt, methods=["GET"]),
             Route("/api/monitor/host", api_host_monitor, methods=["GET"]),
             Route("/api/audit/report", api_audit_report, methods=["GET"]),
+            Route("/api/audit/snapshot", api_audit_snapshot, methods=["POST"]),
             Route("/api/debug/events", api_debug_events, methods=["GET"]),
             Route("/api/debug/export", api_debug_export, methods=["GET"]),
             Route("/api/debug/clear", api_debug_clear, methods=["POST"]),

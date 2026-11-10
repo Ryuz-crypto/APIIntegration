@@ -1,10 +1,10 @@
-# Batería de aceptación — ec-mcp 9.1.0
+# Batería de aceptación — ec-mcp 9.2.0
 
 Esta batería comprueba la build de `main` desplegada. La ampliación por dominios y la plantilla detallada están en [QA-FULL.md](QA-FULL.md). Las llamadas siguientes se ejecutan desde un cliente MCP; son ejemplos de herramientas y argumentos, no comandos de shell.
 
 ## Reglas y preparación
 
-- Registra fecha UTC, entorno, versión esperada `9.1.0`, **SHA completo esperado** de la publicación aprobada, transporte, versión del Orchestrator y alcance autorizado.
+- Registra fecha UTC, entorno, versión esperada `9.2.0`, **SHA completo esperado** de la publicación aprobada, transporte, versión del Orchestrator y alcance autorizado.
 - Ejecuta T0 primero. Si no coincide el SHA o la identidad no puede determinarse, marca T0 **BLOCKED** y no atribuyas los demás resultados a esa build.
 - Compara inventario, alarmas y métricas con fuentes vivas y la misma ventana temporal. No supongas cantidad fija de appliances, túneles, alarmas ni perfiles.
 - Estados: **PASS**, **FAIL**, **BLOCKED** (prerrequisito fallido), **SKIPPED_NO_ENTITY** (entidad ausente comprobada) y **SKIPPED_NOT_CONFIGURED** (integración no configurada). Un error no es ausencia de entidad.
@@ -18,7 +18,7 @@ Esta batería comprueba la build de `main` desplegada. La ampliación por domini
 orchestrator_info({})
 ```
 
-PASS: `build.package_version` es `9.1.0` y `build.git_commit` coincide con el SHA completo aprobado. Registra `detected_version`, `active_profile`, perfiles disponibles y los estados de escritura/SSH. Comprueba que el perfil corresponde a la versión y al catálogo servido; no presupongas que Orchestrator 10 usa el perfil 9.6.
+PASS: `build.package_version` es `9.2.0` y `build.git_commit` coincide con el SHA completo aprobado. Registra `detected_version`, `active_profile`, perfiles disponibles y los estados de escritura/SSH. Comprueba que el perfil corresponde a la versión y al catálogo servido; no presupongas que Orchestrator 10 usa el perfil 9.6.
 
 En el servidor, para contraste, desde `APIIntegration/ec-mcp`:
 
