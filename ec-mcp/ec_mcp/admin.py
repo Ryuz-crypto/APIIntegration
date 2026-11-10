@@ -47,7 +47,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 from . import __version__, admin_users
-from .admin_config import diff_env, public_config, update_env
+from .admin_config import diff_env, public_config, restart_tls_errors, update_env
 from .admin_page import PAGE as _PAGE_TEMPLATE
 from .admin_services import ServiceProbeError, probe_axis, probe_orchestrator, services_status
 from .admin_users import UserError
@@ -858,6 +858,10 @@ async def api_restart(request):
     session, denied = _authorize(request, "restart")
     if denied:
         return denied
+    errors = restart_tls_errors()
+    if errors:
+        _audit_panel(session["user"], "restart", "panel", "blocked_tls")
+        return JSONResponse({"state": "error", "error": "; ".join(errors)}, status_code=400)
     try:
         result = queue_restart()
     except (OSError, ValueError) as exc:

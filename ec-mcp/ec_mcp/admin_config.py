@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+import ssl
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -360,6 +361,31 @@ def _env_or(effective: dict[str, str], key: str) -> str:
     return effective.get(key) or os.environ.get(key, "")
 
 
+def tls_preflight_errors(effective: dict[str, str]) -> list[str]:
+    """Validate the TLS pair as the admin service user before a restart."""
+    if effective.get("EC_ADMIN_TLS_ENABLED", "false").strip().lower() != "true":
+        return []
+    cert = effective.get("EC_ADMIN_TLS_CERT", "").strip()
+    key = effective.get("EC_ADMIN_TLS_KEY", "").strip()
+    if not cert or not key:
+        return ["HTTPS está habilitado: configura EC_ADMIN_TLS_CERT y EC_ADMIN_TLS_KEY antes de reiniciar."]
+    for label, filename in (("certificado", cert), ("llave", key)):
+        path = Path(filename).expanduser()
+        if not path.is_file() or not os.access(path, os.R_OK):
+            return [f"El archivo de {label} TLS no existe o no es legible por el servicio del panel."]
+    try:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(certfile=str(Path(cert).expanduser()), keyfile=str(Path(key).expanduser()))
+    except (OSError, ssl.SSLError, ValueError):
+        return ["No se pudo cargar el certificado y la llave TLS; revisa que sean válidos, coincidan y sean legibles."]
+    return []
+
+
+def restart_tls_errors(path: Path | None = None) -> list[str]:
+    """Check effective configuration without modifying files or changing TLS."""
+    return tls_preflight_errors(_effective_values(path))
+
+
 def _cross_field_errors(effective: dict[str, str]) -> list[str]:
     """Reglas obligatorias entre varias variables sobre la configuración efectiva."""
     errors: list[str] = []
@@ -383,6 +409,7 @@ def _cross_field_errors(effective: dict[str, str]) -> list[str]:
         password_file = effective.get("EC_ADMIN_PASSWORD_FILE", "") or str(Path.cwd() / ".ec-admin-pass")
         if not effective.get("EC_ADMIN_PASSWORD", "") and not Path(password_file).is_file():
             errors.append("EC_ADMIN_HOST no es loopback: configura EC_ADMIN_PASSWORD o un EC_ADMIN_PASSWORD_FILE existente")
+    errors.extend(tls_preflight_errors(effective))
     return errors
 
 
