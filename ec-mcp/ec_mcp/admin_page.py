@@ -186,6 +186,36 @@ html[data-effect="pulse"] .topology-card{animation:panel-glow 4s ease-in-out inf
 .monitor-card strong,.monitor-card small{display:block}.monitor-card small{color:#c4dde1;margin-top:8px;line-height:1.4}
 .monitor-value{font-size:26px;font-weight:800;margin:8px 0;color:#8aefd4}.monitor-card meter{width:100%;height:10px}
 
+
+/* Shared surfaces: cards and labels use matching contrast in every tab. */
+body{background:var(--console-bg,#071d29)}
+.panel{background:var(--panel-bg,#0d2c38);color:var(--panel-fg,#f2ffff);border-radius:12px;min-width:0}
+.panel h1,.panel h2,.panel h3,.panel label,.panel .help,.panel p,.panel table.diff td,.panel table.diff th{color:var(--panel-fg,#f2ffff)}
+.panel .group,.panel details.group,.panel .orch,.panel .tool-card,.panel .monitor-card{background:var(--card-bg,#103542);color:var(--card-fg,#f2ffff);border:1px solid #53727a;border-radius:10px}
+.panel .group h3,.panel .group label,.panel .group p,.panel .group .help,.panel .orch .help,.panel .orch strong,.panel .tool-card .help,.panel .monitor-card small,.panel .kv dt{color:var(--card-fg,#f2ffff)}
+.panel .orch{overflow-wrap:anywhere;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.panel .badge{background:#d9f5ec;color:#075842;border-color:#82bbad}
+.panel .orch-actions{display:flex;flex-wrap:wrap;gap:6px;max-width:70%;margin-inline-start:12px}
+.panel .tool-card{border-left:4px solid var(--brand)}
+.panel .cert-status,.panel .cert-status span{color:#173a47}
+.panel .cert-status.active,.panel .cert-status.active span{color:#075842}
+.panel .msg,.panel .msg p{color:#075842}.panel .msg.err,.panel .msg.err p{color:#8b2140}.panel .msg.info,.panel .msg.info p{color:#0b4a6b}
+.panel input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),.panel select{background:#f7fbfc;color:#102a43;border-color:#688a97}
+.panel .secret-note{color:var(--card-fg,#f2ffff)}
+.panel .diff{display:block;overflow-x:auto}
+.panel .group,.panel .orch,.panel .tool-card{transition:box-shadow .2s ease,transform .2s ease}
+.panel .orch:hover,.panel .tool-card:hover{box-shadow:0 10px 28px rgba(0,0,0,.22),0 0 0 1px var(--brand)}
+.panel h2{letter-spacing:-.02em}
+@media(max-width:700px){
+ header.topbar{flex-wrap:wrap;padding:12px 16px}.topbar-actions{flex-wrap:wrap;justify-content:flex-end}
+ nav{padding:0 8px;scrollbar-width:thin}nav button{padding:12px}
+ .panel{margin:12px 12px 0;padding:16px}.tools-grid,.grid{grid-template-columns:minmax(0,1fr)}
+ .panel .orch-actions{float:none;max-width:none;margin:0 0 12px;justify-content:flex-start}
+ .kv{grid-template-columns:minmax(90px,auto) minmax(0,1fr)}
+ .topology{margin:12px}.color-controls{grid-template-columns:1fr 1fr}
+ dialog{max-height:90vh;overflow:auto}.monitor-grid{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+}
+@media(max-width:380px){.color-controls{grid-template-columns:1fr}.topbar-actions{justify-content:flex-start}}
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='home', TOPOLOGY_STATUS=null, TOPOLOGY_BUSY=false;
@@ -210,6 +240,9 @@ function openCustom(){
  q('#app-accent').value=localStorage.getItem('ec-accent')||'#01a982';
  q('#app-header').value=localStorage.getItem('ec-header')||'#073b4c';
  q('#app-cyan').value=localStorage.getItem('ec-cyan')||'#00c8ff';
+ q('#app-page-bg').value=localStorage.getItem('ec-page-bg')||'#071d29';
+ q('#app-panel-bg').value=localStorage.getItem('ec-panel-bg')||'#0d2c38';
+ q('#app-card-bg').value=localStorage.getItem('ec-card-bg')||'#103542';
  renderIconPicker();
  previewBrand();
  d.showModal?d.showModal():d.setAttribute('open','');
@@ -219,18 +252,19 @@ function pickIcon(ic){localStorage.setItem('ec-icon',ic);localStorage.removeItem
 function previewBrand(){var p=q('#brand-preview');if(!p||!p.style||!p.querySelector)return;p.style.setProperty('--preview-primary',localStorage.getItem('ec-accent')||'#01a982');p.style.setProperty('--preview-header',localStorage.getItem('ec-header')||'#073b4c');var ic=siteIcon();var logo=siteLogo();var pv=p.querySelector('.pv-brand');if(pv)pv.innerHTML=(logo?'<img class="logo" src="'+logo+'">':(ic?'<span class="logo">'+esc(ic)+'</span>':''))+'<div><strong>'+esc(q('#custom-name').value||siteName())+'</strong><span>'+t('tagline')+'</span></div>'}
 function refreshBrand(){if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
 function closeCustom(){var d=q('#custom-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
-function resetCustom(){['ec-accent','ec-header','ec-cyan','ec-icon','ec-logo','ec-site-name','ec-effect'].forEach(function(k){localStorage.removeItem(k)});applySavedTheme();openCustom();refreshBrand();notice(t('app_reset_done'),'ok')}
+function resetCustom(){['ec-accent','ec-header','ec-cyan','ec-icon','ec-logo','ec-site-name','ec-effect','ec-page-bg','ec-panel-bg','ec-card-bg'].forEach(function(k){localStorage.removeItem(k)});applySavedTheme();openCustom();refreshBrand();notice(t('app_reset_done'),'ok')}
 function saveCustom(){
  var name=q('#custom-name')?q('#custom-name').value.trim():'';if(name)localStorage.setItem('ec-site-name',name);
  var a=q('#app-accent');if(a)localStorage.setItem('ec-accent',a.value);
  var h=q('#app-header');if(h)localStorage.setItem('ec-header',h.value);
  var c=q('#app-cyan');if(c)localStorage.setItem('ec-cyan',c.value);
+ ['page-bg','panel-bg','card-bg'].forEach(function(k){var el=q('#app-'+k);if(el)localStorage.setItem('ec-'+k,el.value)});
  var effect=q('#app-effect');if(effect)localStorage.setItem('ec-effect',effect.value);
  var f=q('#custom-logo');
  if(f&&f.files&&f.files[0]){var r=new FileReader();r.onload=function(e){try{localStorage.setItem('ec-logo',String(e.target.result));localStorage.removeItem('ec-icon')}catch(err){notice(t('file_too_big'),'err')}applySavedTheme();closeCustom();refreshBrand()};r.readAsDataURL(f.files[0]);return}
  applySavedTheme();closeCustom();refreshBrand();
 }
-function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><label>Estilo de animación<select id="app-effect"><option value="flow">Flujo</option><option value="pulse">Pulso</option><option value="quiet">Sin animación</option></select></label><p class="help">Los colores pueden personalizarse abajo. Los efectos son decorativos y se aplican a este navegador.</p><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="previewBrand()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="previewBrand()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="previewBrand()"></label></div><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button><button class="danger" onclick="resetCustom()">'+t('app_reset')+'</button></div></dialog>'}
+function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><label>Estilo de animación<select id="app-effect"><option value="flow">Flujo</option><option value="pulse">Pulso</option><option value="quiet">Sin animación</option></select></label><p class="help">Los colores pueden personalizarse abajo. Los efectos son decorativos y se aplican a este navegador.</p><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="previewBrand()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="previewBrand()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="previewBrand()"></label><label>'+(LANG==='es'?'Fondo de página':'Page background')+'<input type="color" id="app-page-bg"></label><label>'+(LANG==='es'?'Fondo de paneles':'Panel background')+'<input type="color" id="app-panel-bg"></label><label>'+(LANG==='es'?'Fondo de tarjetas':'Card background')+'<input type="color" id="app-card-bg"></label></div><p class="help">'+(LANG==='es'?'El texto se ajusta automáticamente al fondo. Guarda para aplicar los cambios.':'Text adjusts automatically to the background. Save to apply changes.')+'</p><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button><button class="danger" onclick="resetCustom()">'+t('app_reset')+'</button></div></dialog>'}
 
 var DONATE_URL='https://github.com/sponsors/Ryuz-crypto';
 function footerHtml(){return '<footer class="powered-footer"><span>'+t('credits')+': ec-mcp · Ryuz-crypto</span><a class="donate" href="'+DONATE_URL+'" target="_blank" rel="noopener">☕ '+t('donate')+'</a></footer>'}
@@ -238,12 +272,19 @@ function userChip(){return '<details class="menu"><summary class="chip">'+esc(ME
 
 function chromeHtml(){return '<span class="chrome">'+langSelectHtml()+'<button class="secondary" style="padding:4px 9px;font-size:.75rem" title="'+t('menu_custom')+'" onclick="openCustom()">&#9881;</button></span>'}
 function langSelectHtml(){return '<select id="lang-sel" title="Idioma / Language" style="min-height:30px;padding:3px 6px;border-radius:4px;border:1px solid #4f7080;background:#fff;color:#102a43" onchange="setLang(this.value)">'+LANGS.map(function(l){return '<option value="'+l[0]+'"'+(LANG===l[0]?' selected':'')+'>'+l[1]+'</option>'}).join('')+'</select>'}
+function contrastText(hex){
+ if(!/^#[0-9a-f]{6}$/i.test(hex))return '#ffffff';
+ var rgb=[1,3,5].map(function(i){var c=parseInt(hex.slice(i,i+2),16)/255;return c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4)});
+ var luminance=.2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];
+ return luminance>.179?'#000000':'#ffffff';
+}
 function applySavedTheme(){
  var root=document.documentElement.style;
  if(document.documentElement.dataset)document.documentElement.dataset.effect=localStorage.getItem('ec-effect')||'flow';
  root.setProperty('--brand',localStorage.getItem('ec-accent')||'#01a982');
  root.setProperty('--brand-header',localStorage.getItem('ec-header')||'#073b4c');
  root.setProperty('--cyan',localStorage.getItem('ec-cyan')||'#00c8ff');
+ [['page-bg','#071d29'],['panel-bg','#0d2c38'],['card-bg','#103542']].forEach(function(pair){var c=localStorage.getItem('ec-'+pair[0])||pair[1];if(!/^#[0-9a-f]{6}$/i.test(c))c=pair[1];root.setProperty('--'+(pair[0]==='page-bg'?'console-bg':pair[0]),c);if(pair[0]!=='page-bg')root.setProperty('--'+pair[0].replace('-bg','-fg'),contrastText(c))});
 }
 applySavedTheme();
 
