@@ -732,7 +732,7 @@ async function dbgRefresh(){
  try{
   var r=await api('/api/debug/events?limit=500&q='+encodeURIComponent(DBG_Q));
   if(ME&&ME.role==='admin')refreshHostMonitor();
-  var rows=(r.events||[]).map(function(e){return '<tr><td class="mono" style="white-space:nowrap">'+esc(String(e.ts_iso||'').replace('T',' ').slice(0,19))+'</td><td><span class="badge">'+(e.source==='mcp-tool'?t('dbg_tool'):t('dbg_api'))+'</span></td><td class="mono">'+esc(e.tool?e.tool+' · '+e.action:e.action)+'</td><td class="mono">'+esc(e.target||'')+'</td><td>'+esc(e.user||'No disponible')+'</td><td>'+esc(e.result||'')+'</td><td style="white-space:nowrap">'+(e.latency||0).toFixed(2)+'s</td></tr>'}).join('')||'<tr><td colspan="7" class="help">'+t('dbg_empty')+'</td></tr>';
+  var rows=(r.events||[]).map(function(e){return '<tr><td class="mono" style="white-space:nowrap">'+esc(String(e.ts_iso||'').replace('T',' ').slice(0,19))+'</td><td><span class="badge">'+(e.source==='mcp-tool'?t('dbg_tool'):t('dbg_api'))+'</span></td><td class="mono">'+esc(e.tool?e.tool+' · '+e.action:e.action)+'</td><td class="mono">'+esc(e.target||'')+'</td><td>'+esc(e.user||'No disponible')+'</td><td>'+esc(e.result||'')+'</td><td style="white-space:nowrap">'+(typeof e.latency==='number'?e.latency.toFixed(2)+'s':'—')+'</td></tr>'}).join('')||'<tr><td colspan="7" class="help">'+t('dbg_empty')+'</td></tr>';
   q('#dbg-table').innerHTML='<table class="diff"><tr><th>'+t('dbg_time')+'</th><th>'+t('dbg_source')+'</th><th>'+t('dbg_action')+'</th><th>'+t('dbg_target')+'</th><th>Usuario</th><th>'+t('dbg_result')+'</th><th>'+t('dbg_lat')+'</th></tr>'+rows+'</table>';
  }catch(e){notice(e.message,'err')}
 }
