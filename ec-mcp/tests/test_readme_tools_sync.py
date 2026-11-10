@@ -40,6 +40,6 @@ def test_readme_version_header_matches_package():
     from ec_mcp import __version__
 
     readme = README.read_text(encoding="utf-8")
-    assert f"**Versión estable: {__version__}**" in readme, (
+    assert f"**Versión: {__version__}**" in readme, (
         f"README header must state the installed version {__version__}."
     )

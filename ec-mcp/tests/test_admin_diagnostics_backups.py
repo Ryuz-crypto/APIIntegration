@@ -35,3 +35,20 @@ def test_admin_only_diagnostics_and_delete(monkeypatch):
         response = client.post("/api/diagnostics/run", json={"command": "uptime"})
         assert response.status_code == 200
         assert b"[Fin:" in response.content
+
+
+def test_diagnostic_output_redacts_common_secrets(monkeypatch):
+    monkeypatch.setenv("EC_ADMIN_PASSWORD", "unique-password-value")
+    line = b"password=unique-password-value token=abc123 Authorization: Bearer x.y.z\\n"
+    sanitized = admin._redact_diagnostic_line(line).decode()
+    assert "unique-password-value" not in sanitized
+    assert "abc123" not in sanitized
+    assert "x.y.z" not in sanitized
+    assert "REDACTED" in sanitized
+
+
+def test_diagnostics_are_fixed_read_only_commands():
+    for name in ("status", "journal_mcp", "journal_admin"):
+        args = admin._DIAGNOSTIC_COMMANDS[name]
+        assert args[0] in {"/usr/bin/systemctl", "/usr/bin/journalctl"}
+        assert all(isinstance(arg, str) for arg in args)
