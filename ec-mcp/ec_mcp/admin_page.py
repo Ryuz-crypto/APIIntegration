@@ -312,6 +312,44 @@ html[data-effect="quiet"] .sase-holo *,html[data-effect="quiet"] .sase-holo:befo
 @media(max-width:700px){.topology-hero{min-height:225px}.topology-hero>p{max-width:75%}.sase-holo{width:150px;right:-25px;top:38%;opacity:.38}.sase-link{width:3px;height:24px}.sase-link:after{top:0;left:-4px}}
 @media(prefers-reduced-motion:reduce){.sase-holo *, .sase-holo:before,.sase-holo:after,.panel:before{animation:none}.sase-node,.topology-list .topology-card,.panel .group{transition:none}}
 
+
+/* Shared sci-fi chrome and contextual HUD, including user menus and dialogs. */
+.panel .actions>button:not(.secondary):not(.danger),.topology-head>button{background:var(--brand);border-color:var(--brand);color:var(--brand-fg,#000)}
+.sase-node,.topology-list .topology-card{background:color-mix(in srgb,var(--brand) 18%,#082630)}
+.sase-inventory,.topology-group{background:color-mix(in srgb,var(--brand) 10%,#08232d)}
+.panel input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),.panel select,.panel textarea{background:#071f2b;color:#f1ffff;border-color:#648a93;color-scheme:dark}
+.panel input::placeholder,.panel textarea::placeholder{color:#a9c7ce}
+.chrome button.secondary{background:#103642;color:#edfffb;border-color:#648a93}
+.chrome button.secondary:hover{background:#16515a;color:#fff}
+nav{background:color-mix(in srgb,var(--brand) 12%,#061721);border-color:color-mix(in srgb,var(--brand) 40%,#264553)}
+details.menu .menu-body{background:var(--panel-bg,#0d2c38);color:var(--panel-fg,#fff);border:1px solid color-mix(in srgb,var(--brand) 55%,#4d7882);border-radius:12px;padding:10px;box-shadow:0 16px 40px #0009,0 0 20px color-mix(in srgb,var(--brand) 22%,transparent)}
+details.menu .menu-body button.secondary,dialog button.secondary{background:#103642;color:#edfffb;border:1px solid #527783}
+details.menu .menu-body button.secondary:hover,dialog button.secondary:hover{background:#16515a;color:#fff;border-color:var(--brand)}
+dialog{background:var(--panel-bg,#0d2c38);color:var(--panel-fg,#fff);border:1px solid #527783;border-top:3px solid var(--brand);border-radius:14px;max-height:90vh;overflow:auto}
+dialog h3,dialog label,dialog .help{color:var(--panel-fg,#fff)}
+dialog input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),dialog select,dialog textarea{background:#071f2b;color:#f1ffff;border-color:#648a93;color-scheme:dark}
+#lang-sel{background:#0a2b37!important;color:#efffff!important;border-color:#648a93!important;color-scheme:dark}
+.icon-picker button{background:#123743;color:#eafff9}.icon-picker button.selected{background:#d9fff1;color:#075842}
+#workspace[data-context]:not([data-section="home"])::before{content:attr(data-context);display:block;margin:18px 32px 0;color:var(--brand);font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+#workspace[data-section]:not([data-section="home"]) .panel:first-child:after{content:"";position:absolute;right:22px;top:18px;width:38px;height:38px;border:1px solid var(--brand);border-right-color:transparent;border-radius:50%;box-shadow:0 0 16px color-mix(in srgb,var(--brand) 35%,transparent);opacity:.55;pointer-events:none;animation:hud-orbit 7s linear infinite}
+@keyframes hud-orbit{to{transform:rotate(360deg)}}
+#workspace[data-section="wizard"] .panel:first-child:after{border-style:dashed}
+#workspace[data-section="orch"] .panel:first-child:after{border-radius:30%;transform:rotate(45deg)}
+#workspace[data-section="sse"] .panel:first-child:after{border-style:dotted}
+#workspace[data-section="svc"] .panel:first-child:after{border-width:3px}
+#workspace[data-section="config"] .panel:first-child:after{border-radius:8px}
+#workspace[data-section="tls"] .panel:first-child:after{border-radius:45% 45% 50% 50%}
+#workspace[data-section="tools"] .panel:first-child:after{border-style:double;border-width:4px}
+#workspace[data-section="debug"] .panel:first-child:after{border-left-color:transparent}
+#workspace[data-section="update"] .panel:first-child:after{border-bottom-color:transparent}
+#workspace[data-section="users"] .panel:first-child:after{border-radius:50% 50% 30% 30%}
+.topology-hero{background:radial-gradient(ellipse at 82% 20%,color-mix(in srgb,var(--brand) 35%,transparent),transparent 43%),linear-gradient(122deg,#071d2a 4%,color-mix(in srgb,var(--brand) 24%,#08252f) 63%,color-mix(in srgb,var(--brand) 34%,#061d28))}
+.sase-node,.topology-list .topology-card,.sase-inventory,.topology-group{border-color:color-mix(in srgb,var(--brand) 36%,#31515d)}
+.sase-core{background:color-mix(in srgb,var(--brand) 32%,#082b35)}
+html[data-effect="quiet"] #workspace .panel:first-child:after{animation:none}
+@media(max-width:700px){#workspace[data-context]:not([data-section="home"])::before{margin:14px 12px 0}#workspace[data-section]:not([data-section="home"]) .panel:first-child:after{width:26px;height:26px;right:12px;top:12px;opacity:.35}}
+@media(prefers-reduced-motion:reduce){#workspace .panel:first-child:after{animation:none}}
+
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='home', TOPOLOGY_STATUS=null, TOPOLOGY_BUSY=false;
@@ -328,10 +366,27 @@ function siteLogo(){return localStorage.getItem('ec-logo')||''}
 function siteIcon(){return localStorage.getItem('ec-icon')||''}
 function brandHtml(){var ic=siteIcon();var logo=siteLogo();return '<div class="brand">'+(logo?'<img class="logo" src="'+logo+'" alt="logo">':(ic?'<span class="logo">'+esc(ic)+'</span>':''))+'<div><strong>'+esc(siteName())+'</strong><span>'+t('tagline')+'</span></div></div>'}
 var ICONS=['⚡','🌐','🛰️','🔒','📡','🧭','🖧','⛓️'];
+var SKINS={
+ custom:null,
+ aurora:{accent:'#01a982',header:'#073b4c',cyan:'#00c8ff',page:'#071d29',panel:'#0d2c38',card:'#103542'},
+ arctic:{accent:'#28b4df',header:'#103454',cyan:'#8ceaff',page:'#071522',panel:'#102a40',card:'#163950'},
+ ultraviolet:{accent:'#ae83ff',header:'#302350',cyan:'#e3a6ff',page:'#160f28',panel:'#261d3d',card:'#35294c'},
+ solar:{accent:'#f3b84f',header:'#49300f',cyan:'#ffdd8a',page:'#201508',panel:'#352617',card:'#493521'},
+ ember:{accent:'#ff737a',header:'#4a1f29',cyan:'#ffb7a8',page:'#200f18',panel:'#36202a',card:'#492b33'},
+ ocean:{accent:'#5b96ff',header:'#172d59',cyan:'#91caff',page:'#0b142a',panel:'#192743',card:'#243757'},
+ graphite:{accent:'#9cccbf',header:'#293d42',cyan:'#d0fff0',page:'#121b1e',panel:'#202d31',card:'#304147'}
+};
+function chooseSkin(id){
+ var p=SKINS[id];if(!p)return;
+ [['app-accent',p.accent],['app-header',p.header],['app-cyan',p.cyan],['app-page-bg',p.page],['app-panel-bg',p.panel],['app-card-bg',p.card],['app-panel-fg',contrastText(p.panel)],['app-card-fg',contrastText(p.card)]].forEach(function(v){var el=q('#'+v[0]);if(el)el.value=v[1]});
+ previewBrand();
+}
+function markCustomSkin(){var el=q('#app-skin');if(el)el.value='custom';previewBrand()}
 function openCustom(){
  var d=q('#custom-dlg');if(!d){q('#app').innerHTML+=customDialogHtml();d=q('#custom-dlg')}
  if(!d)return;
  q('#custom-name').value=siteName();
+ q('#app-skin').value=SKINS[localStorage.getItem('ec-skin')]?localStorage.getItem('ec-skin'):'custom';
  q('#app-effect').value=localStorage.getItem('ec-effect')||'sci-fi';
  q('#app-accent').value=localStorage.getItem('ec-accent')||'#01a982';
  q('#app-header').value=localStorage.getItem('ec-header')||'#073b4c';
@@ -347,10 +402,10 @@ function openCustom(){
 }
 function renderIconPicker(){var cur=siteIcon();q('#icon-picker').innerHTML=ICONS.map(function(ic){return '<button type="button" class="'+(ic===cur?'selected':'')+'" onclick="pickIcon(\''+ic+'\')">'+ic+'</button>'}).join('')}
 function pickIcon(ic){localStorage.setItem('ec-icon',ic);localStorage.removeItem('ec-logo');renderIconPicker();previewBrand();applySavedTheme();refreshBrand()}
-function previewBrand(){var p=q('#brand-preview');if(!p||!p.style||!p.querySelector)return;p.style.setProperty('--preview-primary',localStorage.getItem('ec-accent')||'#01a982');p.style.setProperty('--preview-header',localStorage.getItem('ec-header')||'#073b4c');var ic=siteIcon();var logo=siteLogo();var pv=p.querySelector('.pv-brand');if(pv)pv.innerHTML=(logo?'<img class="logo" src="'+logo+'">':(ic?'<span class="logo">'+esc(ic)+'</span>':''))+'<div><strong>'+esc(q('#custom-name').value||siteName())+'</strong><span>'+t('tagline')+'</span></div>'}
+function previewBrand(){var p=q('#brand-preview');if(!p||!p.style||!p.querySelector)return;p.style.setProperty('--preview-primary',(q('#app-accent')||{}).value||'#01a982');p.style.setProperty('--preview-header',(q('#app-header')||{}).value||'#073b4c');var ic=siteIcon();var logo=siteLogo();var pv=p.querySelector('.pv-brand');if(pv)pv.innerHTML=(logo?'<img class="logo" src="'+logo+'">':(ic?'<span class="logo">'+esc(ic)+'</span>':''))+'<div><strong>'+esc(q('#custom-name').value||siteName())+'</strong><span>'+t('tagline')+'</span></div>'}
 function refreshBrand(){if(AUTHED){renderShell();showTab(CURTAB)}else{renderLogin()}}
 function closeCustom(){var d=q('#custom-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
-function resetCustom(){['ec-accent','ec-header','ec-cyan','ec-icon','ec-logo','ec-site-name','ec-effect','ec-page-bg','ec-panel-bg','ec-card-bg','ec-panel-fg','ec-card-fg'].forEach(function(k){localStorage.removeItem(k)});applySavedTheme();openCustom();refreshBrand();notice(t('app_reset_done'),'ok')}
+function resetCustom(){['ec-accent','ec-header','ec-cyan','ec-icon','ec-logo','ec-site-name','ec-effect','ec-page-bg','ec-panel-bg','ec-card-bg','ec-panel-fg','ec-card-fg','ec-skin'].forEach(function(k){localStorage.removeItem(k)});applySavedTheme();openCustom();refreshBrand();notice(t('app_reset_done'),'ok')}
 function colorLuminance(hex){var c=[1,3,5].map(function(i){var v=parseInt(hex.slice(i,i+2),16)/255;return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]}
 function saveCustom(){
  var pairs=[['panel-bg','panel-fg'],['card-bg','card-fg']];
@@ -360,12 +415,13 @@ function saveCustom(){
  var h=q('#app-header');if(h)localStorage.setItem('ec-header',h.value);
  var c=q('#app-cyan');if(c)localStorage.setItem('ec-cyan',c.value);
  ['page-bg','panel-bg','card-bg','panel-fg','card-fg'].forEach(function(k){var el=q('#app-'+k);if(el)localStorage.setItem('ec-'+k,el.value)});
+ var skin=q('#app-skin');if(skin)localStorage.setItem('ec-skin',skin.value);
  var effect=q('#app-effect');if(effect)localStorage.setItem('ec-effect',effect.value);
  var f=q('#custom-logo');
  if(f&&f.files&&f.files[0]){var r=new FileReader();r.onload=function(e){try{localStorage.setItem('ec-logo',String(e.target.result));localStorage.removeItem('ec-icon')}catch(err){notice(t('file_too_big'),'err')}applySavedTheme();closeCustom();refreshBrand()};r.readAsDataURL(f.files[0]);return}
  applySavedTheme();closeCustom();refreshBrand();
 }
-function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><label>Estilo de animación<select id="app-effect"><option value="sci-fi">Sci-fi · Holográfico</option><option value="flow">Flujo</option><option value="pulse">Pulso</option><option value="quiet">Sin animación</option></select></label><p class="help">Los colores pueden personalizarse abajo. Los efectos son decorativos y se aplican a este navegador.</p><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="previewBrand()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="previewBrand()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="previewBrand()"></label><label>'+(LANG==='es'?'Fondo de página':'Page background')+'<input type="color" id="app-page-bg"></label><label>'+(LANG==='es'?'Fondo de paneles':'Panel background')+'<input type="color" id="app-panel-bg"></label><label>'+(LANG==='es'?'Fondo de tarjetas':'Card background')+'<input type="color" id="app-card-bg"></label><label>'+(LANG==='es'?'Texto de paneles':'Panel text')+'<input type="color" id="app-panel-fg"></label><label>'+(LANG==='es'?'Texto de tarjetas':'Card text')+'<input type="color" id="app-card-fg"></label></div><p class="help">'+(LANG==='es'?'Elige colores con suficiente contraste. Guarda para aplicar los cambios.':'Choose colors with sufficient contrast. Save to apply changes.')+'</p><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button><button class="danger" onclick="resetCustom()">'+t('app_reset')+'</button></div></dialog>'}
+function customDialogHtml(){return '<dialog id="custom-dlg"><h3>'+t('custom_title')+'</h3><label>'+t('custom_name')+'<input id="custom-name" oninput="previewBrand()"></label><label>'+(LANG==='es'?'Skin visual':'Visual skin')+'<select id="app-skin" onchange="chooseSkin(this.value)"><option value="custom">'+(LANG==='es'?'Personalizado / actual':'Custom / current')+'</option><option value="aurora">Aurora · HPE</option><option value="arctic">Arctic · Cyan</option><option value="ultraviolet">Ultraviolet</option><option value="solar">Solar · Amber</option><option value="ember">Ember · Crimson</option><option value="ocean">Ocean · Cobalt</option><option value="graphite">Graphite · Sage</option></select></label><p class="help">'+(LANG==='es'?'Elige una skin y guarda; puedes ajustar sus colores.':'Choose a skin and save; you can adjust its colors.')+'</p><label>Estilo de animación<select id="app-effect"><option value="sci-fi">Sci-fi · Holográfico</option><option value="flow">Flujo</option><option value="pulse">Pulso</option><option value="quiet">Sin animación</option></select></label><p class="help">Los colores pueden personalizarse abajo. Los efectos son decorativos y se aplican a este navegador.</p><div class="color-controls"><label>'+t('app_accent')+'<input type="color" id="app-accent" oninput="markCustomSkin()"></label><label>'+t('app_header')+'<input type="color" id="app-header" oninput="markCustomSkin()"></label><label>'+t('app_cyan')+'<input type="color" id="app-cyan" oninput="markCustomSkin()"></label><label>'+(LANG==='es'?'Fondo de página':'Page background')+'<input type="color" id="app-page-bg" oninput="markCustomSkin()"></label><label>'+(LANG==='es'?'Fondo de paneles':'Panel background')+'<input type="color" id="app-panel-bg" oninput="markCustomSkin()"></label><label>'+(LANG==='es'?'Fondo de tarjetas':'Card background')+'<input type="color" id="app-card-bg" oninput="markCustomSkin()"></label><label>'+(LANG==='es'?'Texto de paneles':'Panel text')+'<input type="color" id="app-panel-fg" oninput="markCustomSkin()"></label><label>'+(LANG==='es'?'Texto de tarjetas':'Card text')+'<input type="color" id="app-card-fg" oninput="markCustomSkin()"></label></div><p class="help">'+(LANG==='es'?'Elige colores con suficiente contraste. Guarda para aplicar los cambios.':'Choose colors with sufficient contrast. Save to apply changes.')+'</p><label style="margin-top:12px">'+t('app_icon')+'<span class="icon-picker" id="icon-picker"></span></label><label style="margin-top:10px">'+t('custom_logo')+'<input id="custom-logo" type="file" accept="image/png,image/*"></label><div class="panel brand-preview" id="brand-preview"><div class="pv-brand"></div></div><div class="actions"><button onclick="saveCustom()">'+t('custom_save')+'</button><button class="secondary" onclick="closeCustom()">'+t('custom_cancel')+'</button><button class="danger" onclick="resetCustom()">'+t('app_reset')+'</button></div></dialog>'}
 
 var DONATE_URL='https://github.com/sponsors/Ryuz-crypto';
 function footerHtml(){return '<footer class="powered-footer"><span>'+t('credits')+': ec-mcp · Ryuz-crypto</span><a class="donate" href="'+DONATE_URL+'" target="_blank" rel="noopener">☕ '+t('donate')+'</a></footer>'}
@@ -382,7 +438,8 @@ function contrastText(hex){
 function applySavedTheme(){
  var root=document.documentElement.style;
  if(document.documentElement.dataset)document.documentElement.dataset.effect=localStorage.getItem('ec-effect')||'flow';
- root.setProperty('--brand',localStorage.getItem('ec-accent')||'#01a982');
+ var accent=localStorage.getItem('ec-accent')||'#01a982';
+ root.setProperty('--brand',accent);root.setProperty('--brand-fg',contrastText(accent));
  root.setProperty('--brand-header',localStorage.getItem('ec-header')||'#073b4c');
  root.setProperty('--cyan',localStorage.getItem('ec-cyan')||'#00c8ff');
  [['page-bg','#071d29'],['panel-bg','#0d2c38'],['card-bg','#103542']].forEach(function(pair){var c=localStorage.getItem('ec-'+pair[0])||pair[1];if(!/^#[0-9a-f]{6}$/i.test(c))c=pair[1];root.setProperty('--'+(pair[0]==='page-bg'?'console-bg':pair[0]),c);if(pair[0]!=='page-bg'){var fg=localStorage.getItem('ec-'+pair[0].replace('-bg','-fg'));root.setProperty('--'+pair[0].replace('-bg','-fg'),/^#[0-9a-f]{6}$/i.test(fg||'')?fg:contrastText(c))}});
@@ -483,6 +540,7 @@ function renderShell(){
 function showTab(name){
  CURTAB=name;
  var ws=q('#workspace');
+ if(ws&&ws.dataset){var contexts={wizard:'SETUP / CONFIGURACIÓN',orch:'SD-WAN / ORCHESTRATORS',sse:'SSE / PLATAFORMAS',svc:'OPERATIONS / SERVICIOS',config:'SYSTEM / VARIABLES',tls:'SECURITY / CERTIFICADOS',tools:'MCP / TOOLS',debug:'OBSERVABILITY / DEBUG',update:'SYSTEM / ACTUALIZACIONES',users:'IDENTITY / USUARIOS'};ws.dataset.section=name;ws.dataset.context=contexts[name]||''}
  if(ws&&ws.animate&&localStorage.getItem('ec-effect')!=='quiet'&&!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches))
   ws.animate([{opacity:.25,transform:'translateY(14px) scale(.99)',filter:'blur(4px)'},{opacity:1,transform:'none',filter:'blur(0)'}],{duration:420,easing:'cubic-bezier(.2,.8,.2,1)'});
  var ntc=q('#notice');if(ntc)ntc.innerHTML='';
