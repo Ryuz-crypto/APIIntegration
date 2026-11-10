@@ -16,8 +16,8 @@ COLUMNS = ("ts_iso", "source", "tool", "action", "target", "result", "user")
 def safe_cell(value: object) -> str:
     text = str(value if value is not None else "")
     text = redact_secrets(text, [])
-    text = re.sub(r"(?i)(https?://)[^/\\s@]+@", r"\\1[redacted]@", text)
-    text = re.sub(r"(\\?[^\\s]*)", "?[redacted]", text)
+    text = re.sub(r"(?i)(https?://)[^/\s@]+@", r"\1[redacted]@", text)
+    text = re.sub(r"(\?[^\s]*)", "?[redacted]", text)
     text = "".join(character if ord(character) >= 32 else " " for character in text)[:500]
     # Prevent CSV/Excel formula interpretation even after leading whitespace.
     if text.lstrip().startswith(("=", "+", "-", "@")):
