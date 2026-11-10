@@ -1559,8 +1559,28 @@ _DIAGNOSTIC_COMMANDS = {
     "uptime": ("/usr/bin/uptime",),
     "memory": ("/usr/bin/free", "-h"),
     "disk": ("/usr/bin/df", "-h"),
+    "status": ("/usr/bin/systemctl", "--no-pager", "--full", "status", "ec-mcp", "ec-mcp-admin"),
+    "journal_mcp": ("/usr/bin/journalctl", "-u", "ec-mcp", "-n", "100", "--no-pager", "-o", "cat"),
+    "journal_admin": ("/usr/bin/journalctl", "-u", "ec-mcp-admin", "-n", "100", "--no-pager", "-o", "cat"),
 }
 _DIAGNOSTIC_LOCK = asyncio.Lock()
+
+
+def _redact_diagnostic_line(line: bytes) -> bytes:
+    """Best-effort log redaction; callers must still review before sharing."""
+    from .security import redact_secrets
+
+    text = line.decode("utf-8", errors="replace")
+    values = [
+        value for key, value in os.environ.items()
+        if value and re.search(r"(?i)(password|passwd|secret|token|api.?key|private.?key|credential)", key)
+    ]
+    text = redact_secrets(text, values)
+    text = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1***REDACTED***", text)
+    text = re.sub(r"(?i)((?:token|api[_-]?key|authorization|secret|password)[\x22\x27]?\s*[:=]\s*[\x22\x27]?)[^\s&\x22\x27]+", r"\1***REDACTED***", text)
+    text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
+    return text.encode("utf-8")
+
 
 
 async def api_diagnostic_run(request):
@@ -1597,7 +1617,7 @@ async def api_diagnostic_run(request):
                     if total > 32768:
                         yield b"\n[Salida limitada]\n"
                         break
-                    yield line
+                    yield _redact_diagnostic_line(line)
                 await process.wait()
             result = "ok" if process.returncode == 0 else "error"
             yield f"\n[Fin: {result}]\n".encode()
