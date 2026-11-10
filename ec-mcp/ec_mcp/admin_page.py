@@ -180,6 +180,12 @@ html[data-effect="pulse"] .topology-card{animation:panel-glow 4s ease-in-out inf
 @keyframes panel-glow{0%,100%{box-shadow:0 6px 18px rgba(0,0,0,.18)}50%{box-shadow:0 0 18px rgba(1,169,130,.28)}}
 @media(prefers-reduced-motion:reduce){html[data-effect="pulse"] .topology-card{animation:none}}
 
+
+.monitor-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:18px 0}
+.monitor-card{background:#103542;border:1px solid #315e69;border-radius:9px;padding:14px;color:#e7f7f4;min-width:0}
+.monitor-card strong,.monitor-card small{display:block}.monitor-card small{color:#c4dde1;margin-top:8px;line-height:1.4}
+.monitor-value{font-size:26px;font-weight:800;margin:8px 0;color:#8aefd4}.monitor-card meter{width:100%;height:10px}
+
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='home', TOPOLOGY_STATUS=null, TOPOLOGY_BUSY=false;
@@ -715,7 +721,7 @@ function copyAgent(){var el=q('#agent-text');if(el&&navigator.clipboard){navigat
 function closeAgent(){var d=q('#agent-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
 var DBG_TIMER=null,DBG_PAUSED=false,DBG_Q='';
 async function renderDebug(){
- q('#workspace').innerHTML='<section class="panel"><h2>'+t('dbg_title')+'</h2><p class="help">'+t('dbg_desc')+'</p><div class="actions" style="align-items:center"><input id="dbg-q" placeholder="'+t('dbg_filter')+'" oninput="dbgApplyFilter()" style="max-width:300px;min-height:34px;margin-top:0"><button class="secondary" onclick="dbgTogglePause()" id="dbg-pause">'+t('dbg_pause')+'</button><button class="secondary" onclick="dbgRefresh()">'+t('dbg_refresh')+'</button><button class="secondary" onclick="dbgExport()">'+t('dbg_export')+'</button><button class="danger" onclick="dbgClear()">'+t('dbg_clear')+'</button></div><details class="group"><summary>Diagnóstico Linux (solo lectura)</summary><p class="help">Ejecuta estos comandos manualmente en el servidor. No se ejecutan desde el panel. Revisa y oculta secretos antes de compartir salidas.</p><pre class="diagnostic-commands">systemctl --no-pager status ec-mcp ec-mcp-admin\njournalctl -u ec-mcp-admin -n 100 --no-pager\nss -lntp</pre></details><p class="help">API del panel: método, ruta, estado y duración. La auditoría MCP muestra la acción registrada; no garantiza capturar cada solicitud upstream. No se muestran cuerpos, cabeceras ni credenciales.</p><div id="dbg-table"><p class="help">'+t('checking')+'</p></div></section>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('dbg_title')+'</h2><p class="help">'+t('dbg_desc')+'</p><div class="actions" style="align-items:center"><input id="dbg-q" placeholder="'+t('dbg_filter')+'" oninput="dbgApplyFilter()" style="max-width:300px;min-height:34px;margin-top:0"><button class="secondary" onclick="dbgTogglePause()" id="dbg-pause">'+t('dbg_pause')+'</button><button class="secondary" onclick="dbgRefresh()">'+t('dbg_refresh')+'</button><button class="secondary" onclick="dbgExport()">'+t('dbg_export')+'</button><button class="danger" onclick="dbgClear()">'+t('dbg_clear')+'</button></div><div id="host-monitor" class="monitor-grid" aria-live="polite"></div><div class="actions"><button class="secondary" onclick="downloadAudit(\'csv\')">CSV</button><button class="secondary" onclick="downloadAudit(\'xlsx\')">Excel</button><button class="secondary" onclick="downloadAudit(\'pdf\')">PDF</button></div><p class="help">Informes para administradores: hasta 500 eventos disponibles. Los campos no registrados se muestran vacíos; no se infiere el usuario.</p><details class="group"><summary>Diagnóstico Linux (solo lectura)</summary><p class="help">Ejecuta estos comandos manualmente en el servidor. No se ejecutan desde el panel. Revisa y oculta secretos antes de compartir salidas.</p><pre class="diagnostic-commands">systemctl --no-pager status ec-mcp ec-mcp-admin\njournalctl -u ec-mcp-admin -n 100 --no-pager\nss -lntp</pre></details><p class="help">API del panel: método, ruta, estado y duración. La auditoría MCP muestra la acción registrada; no garantiza capturar cada solicitud upstream. No se muestran cuerpos, cabeceras ni credenciales.</p><div id="dbg-table"><p class="help">'+t('checking')+'</p></div></section>';
  await dbgRefresh();
  if(!DBG_TIMER)DBG_TIMER=setInterval(function(){if(!DBG_PAUSED)dbgRefresh()},2500);
 }
@@ -724,11 +730,38 @@ function dbgApplyFilter(){DBG_Q=(q('#dbg-q')||{}).value||'';dbgRefresh()}
 function dbgTogglePause(){DBG_PAUSED=!DBG_PAUSED;var b=q('#dbg-pause');if(b)b.textContent=DBG_PAUSED?t('dbg_resume'):t('dbg_pause')}
 async function dbgRefresh(){
  try{
-  var r=await api('/api/debug/events?limit=200&q='+encodeURIComponent(DBG_Q));
-  var rows=(r.events||[]).map(function(e){return '<tr><td class="mono" style="white-space:nowrap">'+esc(String(e.ts_iso||'').replace('T',' ').slice(0,19))+'</td><td><span class="badge">'+(e.source==='mcp-tool'?t('dbg_tool'):t('dbg_api'))+'</span></td><td class="mono">'+esc(e.tool?e.tool+' · '+e.action:e.action)+'</td><td class="mono">'+esc(e.target||'')+'</td><td>'+esc(e.result||'')+'</td><td style="white-space:nowrap">'+(e.latency||0).toFixed(2)+'s</td></tr>'}).join('')||'<tr><td colspan="6" class="help">'+t('dbg_empty')+'</td></tr>';
-  q('#dbg-table').innerHTML='<table class="diff"><tr><th>'+t('dbg_time')+'</th><th>'+t('dbg_source')+'</th><th>'+t('dbg_action')+'</th><th>'+t('dbg_target')+'</th><th>'+t('dbg_result')+'</th><th>'+t('dbg_lat')+'</th></tr>'+rows+'</table>';
+  var r=await api('/api/debug/events?limit=500&q='+encodeURIComponent(DBG_Q));
+  if(ME&&ME.role==='admin')refreshHostMonitor();
+  var rows=(r.events||[]).map(function(e){return '<tr><td class="mono" style="white-space:nowrap">'+esc(String(e.ts_iso||'').replace('T',' ').slice(0,19))+'</td><td><span class="badge">'+(e.source==='mcp-tool'?t('dbg_tool'):t('dbg_api'))+'</span></td><td class="mono">'+esc(e.tool?e.tool+' · '+e.action:e.action)+'</td><td class="mono">'+esc(e.target||'')+'</td><td>'+esc(e.user||'No disponible')+'</td><td>'+esc(e.result||'')+'</td><td style="white-space:nowrap">'+(e.latency||0).toFixed(2)+'s</td></tr>'}).join('')||'<tr><td colspan="7" class="help">'+t('dbg_empty')+'</td></tr>';
+  q('#dbg-table').innerHTML='<table class="diff"><tr><th>'+t('dbg_time')+'</th><th>'+t('dbg_source')+'</th><th>'+t('dbg_action')+'</th><th>'+t('dbg_target')+'</th><th>Usuario</th><th>'+t('dbg_result')+'</th><th>'+t('dbg_lat')+'</th></tr>'+rows+'</table>';
  }catch(e){notice(e.message,'err')}
 }
+
+var HOST_MONITOR_BUSY=false;
+function formatBytes(value){if(value===null||value===undefined)return 'No disponible';return (value/1073741824).toFixed(2)+' GiB'}
+function meterCard(label,value,detail){
+ var known=typeof value==='number'&&Number.isFinite(value),pct=known?Math.max(0,Math.min(100,value)):0;
+ return '<div class="monitor-card"><strong>'+esc(label)+'</strong><div class="monitor-value">'+(known?pct.toFixed(1)+'%':'—')+'</div>'+(known?'<meter min="0" max="100" value="'+pct+'">'+pct+'%</meter>':'')+'<small>'+esc(detail)+'</small></div>';
+}
+async function refreshHostMonitor(){
+ if(HOST_MONITOR_BUSY)return;HOST_MONITOR_BUSY=true;
+ try{
+  var r=await api('/api/monitor/host');if(r.error)throw Error(r.error);
+  var cpu=r.cpu||{},mem=r.memory||{},disk=r.disk||{},activity=r.activity||{},os=r.os||{};
+  var node=q('#host-monitor');if(!node||CURTAB!=='debug')return;
+  node.innerHTML=meterCard('CPU',cpu.used_percent,(cpu.cores||'—')+' núcleos · uso entre muestras')+
+   meterCard('RAM',mem.used_percent,formatBytes(mem.used_bytes)+' / '+formatBytes(mem.total_bytes))+
+   meterCard('Disco',disk.used_percent,formatBytes(disk.used_bytes)+' / '+formatBytes(disk.total_bytes)+' · sistema de archivos del servicio')+
+   '<div class="monitor-card"><strong>Sistema</strong><div>'+esc(os.system||'No disponible')+' '+esc(os.release||'')+'</div><small>'+esc(os.architecture||'')+' · auditoría: '+esc(formatBytes(r.audit_log_bytes))+'</small></div>'+
+   '<div class="monitor-card"><strong>Eventos MCP · último minuto</strong><div class="monitor-value">'+esc(activity.observed_audit_events_last_minute==null?'—':activity.observed_audit_events_last_minute)+'</div><small>Hasta 500 eventos observados; no equivale a solicitudes simultáneas. Concurrencia: no disponible.</small></div>';
+ }catch(e){var node=q('#host-monitor');if(node)node.textContent='Métricas no disponibles: '+e.message}
+ finally{HOST_MONITOR_BUSY=false}
+}
+async function downloadAudit(format){
+ try{var response=await fetch('/api/audit/report?format='+encodeURIComponent(format));if(!response.ok)throw Error('HTTP '+response.status);var blob=await response.blob();var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ec-mcp-auditoria.'+format;a.click();URL.revokeObjectURL(a.href)}
+ catch(e){notice(e.message,'err')}
+}
+
 async function dbgExport(){
  try{
   var r=await fetch('/api/debug/export');
