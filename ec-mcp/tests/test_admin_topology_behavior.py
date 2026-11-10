@@ -44,6 +44,15 @@ assert(workspace.innerHTML.includes('Conectado'));
 assert(workspace.innerHTML.includes('Con problemas'));
 assert(workspace.innerHTML.includes('HTTP 403'));
 assert(workspace.innerHTML.includes('no representan tráfico'));
+renderLogin = () => {};
+setLang('he');
+assert.equal(document.documentElement.lang, 'he');
+assert.equal(document.documentElement.dir, 'rtl');
+renderTopology();
+assert(workspace.innerHTML.includes('מפת חיבורים'));
+assert(workspace.innerHTML.includes('עוזרי בינה מלאכותית'));
+setLang('es');
+assert.equal(document.documentElement.dir, 'ltr');
 console.log('topology behavior verified');
 """
     result = subprocess.run(  # noqa: S603 - runs this repository's own panel script
