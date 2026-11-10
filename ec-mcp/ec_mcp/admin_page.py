@@ -753,7 +753,7 @@ async function refreshHostMonitor(){
    meterCard('RAM',mem.used_percent,formatBytes(mem.used_bytes)+' / '+formatBytes(mem.total_bytes))+
    meterCard('Disco',disk.used_percent,formatBytes(disk.used_bytes)+' / '+formatBytes(disk.total_bytes)+' · sistema de archivos del servicio')+
    '<div class="monitor-card"><strong>Sistema</strong><div>'+esc(os.system||'No disponible')+' '+esc(os.release||'')+'</div><small>'+esc(os.architecture||'')+' · auditoría: '+esc(formatBytes(r.audit_log_bytes))+'</small></div>'+
-   '<div class="monitor-card"><strong>Eventos MCP · último minuto</strong><div class="monitor-value">'+esc(activity.observed_audit_events_last_minute==null?'—':activity.observed_audit_events_last_minute)+'</div><small>Hasta 500 eventos observados; no equivale a solicitudes simultáneas. Concurrencia: no disponible.</small></div>';
+   '<div class="monitor-card"><strong>Eventos MCP · último minuto</strong><div class="monitor-value">'+esc(activity.observed_audit_events_last_minute==null?'—':activity.observed_audit_events_last_minute)+'</div>'+(typeof activity.observed_audit_events_last_minute==='number'?'<meter min="0" max="500" value="'+Math.max(0,Math.min(500,activity.observed_audit_events_last_minute))+'"></meter>':'')+'<small>Escala: hasta 500 registros observables, no capacidad ni solicitudes simultáneas. Concurrencia: no disponible.</small></div>';
  }catch(e){var node=q('#host-monitor');if(node)node.textContent='Métricas no disponibles: '+e.message}
  finally{HOST_MONITOR_BUSY=false}
 }
