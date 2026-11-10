@@ -20,7 +20,7 @@ def test_wizard_reviews_and_saves_same_changed_fields() -> None:
 const assert = require('node:assert/strict');
 const elements = {'#workspace': {innerHTML:''}, '#wiz-diff': {innerHTML:''}, '#notice': {innerHTML:''}};
 globalThis.localStorage = {getItem: () => null, setItem: () => {}};
-globalThis.document = {querySelector: key => elements[key] || null, addEventListener: () => {}};
+globalThis.document = {documentElement:{style:{setProperty:()=>{}}}, querySelector: key => elements[key] || null, addEventListener: () => {}};
 globalThis.window = globalThis;
 """ + script + r"""
 (async () => {
