@@ -234,7 +234,7 @@ function chromeHtml(){return '<span class="chrome">'+langSelectHtml()+'<button c
 function langSelectHtml(){return '<select id="lang-sel" title="Idioma / Language" style="min-height:30px;padding:3px 6px;border-radius:4px;border:1px solid #4f7080;background:#fff;color:#102a43" onchange="setLang(this.value)">'+LANGS.map(function(l){return '<option value="'+l[0]+'"'+(LANG===l[0]?' selected':'')+'>'+l[1]+'</option>'}).join('')+'</select>'}
 function applySavedTheme(){
  var root=document.documentElement.style;
- document.documentElement.dataset.effect=localStorage.getItem('ec-effect')||'flow';
+ if(document.documentElement.dataset)document.documentElement.dataset.effect=localStorage.getItem('ec-effect')||'flow';
  root.setProperty('--brand',localStorage.getItem('ec-accent')||'#01a982');
  root.setProperty('--brand-header',localStorage.getItem('ec-header')||'#073b4c');
  root.setProperty('--cyan',localStorage.getItem('ec-cyan')||'#00c8ff');
