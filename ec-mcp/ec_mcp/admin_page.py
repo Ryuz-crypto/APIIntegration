@@ -10,6 +10,8 @@ PAGE = r"""<!doctype html>
 body{font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:var(--page-bg);color:var(--text);margin:0;min-height:100vh}
 main{max-width:1500px;margin:0 auto;padding-bottom:40px}
 header.topbar{min-height:68px;padding:12px 32px;display:flex;align-items:center;justify-content:space-between;gap:16px;color:#fff;background:var(--brand-header);border-bottom:4px solid transparent;position:relative;transition:background .3s ease}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 header.topbar::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:linear-gradient(90deg,var(--brand),var(--cyan),var(--brand));background-size:200% 100%;animation:accentbar 7s linear infinite}
 @keyframes accentbar{to{background-position:200% 0}}
 nav button{transition:color .15s ease,border-color .15s ease}
@@ -115,7 +117,7 @@ button:active{transform:scale(.97)}
 .donate:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(242,185,0,.4)}
 </style></head><body><main id="app">Cargando...</main>
 <script>
-var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, CURTAB='wizard';
+var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='wizard';
 var LANG=localStorage.getItem('ec-lang')||'es';
 var ACCENTS=[{n:'HPE Green',c:'#01a982'},{n:'Cyan',c:'#00c8ff'},{n:'Blue',c:'#00739d'},{n:'Gold',c:'#f2b900'},{n:'Rose',c:'#d94f70'},{n:'Header teal',c:'#073b4c'}];
 var I18N={es:{nav_wizard:'Asistente',nav_orch:'Orquestadores',nav_sse:'Plataformas SSE',nav_svc:'Servicios',nav_config:'Variables',nav_update:'Actualizaciones',nav_users:'Usuarios',nav_out:'Salir',tagline:'MCP para SASE · EdgeConnect SD-WAN',login_title:'Control plane administrativo',login_user:'Usuario',login_pass:'Contraseña',login_enter:'Entrar',h2_orch:'Orquestadores',h2_sse:'Plataformas SSE (multi-tenant)',h2_svc:'Servicios',h2_config:'Variables del servicio',h2_update:'Actualizaciones desde GitHub',h2_users:'Usuarios del panel',h2_wizard:'Asistente de configuración',btn_save:'Guardar',btn_save_vars:'Guardar variables',btn_save_restart:'Guardar y reiniciar servicios',btn_save_restart_short:'Guardar y reiniciar',btn_recheck:'Volver a comprobar',btn_detect:'Detectar GitHub',btn_apply_update:'Aplicar actualización',btn_back:'Atrás',btn_next:'Siguiente',btn_review:'Revisar cambios',btn_probe:'Probar',btn_dup:'Duplicar',btn_ren:'Renombrar',btn_default:'Por defecto',btn_edit:'Editar',btn_delete:'Eliminar',btn_save_orch:'Guardar orquestador',btn_save_sse:'Guardar plataforma SSE',loading:'Cargando...',wiz_loading:'Cargando pasos...',secret_set:'Secreto configurado; no se muestra.',secret_unset:'Sin configurar.'},en:{nav_wizard:'Wizard',nav_orch:'Orchestrators',nav_sse:'SSE platforms',nav_svc:'Services',nav_config:'Settings',nav_update:'Updates',nav_users:'Users',nav_out:'Sign out',tagline:'MCP for SASE · EdgeConnect SD-WAN',login_title:'Administrative control plane',login_user:'User',login_pass:'Password',login_enter:'Sign in',h2_orch:'Orchestrators',h2_sse:'SSE platforms (multi-tenant)',h2_svc:'Services',h2_config:'Service settings',h2_update:'Updates from GitHub',h2_users:'Panel users',h2_wizard:'Setup wizard',btn_save:'Save',btn_save_vars:'Save settings',btn_save_restart:'Save and restart services',btn_save_restart_short:'Save and restart',btn_recheck:'Re-check',btn_detect:'Check GitHub',btn_apply_update:'Apply update',btn_back:'Back',btn_next:'Next',btn_review:'Review changes',btn_probe:'Test',btn_dup:'Duplicate',btn_ren:'Rename',btn_default:'Default',btn_edit:'Edit',btn_delete:'Delete',btn_save_orch:'Save orchestrator',btn_save_sse:'Save SSE platform',loading:'Loading...',wiz_loading:'Loading steps...',secret_set:'Secret configured; never displayed.',secret_unset:'Not configured.'}};
@@ -321,7 +323,7 @@ async function renderWizard(){
  if(!WIZARD){
   q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_wizard')+'</h2><p class="help">'+t('wiz_loading')+'</p></section>';
   try{WIZARD=await api('/api/wizard')}catch(e){notice(e.message,'err');return}
-  WSTEP=-1;WDRAFT={};
+  WSTEP=-1;WDRAFT={};WREVIEW=null;
   WIZARD.fields.forEach(function(f){WDRAFT[f.key]=f.secret?'':f.value});
  }
  if(WSTEP<0){q('#workspace').innerHTML=wizHomeHtml();return}
@@ -359,7 +361,7 @@ function wizRenderStep(){
   (s.id==='targets'?'<p class="help">'+t('wiz_targets_help')+'</p>':'')+
   '<div class="group"><div class="grid">'+fields.map(wizFieldHtml).join('')+'</div></div>'+targets+
   '<div class="actions">'+(WSTEP>=0?'<button class="secondary" onclick="wizHome()" title="'+t('wiz_home_title')+'">&#8962;</button>':'')+(WSTEP>=0&&stepSkippable(s)?'<button class="secondary" onclick="wizSkip()">'+t('btn_skip')+'</button>':'')+'<button class="secondary" onclick="wizBack()" '+(WSTEP===0?'disabled':'')+'>'+t('btn_back')+'</button><button onclick="wizNext()">'+(WSTEP===steps.length-1?t('btn_review'):t('btn_next'))+'</button></div></section>';
- fields.forEach(function(f){var el=q('#wiz-'+f.key);if(el){if(!f.secret)el.value=(WDRAFT[f.key]!==undefined?WDRAFT[f.key]:f.value);el.addEventListener('change',function(){WDRAFT[f.key]=el.value;wizRefreshDepends()})}});
+ fields.forEach(function(f){var el=q('#wiz-'+f.key);if(el){el.value=(WDRAFT[f.key]!==undefined?WDRAFT[f.key]:(f.secret?'':f.value));el.addEventListener('input',function(){WDRAFT[f.key]=el.value;WREVIEW=null;wizRefreshDepends()});el.addEventListener('change',function(){WDRAFT[f.key]=el.value;WREVIEW=null;wizRefreshDepends()})}});
  wizRefreshDepends();
 }
 function wizRefreshDepends(){WIZARD.fields.forEach(function(f){if(!f.depends_on)return;var n=document.querySelector('[data-field="'+f.key+'"]');if(n)n.style.display=wizDependsOk(f)?'':'none'})}
@@ -374,7 +376,7 @@ function wizValidateStep(){
  });
  return errs;
 }
-function wizCollect(){var values={};WIZARD.fields.forEach(function(f){var el=q('#wiz-'+f.key);if(!el)return;var v=el.value;if(f.secret){if(v!=='')values[f.key]=v}else values[f.key]=v});return values}
+function wizCollect(){var values={};WIZARD.fields.forEach(function(f){if(!wizDependsOk(f))return;var v=WDRAFT[f.key];if(v===undefined||v===null)return;if(f.secret){if(v!=='')values[f.key]=v}else if(String(v)!==String(f.value==null?'':f.value))values[f.key]=v});return values}
 async function wizNext(){
  var errs=wizValidateStep();
  wizFields(WIZARD.steps[WSTEP].id).forEach(function(f){var el=q('#wiz-'+f.key);if(el)WDRAFT[f.key]=el.value});
@@ -382,7 +384,7 @@ async function wizNext(){
  if(WSTEP<WIZARD.steps.length-1){WSTEP++;wizRenderStep();return}
  await wizReview();
 }
-function wizBack(){if(WSTEP>0){WSTEP--;wizRenderStep()}else if(WSTEP===0){wizHome()}}
+function wizBack(){WREVIEW=null;if(WSTEP>0){WSTEP--;wizRenderStep()}else if(WSTEP===0){wizHome()}}
 function wizHome(){WSTEP=-1;q('#workspace').innerHTML=wizHomeHtml()}
 function wizHomeHtml(){
  var orchs=STATE.orchestrators||[], sses=STATE.sse_platforms||[];
@@ -393,6 +395,7 @@ function wizHomeHtml(){
  else{sse='<p class="help">'+t('wiz_no_sse')+'</p><div class="actions"><button onclick="wizGoto(\'sse\')">'+t('wiz_setup_sse')+'</button></div>'}
  return '<section class="panel"><h2>'+t('wiz_home_title')+'</h2><p class="help">'+t('wiz_home_desc')+'</p>'+
  '<div class="grid"><div class="group"><h3>SD-WAN · Orchestrator</h3>'+sdwan+'</div><div class="group"><h3>SSE · Axis Security</h3>'+sse+'</div></div>'+
+ '<div class="group"><h3>'+t('nav_svc')+'</h3><p class="help">'+(LANG==='es'?'Comprueba el estado real del MCP y de las conexiones guardadas.':'Check the actual status of MCP and saved connections.')+'</p><div class="actions"><button class="secondary" onclick="showTab(\'svc\')">'+t('nav_svc')+'</button></div></div>'+
  '<div class="group"><h3>'+t('wiz_general')+'</h3><p class="help">'+t('wiz_general_desc')+'</p><div class="actions"><button class="secondary" onclick="wizGoto(\'security\')">'+t('wiz_edit_general')+'</button><button class="secondary" onclick="wizSkipAll()">'+t('wiz_skip_done')+'</button></div></div>'+
  '<div class="actions"><button onclick="WSTEP=0;wizRenderStep()">'+t('wiz_start')+'</button></div></section>';
 }
@@ -401,9 +404,11 @@ function stepSkippable(s){var fs=wizFields(s.id);if(!fs.length)return false;retu
 function wizSkip(){if(WSTEP<WIZARD.steps.length-1){WSTEP++;wizRenderStep()}else{wizReview()}}
 
 async function wizReview(){
+ WREVIEW=null;var proposed=wizCollect();
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('review_title')+'</h2><p class="help">'+t('review_desc')+'<span class="mono">'+esc(WIZARD.env_file)+'</span>'+t('review_nowrite')+'</p><div id="wiz-diff">Comprobando...</div><div class="actions"><button class="secondary" onclick="wizBack()">'+t('btn_back')+'</button><button onclick="wizSave(false)">'+t('btn_save_vars')+'</button><button onclick="wizSave(true)">'+t('btn_save_restart_short')+'</button></div></section>';
  try{
-  var r=await api('/api/config/diff',{values:wizCollect()});
+  var r=await api('/api/config/diff',{values:proposed});
+  if(r.ok!==false&&!(r.errors&&r.errors.length))WREVIEW=Object.assign({},proposed);
   var h='';
   if(r.errors&&r.errors.length)h+='<div class="msg err">'+r.errors.map(esc).join('<br>')+'</div>';
   if(r.changes&&r.changes.length)h+='<table class="diff">'+r.changes.map(function(c){return '<tr><td class="mono">'+esc(c.key)+'</td><td class="mono">'+(c.cleared?'(eliminar secreto)':esc(c.old))+'</td><td>→</td><td class="mono">'+esc(c.new)+'</td></tr>'}).join('')+'</table>';
@@ -414,9 +419,10 @@ async function wizReview(){
 }
 async function wizSave(restart){
  try{
-  var r=await api('/api/config',{values:wizCollect()});
+  if(!WREVIEW){notice(LANG==='es'?'Revisa los cambios antes de guardar.':'Review the changes before saving.','err');return}
+  var r=await api('/api/config',{values:WREVIEW});
   if(!r.ok){notice(r.error||'Error al guardar','err');return}
-  notice(r.message,'ok');CONFIG=await api('/api/config');
+  notice(r.message,'ok');WREVIEW=null;WDRAFT={};CONFIG=await api('/api/config');
   if(restart)await doRestart();else{WIZARD=null;WSTEP=0;await renderWizard()}
  }catch(e){notice(e.message,'err')}
 }
@@ -647,7 +653,7 @@ function renderConfig(){
  if(!CONFIG){q('#workspace').innerHTML='<section class="panel">Cargando variables...</section>';return}
  if(CFG_TAB!=='global'){var ts=cfgTargets();var x=ts.find(function(v){return v.id===CFG_TAB});q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_config')+'</h2>'+targetsNavHtml()+(x?targetPanelHtml(x):'<p class="help">'+t('no_orch')+'</p>')+'</section>';return}
  var groups={};CONFIG.fields.forEach(function(f){var gk=f['group_'+LANG]||f.group;(groups[gk]||(groups[gk]=[])).push(f)});
- var stepOrder={};(CONFIG.steps||[]).forEach(function(s,i){stepOrder[s.id]=i});var gnames=Object.keys(groups).sort(function(a,b){var fa=groups[a][0],fb=groups[b][0];return (stepOrder[fa.step]??99)-(stepOrder[fb.step]??99)||a.localeCompare(b)});var html=gnames.map(function(name){return '<details class="group" open><summary><h3>'+esc(name)+'<span class="count">'+groups[name].length+'</span></h3></summary><div class="grid">'+groups[name].map(fieldHtml).join('')+'</div></details>'}).join('');
+ var stepOrder={};(CONFIG.steps||[]).forEach(function(s,i){stepOrder[s.id]=i});var gnames=Object.keys(groups).sort(function(a,b){var fa=groups[a][0],fb=groups[b][0];return (stepOrder[fa.step]??99)-(stepOrder[fb.step]??99)||a.localeCompare(b)});var html=gnames.map(function(name){return '<details class="group"><summary><h3>'+esc(name)+'<span class="count">'+groups[name].length+'</span></h3></summary><div class="grid">'+groups[name].map(fieldHtml).join('')+'</div></details>'}).join('');
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_config')+'</h2><p>'+t('saved_in')+'<span class="mono">'+esc(CONFIG.env_file)+'</span>. '+t('secrets_note')+'</p>'+targetsNavHtml()+html+blobsInfoHtml()+'<div class="actions"><button onclick="saveConfig()">'+t('btn_save_vars')+'</button><button class="secondary" onclick="restartServices()">'+t('btn_save_restart')+'</button></div></section>';
  CONFIG.fields.forEach(function(f){var el=q('#cfg-'+f.key);if(el&&!f.secret)el.value=f.value});
 }
