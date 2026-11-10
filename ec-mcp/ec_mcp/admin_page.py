@@ -353,6 +353,7 @@ html[data-effect="quiet"] #workspace .panel:first-child:after{animation:none}
 .sase-planet-orbit{position:absolute;inset:28%;border:1px solid #98ffe742;border-radius:50%;animation:sase-rotate 7s linear infinite}.sase-planet-orbit i{position:absolute;top:-5px;left:50%;width:10px;height:10px;border-radius:50%;background:#d0fff3;box-shadow:0 0 12px #63ffe0}.sase-planet-orbit.planet-two{inset:32%;animation-duration:11s;animation-direction:reverse}.sase-planet-orbit.planet-two i{width:7px;height:7px;background:#8dcaff;box-shadow:0 0 10px #81c8ff}.sase-ai-brands{color:#8df7de!important;font-weight:700;letter-spacing:.03em}html[data-effect="quiet"] .sase-planet-orbit{animation:none}@media(prefers-reduced-motion:reduce){.sase-planet-orbit{animation:none}}
 
 /* Readable result notifications and atom motif. */
+.panel button.secondary{background:#103642;color:#effffb;border-color:#557d85}.panel button.secondary:hover{background:#17515a;color:#fff;border-color:var(--brand)}
 .notice-card{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border:1px solid #4b887a;border-left:4px solid #58eac0;border-radius:11px;color:#ecfff8;background:#0b3837;box-shadow:0 12px 28px #0004;margin-bottom:10px;white-space:pre-wrap}
 .notice-card.err{background:#45232e;border-color:#b87889;border-left-color:#ff88a0;color:#fff1f3}.notice-card.info{background:#103446;border-color:#628a9b;border-left-color:#7bd6f4;color:#effcff}
 .notice-icon{display:grid;place-items:center;flex:0 0 28px;height:28px;border:1px solid currentColor;border-radius:50%;font-weight:900}
