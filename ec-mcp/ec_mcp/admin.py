@@ -129,7 +129,7 @@ class _DebugMiddleware(BaseHTTPMiddleware):
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
         path = request.url.path
-        if path.startswith("/api/") or path == "/login":
+        if (path.startswith("/api/") and path not in {"/api/debug/events", "/api/monitor/host"}) or path == "/login":
             _debug_record(
                 "panel-api",
                 f"{request.method} {path}",
@@ -1310,13 +1310,23 @@ def _audit_tail(limit: int) -> list[dict]:
     entries: list[dict] = []
     if path.is_file():
         try:
-            tail = path.read_bytes()[-262144:]
-            for line in tail.decode("utf-8", "replace").splitlines():
+            with path.open("rb") as stream:
+                stream.seek(0, os.SEEK_END)
+                size = stream.tell()
+                start = max(0, size - 8 * 1024 * 1024)
+                stream.seek(start)
+                tail = stream.read(8 * 1024 * 1024)
+            lines = tail.decode("utf-8", "replace").splitlines()
+            if start and lines:
+                lines = lines[1:]  # first line may be incomplete
+            for line in lines:
                 line = line.strip()
                 if not line:
                     continue
                 try:
-                    entries.append(json.loads(line))
+                    entry = json.loads(line)
+                    if isinstance(entry, dict):
+                        entries.append(entry)
                 except json.JSONDecodeError:
                     continue
         except OSError:
@@ -1350,11 +1360,11 @@ def _debug_events_payload(limit: int, query: str = "", source: str = "") -> list
             {
                 "ts": ts,
                 "ts_iso": ts_raw,
-                "source": "mcp-tool",
+                "source": "panel-audit" if a.get("tool") == "admin_panel" else "mcp-tool",
                 "action": str(a.get("action", "")),
                 "target": str(a.get("target", "")),
                 "result": str(a.get("result", "")),
-                "latency": 0.0,
+                "latency": None,
                 "tool": str(a.get("tool", "")),
                 "user": str(a.get("user", "")),
             }
@@ -1365,6 +1375,47 @@ def _debug_events_payload(limit: int, query: str = "", source: str = "") -> list
         events = [e for e in events if e["source"] == source]
     events.sort(key=lambda e: e["ts"], reverse=True)
     return events[:limit]
+
+
+async def api_host_monitor(request):
+    _session, denied = _authorize(request, "users")
+    if denied:
+        return denied
+    from .system_monitor import host_snapshot
+
+    snapshot = host_snapshot(Settings.from_env().audit_log_path)
+    events = _debug_events_payload(500, source="mcp-tool")
+    now = time.time()
+    snapshot["activity"] = {
+        "observed_audit_events_last_minute": sum(1 for event in events if 0 <= now - event["ts"] <= 60),
+        "scope": "last 500 audit events visible in bounded log tail; not concurrent requests",
+        "concurrent_requests": None,
+    }
+    return JSONResponse(snapshot)
+
+
+async def api_audit_report(request):
+    session, denied = _authorize(request, "users")
+    if denied:
+        return denied
+    from .audit_reports import csv_report, pdf_report, xlsx_report
+
+    fmt = request.query_params.get("format", "csv").lower()
+    formats = {
+        "csv": (csv_report, "text/csv; charset=utf-8", "csv"),
+        "xlsx": (xlsx_report, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
+        "pdf": (pdf_report, "application/pdf", "pdf"),
+    }
+    if fmt not in formats:
+        return JSONResponse({"error": "Formato no admitido."}, status_code=400)
+    events = _debug_events_payload(500)
+    build, media_type, extension = formats[fmt]
+    body = build(events)
+    _audit_panel(session["user"], "audit_report_export", "panel", "ok", {"format": fmt, "events": len(events)})
+    return Response(body, media_type=media_type, headers={
+        "Content-Disposition": f'attachment; filename="ec-mcp-auditoria.{extension}"',
+        "Cache-Control": "no-store",
+    })
 
 
 async def api_debug_events(request):
@@ -1570,6 +1621,8 @@ def build_admin_app() -> Starlette:
             Route("/api/tools", api_tools_list, methods=["GET"]),
             Route("/api/tools/toggle", api_tools_toggle, methods=["POST"]),
             Route("/api/agent-prompt", api_agent_prompt, methods=["GET"]),
+            Route("/api/monitor/host", api_host_monitor, methods=["GET"]),
+            Route("/api/audit/report", api_audit_report, methods=["GET"]),
             Route("/api/debug/events", api_debug_events, methods=["GET"]),
             Route("/api/debug/export", api_debug_export, methods=["GET"]),
             Route("/api/debug/clear", api_debug_clear, methods=["POST"]),
