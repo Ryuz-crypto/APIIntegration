@@ -1262,6 +1262,18 @@ async def api_tools_toggle(request):
     return JSONResponse({"ok": True, "name": name, "enabled": enabled, "disabled": sorted(disabled)})
 
 
+async def api_tools_enable_all(request):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    try:
+        update_env({"EC_MCP_DISABLED_TOOLS": ""})
+    except (OSError, ValueError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    _audit_panel(session["user"], "tools_enable_all", "all", "ok")
+    return JSONResponse({"ok": True, "restart_required": True, "disabled": []})
+
+
 AGENT_PROMPT_HEADER = """# ec-mcp — sugerencia para AI Agent (skill)
 
 Eres un agente operando **ec-mcp**, un servidor MCP para HPE Aruba EdgeConnect SD-WAN.
@@ -1276,6 +1288,23 @@ Reglas de oro:
 8. Si un llamado falla, lee el mensaje de error: suele indicar el parámetro exacto que falta.
 
 Consulta también la documentación completa en `ec-mcp/README.md` (125 tools) y los skills de `ec-mcp/docs/` reproducidos abajo.
+"""
+
+
+AGENT_PROMPT_HEADER += """
+---
+
+# ec-mcp — AI agent guidance (English)
+
+You are operating ec-mcp for HPE Aruba EdgeConnect SD-WAN and SASE.
+- Discover targets and inventory first with list_orchestrator_targets_tool, list_appliances and orchestrator_info.
+- Pass the intended target where supported. A missing target uses the configured default.
+- Write tools are disabled by default. Use dry-run or preview, request explicit confirmation and never bypass write safeguards.
+- SSH is optional; use the Orchestrator API where appropriate.
+- For ZTP and overlays, prepare, preview, confirm explicitly, verify, and use rollback when needed.
+- For SSE, use axis_health and axis tools with the intended target; changes may need axis_commit.
+- Respect output and audit limits, never expose secrets, and inspect errors for missing parameters.
+- The reference documents included below retain their original language.
 """
 
 
@@ -1726,6 +1755,7 @@ def build_admin_app() -> Starlette:
             Route("/api/tls/delete", api_tls_delete, methods=["POST"]),
             Route("/api/tools", api_tools_list, methods=["GET"]),
             Route("/api/tools/toggle", api_tools_toggle, methods=["POST"]),
+            Route("/api/tools/enable-all", api_tools_enable_all, methods=["POST"]),
             Route("/api/agent-prompt", api_agent_prompt, methods=["GET"]),
             Route("/api/monitor/host", api_host_monitor, methods=["GET"]),
             Route("/api/audit/report", api_audit_report, methods=["GET"]),
