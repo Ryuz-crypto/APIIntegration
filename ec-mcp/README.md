@@ -386,8 +386,8 @@ La pestaña **Servicios** (`GET /api/services/status`) comprueba cada backend
 con una petición HTTP real en el momento de la consulta y registra cada
 verificación en la auditoría estructurada (`tool=admin_panel`):
 
-- Cada **Orchestrator** del registro recibe un `GET /gms/rest/system/healthcheck`.
-- Cada **plataforma SSE** recibe un `GET /Health` con su token Bearer.
+- Cada **Orchestrator** del registro recibe un `GET /gms/rest/gmsserver/briefInfo` después de autenticar.
+- Cada **plataforma SSE** recibe un `GET /api/v1.0/Health` con su token Bearer. Configura como URL base el origen de la API (sin agregar `/api/v1.0`). Un error 401/403 indica revisar token/permisos; 404 indica revisar la URL. Guardar, aplicar a `.env` y elegir **Por defecto** son acciones distintas; reinicia para cargar cambios en el MCP.
 - El **transporte MCP** se comprueba contra `EC_MCP_HOST:EC_MCP_PORT/health`.
 - El **worker de actualizaciones** reporta su estado real (`idle`, `pending`,
   `running`, `success` o el último error).

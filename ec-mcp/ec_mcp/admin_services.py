@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 
 from .audit import AuditLog
+from .axis_client import API_PREFIX
 from .config import Settings
 from .multi_target import load_registry
 
@@ -83,7 +84,7 @@ def probe_axis(entry: dict[str, Any]) -> dict[str, Any]:
     verify_tls = entry.get("verify_tls", True)
     started = _now()
     with httpx.Client(base_url=base_url, verify=verify_tls, timeout=PROBE_TIMEOUT) as client:
-        response = client.get("/Health", headers={"Authorization": f"Bearer {token}"})
+        response = client.get(f"{API_PREFIX}/Health", headers={"Authorization": f"Bearer {token}"})
     elapsed = (_now() - started).total_seconds()
     if response.status_code != 200:
         raise ServiceProbeError(f"HTTP {response.status_code} al consultar la plataforma SSE.")

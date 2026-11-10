@@ -691,10 +691,7 @@ async def api_apply(request):
         if name and not registry.get_sse(name):
             return JSONResponse({"ok": False, "error": f"No existe la plataforma SSE '{name}'"})
         if not name:
-            entries = registry.list_sse()
-            if not entries:
-                return JSONResponse({"ok": False, "error": "No hay plataformas SSE guardadas"})
-            name = sorted(entries)[0]
+            return JSONResponse({"ok": False, "error": "Selecciona una plataforma SSE guardada antes de aplicar."}, status_code=400)
         entry = registry.get_sse(name)
         wanted = {
             "EC_AXIS_ENABLED": "true",
@@ -746,11 +743,25 @@ async def api_apply(request):
                 break
         else:
             lines.append(set_line)
-    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    descriptor = None
+    temporary_name = None
     try:
-        env_path.chmod(0o600)
+        env_path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{env_path.name}.", dir=env_path.parent)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            descriptor = None
+            stream.write("\n".join(lines) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary_name, 0o600)
+        os.replace(temporary_name, env_path)
     except OSError:
-        pass
+        return JSONResponse({"ok": False, "error": "No se pudo aplicar la configuración; revisa los permisos del archivo de entorno."}, status_code=500)
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        if temporary_name is not None:
+            Path(temporary_name).unlink(missing_ok=True)
     for key, value in wanted.items():
         os.environ[key] = value
     _audit_panel(session["user"], "apply", target_label, "ok", {"env_file": str(env_path)})
@@ -760,6 +771,7 @@ async def api_apply(request):
             "message": (
                 f"{target_label} escrito en {env_path}. Reinicia el servicio para "
                 "que el cambio quede persistente. Usa 'Guardar y reiniciar servicios' desde Variables para aplicarlo"
+                + ("; selecciona 'Por defecto' si quieres que el MCP use esta plataforma sin especificar target." if kind == "sse" else "")
             ),
         }
     )
