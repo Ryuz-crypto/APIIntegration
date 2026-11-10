@@ -129,7 +129,7 @@ class _DebugMiddleware(BaseHTTPMiddleware):
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
         path = request.url.path
-        if path.startswith("/api/") or path == "/login":
+        if (path.startswith("/api/") and path not in {"/api/debug/events", "/api/monitor/host"}) or path == "/login":
             _debug_record(
                 "panel-api",
                 f"{request.method} {path}",
