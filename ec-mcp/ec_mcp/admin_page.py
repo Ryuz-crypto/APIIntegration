@@ -351,6 +351,18 @@ html[data-effect="quiet"] #workspace .panel:first-child:after{animation:none}
 @media(prefers-reduced-motion:reduce){#workspace .panel:first-child:after{animation:none}}
 
 .sase-planet-orbit{position:absolute;inset:28%;border:1px solid #98ffe742;border-radius:50%;animation:sase-rotate 7s linear infinite}.sase-planet-orbit i{position:absolute;top:-5px;left:50%;width:10px;height:10px;border-radius:50%;background:#d0fff3;box-shadow:0 0 12px #63ffe0}.sase-planet-orbit.planet-two{inset:32%;animation-duration:11s;animation-direction:reverse}.sase-planet-orbit.planet-two i{width:7px;height:7px;background:#8dcaff;box-shadow:0 0 10px #81c8ff}.sase-ai-brands{color:#8df7de!important;font-weight:700;letter-spacing:.03em}html[data-effect="quiet"] .sase-planet-orbit{animation:none}@media(prefers-reduced-motion:reduce){.sase-planet-orbit{animation:none}}
+
+/* Readable result notifications and atom motif. */
+.panel button.secondary{background:#103642;color:#effffb;border-color:#557d85}.panel button.secondary:hover{background:#17515a;color:#fff;border-color:var(--brand)}
+.notice-card{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border:1px solid #4b887a;border-left:4px solid #58eac0;border-radius:11px;color:#ecfff8;background:#0b3837;box-shadow:0 12px 28px #0004;margin-bottom:10px;white-space:pre-wrap}
+.notice-card.err{background:#45232e;border-color:#b87889;border-left-color:#ff88a0;color:#fff1f3}.notice-card.info{background:#103446;border-color:#628a9b;border-left-color:#7bd6f4;color:#effcff}
+.notice-icon{display:grid;place-items:center;flex:0 0 28px;height:28px;border:1px solid currentColor;border-radius:50%;font-weight:900}
+.notice-body{min-width:0;flex:1;overflow-wrap:anywhere}.notice-body strong{display:block;margin-bottom:3px;font-size:13px}.notice-body span{display:block;line-height:1.5;font-size:13px}
+.notice-close{min-height:28px;padding:2px 7px;background:transparent;color:inherit;border:0;font-size:18px}
+#workspace[data-section]:not([data-section="home"]) .panel:first-child:after{border:0!important;border-radius:0!important;background:center/contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%237cf9de' stroke-width='2.4'%3E%3Cellipse cx='40' cy='40' rx='35' ry='13'/%3E%3Cellipse cx='40' cy='40' rx='35' ry='13' transform='rotate(60 40 40)'/%3E%3Cellipse cx='40' cy='40' rx='35' ry='13' transform='rotate(120 40 40)'/%3E%3C/g%3E%3Ccircle cx='40' cy='40' r='5' fill='%23d8fff5'/%3E%3C/svg%3E");box-shadow:none;opacity:.75;animation:hud-orbit 14s linear infinite}
+.tools-pager{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px}.tools-pager .help{margin:0}
+@media(prefers-reduced-motion:reduce){#workspace .panel:first-child:after{animation:none}}
+
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='home', TOPOLOGY_STATUS=null, TOPOLOGY_BUSY=false;
@@ -524,6 +536,18 @@ var EXTRA_UI={
 };
 var EXTRA_KEYS=['custom_tagline','animation_style','effect_flow','effect_pulse','effect_none','effect_help','diag_title','diag_help','diag_memory','diag_disk','diag_status','diag_mcp_log','diag_admin_log','diag_running','diag_user','diag_api_help'];
 Object.keys(EXTRA_UI).forEach(function(lang){if(!I18N[lang])I18N[lang]={};EXTRA_KEYS.forEach(function(key,i){I18N[lang][key]=EXTRA_UI[lang][i]})});if(I18N.mx)EXTRA_KEYS.forEach(function(key,i){I18N.mx[key]=EXTRA_UI.es[i]});
+var EXTRA_TOOLS={
+ es:['Resultado correcto','No se pudo completar','Información','Buscar herramienta','Nombre o descripción','Estado','Habilitadas','Deshabilitadas','Monitoreo recomendado','Todas las herramientas','Habilitar todas','¿Habilitar todas las tools? Se aplicará después de reiniciar; las políticas de escritura siguen vigentes.','Anterior','Siguiente','Página','No hay herramientas para este filtro.','Cambios guardados; reinicia el MCP para aplicarlos.'],
+ en:['Completed','Could not complete','Information','Search tools','Name or description','Status','Enabled','Disabled','Recommended monitoring','All tools','Enable all','Enable all tools? Applied after restart; write policies still apply.','Previous','Next','Page','No tools match this filter.','Changes saved; restart the MCP to apply them.'],
+ pt:['Concluído','Não foi possível concluir','Informação','Buscar ferramentas','Nome ou descrição','Estado','Ativadas','Desativadas','Monitoramento recomendado','Todas as ferramentas','Ativar todas','Ativar todas as ferramentas? Aplicado após reiniciar; políticas de escrita permanecem.','Anterior','Próxima','Página','Nenhuma ferramenta neste filtro.','Alterações salvas; reinicie o MCP para aplicar.'],
+ it:['Completato','Impossibile completare','Informazione','Cerca strumenti','Nome o descrizione','Stato','Abilitati','Disabilitati','Monitoraggio consigliato','Tutti gli strumenti','Abilita tutti','Abilitare tutti gli strumenti? Dopo il riavvio restano valide le regole di scrittura.','Precedente','Successiva','Pagina','Nessuno strumento corrisponde.','Modifiche salvate; riavviare MCP.'],
+ de:['Abgeschlossen','Nicht abgeschlossen','Information','Tools suchen','Name oder Beschreibung','Status','Aktiviert','Deaktiviert','Empfohlenes Monitoring','Alle Tools','Alle aktivieren','Alle Tools aktivieren? Nach Neustart wirksam; Schreibregeln gelten weiterhin.','Zurück','Weiter','Seite','Keine Tools für diesen Filter.','Änderungen gespeichert; MCP neu starten.'],
+ fr:['Terminé','Échec','Information','Rechercher des outils','Nom ou description','État','Activés','Désactivés','Surveillance recommandée','Tous les outils','Tout activer','Activer tous les outils ? Après redémarrage ; les règles d’écriture restent applicables.','Précédent','Suivant','Page','Aucun outil pour ce filtre.','Modifications enregistrées ; redémarrez MCP.'],
+ ja:['完了','完了できません','情報','ツール検索','名前または説明','状態','有効','無効','推奨監視','すべてのツール','すべて有効化','すべてのツールを有効にしますか？再起動後に適用され、書き込み規則は維持されます。','前へ','次へ','ページ','該当するツールはありません。','保存しました。MCPを再起動してください。'],
+ he:['הושלם','לא ניתן להשלים','מידע','חיפוש כלים','שם או תיאור','מצב','פעילים','מושבתים','ניטור מומלץ','כל הכלים','הפעלת הכל','להפעיל את כל הכלים? יוחל לאחר הפעלה מחדש; מדיניות כתיבה תישאר בתוקף.','הקודם','הבא','עמוד','אין כלים מתאימים.','השינויים נשמרו; יש להפעיל את MCP מחדש.']
+};
+var EXTRA_TOOL_KEYS=['notice_ok','notice_err','notice_info','tools_search','tools_search_hint','tools_state','tools_enabled','tools_disabled_label','tools_recommended','tools_all','tools_enable_all','tools_enable_all_confirm','tools_prev','tools_next','tools_page','tools_empty','tools_restart'];
+Object.keys(EXTRA_TOOLS).forEach(function(lang){EXTRA_TOOL_KEYS.forEach(function(key,i){I18N[lang][key]=EXTRA_TOOLS[lang][i]})});if(I18N.mx)EXTRA_TOOL_KEYS.forEach(function(key,i){I18N.mx[key]=EXTRA_TOOLS.es[i]});
 function q(s){return document.querySelector(s)}
 function esc(v){return String(v==null?'':v).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 async function api(path,body){
@@ -534,7 +558,11 @@ async function api(path,body){
  if(response.status===401){AUTHED=false;renderLogin();throw new Error('Sesión expirada');}
  return data;
 }
-function notice(message,type){var node=q('#notice');if(node)node.innerHTML='<div class="msg '+(type||'info')+'">'+esc(message)+'</div>'}
+function notice(message,type){
+ var node=q('#notice');if(!node)return;var kind=type==='err'?'err':type==='ok'?'ok':'info';
+ var title=t(kind==='err'?'notice_err':kind==='ok'?'notice_ok':'notice_info'),icon=kind==='err'?'!':kind==='ok'?'✓':'i';
+ node.innerHTML='<div class="notice-card '+kind+'" role="'+(kind==='err'?'alert':'status')+'"><span class="notice-icon" aria-hidden="true">'+icon+'</span><div class="notice-body"><strong>'+esc(title)+'</strong><span>'+esc(message)+'</span></div><button type="button" class="notice-close" aria-label="Close" onclick="q(\'#notice\').innerHTML=\'\'">×</button></div>';
+}
 function renderLogin(){
  q('#app').innerHTML='<section class="panel" style="max-width:440px;margin:12vh auto">'+brandHtml()+chromeHtml()+'<form onsubmit="login();return false"><label style="margin-top:22px">'+t('u_name')+'<input id="login-user" autocomplete="username"></label><label style="margin-top:12px">'+t('login_pass')+'<input id="login-password" type="password" autocomplete="current-password"></label><div class="actions"><button type="submit">'+t('login_enter')+'</button></div></form><div id="notice"></div></section>';
  if(!q('#custom-dlg'))q('#app').innerHTML+=customDialogHtml();
@@ -665,8 +693,8 @@ async function deleteOrch(name){if(!confirm('Eliminar '+name+'?'))return;await a
 async function applyOrch(){try{var r=await api('/api/apply',{name:q('#o-name').value.trim(),kind:'orchestrator'});notice(r.message||r.error,r.ok?'ok':'err');CONFIG=await api('/api/config')}catch(e){notice(e.message,'err')}}
 function renderSse(){
  var list=(STATE.sse_platforms||[]).map(function(o){return '<div class=\"orch\"><span class=\"orch-actions\"><button class=\"secondary\" onclick=\"probeTarget(\'sse\',\''+esc(o.name)+'\')\">'+t('btn_probe')+'</button><button class=\"secondary\" onclick=\"dupTarget(\'sse\',\''+esc(o.name)+'\')\">'+t('btn_dup')+'</button><button class=\"secondary\" onclick=\"renTarget(\'sse\',\''+esc(o.name)+'\')\">'+t('btn_ren')+'</button><button class=\"secondary\" onclick=\"setDefaultTarget(\'sse\',\''+esc(o.name)+'\')\">'+t('btn_default')+'</button><button class=\"secondary\" onclick=\"editSse(\''+esc(o.name)+'\')\">'+t('btn_edit')+'</button><button class=\"danger\" onclick=\"deleteSse(\''+esc(o.name)+'\')\">'+t('btn_delete')+'</button></span><strong>'+esc(o.name)+'</strong> '+(o.active?'<span class=\"badge\">'+t('badge_active')+'</span>':'')+(o.default?'<span class=\"badge\">'+t('badge_default')+'</span>':'')+' <span class=\"badge\">'+esc(o.provider)+'</span><br><span class=\"help\">'+esc(o.base_url)+'</span> <span id=\"probe-sse-'+esc(o.name)+'\"></span></div>'}).join('')||'<p class=\"help\">'+t('no_sse')+'</p>';
- q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_sse')+'</h2><p>Administra N plataformas SSE de forma independiente (p. ej. varias instancias de Axis Security). Cada una guarda su propio token y URL.</p>'+list+
- '<div class="group"><h3>'+t('add_update_sse')+'</h3>'+ssePickerHtml()+'<div class="grid"><label>'+t('f_name')+'<input id="s-name" placeholder="axis-prod"></label><label>'+t('f_provider')+'<select id="s-provider"><option>axis</option></select></label><label>'+t('f_baseurl')+'<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>'+t('f_token')+'<input id="s-token" type="password"></label><label>Verificar TLS<select id="s-tls"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select></label><label>'+t('f_timeout')+'<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">'+t('btn_save')+'</button><button class="secondary" onclick="applySse()">'+t('apply_env')+'</button></div></div></section>';
+ q('#workspace').innerHTML='<section class="panel"><h2>'+t('h2_sse')+'</h2><p>'+((LANG==='es'||LANG==='mx')?'Administra plataformas SSE independientes, cada una con su token y URL.':'Manage independent SSE platforms, each with its own token and URL.')+'</p>'+list+
+ '<div class="group"><h3>'+t('add_update_sse')+'</h3>'+ssePickerHtml()+'<div class="grid"><label>'+t('f_name')+'<input id="s-name" placeholder="axis-prod"></label><label>'+t('f_provider')+'<select id="s-provider"><option>axis</option></select></label><label>'+t('f_baseurl')+'<input id="s-url" placeholder="https://admin-api.axissecurity.com"></label><label>'+t('f_token')+'<input id="s-token" type="password"></label><label>'+t('f_tls')+'<select id="s-tls"><option value="true">'+t('yes')+'</option><option value="false">'+t('no')+'</option></select></label><label>'+t('f_timeout')+'<input id="s-timeout" type="number" value="30"></label></div><div class="actions"><button onclick="saveSse()">'+t('btn_save')+'</button><button class="secondary" onclick="applySse()">'+t('apply_env')+'</button></div></div></section>';
 }
 function editSse(name){var o=(STATE.sse_platforms||[]).find(function(x){return x.name===name});if(!o)return;q('#s-name').value=o.name;q('#s-provider').value=o.provider;q('#s-url').value=o.base_url;q('#s-token').value='';q('#s-tls').value=String(o.verify_tls);q('#s-timeout').value=o.timeout}
 async function saveSse(){
@@ -924,7 +952,8 @@ async function delTls(){
  if(!confirm(t('tls_delete')+'?'))return;
  try{var r=await api('/api/tls/delete',{});notice(r.message||r.error,r.ok?'ok':'err');await renderTls()}catch(e){notice(e.message,'err')}
 }
-var TOOLS_ALL=[],TOOLS_DOM='all',TOOLS_QUERY='',TOOLS_STATE='all';
+var TOOLS_ALL=[],TOOLS_DOM='all',TOOLS_QUERY='',TOOLS_STATE='all',TOOLS_GROUP='recommended',TOOLS_PAGE=0;
+var TOOLS_RECOMMENDED=['orchestrator_info','list_appliances','get_wan_health','get_mos','get_tunnel_state','get_active_alarms','get_ha_status','get_availability','get_appliance_health','axis_health','get_sse_status'];
 async function renderTools(){
  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tools_title')+'</h2><p class="help">'+t('tools_desc')+'</p><p class="help">'+t('checking')+'</p></section>';
  try{
@@ -932,26 +961,31 @@ async function renderTools(){
   TOOLS_ALL=r.tools||[];
   var d=r.domains||{};
   var opts='<option value="all">'+t('dom_all')+' ('+r.total+')</option><option value="sdwan">SD-WAN · EdgeConnect ('+(d.sdwan||0)+')</option><option value="sse">HPE SSE · Axis ('+(d.sse||0)+')</option><option value="panel">'+t('dom_panel')+' ('+(d.panel||0)+')</option>';
-  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tools_title')+'</h2><p class="help">'+t('tools_desc')+'</p><p><span class="badge">'+r.total+'</span> '+t('tools_total')+' · <span class="badge">'+r.disabled.length+'</span> '+t('tools_disabled')+'</p><div class="actions" style="align-items:center"><label style="margin:0;display:flex;gap:8px;align-items:center;font-weight:700">'+t('tools_filter')+'<select id="tools-dom" style="width:auto;min-height:34px" onchange="filterTools(this.value)">'+opts+'</select></label><button class="secondary" onclick="showAgentPrompt()">'+t('agent_btn')+'</button></div><div class="tools-search"><label>Buscar herramienta<input id="tools-search" type="search" placeholder="Nombre o descripción" oninput="filterToolsQuery(this.value)"></label><label>Estado<select id="tools-state" onchange="filterToolsState(this.value)"><option value="all">Todas</option><option value="enabled">Habilitadas</option><option value="disabled">Deshabilitadas</option></select></label><span id="tools-count" class="help" aria-live="polite"></span></div><div class="tools-grid" id="tools-list"></div></section>';
-  q('#tools-dom').value=TOOLS_DOM;q('#tools-state').value=TOOLS_STATE;q('#tools-search').value=TOOLS_QUERY;renderToolsGrid();
+  q('#workspace').innerHTML='<section class="panel"><h2>'+t('tools_title')+'</h2><p class="help">'+t('tools_desc')+'</p><p><span class="badge">'+r.total+'</span> '+t('tools_total')+' · <span class="badge">'+r.disabled.length+'</span> '+t('tools_disabled')+'</p><div class="actions" style="align-items:center"><label style="margin:0;display:flex;gap:8px;align-items:center;font-weight:700">'+t('tools_filter')+'<select id="tools-dom" style="width:auto;min-height:34px" onchange="filterTools(this.value)">'+opts+'</select></label><button class="secondary" onclick="showAgentPrompt()">'+t('agent_btn')+'</button></div><div class="tools-search"><label>'+t('tools_search')+'<input id="tools-search" type="search" placeholder="'+t('tools_search_hint')+'" oninput="filterToolsQuery(this.value)"></label><label>'+t('tools_state')+'<select id="tools-state" onchange="filterToolsState(this.value)"><option value="all">'+t('tools_all')+'</option><option value="enabled">'+t('tools_enabled')+'</option><option value="disabled">'+t('tools_disabled_label')+'</option></select></label><label>'+t('tools_filter')+'<select id="tools-group" onchange="filterToolsGroup(this.value)"><option value="recommended">'+t('tools_recommended')+'</option><option value="all">'+t('tools_all')+'</option></select></label><span id="tools-count" class="help" aria-live="polite"></span></div><div class="actions">'+(ME&&ME.role!=='viewer'?'<button class="secondary" onclick="enableAllTools()">'+t('tools_enable_all')+'</button>':'')+'</div><div class="tools-grid" id="tools-list"></div><div class="tools-pager" id="tools-pager"></div></section>';
+  q('#tools-dom').value=TOOLS_DOM;q('#tools-state').value=TOOLS_STATE;q('#tools-group').value=TOOLS_GROUP;q('#tools-search').value=TOOLS_QUERY;renderToolsGrid();
  }catch(e){notice(e.message,'err')}
 }
-function filterTools(v){TOOLS_DOM=v;renderToolsGrid()}
-function filterToolsQuery(v){TOOLS_QUERY=v.toLowerCase().trim();renderToolsGrid()}
-function filterToolsState(v){TOOLS_STATE=v;renderToolsGrid()}
+function filterTools(v){TOOLS_DOM=v;TOOLS_PAGE=0;renderToolsGrid()}
+function filterToolsQuery(v){TOOLS_QUERY=v.toLowerCase().trim();TOOLS_PAGE=0;renderToolsGrid()}
+function filterToolsState(v){TOOLS_STATE=v;TOOLS_PAGE=0;renderToolsGrid()}
+function filterToolsGroup(v){TOOLS_GROUP=v;TOOLS_PAGE=0;renderToolsGrid()}
+function toolsPage(n){TOOLS_PAGE=n;renderToolsGrid()}
 function renderToolsGrid(){
  var canWrite=ME&&ME.role!=='viewer';
- var list=TOOLS_ALL.filter(function(x){var domain=TOOLS_DOM==='all'||x.domain===TOOLS_DOM;var state=TOOLS_STATE==='all'||(TOOLS_STATE==='enabled'?!x.disabled:x.disabled);var search=!TOOLS_QUERY||(x.name+' '+(x.description||'')+' '+(x.description_es||'')).toLowerCase().includes(TOOLS_QUERY);return domain&&state&&search});
- var rows=list.map(function(x){return '<div class="tool-card"><div><strong>'+esc(x.name)+'</strong> <span class="badge">'+(x.domain==='sse'?t('dom_sse'):x.domain==='panel'?t('dom_panel'):t('dom_sdwan'))+'</span><span class="help">'+esc(((LANG==='es'||LANG==='mx')&&x.description_es)?x.description_es:x.description)+'</span></div><label class="switch" title="'+(x.disabled?t('tool_off'):t('tool_on'))+'"><input type="checkbox" '+(x.disabled?'':'checked')+' '+(canWrite?'onchange="toggleTool(\''+esc(x.name)+'\',this.checked)"':'disabled')+'><span class="slider"></span></label></div>'}).join('')||'<p class="help">'+t('dbg_empty')+'</p>';
+ var list=TOOLS_ALL.filter(function(x){var domain=TOOLS_DOM==='all'||x.domain===TOOLS_DOM;var state=TOOLS_STATE==='all'||(TOOLS_STATE==='enabled'?!x.disabled:x.disabled);var search=!TOOLS_QUERY||(x.name+' '+(x.description||'')+' '+(x.description_es||'')).toLowerCase().includes(TOOLS_QUERY);var group=TOOLS_GROUP==='all'||TOOLS_RECOMMENDED.includes(x.name);return domain&&state&&search&&group});
+ var pages=Math.max(1,Math.ceil(list.length/12));TOOLS_PAGE=Math.max(0,Math.min(TOOLS_PAGE,pages-1));
+ var rows=list.slice(TOOLS_PAGE*12,TOOLS_PAGE*12+12).map(function(x){return '<div class="tool-card"><div><strong>'+esc(x.name)+'</strong> <span class="badge">'+(x.domain==='sse'?t('dom_sse'):x.domain==='panel'?t('dom_panel'):t('dom_sdwan'))+'</span><span class="help">'+esc(((LANG==='es'||LANG==='mx')&&x.description_es)?x.description_es:x.description)+'</span></div><label class="switch" title="'+(x.disabled?t('tool_off'):t('tool_on'))+'"><input type="checkbox" '+(x.disabled?'':'checked')+' '+(canWrite?'onchange="toggleTool(\''+esc(x.name)+'\',this.checked)"':'disabled')+'><span class="slider"></span></label></div>'}).join('')||'<p class="help">'+t('tools_empty')+'</p>';
  q('#tools-list').innerHTML=rows;var count=q('#tools-count');if(count)count.textContent=list.length+' / '+TOOLS_ALL.length;
+ q('#tools-pager').innerHTML='<button class="secondary" onclick="toolsPage('+(TOOLS_PAGE-1)+')" '+(TOOLS_PAGE===0?'disabled':'')+'>'+t('tools_prev')+'</button><span class="help">'+t('tools_page')+' '+(TOOLS_PAGE+1)+' / '+pages+'</span><button class="secondary" onclick="toolsPage('+(TOOLS_PAGE+1)+')" '+(TOOLS_PAGE>=pages-1?'disabled':'')+'>'+t('tools_next')+'</button>';
 }
+async function enableAllTools(){if(!confirm(t('tools_enable_all_confirm')))return;try{var r=await api('/api/tools/enable-all',{});notice(r.ok?t('tools_restart'):(r.error||'Error'),r.ok?'ok':'err');if(r.ok)await renderTools()}catch(e){notice(e.message,'err')}}
 async function toggleTool(name,enabled){
  try{var r=await api('/api/tools/toggle',{name:name,enabled:enabled});notice(r.ok?((enabled?t('tool_on'):t('tool_off'))+' '+name):(r.error||'Error'),r.ok?'ok':'err');if(r.ok)await renderTools()}catch(e){notice(e.message,'err')}
 }
 async function showAgentPrompt(){
  try{var r=await api('/api/agent-prompt');if(!q('#agent-dlg'))q('#app').innerHTML+=agentDialogHtml();q('#agent-text').textContent=r.prompt;var d=q('#agent-dlg');d.showModal?d.showModal():d.setAttribute('open','')}catch(e){notice(e.message,'err')}
 }
-function agentDialogHtml(){return '<dialog id="agent-dlg" style="max-width:780px;width:calc(100% - 30px)"><h3>'+t('agent_title')+'</h3><p class="help">'+t('agent_desc')+'</p><pre id="agent-text" style="max-height:52vh;overflow:auto;background:#f6f8f9;border:1px solid var(--line);border-radius:4px;padding:12px;font-size:11px;white-space:pre-wrap"></pre><div class="actions"><button onclick="copyAgent()">'+t('copy')+'</button><button class="secondary" onclick="closeAgent()">'+t('custom_cancel')+'</button></div></dialog>'}
+function agentDialogHtml(){return '<dialog id="agent-dlg" style="max-width:780px;width:calc(100% - 30px)"><h3>'+t('agent_title')+'</h3><p class="help">'+t('agent_desc')+'</p><pre id="agent-text" style="max-height:52vh;overflow:auto;background:#071f2b;color:#f1ffff;border:1px solid var(--line);border-radius:4px;padding:12px;font-size:11px;white-space:pre-wrap"></pre><div class="actions"><button onclick="copyAgent()">'+t('copy')+'</button><button class="secondary" onclick="closeAgent()">'+t('custom_cancel')+'</button></div></dialog>'}
 function copyAgent(){var el=q('#agent-text');if(el&&navigator.clipboard){navigator.clipboard.writeText(el.textContent)}notice(t('copied'),'ok')}
 function closeAgent(){var d=q('#agent-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
 var DBG_TIMER=null,DBG_PAUSED=false,DBG_Q='';
