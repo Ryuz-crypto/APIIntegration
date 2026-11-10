@@ -1396,7 +1396,11 @@ def test_orchestrator_info_exposes_build_for_deployment_verification():
 def test_stable_package_version_is_consistent():
     from ec_mcp import __version__
 
-    assert __version__ == "8.2.0"
+    import tomllib
+    from pathlib import Path
+
+    metadata = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text(encoding="utf-8"))
+    assert __version__ == metadata["project"]["version"]
 
 
 def test_large_helper_response_is_closed_valid_json():
