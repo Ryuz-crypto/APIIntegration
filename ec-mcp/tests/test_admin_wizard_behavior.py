@@ -55,7 +55,7 @@ globalThis.window = globalThis;
   console.log('wizard behavior verified');
 })().catch(error => {console.error(error); process.exitCode=1});
 """
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 - Node executes the repository's own panel script
         [node, "-"],
         input=harness,
         text=True,
