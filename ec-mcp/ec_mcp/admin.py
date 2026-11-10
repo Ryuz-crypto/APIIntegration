@@ -294,33 +294,29 @@ def _save_store(store: dict) -> None:
 
 
 def _sync_registry_blob() -> None:
-    """Espeja el registro en EC_ORCHESTRATORS_JSON / EC_SSE_PLATFORMS_JSON (.env + entorno)."""
+    """Atomically mirror the registry into the environment file and process."""
+    blob = load_registry().to_env_blob()
+    keys = ("EC_ORCHESTRATORS_JSON", "EC_SSE_PLATFORMS_JSON")
+    env_path = Path(os.environ.get("EC_MCP_ENV_FILE") or Path.cwd() / ".env")
+    lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.is_file() else []
+    lines = [line for line in lines if not any(line.strip().startswith(key + "=") for key in keys)]
+    lines.extend(f"{key}={blob[key]}" for key in keys if key in blob)
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{env_path.name}.", dir=env_path.parent)
     try:
-        blob = load_registry().to_env_blob()
-        env_path = Path(os.environ.get("EC_MCP_ENV_FILE") or Path.cwd() / ".env")
-        lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.is_file() else []
-        for key in ("EC_ORCHESTRATORS_JSON", "EC_SSE_PLATFORMS_JSON"):
-            value = blob.get(key)
-            if value is None:
-                lines = [line for line in lines if not line.startswith(key + "=")]
-                os.environ.pop(key, None)
-                continue
-            set_line = f"{key}={value}"
-            for i, line in enumerate(lines):
-                if line.startswith(key + "="):
-                    lines[i] = set_line
-                    break
-            else:
-                lines.append(set_line)
-            os.environ[key] = value
-        env_path.parent.mkdir(parents=True, exist_ok=True)
-        env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        try:
-            env_path.chmod(0o600)
-        except OSError:
-            pass
-    except OSError:
-        pass
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write("\n".join(lines) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary_name, 0o600)
+        os.replace(temporary_name, env_path)
+    finally:
+        Path(temporary_name).unlink(missing_ok=True)
+    for key in keys:
+        if key in blob:
+            os.environ[key] = blob[key]
+        else:
+            os.environ.pop(key, None)
 
 
 def _admin_password() -> str | None:
@@ -518,10 +514,12 @@ async def api_save_orchestrator(request):
         _sync_registry_blob()
     except RegistryError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
+    except OSError:
+        return JSONResponse({"ok": False, "error": "No se pudo completar la sincronización. El registro podría haberse guardado; revisa permisos y vuelve a intentar."}, status_code=500)
     except Exception as exc:  # nunca devolver HTML plano al panel
         return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
     _audit_panel(session["user"], "save_orchestrator", name, "ok")
-    return JSONResponse({"ok": True, "message": f"Orquestador '{name}' guardado (backup creado). Usa 'Aplicar' para activarlo."})
+    return JSONResponse({"ok": True, "message": f"Orquestador '{name}' guardado. Reinicia el MCP para cargarlo; la configuración predeterminada se gestiona por separado."})
 
 async def api_delete_orchestrator(request):
     session, denied = _authorize(request, "write")
@@ -558,6 +556,8 @@ async def api_save_sse(request):
         _sync_registry_blob()
     except RegistryError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
+    except OSError:
+        return JSONResponse({"ok": False, "error": "No se pudo completar la sincronización. El registro podría haberse guardado; revisa permisos y vuelve a intentar."}, status_code=500)
     except Exception as exc:
         return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
     _audit_panel(session["user"], "save_sse", name, "ok")
