@@ -33,7 +33,7 @@ def test_exports_are_bounded_and_safe():
     assert "private" not in data
     assert "user:secret" not in data
     with zipfile.ZipFile(io.BytesIO(xlsx_report(events))) as archive:
-        root = ElementTree.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+        root = ElementTree.fromstring(archive.read("xl/worksheets/sheet1.xml"))  # noqa: S314 - generated fixture
         assert root.tag.endswith("worksheet")
         assert b"private" not in archive.read("xl/worksheets/sheet1.xml")
     pdf = pdf_report(events)
