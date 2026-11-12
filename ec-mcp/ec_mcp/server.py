@@ -37,6 +37,12 @@ from .axis_workflow import (
     summarize_tunnel_status,
 )
 from .build import build_info
+from .central_catalog import (
+    build_request,
+    list_operations,
+    resolve_operation,
+    validate_read_operation,
+)
 from .central_client import ArubaCentralClient
 from .central_workflow import (
     analytics_time_window,
@@ -4627,6 +4633,29 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 },
                 settings.max_output_chars,
             )
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_v2_list_operations(group: str = "", search: str = "", limit: int = 50) -> str:
+        """Browse the Aruba Central v2 API catalog (1.2k+ New Central operations: monitoring, notifications, troubleshooting, configuration, NAC, services, MSP...). Filter by group or free-text search. Read-only; use the returned ids with central_v2_call_read_api."""
+        try:
+            payload = list_operations(group=group, search=search, limit=limit)
+            return json_result(payload, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_v2_call_read_api(operation_id: str, params_json: str = "{}", target: str = "") -> str:
+        """Execute any read (GET) operation from the Aruba Central v2 catalog by operation_id. params_json fills path and query parameters (e.g. {"serial-number": "SG123", "limit": 100}). Write operations are refused; use the curated central_* tools for those."""
+        try:
+            operation = resolve_operation(operation_id)
+            validate_read_operation(operation)
+            params = json.loads(params_json) if params_json.strip() else {}
+            path, query = build_request(operation, params)
+            central = require_central(target)
+            payload = central.request("GET", path.removeprefix("/"), params=query)
+            return json_result(payload, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
