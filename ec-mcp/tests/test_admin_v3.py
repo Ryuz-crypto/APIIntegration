@@ -119,7 +119,7 @@ def test_admin_page_badge_reflects_installed_version():
     assert "3.0.0b1" not in rendered
 
 
-def test_admin_login_lockout_accepts_correct_password_and_resets_counter(monkeypatch):
+def test_admin_login_lockout_blocks_until_window_expires(monkeypatch):
     from starlette.testclient import TestClient
 
     from ec_mcp import admin
@@ -142,6 +142,9 @@ def test_admin_login_lockout_accepts_correct_password_and_resets_counter(monkeyp
     assert blocked.headers["Retry-After"]
     assert blocked.json()["retry_after_seconds"] <= 60
 
+    assert client.post("/login", json={"password": "correct"}).status_code == 429
+    for ip in admin.LOGIN_FAILURES:
+        admin.LOGIN_FAILURES[ip] = [timestamp - 61 for timestamp in admin.LOGIN_FAILURES[ip]]
     recovered = client.post("/login", json={"password": "correct"})
     assert recovered.status_code == 200
     assert recovered.json()["ok"] is True

@@ -418,6 +418,17 @@ async def login_post(request):
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
     failures = [t for t in LOGIN_FAILURES.get(client_ip, []) if now - t < LOGIN_WINDOW_SECONDS]
+    if len(failures) >= LOGIN_MAX_FAILURES:
+        retry_after = max(1, ceil(LOGIN_WINDOW_SECONDS - (now - min(failures))))
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": f"Demasiados intentos. Reintenta en {retry_after} segundos.",
+                "retry_after_seconds": retry_after,
+            },
+            status_code=429,
+            headers={"Retry-After": str(retry_after)},
+        )
     if username and admin_users.has_users():
         role = admin_users.verify_user(username, password) if password else None
         valid = role is not None
@@ -430,17 +441,6 @@ async def login_post(request):
     if valid:
         LOGIN_FAILURES.pop(client_ip, None)
         _audit_panel(user_label, "login", "panel", "ok")
-    elif len(failures) >= LOGIN_MAX_FAILURES:
-        retry_after = max(1, ceil(LOGIN_WINDOW_SECONDS - (now - min(failures))))
-        return JSONResponse(
-            {
-                "ok": False,
-                "error": f"Demasiados intentos. Reintenta en {retry_after} segundos.",
-                "retry_after_seconds": retry_after,
-            },
-            status_code=429,
-            headers={"Retry-After": str(retry_after)},
-        )
     else:
         failures.append(now)
         LOGIN_FAILURES[client_ip] = failures
