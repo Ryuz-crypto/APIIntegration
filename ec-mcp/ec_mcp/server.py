@@ -37,6 +37,24 @@ from .axis_workflow import (
     summarize_tunnel_status,
 )
 from .build import build_info
+from .central_client import ArubaCentralClient
+from .central_workflow import (
+    build_network_test_body,
+    extract_task_id,
+    parse_commands,
+    parse_ports,
+    resolve_family,
+    resolve_troubleshooting_device_type,
+    summarize_alerts,
+    summarize_clients,
+    summarize_devices,
+    summarize_events,
+    trend_metric,
+    validate_operation,
+)
+from .central_workflow import (
+    summarize_health as summarize_central_health,
+)
 from .cli_catalog import (
     catalog_entries,
     total_commands,
@@ -303,6 +321,30 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         )
         shared_axis[name] = client
         return client
+
+    shared_central: dict[str, ArubaCentralClient] = {}
+
+    def require_central() -> ArubaCentralClient:
+        if "default" in shared_central:
+            return shared_central["default"]
+        if not settings.central_enabled or not (
+            settings.central_client_id and settings.central_client_secret
+        ):
+            raise SecurityError(
+                "Aruba Central is not configured. Set EC_CENTRAL_ENABLED=true plus "
+                "EC_CENTRAL_CLIENT_ID and EC_CENTRAL_CLIENT_SECRET (HPE GreenLake OAuth2 credentials)."
+            )
+        client = ArubaCentralClient(
+            client_id=settings.central_client_id,
+            client_secret=settings.central_client_secret,
+            base_url=settings.central_base_url,
+            token_url=settings.central_token_url,
+            timeout=settings.central_timeout,
+            verify_tls=settings.central_verify_tls,
+        )
+        shared_central["default"] = client
+        return client
+
 
     DANGEROUS_OPERATION_PATTERN = re.compile(
         r"(?i)reboot|suspend|delete|remove|wipe|factory|purge|halt|shutdown|decommission"
@@ -3942,6 +3984,245 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             axis.commit_changes()
             audit.record("axis_commit", "commit", "axis", "ok", dry_run=False)
             return json_result({"applied": True, "committed": True}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    # --- Aruba Central (new Central REST API families) ----------------------
+
+    @mcp.tool()
+    def central_status() -> str:
+        """Check Aruba Central connectivity: fetches an OAuth2 token and runs a lightweight sites-health query. Read-only."""
+        try:
+            central = require_central()
+            payload = central.sites_health(params={"limit": 1})
+            audit.record("central_status", "read", settings.central_base_url, "ok")
+            return json_result({"connected": True, "base_url": settings.central_base_url, "probe": payload}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_get_sites(view: str = "summary", limit: int = 100) -> str:
+        """Get Aruba Central site health: view='summary' (per-site health scores), 'device' or 'client'. Read-only."""
+        try:
+            central = require_central()
+            params: dict[str, Any] = {"limit": limit}
+            if view == "device":
+                payload = central.sites_device_health(params=params)
+            elif view == "client":
+                payload = central.sites_client_health(params=params)
+            else:
+                payload = central.sites_health(params=params)
+            return json_result(summarize_central_health(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_get_devices(device_type: str = "ap", limit: int = 100, offset: int = 0) -> str:
+        """List Aruba Central devices by family: device_type='ap', 'switch' or 'gateway'. Read-only."""
+        try:
+            central = require_central()
+            family = resolve_family(device_type)
+            payload = central.list_devices(family, params={"limit": limit, "offset": offset})
+            return json_result(summarize_devices(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_get_device_details(device_type: str, serial: str) -> str:
+        """Get Aruba Central device detail by serial: device_type='ap', 'switch' or 'gateway'. Read-only."""
+        try:
+            central = require_central()
+            payload = central.get_device(resolve_family(device_type), serial)
+            return json_result(payload, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_get_device_trends(device_type: str, serial: str, metric: str, duration: str = "1D") -> str:
+        """Get bounded Aruba Central time-series trends for a device. metric depends on family (aps: throughput/frames/client-count; switches: throughput/frames/poe; gateways: cpu-utilization/memory-utilization/throughput/wan-availability). Read-only."""
+        try:
+            central = require_central()
+            family = resolve_family(device_type)
+            endpoint = trend_metric(family, metric)
+            payload = central.get_device_trends(family, serial, endpoint, params={"duration": duration})
+            return json_result(payload, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_get_clients(limit: int = 100, offset: int = 0, site_id: str = "") -> str:
+        """List Aruba Central wireless clients (optionally filtered by site_id). Read-only."""
+        try:
+            central = require_central()
+            payload = central.list_clients(params={"limit": limit, "offset": offset, "site_id": site_id})
+            return json_result(summarize_clients(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_get_wlans(ssid: str = "", limit: int = 100) -> str:
+        """List Aruba Central WLANs, or get one exact SSID when ssid is provided. Read-only."""
+        try:
+            central = require_central()
+            if ssid:
+                payload = central.get_wlan(ssid)
+            else:
+                payload = central.list_wlans(params={"limit": limit})
+            return json_result(payload, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_get_gateway_cluster(cluster_id: str = "") -> str:
+        """List Aruba Central gateway clusters, or get one cluster's members and health by cluster_id. Read-only."""
+        try:
+            central = require_central()
+            if cluster_id:
+                payload = central.get_cluster(cluster_id)
+            else:
+                payload = central.list_clusters()
+            return json_result(payload, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_get_alerts(site_id: str = "", severity: str = "", state: str = "active", limit: int = 100) -> str:
+        """Get Aruba Central alerts filtered by site, severity and state (active/cleared/deferred). Read-only."""
+        try:
+            central = require_central()
+            payload = central.get_alerts(
+                params={"site_id": site_id, "severity": severity, "state": state, "limit": limit}
+            )
+            return json_result(summarize_alerts(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_get_events(site_id: str = "", serial: str = "", severity: str = "", limit: int = 100) -> str:
+        """Get Aruba Central event records filtered by site, device serial and severity. Read-only."""
+        try:
+            central = require_central()
+            payload = central.get_events(
+                params={"site_id": site_id, "serial": serial, "severity": severity, "limit": limit}
+            )
+            return json_result(summarize_events(payload), settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_list_show_commands(device_type: str, serial: str) -> str:
+        """List the 'show' commands supported by an Aruba Central device. Read-only; use the catalog before central_run_show_commands."""
+        try:
+            central = require_central()
+            payload = central.list_show_commands(resolve_troubleshooting_device_type(device_type), serial)
+            return json_result(payload, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_run_show_commands(device_type: str, serial: str, commands_json: str, confirm: bool = False) -> str:
+        """Run 'show' commands on an Aruba Central device (read-only CLI diagnostics). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Returns a task_id: poll it with central_get_task_result."""
+        try:
+            require_writes("central_run_show_commands")
+            commands = parse_commands(commands_json)
+            device = resolve_troubleshooting_device_type(device_type)
+            if not confirm:
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {"device_type": device, "serial": serial, "commands": commands},
+                        "hint": "Pass confirm=true to execute the show commands on the device.",
+                    },
+                    settings.max_output_chars,
+                )
+            central = require_central()
+            payload = central.run_show_commands(device, serial, commands)
+            task_id = extract_task_id(payload)
+            audit.record("central_run_show_commands", serial, "central", "ok", dry_run=False)
+            return json_result({"applied": True, "task_id": task_id, "hint": "Poll central_get_task_result for output."}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_bounce_port(device_type: str, serial: str, ports_json: str, mode: str = "port", confirm: bool = False) -> str:
+        """Bounce ports (mode='port') or toggle PoE (mode='poe') on an Aruba Central switch or gateway. Disruptive: dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Returns a task_id: poll it with central_get_task_result."""
+        try:
+            require_writes("central_bounce_port")
+            ports = parse_ports(ports_json)
+            device = resolve_troubleshooting_device_type(device_type)
+            mode_value = mode.strip().lower()
+            if mode_value not in ("port", "poe"):
+                raise ValueError("mode must be 'port' or 'poe'")
+            if not confirm:
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {"device_type": device, "serial": serial, "ports": ports, "mode": mode_value},
+                        "hint": "Pass confirm=true to bounce the port(s). This is disruptive.",
+                    },
+                    settings.max_output_chars,
+                )
+            central = require_central()
+            payload = central.bounce_port(device, serial, ports, mode=mode_value)
+            task_id = extract_task_id(payload)
+            audit.record("central_bounce_port", serial, "central", "ok", dry_run=False)
+            return json_result({"applied": True, "task_id": task_id, "hint": "Poll central_get_task_result for status."}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_run_network_test(
+        device_type: str,
+        serial: str,
+        test_type: str,
+        destination: str,
+        port: int = 0,
+        count: int = 0,
+        confirm: bool = False,
+    ) -> str:
+        """Run a live network diagnostic (ping, traceroute, nslookup, tcp, http, https) from an Aruba Central device. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Returns a task_id: poll it with central_get_task_result using the matching operation."""
+        try:
+            require_writes("central_run_network_test")
+            endpoint, body = build_network_test_body(test_type, destination, port=port, count=count)
+            device = resolve_troubleshooting_device_type(device_type)
+            if not confirm:
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {
+                            "device_type": device,
+                            "serial": serial,
+                            "test": endpoint,
+                            "body": body,
+                        },
+                        "hint": "Pass confirm=true to run the network test on the device.",
+                    },
+                    settings.max_output_chars,
+                )
+            central = require_central()
+            payload = central.run_network_test(device, serial, endpoint, body)
+            task_id = extract_task_id(payload)
+            audit.record("central_run_network_test", serial, "central", "ok", dry_run=False)
+            return json_result(
+                {
+                    "applied": True,
+                    "task_id": task_id,
+                    "operation": endpoint,
+                    "hint": f"Poll central_get_task_result with operation='{endpoint}'.",
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_get_task_result(device_type: str, serial: str, task_id: str, operation: str = "showCommands") -> str:
+        """Get the result of an asynchronous Aruba Central troubleshooting task (showCommands, ping, traceroute, nslookup, tcp, http, https, portBounce, poeBounce) by task_id. Read-only."""
+        try:
+            central = require_central()
+            op = validate_operation(operation)
+            payload = central.get_task_result(resolve_troubleshooting_device_type(device_type), serial, task_id, op)
+            return json_result(payload, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 

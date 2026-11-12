@@ -1,12 +1,12 @@
 # ec-mcp — EdgeConnect SD-WAN MCP server
 
-**Versión: 9.2.0** en `main`. La validación de esta versión en el entorno real queda pendiente. La [preparación de auditoría](docs/AUDITORIA-9.2.md) no implementa ni certifica no repudio.
+**Versión: 9.3.0** en `main`. La validación de esta versión en el entorno real queda pendiente. La [preparación de auditoría](docs/AUDITORIA-9.2.md) no implementa ni certifica no repudio.
 
 El panel usa HTTP por defecto (`EC_ADMIN_TLS_ENABLED=false`). Si ya configuraste `true`, se respeta esa elección. HTTP no cifra las credenciales del panel; habilita HTTPS cuando dispongas de certificados o uses un proxy TLS. Esta opción es independiente de la verificación TLS de Orchestrators y SSE.
 
 Para agregar un destino desde Orquestadores o SSE, completa sus datos y usa **Guardar y activar**: el panel guarda el registro y solicita un reinicio del MCP para cargar los destinos. El reinicio aplica todos los cambios pendientes y puede cambiar la selección automática si no existe un destino predeterminado explícito; fija el destino deseado con **Por defecto** cuando utilices varios. **Guardar** permite posponer el reinicio. La opción **Aplicar a .env** sigue destinada a cambiar la configuración global del destino seleccionado.
 
-Estado actual: **9.2.0 estable** en `main`. Esta línea concentra el soporte vigente y añade: retiro del componente DashboardAPI-EC (el repositorio se enfoca en `ec-mcp`), multi-Orchestrator y multi-SSE (multi-tenant), estado real de servicios en el panel con auditoría estructurada (#88 Fases 1–3: SSH fiable, sondas reales de servicios, detección y remediación asistida con propuestas dry-run).
+Estado actual: **9.3.0 estable** en `main`. Esta línea concentra el soporte vigente y añade: retiro del componente DashboardAPI-EC (el repositorio se enfoca en `ec-mcp`), multi-Orchestrator y multi-SSE (multi-tenant), estado real de servicios en el panel con auditoría estructurada (#88 Fases 1–3: SSH fiable, sondas reales de servicios, detección y remediación asistida con propuestas dry-run).
 
 Esta entrega añade la capa de telemetría (PR #70): KPIs de infraestructura del Orchestrator (platform info, GMS server, disco, particiones BD, stats collectors), KPIs por appliance desde el Orchestrator (CPU/performance timeseries, interface state) y estadísticas real-time del appliance (`POST /stats/realtimeStats`, `POST /health`, disk usage) a través del proxy `/appliance/rest`, que alcanza los equipos por la red gestionada SD-WAN sin acceso WAN directo.
 
@@ -38,9 +38,14 @@ catálogo ECOS por SSH.
 - Panel administrativo para gestionar Orchestrators, editar todas las variables permitidas y aplicar cambios sin entrar por SSH.
 - Updater web con detección de GitHub público o privado, commit exacto, pruebas, respaldo y rollback.
 - Workflows MCP transaccionales BIO/ZTP (solo vía tools MCP; el panel web ya no incluye pestaña ZTP).
+- Sección opcional de **HPE Aruba Networking Central** (nuevas familias REST API v1:
+  monitoring, notifications, troubleshooting) con credenciales OAuth2 de HPE
+  GreenLake: salud de sites, inventario, clientes, WLANs, alertas, eventos y
+  diagnóstico en vivo (`show` commands, tests de red, bounce de puertos/PoE) bajo el mismo
+  gating de escrituras y auditoría.
 
 ## Herramientas MCP
-El servidor expone **125 tools**. La descripción completa de cada una (parámetros y
+El servidor expone **140 tools**. La descripción completa de cada una (parámetros y
 retorno) está disponible para el cliente MCP en `tools/list`. Resumen por dominio:
 
 | Dominio | Tools | Qué hace |
@@ -52,10 +57,11 @@ retorno) está disponible para el cliente MCP en `tools/list`. Resumen por domin
 | Overlays / BIO | `list_overlay_sources`, `prepare_overlay_clone`, `preview_overlay_plan`, `apply_overlay_plan`, `verify_overlay_plan`, `rollback_overlay_plan` | Clonación y despliegue transaccional de overlays/BIO: diff, plan inmutable, confirmación exacta y rollback. |
 | Seguridad e incidentes | `get_ids_ips_state`, `get_ids_ips_events`, `get_security_log`, `get_zone_matrix`, `get_ddos_status`, `get_sse_status`, `get_security_posture`, `correlate_incidents`, `propose_remediation`, `list_response_options`, `block_threat` | Postura IDS/IPS, logs de seguridad, matriz de zonas, DDoS e integraciones SSE. `correlate_incidents` detecta y prioriza; `propose_remediation` genera propuestas **dry-run** con evidencia/alcance/riesgo/reversión (nunca aplica); `block_threat` aplica bloqueos con `confirm=true`. |
 | SSE — Axis Security (55 tools) | `axis_health`, `axis_list_tags`, `axis_get_tag`, `axis_create_tag`, `axis_update_tag`, `axis_delete_tag`, `axis_list_applications`, `axis_get_application`, `axis_create_application`, `axis_update_application`, `axis_delete_application`, `axis_list_connectors`, `axis_get_connector`, `axis_connector_status`, `axis_create_connector`, `axis_update_connector`, `axis_delete_connector`, `axis_regenerate_connector`, `axis_list_connector_zones`, `axis_get_connector_zone`, `axis_create_connector_zone`, `axis_update_connector_zone`, `axis_delete_connector_zone`, `axis_list_ip_categories`, `axis_get_ip_category`, `axis_create_ip_category`, `axis_delete_ip_category`, `axis_list_web_categories`, `axis_get_web_category`, `axis_create_web_category`, `axis_delete_web_category`, `axis_list_ssl_exclusions`, `axis_create_ssl_exclusion`, `axis_delete_ssl_exclusion`, `axis_list_groups`, `axis_create_group`, `axis_delete_group`, `axis_list_users`, `axis_get_user`, `axis_create_user`, `axis_delete_user`, `axis_list_locations`, `axis_get_location`, `axis_create_location`, `axis_delete_location`, `axis_list_sub_locations`, `axis_create_sub_location`, `axis_delete_sub_location`, `axis_list_tunnels`, `axis_tunnel_status`, `axis_create_tunnel`, `axis_delete_tunnel`, `axis_list_certificates`, `axis_list_ipsec_locations`, `axis_commit` | Gestión completa de Axis Security: tags, aplicaciones, connectors (+zonas, regeneración), categorías IP/web, exclusiones SSL, grupos, usuarios, locations/sub-locations, túneles IPsec, certificados, estado de salud/commit. Cada herramienta acepta `target` opcional (multi-tenant); las `axis_create/update/delete/regenerate/commit` requieren permisos de escritura. |
+| Aruba Central (15 tools) | `central_status`, `central_get_sites`, `central_get_devices`, `central_get_device_details`, `central_get_device_trends`, `central_get_clients`, `central_get_wlans`, `central_get_gateway_cluster`, `central_get_alerts`, `central_get_events`, `central_list_show_commands`, `central_run_show_commands`, `central_run_network_test`, `central_bounce_port`, `central_get_task_result` | HPE Aruba Networking Central (nuevas familias REST API v1): salud de sites, inventario APs/switches/gateways, tendencias, clientes, WLANs, clusters de gateways, alertas y eventos. Diagnóstico en vivo: catálogo y ejecución de comandos `show`, tests de red (ping/traceroute/nslookup/tcp/http/https), bounce de puertos/PoE y consulta de tareas asíncronas. `central_run_show_commands`, `central_run_network_test` y `central_bounce_port` son escritura con dry-run + `confirm=true` bajo `EC_ALLOW_WRITE_TOOLS`. Sección desactivada por defecto (`EC_CENTRAL_ENABLED`). |
 | SD-WAN AI (Orchestrator 10.0) | `ask_sdwan_ai`, `get_sdwan_ai_chat_logs`, `clear_sdwan_ai_context`, `get_sase_copilot_status` | Conversación con la SD-WAN AI embebida del Orchestrator: preguntar, leer logs del chat, limpiar contexto y consultar estado del copiloto SASE. |
 | Dashboard NOC | `dashboard_snapshot`, `dashboard_render`, `dashboard_remote_config`, `dashboard_deploy_remote`, `dashboard_remote_status`, `dashboard_refresh_remote` | Snapshots y render del dashboard NOC; despliegue remoto opcional vía SSH (escritura, confirmación). |
 
-Total: **125 tools**.
+Total: **140 tools**.
 
 `run_show_api` usa el Orchestrator como transporte:
 
@@ -334,7 +340,7 @@ Los informes aplican redacción de patrones y protección contra fórmulas, pero
 deben revisarse antes de compartirlos porque pueden contener datos operativos.
 El PDF es un resumen y acorta campos largos; CSV y Excel permiten mayor detalle.
 
-La pestaña **Tools** (`/api/tools`, `/api/tools/toggle`) muestra las 125 tools
+La pestaña **Tools** (`/api/tools`, `/api/tools/toggle`) muestra las 140 tools
 MCP en **cuadrícula con sliders** (switch) para activar/desactivar sin bajar la
 página; se guarda en `EC_MCP_DISABLED_TOOLS`, aplica al reiniciar y también es
 editable en Variables. El botón **Sugerencia
@@ -427,6 +433,18 @@ Una variable ya presente en el proceso no es reemplazada por el archivo.
 |---|---:|---|
 | `EC_ORCHESTRATORS_JSON` | vacío | Blob JSON con N Orchestrators nombrados. Lo escribe el panel al aplicar. Si está vacío, se usa `EC_ORCHESTRATOR_*` (un solo target `default`). |
 | `EC_SSE_PLATFORMS_JSON` | vacío | Blob JSON con N plataformas SSE nombradas. Lo escribe el panel al aplicar. Si está vacío, se usa `EC_AXIS_*` (un solo target `default`). |
+
+### Aruba Central
+
+| Variable | Predeterminado | Uso |
+|---|---:|---|
+| `EC_CENTRAL_ENABLED` | `false` | Habilita la sección de Aruba Central (nuevas familias REST API v1). |
+| `EC_CENTRAL_CLIENT_ID` | vacío | Client ID OAuth2 creado en HPE GreenLake (Personal API clients). |
+| `EC_CENTRAL_CLIENT_SECRET` | vacío | Client Secret OAuth2. El token de acceso se obtiene y refresca automáticamente. |
+| `EC_CENTRAL_BASE_URL` | `https://us.api.central.arubanetworks.com` | API gateway base URL de tu cuenta Central (p.ej. `https://us5.api.central.arubanetworks.com`). |
+| `EC_CENTRAL_TOKEN_URL` | endpoint SSO de HPE | Endpoint OAuth2 alternativo (Central on-prem). |
+| `EC_CENTRAL_VERIFY_TLS` | `true` | Verifica el certificado TLS de Central. |
+| `EC_CENTRAL_TIMEOUT` | `30` | Timeout HTTP en segundos. |
 
 ### SSH opcional a appliances
 
@@ -619,7 +637,7 @@ La última llamada debe devolver `applied: true`,
 
 ## Upgrade por terminal
 
-Procedimiento para actualizar a **9.2.0 estable desde `main`**. Actualiza solamente el servidor MCP; no requiere cambiar firmware ni modificar configuración de red en los appliances. Sustituye `~/APIIntegration` por la ruta real de la instalación.
+Procedimiento para actualizar a **9.3.0 estable desde `main`**. Actualiza solamente el servidor MCP; no requiere cambiar firmware ni modificar configuración de red en los appliances. Sustituye `~/APIIntegration` por la ruta real de la instalación.
 
 ### 1. Preparar y respaldar
 
@@ -661,7 +679,7 @@ git fetch origin
 git switch --detach origin/main
 cd ec-mcp
 ./scripts/install.sh --non-interactive
-./.venv/bin/python -c "from ec_mcp import __version__; assert __version__ == '9.2.0'; print(__version__)"
+./.venv/bin/python -c "from ec_mcp import __version__; assert __version__ == '9.3.0'; print(__version__)"
 ```
 
 El instalador conserva `.env` y usa `requirements-stable.txt` para instalar runtime y QA, incluido pytest. Revisa las claves nuevas de `.env.example` y añade solo las que falten; no reemplaces el archivo ni regeneres secretos, conexiones o puertos. La configuración del proceso/systemd prevalece sobre `.env`.
@@ -690,7 +708,7 @@ curl -fsS http://127.0.0.1:8000/health
 curl -I http://127.0.0.1:9090/login
 ```
 
-Sustituye 8000/9090 por tus puertos. `/health` comprueba el transporte; valida también `orchestrator_info()`, `list_appliances()` y `run_show_api(command="show version", appliance_id="<nePk-real>")` desde el cliente. Confirma versión 9.2.0, inventario real, respuesta por API y funcionamiento del login del panel antes de habilitar escrituras. En stdio, reinicia el cliente MCP.
+Sustituye 8000/9090 por tus puertos. `/health` comprueba el transporte; valida también `orchestrator_info()`, `list_appliances()` y `run_show_api(command="show version", appliance_id="<nePk-real>")` desde el cliente. Confirma versión 9.3.0, inventario real, respuesta por API y funcionamiento del login del panel antes de habilitar escrituras. En stdio, reinicia el cliente MCP.
 
 ### 4. Recuperar si falla
 
