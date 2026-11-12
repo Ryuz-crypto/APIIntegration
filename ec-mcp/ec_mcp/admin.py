@@ -757,7 +757,7 @@ async def api_default_target(request):
     try:
         _snapshot_backup(f"default:{kind}:{name}")
         update_env({key: name})
-    except ValueError as exc:
+    except (OSError, ValueError) as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     _audit_panel(session["user"], "default_target", f"{kind}:{name or '(auto)'}", "ok")
     return JSONResponse({"ok": True, "message": f"Target por defecto: {name or '(automático)'}"})
@@ -871,7 +871,10 @@ async def api_apply(request):
             "EC_SSH_HOST": entry.get("ssh_host") or "",
         }
         target_label = f"Orquestador '{name}'"
-    _snapshot_backup(f"apply:{kind}:{name}")
+    try:
+        _snapshot_backup(f"apply:{kind}:{name}")
+    except OSError:
+        return JSONResponse({"ok": False, "error": "No se pudo crear el respaldo; no se aplicaron cambios."}, status_code=500)
     # Persistir el registro completo como blobs JSON para el runtime multi-target.
     for key, value in registry.to_env_blob().items():
         wanted[key] = value
@@ -1889,7 +1892,10 @@ async def api_backups_create(request):
     session, denied = _authorize(request, "write")
     if denied:
         return denied
-    name = _snapshot_backup("manual")
+    try:
+        name = _snapshot_backup("manual")
+    except OSError:
+        return JSONResponse({"ok": False, "error": "No se pudo crear el backup"}, status_code=500)
     if not name:
         return JSONResponse({"ok": False, "error": "No se pudo crear el backup"}, status_code=500)
     _audit_panel(session["user"], "backup_create", name, "ok")
