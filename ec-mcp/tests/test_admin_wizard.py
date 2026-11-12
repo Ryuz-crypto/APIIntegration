@@ -848,7 +848,7 @@ def test_page_has_eight_languages_with_translations():
         assert name in PAGE
     for lang in ("pt", "it", "de", "mx", "fr", "ja"):
         assert f"I18N_L.{lang}" in PAGE or f'"{lang}"' in PAGE
-    assert "I18N.en[k]||I18N.es[k]" in PAGE  # fallback en/es en t()
+    assert "I18N.es[k]||I18N.en[k]" in PAGE  # fallback es/en en t()
 
 
 def test_new_routes_registered():
