@@ -483,7 +483,8 @@ exponer secretos. El panel gestiona los targets Central con el mismo registro
 | Variable | Predeterminado | Uso |
 |---|---:|---|
 | `EC_MCP_ENV_FILE` | búsqueda automática | Ruta explícita al archivo `.env`. |
-| `EC_MCP_AUTH_TOKEN` | vacío | Bearer token obligatorio para HTTP/SSE; mínimo 32 bytes aleatorios. |
+| `EC_MCP_AUTH_TOKEN` | vacío | Bearer token obligatorio para HTTP/SSE; mínimo 32 bytes aleatorios. Token principal. |
+| `EC_MCP_AUTH_TOKENS_JSON` | vacío | Tokens con nombre, uno por plataforma de IA (`{"Vibe":"<token>"}`), gestionados desde la pestaña **Tokens MCP** del panel: se muestran una sola vez al crearse, se pueden revocar de forma independiente y no afectan al token principal. |
 | `EC_MCP_HOST` | `127.0.0.1` | Dirección de escucha HTTP/SSE. |
 | `EC_MCP_PORT` | `8000` | Puerto HTTP/SSE. |
 | `EC_MCP_ALLOWED_HOSTS` | vacío | Hosts públicos separados por coma para protección contra DNS rebinding; incluye puerto si el cliente lo envía. |

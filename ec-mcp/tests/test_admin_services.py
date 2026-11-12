@@ -40,6 +40,15 @@ class _StubClient:
         return self._response
 
 
+@pytest.fixture(autouse=True)
+def _clear_status_cache():
+    import ec_mcp.admin_services as admin_services
+
+    admin_services.clear_status_cache()
+    yield
+    admin_services.clear_status_cache()
+
+
 def test_probe_orchestrator_reports_real_latency(monkeypatch):
     recorded = []
     monkeypatch.setattr(httpx, "Client", _StubClient(_StubResponse(200), recorded))
@@ -245,3 +254,32 @@ def test_apply_orchestrator_handles_none_fields(tmp_path: Path, monkeypatch):
     assert response.json()["ok"] is True
     env = (tmp_path / ".env").read_text()
     assert "EC_ORCHESTRATOR_URL=https://orch.example.com" in env
+
+
+def test_services_status_cache_reuses_recent_report_and_can_clear():
+    import ec_mcp.admin_services as admin_services
+
+    admin_services.clear_status_cache()
+    monkey = pytest.MonkeyPatch()
+
+    class _Registry:
+        def list_orchestrators(self):
+            return {}
+
+        def list_sse(self):
+            return {}
+
+        def list_central(self):
+            return {}
+
+    monkey.setattr(admin_services, "load_registry", lambda: _Registry())
+    monkey.setattr(admin_services, "probe_update_service", lambda: {"state": "idle"})
+    monkey.setattr(admin_services, "probe_mcp_transport", lambda: {"latency": 0.01, "status_code": 200, "url": "u"})
+    first = admin_services.services_status(probe=True)
+    second = admin_services.services_status(probe=True)
+    assert first["checked_at"] == second["checked_at"]
+    admin_services.clear_status_cache()
+    third = admin_services.services_status(probe=True)
+    assert third["checked_at"] != first["checked_at"]
+    monkey.undo()
+    admin_services.clear_status_cache()

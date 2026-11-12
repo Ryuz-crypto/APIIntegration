@@ -299,7 +299,24 @@ SETTINGS = (
     ),
     Setting("EC_MCP_AUDIT_LOG", "Seguridad", "Archivo de auditoría", default="logs/mcp-audit.jsonl", step="security"),
     Setting("EC_MCP_PROFILES_DIR", "Seguridad", "Directorio de perfiles", step="security"),
-    Setting("EC_MCP_AUTH_TOKEN", "Transporte MCP", "Bearer token MCP", "password", secret=True, step="transport"),
+    Setting(
+        "EC_MCP_AUTH_TOKEN",
+        "Transporte MCP",
+        "Bearer token MCP",
+        "password",
+        secret=True,
+        step="transport",
+        help="Token principal. Genera tokens adicionales por plataforma de IA desde la pestaña Tokens MCP.",
+    ),
+    Setting(
+        "EC_MCP_AUTH_TOKENS_JSON",
+        "Transporte MCP",
+        'Tokens con nombre (JSON {"Vibe": "..."})',
+        "password",
+        secret=True,
+        step="transport",
+        help="Tokens independientes por plataforma de IA, gestionados desde la pestaña Tokens MCP. Se pueden revocar sin afectar al token principal.",
+    ),
     Setting("EC_MCP_HOST", "Transporte MCP", "IP de escucha MCP", default="127.0.0.1", step="transport"),
     Setting(
         "EC_MCP_PORT", "Transporte MCP", "Puerto MCP", "integer", "8000", minimum=1, maximum=65535, step="transport"

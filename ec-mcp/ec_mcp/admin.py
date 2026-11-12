@@ -38,6 +38,7 @@ import time
 from collections import deque
 from math import ceil
 from pathlib import Path
+from typing import Any
 
 import httpx
 from starlette.applications import Starlette
@@ -1053,6 +1054,117 @@ async def api_restart_result(request):
     return JSONResponse(state)
 
 
+def _mcp_token_hint(token: str) -> str:
+    if len(token) <= 8:
+        return "****"
+    return f"{token[:4]}…{token[-4:]}"
+
+
+def _public_mcp_tokens() -> dict[str, Any]:
+    """List MCP auth tokens without ever returning their values."""
+    from .transport import load_named_auth_tokens
+
+    entries: list[dict[str, Any]] = []
+    env_token = os.environ.get("EC_MCP_AUTH_TOKEN", "").strip()
+    if env_token:
+        entries.append(
+            {
+                "name": "Principal",
+                "source": "env",
+                "hint": _mcp_token_hint(env_token),
+                "revocable": False,
+            }
+        )
+    try:
+        named = load_named_auth_tokens()
+    except SystemExit as exc:
+        return {"ok": False, "error": str(exc), "tokens": entries}
+    for name in sorted(named):
+        entries.append(
+            {
+                "name": name,
+                "source": "json",
+                "hint": _mcp_token_hint(named[name]),
+                "revocable": True,
+            }
+        )
+    return {"ok": True, "tokens": entries}
+
+
+async def api_mcp_tokens_list(request):
+    _session, denied = _authorize(request, "read")
+    if denied:
+        return denied
+    return JSONResponse(_public_mcp_tokens())
+
+
+async def api_mcp_tokens_create(request):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    body = await request.json()
+    name = str(body.get("name") or "").strip()
+    if not name or any(character.isspace() for character in name) or any(c in name for c in "\"'\\\n\r\x00"):
+        return JSONResponse(
+            {"ok": False, "error": "El nombre es obligatorio y no puede contener espacios ni comillas"}, status_code=400
+        )
+    from .transport import load_named_auth_tokens, validate_token_strength
+
+    try:
+        named = load_named_auth_tokens()
+    except SystemExit as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    if name in named or name == "Principal":
+        return JSONResponse({"ok": False, "error": f"Ya existe un token llamado '{name}'"}, status_code=400)
+    token = secrets.token_urlsafe(48)
+    validate_token_strength(token)
+    named[name] = token
+    try:
+        _snapshot_backup(f"mcp-token:{name}")
+        update_env({"EC_MCP_AUTH_TOKENS_JSON": json.dumps(named, separators=(",", ":"))})
+        os.environ["EC_MCP_AUTH_TOKENS_JSON"] = json.dumps(named, separators=(",", ":"))
+    except (OSError, ValueError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+    _audit_panel(session["user"], "mcp_token_create", name, "ok")
+    return JSONResponse(
+        {
+            "ok": True,
+            "message": f"Token '{name}' creado. Guárdalo ahora: no se volverá a mostrar. Reinicia el MCP para activarlo.",
+            "name": name,
+            "token": token,
+        }
+    )
+
+
+async def api_mcp_tokens_delete(request):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    body = await request.json()
+    name = str(body.get("name") or "").strip()
+    from .transport import load_named_auth_tokens
+
+    try:
+        named = load_named_auth_tokens()
+    except SystemExit as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    if name not in named:
+        return JSONResponse({"ok": False, "error": f"No existe el token '{name}'"}, status_code=404)
+    del named[name]
+    try:
+        _snapshot_backup(f"mcp-token-delete:{name}")
+        if named:
+            update_env({"EC_MCP_AUTH_TOKENS_JSON": json.dumps(named, separators=(",", ":"))})
+            os.environ["EC_MCP_AUTH_TOKENS_JSON"] = json.dumps(named, separators=(",", ":"))
+        else:
+            update_env({}, clear_secrets=["EC_MCP_AUTH_TOKENS_JSON"])
+            os.environ.pop("EC_MCP_AUTH_TOKENS_JSON", None)
+    except (OSError, ValueError) as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+    _audit_panel(session["user"], "mcp_token_delete", name, "ok")
+    return JSONResponse({"ok": True, "message": f"Token '{name}' revocado. Reinicia el MCP para aplicarlo."})
+
+
 async def api_users_list(request):
     _session, denied = _authorize(request, "users")
     if denied:
@@ -1981,6 +2093,9 @@ def build_admin_app() -> Starlette:
             Route("/api/users", api_users_save, methods=["POST"]),
             Route("/api/users/delete", api_users_delete, methods=["POST"]),
             Route("/api/users/password", api_users_password, methods=["POST"]),
+            Route("/api/mcp-tokens", api_mcp_tokens_list, methods=["GET"]),
+            Route("/api/mcp-tokens", api_mcp_tokens_create, methods=["POST"]),
+            Route("/api/mcp-tokens/delete", api_mcp_tokens_delete, methods=["POST"]),
             Route("/api/tls", api_tls_status, methods=["GET"]),
             Route("/api/tls/upload", api_tls_upload, methods=["POST"]),
             Route("/api/tls/delete", api_tls_delete, methods=["POST"]),
