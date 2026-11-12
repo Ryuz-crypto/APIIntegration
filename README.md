@@ -1,6 +1,6 @@
 # APIIntegration — ec-mcp
 
-[![ec-mcp](https://img.shields.io/badge/ec--mcp-9.4.0%20audit--readiness-7B61FF)](ec-mcp/README.md)
+[![ec-mcp](https://img.shields.io/badge/ec--mcp-9.5.0%20audit--readiness-7B61FF)](ec-mcp/README.md)
 [![Human Verified](https://img.shields.io/badge/human--verified-%E2%9C%93-2EA44F)](SECURITY.md)
 [![ec-mcp CI](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml/badge.svg)](https://github.com/Ryuz-crypto/APIIntegration/actions/workflows/ec-mcp.yml)
 [![Licencia restringida](https://img.shields.io/badge/licencia-uso_restringido-blue.svg)](LICENSE)
@@ -9,7 +9,7 @@ Servidor **MCP (Model Context Protocol)** para descubrir, consultar y operar ent
 
 ## ec-mcp — MCP y panel de administración web
 
-Versión en `main`: **9.4.0**. La validación de esta versión en el servidor real queda pendiente. Referencia exhaustiva en [ec-mcp/README.md](ec-mcp/README.md) y plantilla completa en [ec-mcp/.env.example](ec-mcp/.env.example).
+Versión en `main`: **9.5.0**. La validación de esta versión en el servidor real queda pendiente. Referencia exhaustiva en [ec-mcp/README.md](ec-mcp/README.md) y plantilla completa en [ec-mcp/.env.example](ec-mcp/.env.example).
 
 ### Instalación (Linux)
 

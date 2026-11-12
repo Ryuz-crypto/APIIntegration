@@ -561,7 +561,7 @@ def test_tools_list_toggle_and_runtime_filter(client, env, monkeypatch):
     r = client.get("/api/tools")
     assert r.status_code == 200
     data = r.json()
-    assert data["total"] == 142
+    assert data["total"] == 144
     assert data["disabled"] == []
     name = data["tools"][0]["name"]
     off = client.post("/api/tools/toggle", json={"name": name, "enabled": False})
@@ -572,11 +572,11 @@ def test_tools_list_toggle_and_runtime_filter(client, env, monkeypatch):
 
     mcp = server.create_server()
     assert name not in {t.name for t in mcp._tool_manager.list_tools()}
-    assert len(mcp._tool_manager.list_tools()) == 141
+    assert len(mcp._tool_manager.list_tools()) == 143
     on = client.post("/api/tools/toggle", json={"name": name, "enabled": True})
     assert on.json()["disabled"] == []
     mcp2 = server.create_server()
-    assert len(mcp2._tool_manager.list_tools()) == 142
+    assert len(mcp2._tool_manager.list_tools()) == 144
     admin._TOOLS_CACHE = None
 
 
@@ -584,7 +584,7 @@ def test_agent_prompt_endpoint_includes_skills(client):
     r = client.get("/api/agent-prompt")
     assert r.status_code == 200
     data = r.json()
-    assert data["tools_total"] == 142
+    assert data["tools_total"] == 144
     assert "EDGECONNECT_NOC_OPS_SKILL.md" in data["prompt"]
     assert "AI_AGENT_SKILL_RECOMMENDATIONS.md" in data["prompt"]
     assert "sugerencia" in data["prompt"].lower()
