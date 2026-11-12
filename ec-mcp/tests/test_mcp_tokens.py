@@ -140,3 +140,89 @@ def test_tools_filter_includes_central_domain():
 
     assert 'value="central"' in PAGE
     assert "dom_central" in PAGE
+
+
+def test_token_store_hot_reloads_named_tokens(tmp_path, monkeypatch):
+
+    from ec_mcp.transport import TokenStore
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("EC_MCP_AUTH_TOKEN=env-token-value-0123456789abcdef\n", encoding="utf-8")
+    monkeypatch.setenv("EC_MCP_ENV_FILE", str(env_file))
+    monkeypatch.setenv("EC_MCP_AUTH_TOKEN", "env-token-value-0123456789abcdef")
+    monkeypatch.delenv("EC_MCP_AUTH_TOKENS_JSON", raising=False)
+
+    store = TokenStore(["env-token-value-0123456789abcdef"], ttl=60.0)
+    assert store.current() == ["env-token-value-0123456789abcdef"]
+
+    second = _strong()
+    env_file.write_text(
+        "EC_MCP_AUTH_TOKEN=env-token-value-0123456789abcdef\n"
+        + "EC_MCP_AUTH_TOKENS_JSON="
+        + json.dumps({"Vibe": second})
+        + "\n",
+        encoding="utf-8",
+    )
+    store.force_refresh()
+    tokens = store.current()
+    assert second in tokens
+    assert "env-token-value-0123456789abcdef" in tokens
+
+    env_file.write_text(
+        "EC_MCP_AUTH_TOKEN=env-token-value-0123456789abcdef\nEC_MCP_AUTH_TOKENS_JSON={broken\n",
+        encoding="utf-8",
+    )
+    store.force_refresh()
+    assert second in store.current()
+
+    env_file.write_text("EC_MCP_AUTH_TOKEN=env-token-value-0123456789abcdef\n", encoding="utf-8")
+    store.force_refresh()
+    assert second not in store.current()
+
+
+def test_middleware_uses_hot_reload(tmp_path, monkeypatch):
+    import asyncio
+
+    from ec_mcp.transport import BearerAuthMiddleware, TokenStore
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("EC_MCP_AUTH_TOKEN=env-token-value-0123456789abcdef\n", encoding="utf-8")
+    monkeypatch.setenv("EC_MCP_ENV_FILE", str(env_file))
+    monkeypatch.setenv("EC_MCP_AUTH_TOKEN", "env-token-value-0123456789abcdef")
+    monkeypatch.delenv("EC_MCP_AUTH_TOKENS_JSON", raising=False)
+
+    reached = []
+
+    class _App:
+        async def __call__(self, scope, receive, send):
+            reached.append(scope.get("path"))
+
+    middleware = BearerAuthMiddleware(_App(), TokenStore(["env-token-value-0123456789abcdef"]))
+
+    async def _send(message):
+        pass
+
+    def run(token: str):
+        reached.clear()
+        scope = {
+            "type": "http",
+            "path": "/mcp",
+            "headers": [(b"authorization", f"Bearer {token}".encode())],
+            "client": ("127.0.0.1", 1),
+        }
+        asyncio.run(middleware(scope, None, _send))
+
+    fresh = _strong()
+    run(fresh)
+    assert reached == []
+
+    env_file.write_text(
+        "EC_MCP_AUTH_TOKEN=env-token-value-0123456789abcdef\n"
+        + "EC_MCP_AUTH_TOKENS_JSON="
+        + json.dumps({"Vibe": fresh})
+        + "\n",
+        encoding="utf-8",
+    )
+    middleware.store.force_refresh()
+    run(fresh)
+    assert reached == ["/mcp"]
