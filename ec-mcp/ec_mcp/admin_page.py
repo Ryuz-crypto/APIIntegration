@@ -1172,12 +1172,14 @@ async function saveConfig(restart){
  try{var r=await api('/api/config',collectConfig());notice(r.message||r.error,r.ok?'ok':'err');if(!r.ok)return;CONFIG=await api('/api/config');if(restart)await doRestart();else renderConfig()}catch(e){notice(e.message,'err')}
 }
 function restartDialogHtml(){
- var orchs=(STATE&&STATE.orchestrators)||[],sses=(STATE&&STATE.sse_platforms)||[];
+ var orchs=(STATE&&STATE.orchestrators)||[],sses=(STATE&&STATE.sse_platforms)||[],cens=(STATE&&STATE.central_platforms)||[];
  var defO=((orchs.find(function(o){return o.default})||orchs.find(function(o){return o.active})||{}).name)||'';
  var defS=((sses.find(function(o){return o.default})||sses.find(function(o){return o.active})||{}).name)||'';
+ var defC=((cens.find(function(o){return o.default})||cens.find(function(o){return o.active})||{}).name)||'';
  var oradio='<label class=\"clear\"><input type=\"radio\" name=\"rst-orch\" value=\"\"'+(defO?'':' checked')+'> —</label>'+orchs.map(function(o){return '<label class=\"clear\"><input type=\"radio\" name=\"rst-orch\" value=\"'+esc(o.name)+'\"'+(o.name===defO?' checked':'')+'> '+esc(o.name)+'</label>'}).join('');
  var sradio='<label class=\"clear\"><input type=\"radio\" name=\"rst-sse\" value=\"\"'+(defS?'':' checked')+'> —</label>'+sses.map(function(o){return '<label class=\"clear\"><input type=\"radio\" name=\"rst-sse\" value=\"'+esc(o.name)+'\"'+(o.name===defS?' checked':'')+'> '+esc(o.name)+'</label>'}).join('');
- return '<dialog id=\"restart-dlg\" style=\"max-width:560px;width:calc(100% - 30px)\"><h3>'+t('btn_save_restart')+'</h3><p class=\"help\">'+t('targets_h')+'</p><div class=\"group\"><h3>'+t('h2_orch')+'</h3>'+oradio+'</div><div class=\"group\"><h3>'+t('h2_sse')+'</h3>'+sradio+'</div><div class=\"actions\"><button onclick=\"submitRestart()\">'+t('btn_save_restart_short')+'</button><button class=\"secondary\" onclick=\"closeRestart()\">'+t('custom_cancel')+'</button></div></dialog>';
+ var cradio='<label class=\"clear\"><input type=\"radio\" name=\"rst-central\" value=\"\"'+(defC?'':' checked')+'> —</label>'+cens.map(function(o){return '<label class=\"clear\"><input type=\"radio\" name=\"rst-central\" value=\"'+esc(o.name)+'\"'+(o.name===defC?' checked':'')+'> '+esc(o.name)+'</label>'}).join('');
+ return '<dialog id=\"restart-dlg\" style=\"max-width:560px;width:calc(100% - 30px);background:var(--panel-bg,#0d2c38);color:var(--panel-fg,#fff)\"><h3>'+t('btn_save_restart')+'</h3><p class=\"help\">'+t('targets_h')+'</p><div class=\"group\"><h3>'+t('h2_orch')+'</h3>'+oradio+'</div><div class=\"group\"><h3>'+t('h2_sse')+'</h3>'+sradio+'</div><div class=\"group\"><h3>'+t('h2_central')+'</h3>'+cradio+'</div><div class=\"actions\"><button onclick=\"submitRestart()\">'+t('btn_save_restart_short')+'</button><button class=\"secondary\" onclick=\"closeRestart()\">'+t('custom_cancel')+'</button></div></dialog>';
 }
 function openRestart(){if(!q('#restart-dlg'))q('#app').innerHTML+=restartDialogHtml();var d=q('#restart-dlg');d.showModal?d.showModal():d.setAttribute('open','')}
 function closeRestart(){var d=q('#restart-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
@@ -1185,11 +1187,13 @@ async function restartServices(){openRestart()}
 async function submitRestart(){
  var orch=(document.querySelector('input[name=\"rst-orch\"]:checked')||{value:''}).value||'';
  var sse=(document.querySelector('input[name=\"rst-sse\"]:checked')||{value:''}).value||'';
+ var central=(document.querySelector('input[name=\"rst-central\"]:checked')||{value:''}).value||'';
  closeRestart();
  try{
   var r=await api('/api/config',collectConfig());notice(r.message||r.error,r.ok?'ok':'err');if(!r.ok)return;
   if(orch){var a=await api('/api/apply',{name:orch,kind:'orchestrator'});notice(a.message||a.error,a.ok?'ok':'err');if(!a.ok)return}
   if(sse){var b=await api('/api/apply',{name:sse,kind:'sse'});notice(b.message||b.error,b.ok?'ok':'err');if(!b.ok)return}
+  if(central){var c=await api('/api/apply',{name:central,kind:'central'});notice(c.message||c.error,c.ok?'ok':'err');if(!c.ok)return}
   CONFIG=await api('/api/config');STATE=await api('/api/state');renderConfig();
   await doRestart();
  }catch(e){notice(e.message,'err')}
