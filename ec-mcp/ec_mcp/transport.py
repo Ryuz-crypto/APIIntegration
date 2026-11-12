@@ -91,12 +91,11 @@ class TokenStore:
         self._static = list(tokens)
         self._named: list[str] = []
         self._ttl = ttl
-        self._at = 0.0
+        self._expires = 0.0
 
     def current(self) -> list[str]:
         now = time.monotonic()
-        if now - self._at >= self._ttl:
-            self._at = now
+        if now >= self._expires:
             blob = _env_file_value("EC_MCP_AUTH_TOKENS_JSON") or os.environ.get("EC_MCP_AUTH_TOKENS_JSON", "")
             try:
                 named = load_named_auth_tokens(blob)
@@ -105,6 +104,7 @@ class TokenStore:
                 for token in self._named:
                     named[str(len(named))] = token
             self._named = [token for token in named.values() if token not in self._static]
+            self._expires = now + self._ttl
         tokens = list(self._static)
         for token in self._named:
             if token not in tokens:
@@ -112,7 +112,7 @@ class TokenStore:
         return tokens
 
     def force_refresh(self) -> None:
-        self._at = 0.0
+        self._expires = 0.0
 
 
 class BearerAuthMiddleware:
