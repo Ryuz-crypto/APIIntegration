@@ -171,6 +171,7 @@ def services_status(probe: bool = True) -> dict[str, Any]:
         "probe": bool(probe),
         "orchestrators": [],
         "sse_platforms": [],
+        "central_platforms": [],
         "update_worker": {},
         "mcp_transport": {},
     }
@@ -195,6 +196,15 @@ def services_status(probe: bool = True) -> dict[str, Any]:
             item.update({"state": "down", "error": str(exc)})
         item["checked_at"] = _now().isoformat()
         report["sse_platforms"].append(item)
+    for name, entry in sorted((registry.list_central() or {}).items()):
+        item = {"name": name}
+        try:
+            result = probe_central(entry)
+            item.update({"state": "up", **result})
+        except (ServiceProbeError, httpx.HTTPError, ValueError) as exc:
+            item.update({"state": "down", "error": str(exc)})
+        item["checked_at"] = _now().isoformat()
+        report["central_platforms"].append(item)
     try:
         report["update_worker"] = probe_update_service()
     except (OSError, ValueError) as exc:
@@ -207,7 +217,7 @@ def services_status(probe: bool = True) -> dict[str, Any]:
         "services_status",
         "panel",
         "checked",
-        {"probes": len(report["orchestrators"]) + len(report["sse_platforms"]) + 2},
+        {"probes": len(report["orchestrators"]) + len(report["sse_platforms"]) + len(report["central_platforms"]) + 2},
     )
     return report
 

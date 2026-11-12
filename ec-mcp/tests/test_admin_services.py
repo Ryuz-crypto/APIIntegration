@@ -86,6 +86,9 @@ def test_services_status_marks_down_without_fabricating_ready(tmp_path: Path, mo
         def list_sse(self):
             return {"axis": {"base_url": "https://axis.example.com", "admin_token": "tok"}}
 
+        def list_central(self):
+            return {}
+
     monkeypatch.setattr(admin_services, "load_registry", lambda: _Registry())
     monkeypatch.setattr(admin_services, "probe_update_service", lambda: {"state": "idle"})
 
@@ -111,6 +114,9 @@ def test_services_status_reports_errors_not_ready(tmp_path: Path, monkeypatch):
             return {"prod": {"url": "https://orch.example.com"}}
 
         def list_sse(self):
+            return {}
+
+        def list_central(self):
             return {}
 
     monkeypatch.setattr(admin_services, "load_registry", lambda: _Registry())
@@ -152,9 +158,14 @@ def test_services_endpoint_returns_real_report(tmp_path: Path, monkeypatch):
         def list_sse(self):
             return {}
 
+        def list_central(self):
+            return {}
+
     monkeypatch.setattr(admin_services, "load_registry", lambda: _Registry())
     monkeypatch.setattr(admin_services, "probe_update_service", lambda: {"state": "idle"})
-    monkeypatch.setattr(admin_services, "probe_mcp_transport", _fail := (lambda: {"latency": 0.0, "status_code": 200, "url": "u"}))
+    monkeypatch.setattr(
+        admin_services, "probe_mcp_transport", _fail := (lambda: {"latency": 0.0, "status_code": 200, "url": "u"})
+    )
     app = build_admin_app()
     client = TestClient(app)
     client.cookies.set("ec_admin_session", "test-session")
@@ -172,7 +183,9 @@ def test_services_endpoint_returns_real_report(tmp_path: Path, monkeypatch):
 
 def test_request_restart_audits_pending(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("EC_MCP_AUDIT_LOG", str(tmp_path / "audit.jsonl"))
-    monkeypatch.setattr("ec_mcp.web_update.queue_restart", lambda: {"state": "pending", "action": "restart", "message": "m"})
+    monkeypatch.setattr(
+        "ec_mcp.web_update.queue_restart", lambda: {"state": "pending", "action": "restart", "message": "m"}
+    )
     result = admin_services.request_restart("apply config")
     assert result["state"] == "pending"
     entries = [json.loads(line) for line in (tmp_path / "audit.jsonl").read_text().splitlines()]
@@ -222,9 +235,7 @@ def test_apply_orchestrator_handles_none_fields(tmp_path: Path, monkeypatch):
             return {}
 
     monkeypatch.setattr("ec_mcp.admin.load_registry", lambda: _Registry())
-    monkeypatch.setattr(
-        "ec_mcp.admin.public_orchestrator", lambda name, entry: {"verify_tls": True}
-    )
+    monkeypatch.setattr("ec_mcp.admin.public_orchestrator", lambda name, entry: {"verify_tls": True})
     app = build_admin_app()
     client = TestClient(app)
     client.cookies.set("ec_admin_session", "s")

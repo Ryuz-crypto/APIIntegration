@@ -48,7 +48,16 @@ def test_public_config_exposes_wizard_metadata(env):
     assert by_key["EC_AXIS_ADMIN_TOKEN"]["depends_on"] == ["EC_AXIS_ENABLED", "true"]
     assert by_key["EC_DASHBOARD_REMOTE_HOST"]["depends_on"] == ["EC_DASHBOARD_REMOTE_ENABLED", "true"]
     assert [s["id"] for s in config["steps"]] == [
-        "orchestrator", "ssh", "sse", "targets", "security", "transport", "panel", "updates", "dashboard",
+        "orchestrator",
+        "ssh",
+        "sse",
+        "central",
+        "targets",
+        "security",
+        "transport",
+        "panel",
+        "updates",
+        "dashboard",
     ]
 
 
@@ -101,7 +110,16 @@ def test_wizard_endpoint_returns_steps_fields_and_state(client):
     assert r.status_code == 200
     data = r.json()
     assert [s["id"] for s in data["steps"]] == [
-        "orchestrator", "ssh", "sse", "targets", "security", "transport", "panel", "updates", "dashboard",
+        "orchestrator",
+        "ssh",
+        "sse",
+        "central",
+        "targets",
+        "security",
+        "transport",
+        "panel",
+        "updates",
+        "dashboard",
     ]
     by_key = {f["key"]: f for f in data["fields"]}
     assert by_key["EC_ORCHESTRATOR_URL"]["required"] is True
@@ -188,7 +206,10 @@ def test_multi_user_login_roles_and_guards(env):
     assert r.json() == {"ok": True, "user": "bob", "role": "viewer"}
     assert c.get("/api/state").status_code == 200
     assert c.post("/api/config", json={"values": {"EC_MCP_PORT": "9000"}}).status_code == 403
-    assert c.post("/api/orchestrators", json={"name": "x", "url": "https://x.example.com", "api_key": "k"}).status_code == 403
+    assert (
+        c.post("/api/orchestrators", json={"name": "x", "url": "https://x.example.com", "api_key": "k"}).status_code
+        == 403
+    )
     assert c.get("/api/users").status_code == 403
     assert c.post("/api/restart").status_code == 403
 
@@ -356,8 +377,24 @@ def pem_pair(tmp_path: Path):
     openssl = _openssl()
     cert = tmp_path / "cert.pem"
     key = tmp_path / "key.pem"
-    _run(openssl, ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-                   "-subj", "/CN=ec-mcp-test", "-keyout", str(key), "-out", str(cert)])
+    _run(
+        openssl,
+        [
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-days",
+            "1",
+            "-subj",
+            "/CN=ec-mcp-test",
+            "-keyout",
+            str(key),
+            "-out",
+            str(cert),
+        ],
+    )
     return cert.read_text(encoding="utf-8"), key.read_text(encoding="utf-8")
 
 
@@ -366,11 +403,25 @@ def test_tls_pem_upload_requires_confirmation_and_matching_key(client, env, pem_
 
     cert_pem, key_pem = pem_pair
     assert client.get("/api/tls").json()["cert_present"] is False
-    no_confirm = client.post("/api/tls/upload", json={"mode": "pem", "certificateData": base64.b64encode(cert_pem.encode()).decode(), "keyData": base64.b64encode(key_pem.encode()).decode(), "confirmation": "mal"})
+    no_confirm = client.post(
+        "/api/tls/upload",
+        json={
+            "mode": "pem",
+            "certificateData": base64.b64encode(cert_pem.encode()).decode(),
+            "keyData": base64.b64encode(key_pem.encode()).decode(),
+            "confirmation": "mal",
+        },
+    )
     assert no_confirm.status_code == 400
-    bad = client.post("/api/tls/upload", json={"mode": "pem", "cert": "no pem", "key": key_pem, "confirmation": "INSTALAR CERTIFICADO"})
+    bad = client.post(
+        "/api/tls/upload",
+        json={"mode": "pem", "cert": "no pem", "key": key_pem, "confirmation": "INSTALAR CERTIFICADO"},
+    )
     assert bad.status_code == 400
-    ok = client.post("/api/tls/upload", json={"mode": "pem", "cert": cert_pem, "key": key_pem, "confirmation": "INSTALAR CERTIFICADO"})
+    ok = client.post(
+        "/api/tls/upload",
+        json={"mode": "pem", "cert": cert_pem, "key": key_pem, "confirmation": "INSTALAR CERTIFICADO"},
+    )
     assert ok.json()["ok"] is True
     assert ok.json()["fingerprint"] and "ec-mcp-test" in ok.json()["subject"]
     cert_path = env / ".ec-admin-tls" / "cert.pem"
@@ -395,19 +446,74 @@ def test_tls_pfx_mode_and_key_mismatch(client, env, pem_pair, tmp_path):
     openssl = _openssl()
     cert_pem, _key_pem = pem_pair
     # primera instalación PEM correcta
-    first = client.post("/api/tls/upload", json={"mode": "pem", "cert": cert_pem, "key": (tmp_path / "key.pem").read_text(encoding="utf-8"), "confirmation": "INSTALAR CERTIFICADO"})
+    first = client.post(
+        "/api/tls/upload",
+        json={
+            "mode": "pem",
+            "cert": cert_pem,
+            "key": (tmp_path / "key.pem").read_text(encoding="utf-8"),
+            "confirmation": "INSTALAR CERTIFICADO",
+        },
+    )
     assert first.json()["ok"] is True
     pfx = tmp_path / "cert.pfx"
-    _run(openssl, ["pkcs12", "-export", "-out", str(pfx), "-inkey", str(tmp_path / "key.pem"), "-in", str(tmp_path / "cert.pem"), "-passout", "pass:secreto123"])
+    _run(
+        openssl,
+        [
+            "pkcs12",
+            "-export",
+            "-out",
+            str(pfx),
+            "-inkey",
+            str(tmp_path / "key.pem"),
+            "-in",
+            str(tmp_path / "cert.pem"),
+            "-passout",
+            "pass:secreto123",
+        ],
+    )
     pfx_b64 = base64.b64encode(pfx.read_bytes()).decode()
-    r = client.post("/api/tls/upload", json={"mode": "pfx", "certificateData": pfx_b64, "password": "secreto123", "confirmation": "INSTALAR CERTIFICADO"})
+    r = client.post(
+        "/api/tls/upload",
+        json={
+            "mode": "pfx",
+            "certificateData": pfx_b64,
+            "password": "secreto123",
+            "confirmation": "INSTALAR CERTIFICADO",
+        },
+    )
     assert r.json()["ok"] is True and r.json()["mode"] == "pfx"
     # el certificado anterior quedó respaldado
     assert (env / ".ec-admin-tls" / "cert.pem.bak").is_file()
     # llave que no corresponde
     other_key = tmp_path / "other.key"
-    _run(openssl, ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=otro", "-keyout", str(other_key), "-out", str(tmp_path / "other.pem")])
-    wrong = client.post("/api/tls/upload", json={"mode": "pem", "cert": cert_pem, "key": other_key.read_text(encoding="utf-8"), "confirmation": "INSTALAR CERTIFICADO"})
+    _run(
+        openssl,
+        [
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-days",
+            "1",
+            "-subj",
+            "/CN=otro",
+            "-keyout",
+            str(other_key),
+            "-out",
+            str(tmp_path / "other.pem"),
+        ],
+    )
+    wrong = client.post(
+        "/api/tls/upload",
+        json={
+            "mode": "pem",
+            "cert": cert_pem,
+            "key": other_key.read_text(encoding="utf-8"),
+            "confirmation": "INSTALAR CERTIFICADO",
+        },
+    )
     assert wrong.status_code == 400 and "no corresponde" in wrong.json()["error"]
 
 
@@ -416,7 +522,13 @@ def test_tls_upload_forbidden_for_viewer(env, pem_pair):
     admin_users.upsert_user("bob", "bobpw", "viewer")
     c = TestClient(build_admin_app())
     assert c.post("/login", json={"username": "bob", "password": "bobpw"}).json()["ok"] is True
-    assert c.post("/api/tls/upload", json={"mode": "pem", "cert": cert_pem, "key": key_pem, "confirmation": "INSTALAR CERTIFICADO"}).status_code == 403
+    assert (
+        c.post(
+            "/api/tls/upload",
+            json={"mode": "pem", "cert": cert_pem, "key": key_pem, "confirmation": "INSTALAR CERTIFICADO"},
+        ).status_code
+        == 403
+    )
     assert c.get("/api/tls").status_code == 200
 
 
@@ -432,7 +544,7 @@ def test_page_has_tls_tab_branding_and_per_target_selector():
     assert "wiz_step" in PAGE
     assert "group_'+LANG" in PAGE
     assert "ntc.innerHTML" in PAGE
-    assert "#073b4c" in PAGE and "#01a982" in PAGE and "details class=\"group\"" in PAGE
+    assert "#073b4c" in PAGE and "#01a982" in PAGE and 'details class="group"' in PAGE
 
 
 def test_public_config_has_group_en_and_tls_settings(env):
@@ -488,7 +600,7 @@ def test_page_has_tools_tab_and_clean_chrome():
     assert 'class="slider"' in PAGE and "tools-grid" in PAGE
     assert "brand-preview" in PAGE and "icon-picker" in PAGE and "applySavedTheme" in PAGE
     assert 'onclick="applyOrch()">' in PAGE and 'onclick="applySse()">' in PAGE
-    assert '()"' + chr(39) + '>' not in PAGE  # patrón del bug "false": comilla antes del >
+    assert '()"' + chr(39) + ">" not in PAGE  # patrón del bug "false": comilla antes del >
 
 
 def test_debug_events_export_clear(client, env):
@@ -642,7 +754,9 @@ def test_sse_writes_have_independent_gate(monkeypatch):
     monkeypatch.setenv("EC_ALLOW_WRITE_TOOLS", "true")
     monkeypatch.setenv("EC_ALLOW_SSE_WRITE_TOOLS", "false")
     monkeypatch.setenv("EC_ORCHESTRATORS_JSON", '{"p":{"url":"https://o.example.com","api_key":"k"}}')
-    monkeypatch.setenv("EC_SSE_PLATFORMS_JSON", '{"axis":{"provider":"axis","base_url":"https://a.example.com","admin_token":"t"}}')
+    monkeypatch.setenv(
+        "EC_SSE_PLATFORMS_JSON", '{"axis":{"provider":"axis","base_url":"https://a.example.com","admin_token":"t"}}'
+    )
     import asyncio
 
     def axis_fn():
