@@ -28,6 +28,50 @@ TREND_METRICS = {
 
 SHOW_COMMANDS_MAX = 20
 
+NETWORK_TESTS = {
+    "ping": "ping",
+    "traceroute": "traceroute",
+    "nslookup": "nslookup",
+    "tcp": "tcp",
+    "http": "http",
+    "https": "https",
+}
+
+
+def build_network_test_body(
+    test_type: str,
+    destination: str,
+    port: int = 0,
+    count: int = 0,
+) -> tuple[str, dict[str, Any]]:
+    """Build the request body for a Central live network test.
+
+    Returns (endpoint, body). Validation follows the parameters accepted by
+    the network-troubleshooting v1 family for each test type.
+    """
+    test = (test_type or "").strip().lower()
+    endpoint = NETWORK_TESTS.get(test)
+    if endpoint is None:
+        raise ValueError(f"Unsupported test_type '{test_type}'. Use one of: {', '.join(sorted(NETWORK_TESTS))}")
+    if not destination.strip():
+        raise ValueError("destination is required (IP address or hostname)")
+    body: dict[str, Any] = {}
+    if test == "nslookup":
+        body["host"] = destination.strip()
+    else:
+        body["destination"] = destination.strip()
+    if test in ("http", "https"):
+        body["protocol"] = test.upper()
+    if test == "tcp":
+        if not port or not isinstance(port, int):
+            raise ValueError("port is required for tcp tests")
+        body["port"] = port
+    if test == "ping" and count:
+        if not isinstance(count, int) or not 1 <= count <= 100:
+            raise ValueError("count must be an integer between 1 and 100")
+        body["count"] = count
+    return endpoint, body
+
 
 def resolve_family(device_type: str) -> str:
     """Map a user-provided device type to a monitoring family."""
@@ -234,6 +278,16 @@ def summarize_events(payload: Any) -> dict[str, Any]:
     return {"count": len(events), "events": events}
 
 
+def validate_operation(operation: str) -> str:
+    """Validate an async operation name for task result lookups."""
+    value = (operation or "showCommands").strip() or "showCommands"
+    from .central_client import ASYNC_OPERATIONS
+
+    if value not in ASYNC_OPERATIONS:
+        raise ValueError(f"Unsupported operation '{operation}'. Use one of {sorted(ASYNC_OPERATIONS)}")
+    return value
+
+
 def extract_task_id(payload: Any) -> str:
     """Extract the async task id from a troubleshooting initiation response."""
     if isinstance(payload, dict):
@@ -252,6 +306,7 @@ def extract_task_id(payload: Any) -> str:
 
 __all__ = [
     "DEVICE_FAMILIES",
+    "NETWORK_TESTS",
     "SHOW_COMMANDS_MAX",
     "TREND_METRICS",
     "TROUBLESHOOTING_DEVICE_TYPES",
@@ -268,4 +323,5 @@ __all__ = [
     "summarize_list",
     "summarize_sites",
     "trend_metric",
+    "validate_operation",
 ]

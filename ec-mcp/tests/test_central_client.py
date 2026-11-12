@@ -221,3 +221,74 @@ class TestCentralWorkflow:
         result = summarize_devices(payload)
         assert result["count"] == 1
         assert result["devices"][0]["serial"] == "SG1"
+
+
+class TestNetworkTests:
+    def test_run_network_test_paths(self, monkeypatch):
+        monkeypatch.setattr(
+            "ec_mcp.central_client.httpx.post",
+            lambda *a, **k: httpx.Response(200, json={"access_token": "t", "expires_in": 3600}),
+        )
+        captured = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured[request.url.path] = json.loads(request.content)
+            return httpx.Response(202, json={"taskId": "t"})
+
+        client = make_client(handler)
+        client.run_network_test("cx", "SG1", "ping", {"destination": "8.8.8.8", "count": 3})
+        client.run_network_test("gateways", "SG2", "tcp", {"destination": "10.0.0.1", "port": 443})
+        assert captured["/network-troubleshooting/v1/cx/SG1/ping"] == {"destination": "8.8.8.8", "count": 3}
+        assert captured["/network-troubleshooting/v1/gateways/SG2/tcp"] == {"destination": "10.0.0.1", "port": 443}
+
+    def test_get_task_result_operations(self, monkeypatch):
+        monkeypatch.setattr(
+            "ec_mcp.central_client.httpx.post",
+            lambda *a, **k: httpx.Response(200, json={"access_token": "t", "expires_in": 3600}),
+        )
+        paths = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            paths.append(request.url.path)
+            return httpx.Response(200, json={"status": "COMPLETED"})
+
+        client = make_client(handler)
+        client.get_task_result("cx", "SG1", "task-1")
+        client.get_task_result("cx", "SG1", "task-1", operation="ping")
+        assert paths == [
+            "/network-troubleshooting/v1/cx/SG1/showCommands/async-operations/task-1",
+            "/network-troubleshooting/v1/cx/SG1/ping/async-operations/task-1",
+        ]
+        with pytest.raises(ValueError, match="Unsupported operation"):
+            client.get_task_result("cx", "SG1", "task-1", operation="bogus")
+
+    def test_build_network_test_body(self):
+        from ec_mcp.central_workflow import build_network_test_body
+
+        assert build_network_test_body("ping", "8.8.8.8", count=3) == (
+            "ping",
+            {"destination": "8.8.8.8", "count": 3},
+        )
+        assert build_network_test_body("nslookup", "example.com") == ("nslookup", {"host": "example.com"})
+        assert build_network_test_body("https", "example.com") == (
+            "https",
+            {"destination": "example.com", "protocol": "HTTPS"},
+        )
+        assert build_network_test_body("tcp", "10.0.0.1", port=443) == (
+            "tcp",
+            {"destination": "10.0.0.1", "port": 443},
+        )
+        with pytest.raises(ValueError, match="Unsupported test_type"):
+            build_network_test_body("speedtest", "x")
+        with pytest.raises(ValueError, match="port is required"):
+            build_network_test_body("tcp", "10.0.0.1")
+        with pytest.raises(ValueError, match="count must be"):
+            build_network_test_body("ping", "8.8.8.8", count=200)
+
+    def test_validate_operation(self):
+        from ec_mcp.central_workflow import validate_operation
+
+        assert validate_operation("") == "showCommands"
+        assert validate_operation("ping") == "ping"
+        with pytest.raises(ValueError, match="Unsupported operation"):
+            validate_operation("bogus")

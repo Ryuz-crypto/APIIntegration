@@ -18,7 +18,7 @@ import httpx
 logger = logging.getLogger("ec_mcp.central")
 
 DEFAULT_BASE_URL = "https://us.api.central.arubanetworks.com"
-DEFAULT_TOKEN_URL = "https://sso.common.cloud.hpe.com/as/token.oauth2"
+DEFAULT_TOKEN_URL = "https://sso.common.cloud.hpe.com/as/token.oauth2"  # nosec B105
 DEFAULT_TIMEOUT = 30.0
 TOKEN_EXPIRY_MARGIN = 60.0
 
@@ -28,6 +28,17 @@ TROUBLESHOOTING = "network-troubleshooting/v1"
 
 DEVICE_FAMILIES = ("aps", "switches", "gateways")
 TROUBLESHOOTING_DEVICE_TYPES = ("aps", "gateways", "cx", "aos-s")
+ASYNC_OPERATIONS = (
+    "showCommands",
+    "ping",
+    "traceroute",
+    "nslookup",
+    "tcp",
+    "http",
+    "https",
+    "portBounce",
+    "poeBounce",
+)
 
 
 class ArubaCentralError(RuntimeError):
@@ -62,8 +73,8 @@ class ArubaCentralClient:
             verify=verify_tls,
             timeout=timeout,
         )
-        self._access_token = ""
-        self._refresh_token = ""
+        self._access_token = ""  # nosec B105
+        self._refresh_token = ""  # nosec B105
         self._expires_at = 0.0
 
     # --- Token handling -------------------------------------------------
@@ -214,10 +225,25 @@ class ArubaCentralClient:
             json_body={"commands": commands},
         )
 
-    def get_task_result(self, device_type: str, serial: str, task_id: str) -> Any:
+    def get_task_result(self, device_type: str, serial: str, task_id: str, operation: str = "showCommands") -> Any:
+        if operation not in ASYNC_OPERATIONS:
+            raise ValueError(f"Unsupported operation '{operation}'. Use one of {sorted(ASYNC_OPERATIONS)}")
         return self.request(
             "GET",
-            f"{TROUBLESHOOTING}/{device_type}/{serial}/showCommands/async-operations/{task_id}",
+            f"{TROUBLESHOOTING}/{device_type}/{serial}/{operation}/async-operations/{task_id}",
+        )
+
+    def run_network_test(
+        self,
+        device_type: str,
+        serial: str,
+        endpoint: str,
+        body: dict[str, Any],
+    ) -> Any:
+        return self.request(
+            "POST",
+            f"{TROUBLESHOOTING}/{device_type}/{serial}/{endpoint}",
+            json_body=body,
         )
 
     def bounce_port(self, device_type: str, serial: str, ports: list[str], mode: str = "port") -> Any:

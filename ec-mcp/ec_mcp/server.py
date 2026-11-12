@@ -39,6 +39,7 @@ from .axis_workflow import (
 from .build import build_info
 from .central_client import ArubaCentralClient
 from .central_workflow import (
+    build_network_test_body,
     extract_task_id,
     parse_commands,
     parse_ports,
@@ -49,6 +50,7 @@ from .central_workflow import (
     summarize_devices,
     summarize_events,
     trend_metric,
+    validate_operation,
 )
 from .central_workflow import (
     summarize_health as summarize_central_health,
@@ -4169,11 +4171,57 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_get_task_result(device_type: str, serial: str, task_id: str) -> str:
-        """Get the result of an asynchronous Aruba Central troubleshooting task (show commands, port bounce) by task_id. Read-only."""
+    def central_run_network_test(
+        device_type: str,
+        serial: str,
+        test_type: str,
+        destination: str,
+        port: int = 0,
+        count: int = 0,
+        confirm: bool = False,
+    ) -> str:
+        """Run a live network diagnostic (ping, traceroute, nslookup, tcp, http, https) from an Aruba Central device. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Returns a task_id: poll it with central_get_task_result using the matching operation."""
+        try:
+            require_writes("central_run_network_test")
+            endpoint, body = build_network_test_body(test_type, destination, port=port, count=count)
+            device = resolve_troubleshooting_device_type(device_type)
+            if not confirm:
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {
+                            "device_type": device,
+                            "serial": serial,
+                            "test": endpoint,
+                            "body": body,
+                        },
+                        "hint": "Pass confirm=true to run the network test on the device.",
+                    },
+                    settings.max_output_chars,
+                )
+            central = require_central()
+            payload = central.run_network_test(device, serial, endpoint, body)
+            task_id = extract_task_id(payload)
+            audit.record("central_run_network_test", serial, "central", "ok", dry_run=False)
+            return json_result(
+                {
+                    "applied": True,
+                    "task_id": task_id,
+                    "operation": endpoint,
+                    "hint": f"Poll central_get_task_result with operation='{endpoint}'.",
+                },
+                settings.max_output_chars,
+            )
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_get_task_result(device_type: str, serial: str, task_id: str, operation: str = "showCommands") -> str:
+        """Get the result of an asynchronous Aruba Central troubleshooting task (showCommands, ping, traceroute, nslookup, tcp, http, https, portBounce, poeBounce) by task_id. Read-only."""
         try:
             central = require_central()
-            payload = central.get_task_result(resolve_troubleshooting_device_type(device_type), serial, task_id)
+            op = validate_operation(operation)
+            payload = central.get_task_result(resolve_troubleshooting_device_type(device_type), serial, task_id, op)
             return json_result(payload, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"

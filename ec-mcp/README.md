@@ -41,11 +41,11 @@ catálogo ECOS por SSH.
 - Sección opcional de **HPE Aruba Networking Central** (nuevas familias REST API v1:
   monitoring, notifications, troubleshooting) con credenciales OAuth2 de HPE
   GreenLake: salud de sites, inventario, clientes, WLANs, alertas, eventos y
-  diagnóstico en vivo (`show` commands, bounce de puertos/PoE) bajo el mismo
+  diagnóstico en vivo (`show` commands, tests de red, bounce de puertos/PoE) bajo el mismo
   gating de escrituras y auditoría.
 
 ## Herramientas MCP
-El servidor expone **139 tools**. La descripción completa de cada una (parámetros y
+El servidor expone **140 tools**. La descripción completa de cada una (parámetros y
 retorno) está disponible para el cliente MCP en `tools/list`. Resumen por dominio:
 
 | Dominio | Tools | Qué hace |
@@ -57,11 +57,11 @@ retorno) está disponible para el cliente MCP en `tools/list`. Resumen por domin
 | Overlays / BIO | `list_overlay_sources`, `prepare_overlay_clone`, `preview_overlay_plan`, `apply_overlay_plan`, `verify_overlay_plan`, `rollback_overlay_plan` | Clonación y despliegue transaccional de overlays/BIO: diff, plan inmutable, confirmación exacta y rollback. |
 | Seguridad e incidentes | `get_ids_ips_state`, `get_ids_ips_events`, `get_security_log`, `get_zone_matrix`, `get_ddos_status`, `get_sse_status`, `get_security_posture`, `correlate_incidents`, `propose_remediation`, `list_response_options`, `block_threat` | Postura IDS/IPS, logs de seguridad, matriz de zonas, DDoS e integraciones SSE. `correlate_incidents` detecta y prioriza; `propose_remediation` genera propuestas **dry-run** con evidencia/alcance/riesgo/reversión (nunca aplica); `block_threat` aplica bloqueos con `confirm=true`. |
 | SSE — Axis Security (55 tools) | `axis_health`, `axis_list_tags`, `axis_get_tag`, `axis_create_tag`, `axis_update_tag`, `axis_delete_tag`, `axis_list_applications`, `axis_get_application`, `axis_create_application`, `axis_update_application`, `axis_delete_application`, `axis_list_connectors`, `axis_get_connector`, `axis_connector_status`, `axis_create_connector`, `axis_update_connector`, `axis_delete_connector`, `axis_regenerate_connector`, `axis_list_connector_zones`, `axis_get_connector_zone`, `axis_create_connector_zone`, `axis_update_connector_zone`, `axis_delete_connector_zone`, `axis_list_ip_categories`, `axis_get_ip_category`, `axis_create_ip_category`, `axis_delete_ip_category`, `axis_list_web_categories`, `axis_get_web_category`, `axis_create_web_category`, `axis_delete_web_category`, `axis_list_ssl_exclusions`, `axis_create_ssl_exclusion`, `axis_delete_ssl_exclusion`, `axis_list_groups`, `axis_create_group`, `axis_delete_group`, `axis_list_users`, `axis_get_user`, `axis_create_user`, `axis_delete_user`, `axis_list_locations`, `axis_get_location`, `axis_create_location`, `axis_delete_location`, `axis_list_sub_locations`, `axis_create_sub_location`, `axis_delete_sub_location`, `axis_list_tunnels`, `axis_tunnel_status`, `axis_create_tunnel`, `axis_delete_tunnel`, `axis_list_certificates`, `axis_list_ipsec_locations`, `axis_commit` | Gestión completa de Axis Security: tags, aplicaciones, connectors (+zonas, regeneración), categorías IP/web, exclusiones SSL, grupos, usuarios, locations/sub-locations, túneles IPsec, certificados, estado de salud/commit. Cada herramienta acepta `target` opcional (multi-tenant); las `axis_create/update/delete/regenerate/commit` requieren permisos de escritura. |
-| Aruba Central (14 tools) | `central_status`, `central_get_sites`, `central_get_devices`, `central_get_device_details`, `central_get_device_trends`, `central_get_clients`, `central_get_wlans`, `central_get_gateway_cluster`, `central_get_alerts`, `central_get_events`, `central_list_show_commands`, `central_run_show_commands`, `central_bounce_port`, `central_get_task_result` | HPE Aruba Networking Central (nuevas familias REST API v1): salud de sites, inventario APs/switches/gateways, tendencias, clientes, WLANs, clusters de gateways, alertas y eventos. Diagnóstico en vivo: catálogo y ejecución de comandos `show`, bounce de puertos/PoE y consulta de tareas asíncronas. `central_run_show_commands` y `central_bounce_port` son escritura con dry-run + `confirm=true` bajo `EC_ALLOW_WRITE_TOOLS`. Sección desactivada por defecto (`EC_CENTRAL_ENABLED`). |
+| Aruba Central (15 tools) | `central_status`, `central_get_sites`, `central_get_devices`, `central_get_device_details`, `central_get_device_trends`, `central_get_clients`, `central_get_wlans`, `central_get_gateway_cluster`, `central_get_alerts`, `central_get_events`, `central_list_show_commands`, `central_run_show_commands`, `central_run_network_test`, `central_bounce_port`, `central_get_task_result` | HPE Aruba Networking Central (nuevas familias REST API v1): salud de sites, inventario APs/switches/gateways, tendencias, clientes, WLANs, clusters de gateways, alertas y eventos. Diagnóstico en vivo: catálogo y ejecución de comandos `show`, tests de red (ping/traceroute/nslookup/tcp/http/https), bounce de puertos/PoE y consulta de tareas asíncronas. `central_run_show_commands`, `central_run_network_test` y `central_bounce_port` son escritura con dry-run + `confirm=true` bajo `EC_ALLOW_WRITE_TOOLS`. Sección desactivada por defecto (`EC_CENTRAL_ENABLED`). |
 | SD-WAN AI (Orchestrator 10.0) | `ask_sdwan_ai`, `get_sdwan_ai_chat_logs`, `clear_sdwan_ai_context`, `get_sase_copilot_status` | Conversación con la SD-WAN AI embebida del Orchestrator: preguntar, leer logs del chat, limpiar contexto y consultar estado del copiloto SASE. |
 | Dashboard NOC | `dashboard_snapshot`, `dashboard_render`, `dashboard_remote_config`, `dashboard_deploy_remote`, `dashboard_remote_status`, `dashboard_refresh_remote` | Snapshots y render del dashboard NOC; despliegue remoto opcional vía SSH (escritura, confirmación). |
 
-Total: **139 tools**.
+Total: **140 tools**.
 
 `run_show_api` usa el Orchestrator como transporte:
 
@@ -340,7 +340,7 @@ Los informes aplican redacción de patrones y protección contra fórmulas, pero
 deben revisarse antes de compartirlos porque pueden contener datos operativos.
 El PDF es un resumen y acorta campos largos; CSV y Excel permiten mayor detalle.
 
-La pestaña **Tools** (`/api/tools`, `/api/tools/toggle`) muestra las 139 tools
+La pestaña **Tools** (`/api/tools`, `/api/tools/toggle`) muestra las 140 tools
 MCP en **cuadrícula con sliders** (switch) para activar/desactivar sin bajar la
 página; se guarda en `EC_MCP_DISABLED_TOOLS`, aplica al reiniciar y también es
 editable en Variables. El botón **Sugerencia
