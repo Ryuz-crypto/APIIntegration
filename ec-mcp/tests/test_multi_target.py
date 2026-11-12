@@ -259,3 +259,12 @@ class TestCentralMultiTenant:
         blob = registry.to_env_blob()
         assert "EC_CENTRAL_PLATFORMS_JSON" in blob
         assert json.loads(blob["EC_CENTRAL_PLATFORMS_JSON"])["central-prod"]["client_id"] == "cid"
+
+
+def test_admin_page_has_central_tab():
+    from ec_mcp.admin_page import PAGE
+
+    assert "Aruba Central" in PAGE
+    assert "renderCentral" in PAGE
+    assert "/api/central" in PAGE
+    assert "tab-central" in PAGE
