@@ -199,6 +199,20 @@ class ArubaCentralClient:
 
         return self.request("GET", f"{MONITORING}/wlans/{quote(ssid, safe='')}", params=params)
 
+    def clients_usage(self, params: dict[str, Any] | None = None) -> Any:
+        return self.request("GET", f"{MONITORING}/clients-usage", params=params)
+
+    def clients_top_usage(self, params: dict[str, Any] | None = None) -> Any:
+        return self.request("GET", f"{MONITORING}/clients-topn-usage", params=params)
+
+    def clients_trend(self, params: dict[str, Any] | None = None) -> Any:
+        return self.request("GET", f"{MONITORING}/clients-trend", params=params)
+
+    def client_onboarding(self, view: str, params: dict[str, Any] | None = None) -> Any:
+        if view not in ("export", "reasons", "count"):
+            raise ValueError("view must be one of: export, reasons, count")
+        return self.request("GET", f"{MONITORING}/client-onboarding-stage/{view}", params=params)
+
     def list_clusters(self, params: dict[str, Any] | None = None) -> Any:
         return self.request("GET", f"{MONITORING}/clusters", params=params)
 

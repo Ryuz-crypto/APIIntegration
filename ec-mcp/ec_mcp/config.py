@@ -40,6 +40,7 @@ class Settings:
 
     orchestrators_json: str = ""
     sse_platforms_json: str = ""
+    central_platforms_json: str = ""
 
     dashboard_remote_enabled: bool = False
     dashboard_remote_host: str = ""
@@ -100,6 +101,7 @@ class Settings:
             central_timeout=float(os.environ.get("EC_CENTRAL_TIMEOUT", "30")),
             orchestrators_json=os.environ.get("EC_ORCHESTRATORS_JSON", ""),
             sse_platforms_json=os.environ.get("EC_SSE_PLATFORMS_JSON", ""),
+            central_platforms_json=os.environ.get("EC_CENTRAL_PLATFORMS_JSON", ""),
             dashboard_remote_enabled=os.environ.get("EC_DASHBOARD_REMOTE_ENABLED", "false").lower() == "true",
             dashboard_remote_host=os.environ.get("EC_DASHBOARD_REMOTE_HOST", ""),
             dashboard_remote_user=os.environ.get("EC_DASHBOARD_REMOTE_USER", ""),

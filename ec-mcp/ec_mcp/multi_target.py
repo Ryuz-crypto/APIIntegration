@@ -48,8 +48,18 @@ SSE_FIELDS = (
     "timeout",
 )
 
+CENTRAL_FIELDS = (
+    "base_url",
+    "client_id",
+    "client_secret",
+    "token_url",
+    "verify_tls",
+    "timeout",
+)
+
 SECRET_ORCHESTRATOR_FIELDS = {"api_key", "password", "ssh_password", "ssh_enable_password"}
 SECRET_SSE_FIELDS = {"admin_token"}
+SECRET_CENTRAL_FIELDS = {"client_secret"}
 
 
 class RegistryError(ValueError):
@@ -77,6 +87,18 @@ class SseTarget:
     provider: str = "axis"
     base_url: str = ""
     admin_token: str = ""
+    verify_tls: bool = True
+    timeout: float = 30.0
+    extra: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class CentralTarget:
+    name: str
+    base_url: str = ""
+    client_id: str = ""
+    client_secret: str = ""
+    token_url: str = ""
     verify_tls: bool = True
     timeout: float = 30.0
     extra: dict[str, Any] = field(default_factory=dict)
@@ -196,6 +218,43 @@ def public_sse(name: str, entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def central_from_entry(name: str, entry: dict[str, Any]) -> CentralTarget:
+    entry = _clean_entry(entry, CENTRAL_FIELDS)
+    base_url = str(entry.get("base_url") or "")
+    if base_url:
+        base_url = _validate_url(base_url, field_name="base_url")
+    if not base_url:
+        raise RegistryError("La URL base de Central es obligatoria")
+    token_url = str(entry.get("token_url") or "")
+    if token_url:
+        token_url = _validate_url(token_url, field_name="token_url")
+    if not entry.get("client_id"):
+        raise RegistryError("El Client ID de Central es obligatorio")
+    if not entry.get("client_secret"):
+        raise RegistryError("El Client Secret de Central es obligatorio")
+    return CentralTarget(
+        name=name,
+        base_url=base_url,
+        client_id=str(entry.get("client_id") or ""),
+        client_secret=str(entry.get("client_secret") or ""),
+        token_url=token_url,
+        verify_tls=_to_bool(entry.get("verify_tls"), True),
+        timeout=_to_float(entry.get("timeout"), 30.0),
+    )
+
+
+def public_central(name: str, entry: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": name,
+        "base_url": entry.get("base_url", ""),
+        "client_id": entry.get("client_id", ""),
+        "token_url": entry.get("token_url", ""),
+        "verify_tls": _to_bool(entry.get("verify_tls"), True),
+        "timeout": _to_float(entry.get("timeout"), 30.0),
+        "has_client_secret": bool(entry.get("client_secret")),
+    }
+
+
 class TargetRegistry:
     """JSON-backed registry of Orchestrators and SSE platforms."""
 
@@ -204,15 +263,16 @@ class TargetRegistry:
 
     def _load(self) -> dict[str, dict[str, dict[str, Any]]]:
         if not self._path.is_file():
-            return {"orchestrators": {}, "sse_platforms": {}}
+            return {"orchestrators": {}, "sse_platforms": {}, "centrals": {}}
         try:
             data = json.loads(self._path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return {"orchestrators": {}, "sse_platforms": {}}
+            return {"orchestrators": {}, "sse_platforms": {}, "centrals": {}}
         if not isinstance(data, dict):
-            return {"orchestrators": {}, "sse_platforms": {}}
+            return {"orchestrators": {}, "sse_platforms": {}, "centrals": {}}
         data.setdefault("orchestrators", {})
         data.setdefault("sse_platforms", {})
+        data.setdefault("centrals", {})
         return data
 
     def _save(self, data: dict) -> None:
@@ -225,6 +285,12 @@ class TargetRegistry:
 
     def list_sse(self) -> dict[str, dict[str, Any]]:
         return dict(self._load()["sse_platforms"])
+
+    def list_central(self) -> dict[str, dict[str, Any]]:
+        return dict(self._load()["centrals"])
+
+    def get_central(self, name: str) -> dict[str, Any]:
+        return dict(self._load()["centrals"].get(name, {}))
 
     def get_orchestrator(self, name: str) -> dict[str, Any]:
         return dict(self._load()["orchestrators"].get(name, {}))
@@ -299,6 +365,36 @@ class TargetRegistry:
     def duplicate_sse(self, name: str, new: str) -> dict[str, Any]:
         return self._duplicate("sse_platforms", name, new)
 
+    def rename_central(self, old: str, new: str) -> dict[str, Any]:
+        return self._rename("centrals", old, new)
+
+    def duplicate_central(self, name: str, new: str) -> dict[str, Any]:
+        return self._duplicate("centrals", name, new)
+
+    def save_central(self, name: str, entry: dict[str, Any], *, partial: bool = True) -> dict[str, Any]:
+        name = _validate_name(name)
+        data = self._load()
+        existing = data["centrals"].get(name, {}) if partial else {}
+        merged = {**existing, **_clean_entry(entry, CENTRAL_FIELDS)}
+        if "client_secret" in entry and (entry["client_secret"] is None or str(entry["client_secret"]).strip() == ""):
+            merged.pop("client_secret", None)
+            if partial and "client_secret" in existing:
+                merged["client_secret"] = existing["client_secret"]
+        if not partial and "client_secret" not in entry:
+            merged.pop("client_secret", None)
+        central_from_entry(name, merged)  # validates
+        data["centrals"][name] = merged
+        self._save(data)
+        return merged
+
+    def delete_central(self, name: str) -> bool:
+        data = self._load()
+        if name in data["centrals"]:
+            del data["centrals"][name]
+            self._save(data)
+            return True
+        return False
+
     def save_sse(self, name: str, entry: dict[str, Any], *, partial: bool = True) -> dict[str, Any]:
         name = _validate_name(name)
         data = self._load()
@@ -331,6 +427,8 @@ class TargetRegistry:
             blob["EC_ORCHESTRATORS_JSON"] = json.dumps(data["orchestrators"], separators=(",", ":"))
         if data["sse_platforms"]:
             blob["EC_SSE_PLATFORMS_JSON"] = json.dumps(data["sse_platforms"], separators=(",", ":"))
+        if data["centrals"]:
+            blob["EC_CENTRAL_PLATFORMS_JSON"] = json.dumps(data["centrals"], separators=(",", ":"))
         return blob
 
 
@@ -343,6 +441,7 @@ def resolve_default_name(names, explicit: str = "") -> str:
     if "default" in ordered:
         return "default"
     return ordered[0] if ordered else ""
+
 
 def _parse_env_json_blob(name: str, blob: str = "") -> dict[str, dict[str, Any]]:
     raw = blob.strip() or os.environ.get(name, "")
@@ -389,6 +488,17 @@ def load_sse_from_env(blob: str = "") -> dict[str, SseTarget]:
         if not isinstance(entry, dict):
             raise RegistryError(f"EC_SSE_PLATFORMS_JSON[{name}] debe ser un objeto")
         targets[_validate_name(str(name))] = sse_from_entry(str(name), entry)
+    return targets
+
+
+def load_central_from_env(blob: str = "") -> dict[str, CentralTarget]:
+    """Load all Aruba Central targets from EC_CENTRAL_PLATFORMS_JSON (or an explicit blob)."""
+    raw = _parse_env_json_blob("EC_CENTRAL_PLATFORMS_JSON", blob)
+    targets: dict[str, CentralTarget] = {}
+    for name, entry in raw.items():
+        if not isinstance(entry, dict):
+            raise RegistryError(f"EC_CENTRAL_PLATFORMS_JSON[{name}] debe ser un objeto")
+        targets[_validate_name(str(name))] = central_from_entry(str(name), entry)
     return targets
 
 

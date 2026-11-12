@@ -50,22 +50,29 @@ from starlette.routing import Route
 from . import __version__, admin_users
 from .admin_config import diff_env, public_config, restart_tls_errors, update_env
 from .admin_page import PAGE as _PAGE_TEMPLATE
-from .admin_services import ServiceProbeError, probe_axis, probe_orchestrator, services_status
+from .admin_services import (
+    ServiceProbeError,
+    probe_axis,
+    probe_central,
+    probe_orchestrator,
+    services_status,
+)
 from .admin_users import UserError
 from .audit import AuditLog
 from .config import Settings
 from .multi_target import (
     RegistryError,
     load_registry,
+    public_central,
     public_orchestrator,
     public_sse,
 )
 
 
 def _render_page() -> str:
-    return _PAGE_TEMPLATE.replace(
-        "__EC_MCP_VERSION__", __version__
-    )
+    return _PAGE_TEMPLATE.replace("__EC_MCP_VERSION__", __version__)
+
+
 from .web_update import check as check_update
 from .web_update import check_pending_request, queue_restart, queue_update
 from .web_update import status as update_status
@@ -222,27 +229,43 @@ def _snapshot_backup(label: str) -> str | None:
             prev_env = prev / "env"
             prev_reg = prev / "registry.json"
             if env_file.is_file() and prev_env.is_file():
-                old = dict(line.split("=", 1) for line in prev_env.read_text(encoding="utf-8").splitlines() if "=" in line)
-                new = dict(line.split("=", 1) for line in env_file.read_text(encoding="utf-8").splitlines() if "=" in line)
+                old = dict(
+                    line.split("=", 1) for line in prev_env.read_text(encoding="utf-8").splitlines() if "=" in line
+                )
+                new = dict(
+                    line.split("=", 1) for line in env_file.read_text(encoding="utf-8").splitlines() if "=" in line
+                )
                 env_changed = sorted(k for k in set(old) | set(new) if old.get(k) != new.get(k))
             if store_file.is_file():
                 new_r = json.loads(store_file.read_text(encoding="utf-8"))
-                new_names = set(new_r.get("orchestrators", {})) | set(new_r.get("sse_platforms", {}))
+                new_names = (
+                    set(new_r.get("orchestrators", {}))
+                    | set(new_r.get("sse_platforms", {}))
+                    | set(new_r.get("centrals", {}))
+                )
                 if prev_reg.is_file():
                     old_r = json.loads(prev_reg.read_text(encoding="utf-8"))
-                    old_names = set(old_r.get("orchestrators", {})) | set(old_r.get("sse_platforms", {}))
+                    old_names = (
+                        set(old_r.get("orchestrators", {}))
+                        | set(old_r.get("sse_platforms", {}))
+                        | set(old_r.get("centrals", {}))
+                    )
                     registry_changed = sorted(old_names ^ new_names) or (["modificado"] if old_r != new_r else [])
                 else:
                     registry_changed = sorted(new_names)  # primer backup con registro
             if env_file.is_file() and prev is not None and not prev_env.is_file():
-                new = dict(line.split("=", 1) for line in env_file.read_text(encoding="utf-8").splitlines() if "=" in line)
+                new = dict(
+                    line.split("=", 1) for line in env_file.read_text(encoding="utf-8").splitlines() if "=" in line
+                )
                 env_changed = sorted(new)
         if env_file.is_file():
             shutil.copy2(env_file, target / "env")
         if store_file.is_file():
             shutil.copy2(store_file, target / "registry.json")
         (target / "meta.json").write_text(
-            json.dumps({"ts": ts, "label": label, "env_changed": env_changed, "registry_changed": registry_changed}, indent=2),
+            json.dumps(
+                {"ts": ts, "label": label, "env_changed": env_changed, "registry_changed": registry_changed}, indent=2
+            ),
             encoding="utf-8",
         )
         backups = sorted(p for p in directory.iterdir() if p.is_dir())
@@ -296,7 +319,7 @@ def _save_store(store: dict) -> None:
 def _sync_registry_blob() -> None:
     """Atomically mirror the registry into the environment file and process."""
     blob = load_registry().to_env_blob()
-    keys = ("EC_ORCHESTRATORS_JSON", "EC_SSE_PLATFORMS_JSON")
+    keys = ("EC_ORCHESTRATORS_JSON", "EC_SSE_PLATFORMS_JSON", "EC_CENTRAL_PLATFORMS_JSON")
     env_path = Path(os.environ.get("EC_MCP_ENV_FILE") or Path.cwd() / ".env")
     lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.is_file() else []
     lines = [line for line in lines if not any(line.strip().startswith(key + "=") for key in keys)]
@@ -434,7 +457,14 @@ async def login_post(request):
     SESSIONS[token] = {"user": user_label, "role": role, "ts": now}
     _save_sessions()
     response = JSONResponse({"ok": True, "user": user_label, "role": role})
-    response.set_cookie("ec_admin_session", token, httponly=True, secure=request.url.scheme == "https" or os.environ.get("EC_ADMIN_TLS_ENABLED", "").lower() == "true", samesite="lax", max_age=int(SESSION_TTL))
+    response.set_cookie(
+        "ec_admin_session",
+        token,
+        httponly=True,
+        secure=request.url.scheme == "https" or os.environ.get("EC_ADMIN_TLS_ENABLED", "").lower() == "true",
+        samesite="lax",
+        max_age=int(SESSION_TTL),
+    )
     return response
 
 
@@ -454,6 +484,7 @@ def _public_state() -> dict:
     active = os.environ.get("EC_ORCHESTRATOR_URL", "")
     default_orch = os.environ.get("EC_DEFAULT_ORCHESTRATOR", "").strip()
     default_sse = os.environ.get("EC_DEFAULT_SSE", "").strip()
+    default_central = os.environ.get("EC_DEFAULT_CENTRAL", "").strip()
     orchestrators = []
     for name, entry in registry.list_orchestrators().items():
         item = public_orchestrator(name, entry)
@@ -469,15 +500,27 @@ def _public_state() -> dict:
             item["active"] = False
         item["default"] = bool(default_sse) and name == default_sse
         sse_platforms.append(item)
+    central_platforms = []
+    for name, entry in registry.list_central().items():
+        item = public_central(name, entry)
+        if name == "default":
+            item["active"] = os.environ.get("EC_CENTRAL_ENABLED", "false").lower() == "true"
+        else:
+            item["active"] = False
+        item["default"] = bool(default_central) and name == default_central
+        central_platforms.append(item)
     return {
         "orchestrators": orchestrators,
         "sse_platforms": sse_platforms,
+        "central_platforms": central_platforms,
         "ssh_enabled": os.environ.get("EC_SSH_ENABLED", "false").lower() == "true",
         "default_orchestrator": default_orch,
         "default_sse": default_sse,
+        "default_central": default_central,
         "blobs": {
             "orchestrators": bool(os.environ.get("EC_ORCHESTRATORS_JSON", "").strip()),
             "sse": bool(os.environ.get("EC_SSE_PLATFORMS_JSON", "").strip()),
+            "central": bool(os.environ.get("EC_CENTRAL_PLATFORMS_JSON", "").strip()),
         },
     }
 
@@ -515,11 +558,23 @@ async def api_save_orchestrator(request):
     except RegistryError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
     except OSError:
-        return JSONResponse({"ok": False, "error": "No se pudo completar la sincronización. El registro podría haberse guardado; revisa permisos y vuelve a intentar."}, status_code=500)
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "No se pudo completar la sincronización. El registro podría haberse guardado; revisa permisos y vuelve a intentar.",
+            },
+            status_code=500,
+        )
     except Exception as exc:  # nunca devolver HTML plano al panel
         return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
     _audit_panel(session["user"], "save_orchestrator", name, "ok")
-    return JSONResponse({"ok": True, "message": f"Orquestador '{name}' guardado. Reinicia el MCP para cargarlo; la configuración predeterminada se gestiona por separado."})
+    return JSONResponse(
+        {
+            "ok": True,
+            "message": f"Orquestador '{name}' guardado. Reinicia el MCP para cargarlo; la configuración predeterminada se gestiona por separado.",
+        }
+    )
+
 
 async def api_delete_orchestrator(request):
     session, denied = _authorize(request, "write")
@@ -557,11 +612,68 @@ async def api_save_sse(request):
     except RegistryError as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
     except OSError:
-        return JSONResponse({"ok": False, "error": "No se pudo completar la sincronización. El registro podría haberse guardado; revisa permisos y vuelve a intentar."}, status_code=500)
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "No se pudo completar la sincronización. El registro podría haberse guardado; revisa permisos y vuelve a intentar.",
+            },
+            status_code=500,
+        )
     except Exception as exc:
         return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
     _audit_panel(session["user"], "save_sse", name, "ok")
     return JSONResponse({"ok": True, "message": f"Plataforma SSE '{name}' guardada (backup creado)."})
+
+
+async def api_save_central(request):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    try:
+        body = await request.json()
+        name = str(body.get("name") or "").strip()
+        entry = {
+            "base_url": str(body.get("base_url") or "").strip(),
+            "client_id": str(body.get("client_id") or "").strip(),
+            "client_secret": body.get("client_secret") or None,
+            "token_url": str(body.get("token_url") or "").strip(),
+            "verify_tls": body.get("verify_tls", True),
+            "timeout": body.get("timeout"),
+        }
+        _snapshot_backup(f"save-central:{name}")
+        load_registry().save_central(name, entry)
+        _sync_registry_blob()
+    except RegistryError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)})
+    except OSError:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "No se pudo completar la sincronización. El registro podría haberse guardado; revisa permisos y vuelve a intentar.",
+            },
+            status_code=500,
+        )
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
+    _audit_panel(session["user"], "save_central", name, "ok")
+    return JSONResponse({"ok": True, "message": f"Plataforma Central '{name}' guardada (backup creado)."})
+
+
+async def api_delete_central(request):
+    session, denied = _authorize(request, "write")
+    if denied:
+        return denied
+    try:
+        body = await request.json()
+        name = str(body.get("name") or "")
+        _snapshot_backup(f"delete-central:{name}")
+        deleted = load_registry().delete_central(name)
+        _sync_registry_blob()
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
+    _audit_panel(session["user"], "delete_central", name, "ok" if deleted else "missing")
+    return JSONResponse({"ok": True, "deleted": deleted, "message": "Eliminada" if deleted else "No existía"})
+
 
 async def api_delete_sse(request):
     session, denied = _authorize(request, "write")
@@ -614,6 +726,14 @@ async def api_duplicate_sse(request):
     return await _registry_copy(request, load_registry().duplicate_sse, "Plataforma SSE")
 
 
+async def api_rename_central(request):
+    return await _registry_copy(request, load_registry().rename_central, "Plataforma Central")
+
+
+async def api_duplicate_central(request):
+    return await _registry_copy(request, load_registry().duplicate_central, "Plataforma Central")
+
+
 async def api_default_target(request):
     session, denied = _authorize(request, "write")
     if denied:
@@ -625,6 +745,9 @@ async def api_default_target(request):
     if kind == "sse":
         key = "EC_DEFAULT_SSE"
         exists = registry.get_sse(name) if name else True
+    elif kind == "central":
+        key = "EC_DEFAULT_CENTRAL"
+        exists = registry.get_central(name) if name else True
     else:
         key = "EC_DEFAULT_ORCHESTRATOR"
         exists = registry.get_orchestrator(name) if name else True
@@ -650,6 +773,9 @@ async def api_probe(request):
     if kind == "sse":
         entry = registry.get_sse(name)
         probe = probe_axis
+    elif kind == "central":
+        entry = registry.get_central(name)
+        probe = probe_central
     else:
         entry = registry.get_orchestrator(name)
         probe = probe_orchestrator
@@ -687,11 +813,31 @@ async def api_apply(request):
     name = str(body.get("name") or "").strip()
     kind = str(body.get("kind") or "orchestrator").strip().lower()
     registry = load_registry()
-    if kind == "sse":
+    if kind == "central":
+        if name and not registry.get_central(name):
+            return JSONResponse({"ok": False, "error": f"No existe la plataforma Central '{name}'"})
+        if not name:
+            return JSONResponse(
+                {"ok": False, "error": "Selecciona una plataforma Central guardada antes de aplicar."}, status_code=400
+            )
+        entry = registry.get_central(name)
+        wanted = {
+            "EC_CENTRAL_ENABLED": "true",
+            "EC_CENTRAL_CLIENT_ID": entry.get("client_id") or "",
+            "EC_CENTRAL_CLIENT_SECRET": entry.get("client_secret") or "",
+            "EC_CENTRAL_BASE_URL": entry.get("base_url") or "",
+            "EC_CENTRAL_TOKEN_URL": entry.get("token_url") or "",
+            "EC_CENTRAL_VERIFY_TLS": str(public_central(name, entry)["verify_tls"]).lower(),
+            "EC_CENTRAL_TIMEOUT": str(public_central(name, entry).get("timeout") or ""),
+        }
+        target_label = f"Plataforma Central '{name}'"
+    elif kind == "sse":
         if name and not registry.get_sse(name):
             return JSONResponse({"ok": False, "error": f"No existe la plataforma SSE '{name}'"})
         if not name:
-            return JSONResponse({"ok": False, "error": "Selecciona una plataforma SSE guardada antes de aplicar."}, status_code=400)
+            return JSONResponse(
+                {"ok": False, "error": "Selecciona una plataforma SSE guardada antes de aplicar."}, status_code=400
+            )
         entry = registry.get_sse(name)
         wanted = {
             "EC_AXIS_ENABLED": "true",
@@ -728,7 +874,7 @@ async def api_apply(request):
     # Persistir el registro completo como blobs JSON para el runtime multi-target.
     for key, value in registry.to_env_blob().items():
         wanted[key] = value
-    for key in ("EC_DEFAULT_ORCHESTRATOR", "EC_DEFAULT_SSE"):
+    for key in ("EC_DEFAULT_ORCHESTRATOR", "EC_DEFAULT_SSE", "EC_DEFAULT_CENTRAL"):
         if os.environ.get(key, "").strip():
             wanted[key] = os.environ[key]
     env_path = Path(os.environ.get("EC_MCP_ENV_FILE") or Path.cwd() / ".env")
@@ -756,7 +902,10 @@ async def api_apply(request):
         os.chmod(temporary_name, 0o600)
         os.replace(temporary_name, env_path)
     except OSError:
-        return JSONResponse({"ok": False, "error": "No se pudo aplicar la configuración; revisa los permisos del archivo de entorno."}, status_code=500)
+        return JSONResponse(
+            {"ok": False, "error": "No se pudo aplicar la configuración; revisa los permisos del archivo de entorno."},
+            status_code=500,
+        )
     finally:
         if descriptor is not None:
             os.close(descriptor)
@@ -771,7 +920,11 @@ async def api_apply(request):
             "message": (
                 f"{target_label} escrito en {env_path}. Reinicia el servicio para "
                 "que el cambio quede persistente. Usa 'Guardar y reiniciar servicios' desde Variables para aplicarlo"
-                + ("; selecciona 'Por defecto' si quieres que el MCP use esta plataforma sin especificar target." if kind == "sse" else "")
+                + (
+                    "; selecciona 'Por defecto' si quieres que el MCP use esta plataforma sin especificar target."
+                    if kind == "sse"
+                    else ""
+                )
             ),
         }
     )
@@ -1006,13 +1159,19 @@ def _normalize_tls(mode: str, cert_raw: bytes, key_raw: bytes, password: str) ->
             handle.write(cert_raw)
             handle.close()
             passin = ["-passin", f"pass:{password}"]
-            cert_pem = _openssl(["pkcs12", "-in", handle.name, "-clcerts", "-nokeys", *passin]).decode("utf-8", "replace")
+            cert_pem = _openssl(["pkcs12", "-in", handle.name, "-clcerts", "-nokeys", *passin]).decode(
+                "utf-8", "replace"
+            )
             key_pem = _openssl(["pkcs12", "-in", handle.name, "-nocerts", "-nodes", *passin]).decode("utf-8", "replace")
         finally:
             Path(handle.name).unlink(missing_ok=True)
     elif mode == "der":
         cert_pem = _openssl(["x509", "-inform", "der", "-outform", "pem"], cert_raw).decode("utf-8", "replace")
-        key_pem = _openssl(["pkey", "-inform", "der", "-outform", "pem"], key_raw).decode("utf-8", "replace") if key_raw else ""
+        key_pem = (
+            _openssl(["pkey", "-inform", "der", "-outform", "pem"], key_raw).decode("utf-8", "replace")
+            if key_raw
+            else ""
+        )
     elif mode == "pem-bundle":
         text = cert_raw.decode("utf-8", "replace")
         certs = _PEM_CERT_RE.findall(text)
@@ -1044,8 +1203,10 @@ def _cert_info(path: Path) -> dict:
         import ssl
 
         info = ssl._ssl._test_decode_cert(str(path))
+
         def _dn(name) -> str:
             return ", ".join("=".join(part) for rdn in name for part in rdn)
+
         return {
             "subject": _dn(info.get("subject", ())),
             "issuer": _dn(info.get("issuer", ())),
@@ -1123,7 +1284,10 @@ async def api_tls_upload(request):
     except ValueError as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     _audit_panel(
-        session["user"], "tls_upload", str(cert_path), "ok",
+        session["user"],
+        "tls_upload",
+        str(cert_path),
+        "ok",
         {"mode": mode, "fingerprint": _cert_fingerprint(cert_pem), "subject": _cert_info(cert_path).get("subject", "")},
     )
     return JSONResponse(
@@ -1152,7 +1316,9 @@ async def api_tls_delete(request):
     except ValueError as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     _audit_panel(session["user"], "tls_delete", ",".join(removed) or "(nada)", "ok")
-    return JSONResponse({"ok": True, "removed": removed, "message": "Certificados eliminados" if removed else "No había certificados"})
+    return JSONResponse(
+        {"ok": True, "removed": removed, "message": "Certificados eliminados" if removed else "No había certificados"}
+    )
 
 
 _TOOLS_CACHE: list | None = None
@@ -1195,6 +1361,8 @@ PANEL_TOOLS = {"dashboard_install", "web_update_check", "web_update_apply", "adm
 
 
 def _tool_domain(name: str) -> str:
+    if name.startswith("central_"):
+        return "central"
     if name.startswith("axis_") or name.startswith("sse_"):
         return "sse"
     if name in PANEL_TOOLS:
@@ -1245,7 +1413,13 @@ async def api_tools_list(request):
             "disabled": sorted(disabled),
             "domains": domains,
             "tools": [
-                {"name": t["name"], "description": t["description"], "description_es": t.get("description_es", ""), "domain": t["domain"], "disabled": t["name"] in disabled}
+                {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "description_es": t.get("description_es", ""),
+                    "domain": t["domain"],
+                    "disabled": t["name"] in disabled,
+                }
                 for t in tools
             ],
         }
@@ -1323,7 +1497,9 @@ You are operating ec-mcp for HPE Aruba EdgeConnect SD-WAN and SASE.
 def _agent_prompt() -> str:
     docs_dir = Path(__file__).resolve().parent.parent / "docs"
     parts = [AGENT_PROMPT_HEADER]
-    parts.append(f"\n- Versión: {__version__}\n- Tools totales: {len(_mcp_tools())}\n- Tools desactivadas: {len(_disabled_tools())}\n")
+    parts.append(
+        f"\n- Versión: {__version__}\n- Tools totales: {len(_mcp_tools())}\n- Tools desactivadas: {len(_disabled_tools())}\n"
+    )
     for fname in ("EDGECONNECT_NOC_OPS_SKILL.md", "AI_AGENT_SKILL_RECOMMENDATIONS.md", "EDGECONNECT_EXPERT_SKILL.md"):
         path = docs_dir / fname
         if path.is_file():
@@ -1455,10 +1631,14 @@ async def api_audit_report(request):
     build, media_type, extension = formats[fmt]
     body = build(events)
     _audit_panel(session["user"], "audit_report_export", "panel", "ok", {"format": fmt, "events": len(events)})
-    return Response(body, media_type=media_type, headers={
-        "Content-Disposition": f'attachment; filename="ec-mcp-auditoria.{extension}"',
-        "Cache-Control": "no-store",
-    })
+    return Response(
+        body,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="ec-mcp-auditoria.{extension}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 async def api_debug_events(request):
@@ -1492,7 +1672,16 @@ async def api_debug_export(request):
         writer.writerow(["ts", "source", "tool", "action", "target", "result", "latency_s", "user"])
         for e in events:
             writer.writerow(
-                [e["ts_iso"], e["source"], e.get("tool", ""), e["action"], e["target"], e["result"], e["latency"], e.get("user", "")]
+                [
+                    e["ts_iso"],
+                    e["source"],
+                    e.get("tool", ""),
+                    e["action"],
+                    e["target"],
+                    e["result"],
+                    e["latency"],
+                    e.get("user", ""),
+                ]
             )
         body = out.getvalue()
         media = "text/csv"
@@ -1515,11 +1704,13 @@ async def api_debug_clear(request):
         return denied
     DEBUG_EVENTS.clear()
     _audit_panel(session["user"], "debug_buffer_clear", "memory", "ok")
-    return JSONResponse({
-        "ok": True,
-        "removed": [],
-        "message": "Búfer de depuración en memoria limpiado. El registro de auditoría se conserva.",
-    })
+    return JSONResponse(
+        {
+            "ok": True,
+            "removed": [],
+            "message": "Búfer de depuración en memoria limpiado. El registro de auditoría se conserva.",
+        }
+    )
 
 
 async def api_audit_snapshot(request):
@@ -1536,7 +1727,9 @@ async def api_audit_snapshot(request):
     except FileNotFoundError:
         return JSONResponse({"ok": False, "error": "Registro de auditoría no disponible"}, status_code=404)
     except (OSError, ValueError):
-        return JSONResponse({"ok": False, "error": "No se pudo crear una captura estable del registro"}, status_code=409)
+        return JSONResponse(
+            {"ok": False, "error": "No se pudo crear una captura estable del registro"}, status_code=409
+        )
     return JSONResponse({"ok": True, "snapshot": snapshot}, headers={"Cache-Control": "no-store"})
 
 
@@ -1618,15 +1811,19 @@ def _redact_diagnostic_line(line: bytes) -> bytes:
 
     text = line.decode("utf-8", errors="replace")
     values = [
-        value for key, value in os.environ.items()
+        value
+        for key, value in os.environ.items()
         if value and re.search(r"(?i)(password|passwd|secret|token|api.?key|private.?key|credential)", key)
     ]
     text = redact_secrets(text, values)
     text = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1***REDACTED***", text)
-    text = re.sub(r"(?i)((?:token|api[_-]?key|authorization|secret|password)[\x22\x27]?\s*[:=]\s*[\x22\x27]?)[^\s&\x22\x27]+", r"\1***REDACTED***", text)
+    text = re.sub(
+        r"(?i)((?:token|api[_-]?key|authorization|secret|password)[\x22\x27]?\s*[:=]\s*[\x22\x27]?)[^\s&\x22\x27]+",
+        r"\1***REDACTED***",
+        text,
+    )
     text = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
     return text.encode("utf-8")
-
 
 
 async def api_diagnostic_run(request):
@@ -1650,8 +1847,10 @@ async def api_diagnostic_run(request):
         result = "error"
         try:
             process = await asyncio.create_subprocess_exec(
-                *_DIAGNOSTIC_COMMANDS[name], stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT, limit=8192,
+                *_DIAGNOSTIC_COMMANDS[name],
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                limit=8192,
             )
             total = 0
             async with asyncio.timeout(10):
@@ -1681,8 +1880,11 @@ async def api_diagnostic_run(request):
             finally:
                 _DIAGNOSTIC_LOCK.release()
 
-    return StreamingResponse(output(), media_type="text/plain; charset=utf-8",
-                             headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+    return StreamingResponse(
+        output(),
+        media_type="text/plain; charset=utf-8",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 async def api_backups_restore(request):
@@ -1697,7 +1899,13 @@ async def api_backups_restore(request):
     except (ValueError, OSError) as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     _audit_panel(session["user"], "backup_restore", name, "ok", result)
-    return JSONResponse({"ok": True, "restored": result["restored"], "message": f"Rollback aplicado desde '{name}'. Reinicia los servicios para aplicar .env."})
+    return JSONResponse(
+        {
+            "ok": True,
+            "restored": result["restored"],
+            "message": f"Rollback aplicado desde '{name}'. Reinicia los servicios para aplicar .env.",
+        }
+    )
 
 
 async def api_users_password(request):
@@ -1709,7 +1917,9 @@ async def api_users_password(request):
     old_password = str(body.get("old_password") or "")
     new_password = str(body.get("new_password") or "")
     if target_user != session["user"] and session.get("role") != "admin":
-        return JSONResponse({"ok": False, "error": "Solo un admin puede cambiar la contraseña de otro usuario"}, status_code=403)
+        return JSONResponse(
+            {"ok": False, "error": "Solo un admin puede cambiar la contraseña de otro usuario"}, status_code=403
+        )
     try:
         if admin_users.has_users():
             if target_user == session["user"] and admin_users.verify_user(target_user, old_password) is None:
@@ -1717,7 +1927,9 @@ async def api_users_password(request):
             admin_users.set_password(target_user, new_password)
         else:
             if target_user != "admin":
-                return JSONResponse({"ok": False, "error": "En modo de contraseña única solo existe 'admin'"}, status_code=400)
+                return JSONResponse(
+                    {"ok": False, "error": "En modo de contraseña única solo existe 'admin'"}, status_code=400
+                )
             if not _verify_password(old_password, allow_first_run=False):
                 return JSONResponse({"ok": False, "error": "Contraseña actual incorrecta"}, status_code=400)
             update_env({"EC_ADMIN_PASSWORD": new_password})
@@ -1725,8 +1937,6 @@ async def api_users_password(request):
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     _audit_panel(session["user"], "user_password", target_user, "changed")
     return JSONResponse({"ok": True, "message": f"Contraseña actualizada para '{target_user}'"})
-
-
 
 
 def HTMLResponseMin(content: str) -> Response:
@@ -1750,6 +1960,10 @@ def build_admin_app() -> Starlette:
             Route("/api/sse/delete", api_delete_sse, methods=["POST"]),
             Route("/api/sse/rename", api_rename_sse, methods=["POST"]),
             Route("/api/sse/duplicate", api_duplicate_sse, methods=["POST"]),
+            Route("/api/central", api_save_central, methods=["POST"]),
+            Route("/api/central/delete", api_delete_central, methods=["POST"]),
+            Route("/api/central/rename", api_rename_central, methods=["POST"]),
+            Route("/api/central/duplicate", api_duplicate_central, methods=["POST"]),
             Route("/api/apply", api_apply, methods=["POST"]),
             Route("/api/default", api_default_target, methods=["POST"]),
             Route("/api/probe", api_probe, methods=["POST"]),
@@ -1785,7 +1999,7 @@ def build_admin_app() -> Starlette:
             Route("/api/backups/restore", api_backups_restore, methods=["POST"]),
             Route("/api/backups/delete", api_backups_delete, methods=["POST"]),
             Route("/api/diagnostics/run", api_diagnostic_run, methods=["POST"]),
-        ]
+        ],
     )
 
 

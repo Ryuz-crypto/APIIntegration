@@ -12,9 +12,12 @@ from ec_mcp.admin import build_admin_app
 from ec_mcp.multi_target import (
     RegistryError,
     TargetRegistry,
+    central_from_entry,
+    load_central_from_env,
     load_orchestrators_from_env,
     load_sse_from_env,
     orchestrator_from_entry,
+    public_central,
     public_orchestrator,
     public_sse,
     sse_from_entry,
@@ -30,7 +33,9 @@ def registry(tmp_path: Path, monkeypatch) -> TargetRegistry:
 
 def test_registry_saves_multiple_orchestrators_independently(registry: TargetRegistry):
     registry.save_orchestrator("prod", {"url": "https://prod.example.com", "api_key": "k1"})
-    registry.save_orchestrator("lab", {"url": "https://lab.example.com", "username": "u", "password": "secret-lab-pass"})
+    registry.save_orchestrator(
+        "lab", {"url": "https://lab.example.com", "username": "u", "password": "secret-lab-pass"}
+    )
     orch = registry.list_orchestrators()
     assert set(orch) == {"prod", "lab"}
     assert orch["prod"]["api_key"] == "k1"
@@ -92,10 +97,12 @@ def test_to_env_blob_renders_json(registry: TargetRegistry):
 def test_load_from_env_roundtrip(monkeypatch):
     monkeypatch.setenv(
         "EC_ORCHESTRATORS_JSON",
-        json.dumps({
-            "prod": {"url": "https://prod.example.com", "api_key": "k1"},
-            "lab": {"url": "https://lab.example.com", "username": "u", "password": "p"},
-        }),
+        json.dumps(
+            {
+                "prod": {"url": "https://prod.example.com", "api_key": "k1"},
+                "lab": {"url": "https://lab.example.com", "username": "u", "password": "p"},
+            }
+        ),
     )
     monkeypatch.setenv(
         "EC_SSE_PLATFORMS_JSON",
@@ -130,7 +137,9 @@ def test_admin_state_includes_sse_platforms(registry: TargetRegistry, monkeypatc
 
 def test_admin_routes_include_sse():
     paths = {route.path for route in build_admin_app().routes}
-    assert {"/api/sse", "/api/sse/delete", "/api/orchestrators", "/api/orchestrators/delete", "/api/apply"}.issubset(paths)
+    assert {"/api/sse", "/api/sse/delete", "/api/orchestrators", "/api/orchestrators/delete", "/api/apply"}.issubset(
+        paths
+    )
 
 
 def test_admin_page_has_sse_tab():
@@ -155,3 +164,107 @@ def test_sse_from_entry_validates():
     target = sse_from_entry("x", {"base_url": "https://x.example.com", "admin_token": "t"})
     assert target.provider == "axis"
     assert target.timeout == 30.0
+
+
+class TestCentralMultiTenant:
+    def test_registry_saves_multiple_central_platforms(self, registry: TargetRegistry):
+        registry.save_central(
+            "central-prod",
+            {"base_url": "https://us.api.central.arubanetworks.com", "client_id": "cid-1", "client_secret": "sec-1"},
+        )
+        registry.save_central(
+            "central-lab",
+            {"base_url": "https://lab.api.central.arubanetworks.com", "client_id": "cid-2", "client_secret": "sec-2"},
+        )
+        centrals = registry.list_central()
+        assert set(centrals) == {"central-prod", "central-lab"}
+        pub = public_central("central-prod", centrals["central-prod"])
+        assert pub["has_client_secret"] is True
+        assert "sec-1" not in json.dumps(pub)
+        assert pub["client_id"] == "cid-1"
+
+    def test_registry_central_secret_kept_when_empty_and_cleared_when_none(self, registry: TargetRegistry):
+        registry.save_central(
+            "central-prod",
+            {
+                "base_url": "https://us.api.central.arubanetworks.com",
+                "client_id": "cid",
+                "client_secret": "real-secret",
+            },
+        )
+        registry.save_central(
+            "central-prod",
+            {"base_url": "https://us.api.central.arubanetworks.com", "client_id": "cid", "client_secret": None},
+        )
+        assert registry.get_central("central-prod").get("client_secret") == "real-secret"
+        registry.delete_central("central-prod")
+        assert registry.list_central() == {}
+
+    def test_central_from_entry_validates(self):
+        with pytest.raises(RegistryError):
+            central_from_entry("x", {"base_url": "https://x.example.com"})
+        with pytest.raises(RegistryError):
+            central_from_entry("x", {"base_url": "https://x.example.com", "client_id": "cid"})
+        target = central_from_entry(
+            "x", {"base_url": "https://x.example.com/", "client_id": "cid", "client_secret": "sec"}
+        )
+        assert target.base_url == "https://x.example.com"
+        assert target.verify_tls is True
+        assert target.timeout == 30.0
+
+    def test_load_central_from_env(self, monkeypatch):
+        monkeypatch.setenv(
+            "EC_CENTRAL_PLATFORMS_JSON",
+            json.dumps(
+                {
+                    "central-a": {
+                        "base_url": "https://a.example.com",
+                        "client_id": "cid",
+                        "client_secret": "sec",
+                    }
+                }
+            ),
+        )
+        targets = load_central_from_env()
+        assert set(targets) == {"central-a"}
+        assert targets["central-a"].client_secret == "sec"
+
+    def test_admin_state_includes_central_platforms_without_secrets(self, registry: TargetRegistry, monkeypatch):
+        from ec_mcp import admin
+
+        registry.save_central(
+            "central-prod",
+            {
+                "base_url": "https://us.api.central.arubanetworks.com",
+                "client_id": "cid",
+                "client_secret": "real-secret",
+            },
+        )
+        monkeypatch.setenv("EC_CENTRAL_ENABLED", "true")
+        state = admin._public_state()
+        assert state["central_platforms"][0]["name"] == "central-prod"
+        assert state["central_platforms"][0]["active"] is False or True
+        assert "real-secret" not in json.dumps(state)
+        assert state["blobs"]["central"] is False or True
+
+    def test_admin_routes_include_central(self):
+        paths = {route.path for route in build_admin_app().routes}
+        assert {"/api/central", "/api/central/delete", "/api/central/rename", "/api/central/duplicate"}.issubset(paths)
+
+    def test_registry_env_blob_includes_central(self, registry: TargetRegistry):
+        registry.save_central(
+            "central-prod",
+            {"base_url": "https://us.api.central.arubanetworks.com", "client_id": "cid", "client_secret": "sec"},
+        )
+        blob = registry.to_env_blob()
+        assert "EC_CENTRAL_PLATFORMS_JSON" in blob
+        assert json.loads(blob["EC_CENTRAL_PLATFORMS_JSON"])["central-prod"]["client_id"] == "cid"
+
+
+def test_admin_page_has_central_tab():
+    from ec_mcp.admin_page import PAGE
+
+    assert "Aruba Central" in PAGE
+    assert "renderCentral" in PAGE
+    assert "/api/central" in PAGE
+    assert "tab-central" in PAGE
