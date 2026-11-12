@@ -326,6 +326,7 @@ details.menu .menu-body{background:var(--panel-bg,#0d2c38);color:var(--panel-fg,
 details.menu .menu-body button.secondary,dialog button.secondary{background:#103642;color:#edfffb;border:1px solid #527783}
 details.menu .menu-body button.secondary:hover,dialog button.secondary:hover{background:#16515a;color:#fff;border-color:var(--brand)}
 dialog{background:var(--panel-bg,#0d2c38);color:var(--panel-fg,#fff);border:1px solid #527783;border-top:3px solid var(--brand);border-radius:14px;max-height:90vh;overflow:auto}
+dialog .group{background:#103542;border-color:#315e69}
 dialog h3,dialog label,dialog .help{color:var(--panel-fg,#fff)}
 dialog input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),dialog select,dialog textarea{background:#071f2b;color:#f1ffff;border-color:#648a93;color-scheme:dark}
 #lang-sel{background:#0a2b37!important;color:#efffff!important;border-color:#648a93!important;color-scheme:dark}
@@ -678,7 +679,7 @@ async function renderServices(){
  var central=(r.central_platforms||[]).map(function(s){return svcRow(t('central_label')+': '+s.name,s)}).join('');
  var up=svcRow(''+t('upd_worker')+'',r.update_worker||{});
  var mcp=r.mcp_transport||{};var mcpRow=svcRow(t('mcp_label')+' ('+esc(mcp.url||'localhost')+')',mcp);
- h+=orch+sse+central+mcpRow+up+'<div class="actions"><button onclick="renderServices()">'+t('btn_recheck')+'</button></div></section>';
+ h+=orch+sse+central+mcpRow+up+'<div class="actions"><button class="secondary" onclick="openRestartNow()">'+((LANG==='es'||LANG==='mx')?'Reiniciar servicios':'Restart services')+'</button><button onclick="renderServices()">'+t('btn_recheck')+'</button></div></section>';
  q('#workspace').innerHTML=h;}catch(e){notice(e.message,'err')}
 }
 function svcRow(label,s){var up=s.state==='up'||s.state==='success'||s.state==='idle';var st=s.state||'unknown';var cls=up?'ok':'err';var extra=s.error?esc(s.error):(s.latency!==undefined?(t('latency')+' '+s.latency.toFixed(2)+'s'):'');return '<div class="orch"><strong>'+esc(label)+'</strong> <span class="badge" data-state="'+esc(st)+'">'+esc(st)+'</span><br><span class="help">'+extra+'</span></div>'}
@@ -1184,6 +1185,10 @@ function restartDialogHtml(){
 }
 function openRestart(){if(!q('#restart-dlg'))q('#app').innerHTML+=restartDialogHtml();var d=q('#restart-dlg');d.showModal?d.showModal():d.setAttribute('open','')}
 function closeRestart(){var d=q('#restart-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
+function restartNowDialogHtml(){return '<dialog id="restartnow-dlg" style="max-width:460px;width:calc(100% - 30px);background:var(--panel-bg,#0d2c38);color:var(--panel-fg,#fff)"><h3>'+((LANG==='es'||LANG==='mx')?'Reiniciar servicios':'Restart services')+'</h3><p class="help">'+((LANG==='es'||LANG==='mx')?'Reinicia ec-mcp y ec-mcp-admin para aplicar la configuración y las tools nuevas. Inicia una conversación nueva en tu plataforma de IA para ver tools nuevas.':'Restarts ec-mcp and ec-mcp-admin to apply configuration and new tools. Start a new conversation in your AI platform to see new tools.')+'</p><label>'+((LANG==='es'||LANG==='mx')?'Contraseña del panel (confirmación)':'Panel password (confirmation)')+'<input id="rstnow-pass" type="password" autocomplete="off"></label><div class="actions"><button onclick="submitRestartNow()">'+((LANG==='es'||LANG==='mx')?'Reiniciar':'Restart')+'</button><button class="secondary" onclick="closeRestartNow()">'+t('custom_cancel')+'</button></div></dialog>'}
+function openRestartNow(){if(!q('#restartnow-dlg'))q('#app').innerHTML+=restartNowDialogHtml();var d=q('#restartnow-dlg');d.showModal?d.showModal():d.setAttribute('open','')}
+function closeRestartNow(){var d=q('#restartnow-dlg');if(d){d.close?d.close():d.removeAttribute('open')}}
+async function submitRestartNow(){try{var r=await api('/api/restart',{password:(q('#rstnow-pass')&&q('#rstnow-pass').value)||''});closeRestartNow();notice(r.message||r.error,r.state==='pending'?'ok':'err');if(r.state==='pending')pollRestart(0)}catch(e){notice(e.message,'err')}}
 async function restartServices(){openRestart()}
 async function submitRestart(){
  var orch=(document.querySelector('input[name=\"rst-orch\"]:checked')||{value:''}).value||'';

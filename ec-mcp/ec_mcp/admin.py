@@ -1484,9 +1484,9 @@ PANEL_TOOLS = {"dashboard_install", "web_update_check", "web_update_apply", "adm
 
 
 def _tool_domain(name: str) -> str:
-    if name.startswith("central_"):
+    if name.startswith("central_") or name == "list_central_targets_tool":
         return "central"
-    if name.startswith("axis_") or name.startswith("sse_"):
+    if name.startswith("axis_") or name.startswith("sse_") or name == "list_sse_targets_tool":
         return "sse"
     if name in PANEL_TOOLS:
         return "panel"
