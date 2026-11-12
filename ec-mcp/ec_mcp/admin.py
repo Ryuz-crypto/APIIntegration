@@ -429,12 +429,12 @@ async def login_post(request):
             status_code=429,
             headers={"Retry-After": str(retry_after)},
         )
-    if username and admin_users.has_users():
-        role = admin_users.verify_user(username, password) if password else None
+    if admin_users.has_users():
+        role = admin_users.verify_user(username, password) if username and password else None
         valid = role is not None
-        user_label = username
+        user_label = username or "(missing username)"
     else:
-        # Sin username se usa la contraseña única (retrocompatible aunque exista archivo de usuarios).
+        # Legacy single-password login remains available only before users are configured.
         role = "admin"
         valid = bool(password) and _verify_password(password, allow_first_run=_loopback_only(host))
         user_label = "admin"

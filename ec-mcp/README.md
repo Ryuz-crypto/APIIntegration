@@ -17,6 +17,8 @@ HPE Aruba Networking EdgeConnect SD-WAN. Puede consultar el Orchestrator y los
 appliances mediante sus APIs oficiales y, de forma opcional, ejecutar el
 catálogo ECOS por SSH.
 
+> **Migración de acceso:** cuando existen usuarios individuales, el panel requiere usuario y contraseña; la contraseña compartida solo funciona si aún no hay usuarios. Antes de actualizar, comprueba que al menos una cuenta administradora individual funcione. Mantén un procedimiento de recuperación fuera de banda.
+
 ## Qué incluye
 
 - Compatibilidad con perfiles API de Orchestrator 9.3–9.6; versiones 9.7 usan
