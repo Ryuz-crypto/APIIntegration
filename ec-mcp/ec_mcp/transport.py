@@ -28,6 +28,7 @@ except ModuleNotFoundError:
 MIN_TOKEN_BYTES = 32
 FAILED_AUTH_LIMIT = 5
 FAILED_AUTH_WINDOW_SECONDS = 60.0
+TOKEN_REFRESH_SECONDS = 3.0
 
 
 def validate_token_strength(token: str) -> None:
@@ -38,6 +39,82 @@ def validate_token_strength(token: str) -> None:
         )
 
 
+def _env_file_path() -> str:
+    """Resolve the .env file the same way the CLI loader does."""
+    candidates = []
+    env_path = os.environ.get("EC_MCP_ENV_FILE")
+    if env_path:
+        candidates.append(env_path)
+    candidates.append(os.path.join(os.getcwd(), ".env"))
+    candidates.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    return ""
+
+
+def _env_file_value(key: str) -> str:
+    """Return a raw value from the .env file without touching os.environ."""
+    path = _env_file_path()
+    if not path:
+        return ""
+    try:
+        with open(path, encoding="utf-8") as stream:
+            lines = stream.read().splitlines()
+    except OSError:
+        return ""
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        if name.strip() == key:
+            return value.strip().strip('"').strip("'")
+    return ""
+
+
+class TokenStore:
+    """Auth token set with hot reload.
+
+    The initial set (primary rotation token + EC_MCP_AUTH_TOKEN + named
+    tokens) is resolved at startup; every TOKEN_REFRESH_SECONDS the named
+    tokens are re-read from the .env file so the panel can create or
+    revoke tokens without restarting the service. A broken file keeps
+    the last known-good set (fail-closed, never open).
+    """
+
+    def __init__(self, tokens: list[str], *, ttl: float = TOKEN_REFRESH_SECONDS):
+        if not tokens:
+            raise ValueError("At least one auth token is required")
+        for token in tokens:
+            validate_token_strength(token)
+        self._static = list(tokens)
+        self._named: list[str] = []
+        self._ttl = ttl
+        self._expires = 0.0
+
+    def current(self) -> list[str]:
+        now = time.monotonic()
+        if now >= self._expires:
+            blob = _env_file_value("EC_MCP_AUTH_TOKENS_JSON") or os.environ.get("EC_MCP_AUTH_TOKENS_JSON", "")
+            try:
+                named = load_named_auth_tokens(blob)
+            except SystemExit:
+                named = {}
+                for token in self._named:
+                    named[str(len(named))] = token
+            self._named = [token for token in named.values() if token not in self._static]
+            self._expires = now + self._ttl
+        tokens = list(self._static)
+        for token in self._named:
+            if token not in tokens:
+                tokens.append(token)
+        return tokens
+
+    def force_refresh(self) -> None:
+        self._expires = 0.0
+
+
 class BearerAuthMiddleware:
     """Serves /health without auth; rejects every other request without a
     valid Authorization: Bearer header. Failed attempts per IP are limited
@@ -46,17 +123,17 @@ class BearerAuthMiddleware:
     def __init__(
         self,
         app,
-        tokens: list[str],
+        tokens,
         *,
         auth_limit: int = FAILED_AUTH_LIMIT,
         auth_window: float = FAILED_AUTH_WINDOW_SECONDS,
     ):
-        if not tokens:
-            raise ValueError("At least one auth token is required")
-        for token in tokens:
-            validate_token_strength(token)
+        if isinstance(tokens, TokenStore):
+            self.store = tokens
+        else:
+            self.store = TokenStore(list(tokens))
         self.app = app
-        self.tokens = tokens
+        self.tokens = self.store.current()
         self._failures: dict[str, deque[float]] = defaultdict(deque)
         self._auth_limit = auth_limit
         self._auth_window = auth_window
@@ -131,7 +208,7 @@ class BearerAuthMiddleware:
         headers = {key.decode("latin-1").lower(): value.decode("latin-1") for key, value in scope.get("headers", [])}
         authorization = headers.get("authorization", "")
         provided = authorization[len("Bearer ") :].strip() if authorization.startswith("Bearer ") else ""
-        if not provided or not any(hmac.compare_digest(provided, token) for token in self.tokens):
+        if not provided or not any(hmac.compare_digest(provided, token) for token in self.store.current()):
             self._record_failure(ip)
             response = JSONResponse({"error": "unauthorized"}, status_code=401)
             await response(scope, receive, send)
@@ -196,13 +273,13 @@ def build_http_app(
         json_response=json_response,
         transport_security=resolve_transport_security(host),
     )
-    return BearerAuthMiddleware(mcp_app, resolve_auth_tokens(primary=token))
+    return BearerAuthMiddleware(mcp_app, TokenStore(resolve_auth_tokens(primary=token)))
 
 
 def build_sse_app(server: FastMCP, token: str):
     """Build the authenticated legacy SSE ASGI app with /health."""
     mcp_app = server.sse_app()
-    return BearerAuthMiddleware(mcp_app, resolve_auth_tokens(primary=token))
+    return BearerAuthMiddleware(mcp_app, TokenStore(resolve_auth_tokens(primary=token)))
 
 
 def resolve_auth_tokens(primary: str | None = None) -> list[str]:
