@@ -274,7 +274,7 @@ def _snapshot_backup(label: str) -> str | None:
             shutil.rmtree(old, ignore_errors=True)
         return name
     except OSError:
-        return None
+        raise
 
 
 def _restore_backup(name: str) -> dict:
