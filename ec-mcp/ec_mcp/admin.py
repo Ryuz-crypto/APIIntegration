@@ -1129,7 +1129,7 @@ async def api_mcp_tokens_create(request):
     return JSONResponse(
         {
             "ok": True,
-            "message": f"Token '{name}' creado. Guárdalo ahora: no se volverá a mostrar. Queda activo en segundos (recarga en caliente, sin reiniciar).",
+            "message": f"Token '{name}' creado. Guárdalo ahora: no se volverá a mostrar. Queda activo en segundos, sin reiniciar el servicio.",
             "name": name,
             "token": token,
         }
@@ -1163,7 +1163,7 @@ async def api_mcp_tokens_delete(request):
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
     _audit_panel(session["user"], "mcp_token_delete", name, "ok")
     return JSONResponse(
-        {"ok": True, "message": f"Token '{name}' revocado. Deja de aceptarse en segundos (recarga en caliente)."}
+        {"ok": True, "message": f"Token '{name}' revocado. Deja de aceptarse en segundos, sin reiniciar el servicio."}
     )
 
 
