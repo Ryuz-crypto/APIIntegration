@@ -67,7 +67,12 @@ from .compat import CompatibilityEngine, load_profiles
 from .config import Settings
 from .dashboard import collect_dashboard_payload, render_dashboard_html
 from .dashboard_install import DashboardDeployError, RemoteDashboardDeployer
-from .multi_target import load_orchestrators_from_env, load_sse_from_env, resolve_default_name
+from .multi_target import (
+    load_central_from_env,
+    load_orchestrators_from_env,
+    load_sse_from_env,
+    resolve_default_name,
+)
 from .orchestrator_client import OrchestratorClient
 from .overlay_workflow import (
     OverlayPlanStore,
@@ -251,9 +256,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         target_settings = orchestrator_targets.get(name)
         if target_settings is None:
             available = ", ".join(sorted(orchestrator_targets)) or "(ninguno)"
-            raise SecurityError(
-                f"Orchestrator target '{name}' is not configured. Available targets: {available}"
-            )
+            raise SecurityError(f"Orchestrator target '{name}' is not configured. Available targets: {available}")
         try:
             client = OrchestratorClient(target_settings, engine, target_name=name)
             shared_clients[name] = client
@@ -284,6 +287,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             sse_targets[name] = target
     if not sse_targets and settings.axis_enabled and settings.axis_admin_token:
         from .multi_target import SseTarget
+
         sse_targets["default"] = SseTarget(
             name="default",
             provider="axis",
@@ -314,9 +318,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         sse = sse_targets.get(name)
         if sse is None:
             available = ", ".join(sorted(sse_targets)) or "(ninguno)"
-            raise SecurityError(
-                f"SSE platform target '{name}' is not configured. Available targets: {available}"
-            )
+            raise SecurityError(f"SSE platform target '{name}' is not configured. Available targets: {available}")
         client = AxisSecurityClient(
             token=sse.admin_token,
             base_url=sse.base_url,
@@ -326,29 +328,63 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         shared_axis[name] = client
         return client
 
-    shared_central: dict[str, ArubaCentralClient] = {}
+    # --- Multi-target: pool de clientes Aruba Central por nombre ---
+    central_targets: dict[str, Any] = {}
+    if settings.central_platforms_json.strip():
+        for name, target in load_central_from_env(settings.central_platforms_json).items():
+            central_targets[name] = target
+    if (
+        not central_targets
+        and settings.central_enabled
+        and settings.central_client_id
+        and settings.central_client_secret
+    ):
+        from .multi_target import CentralTarget
 
-    def require_central() -> ArubaCentralClient:
-        if "default" in shared_central:
-            return shared_central["default"]
-        if not settings.central_enabled or not (
-            settings.central_client_id and settings.central_client_secret
-        ):
-            raise SecurityError(
-                "Aruba Central is not configured. Set EC_CENTRAL_ENABLED=true plus "
-                "EC_CENTRAL_CLIENT_ID and EC_CENTRAL_CLIENT_SECRET (HPE GreenLake OAuth2 credentials)."
-            )
-        client = ArubaCentralClient(
+        central_targets["default"] = CentralTarget(
+            name="default",
+            base_url=settings.central_base_url,
             client_id=settings.central_client_id,
             client_secret=settings.central_client_secret,
-            base_url=settings.central_base_url,
             token_url=settings.central_token_url,
-            timeout=settings.central_timeout,
             verify_tls=settings.central_verify_tls,
+            timeout=settings.central_timeout,
         )
-        shared_central["default"] = client
-        return client
 
+    shared_central: dict[str, ArubaCentralClient] = {}
+
+    default_central_name = os.environ.get("EC_DEFAULT_CENTRAL", "").strip()
+
+    def _resolve_central_name(target: str) -> str:
+        if target.strip():
+            return target.strip()
+        resolved = resolve_default_name(central_targets, default_central_name)
+        return resolved or "default"
+
+    def require_central(target: str = "") -> ArubaCentralClient:
+        name = _resolve_central_name(target)
+        if name in shared_central:
+            return shared_central[name]
+        if not central_targets:
+            raise SecurityError(
+                "Aruba Central is not configured. Set EC_CENTRAL_PLATFORMS_JSON or "
+                "EC_CENTRAL_ENABLED=true plus EC_CENTRAL_CLIENT_ID and EC_CENTRAL_CLIENT_SECRET "
+                "(HPE GreenLake OAuth2 credentials)."
+            )
+        central = central_targets.get(name)
+        if central is None:
+            available = ", ".join(sorted(central_targets)) or "(ninguno)"
+            raise SecurityError(f"Aruba Central target '{name}' is not configured. Available targets: {available}")
+        client = ArubaCentralClient(
+            client_id=central.client_id,
+            client_secret=central.client_secret,
+            base_url=central.base_url,
+            token_url=central.token_url or settings.central_token_url,
+            timeout=central.timeout,
+            verify_tls=central.verify_tls,
+        )
+        shared_central[name] = client
+        return client
 
     DANGEROUS_OPERATION_PATTERN = re.compile(
         r"(?i)reboot|suspend|delete|remove|wipe|factory|purge|halt|shutdown|decommission"
@@ -361,16 +397,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         if operation and DANGEROUS_OPERATION_PATTERN.search(operation):
             if not settings.allow_dangerous_writes:
                 raise SecurityError(
-                    f"Operation '{operation}' is classified as dangerous and requires "
-                    "EC_ALLOW_DANGEROUS_WRITES=true"
+                    f"Operation '{operation}' is classified as dangerous and requires EC_ALLOW_DANGEROUS_WRITES=true"
                 )
         now = time.monotonic()
         while write_timestamps and now - write_timestamps[0] > 60.0:
             write_timestamps.popleft()
         if len(write_timestamps) >= settings.max_writes_per_minute:
-            raise SecurityError(
-                f"Write rate limit reached (max {settings.max_writes_per_minute} per minute)"
-            )
+            raise SecurityError(f"Write rate limit reached (max {settings.max_writes_per_minute} per minute)")
         write_timestamps.append(now)
 
     def require_sse_writes(operation: str = "") -> None:
@@ -394,13 +427,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         budget = max_chars - 256
         if isinstance(payload.get("versions"), dict):
             shrunk = json.loads(text)
-            version_entries = [
-                b for b in shrunk.get("versions", {}).values() if isinstance(b, dict)
-            ]
+            version_entries = [b for b in shrunk.get("versions", {}).values() if isinstance(b, dict)]
             total_entries = sum(
-                len(b.get("operations", {}))
-                for b in version_entries
-                if isinstance(b.get("operations"), dict)
+                len(b.get("operations", {})) for b in version_entries if isinstance(b.get("operations"), dict)
             )
             if total_entries:
                 base_overhead = len(text) - sum(
@@ -438,22 +467,22 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             total = len(data[list_key])
             if fields:
                 data[list_key] = [
-                    {k: item.get(k) for k in fields if isinstance(item, dict) and k in item}
-                    for item in data[list_key]
+                    {k: item.get(k) for k in fields if isinstance(item, dict) and k in item} for item in data[list_key]
                 ]
             items = data[list_key][offset : offset + limit] if limit is not None else data[list_key][offset:]
-            return {list_key: items, "total_count": total, "offset": offset,
-                    "returned": len(items),
-                    "next_offset": (offset + len(items)) if offset + len(items) < total else None}, False
+            return {
+                list_key: items,
+                "total_count": total,
+                "offset": offset,
+                "returned": len(items),
+                "next_offset": (offset + len(items)) if offset + len(items) < total else None,
+            }, False
         else:
             if fields and isinstance(data, dict):
                 data = {k: v for k, v in data.items() if k in fields}
             return data, False
         if fields:
-            items = [
-                {k: item.get(k) for k in fields if isinstance(item, dict) and k in item}
-                for item in items
-            ]
+            items = [{k: item.get(k) for k in fields if isinstance(item, dict) and k in item} for item in items]
         paginated = {
             "data": items,
             "total_count": total,
@@ -481,7 +510,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             "body_example": _sanitize_example(operation.get("body_example")),
         }
 
-    def build_params(version: str, operation_id: str, appliance_id: str, group_id: str, interface_name: str, extras: dict) -> tuple[dict, dict]:
+    def build_params(
+        version: str, operation_id: str, appliance_id: str, group_id: str, interface_name: str, extras: dict
+    ) -> tuple[dict, dict]:
         operation = engine._profiles[version]["operations"][operation_id]
         path_params: dict[str, str] = {}
         query_params: dict[str, str] = {}
@@ -531,10 +562,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         if candidate.lower() == "all":
             candidates = [str(a.get("nePk")) for a in client.list_appliances() if a.get("nePk")]
             if not candidates:
-                raise SecurityError(
-                    "No appliances registered in the Orchestrator inventory; "
-                    "cannot expand 'all'."
-                )
+                raise SecurityError("No appliances registered in the Orchestrator inventory; cannot expand 'all'.")
             return candidates[0]
         direct = normalize_ne_pk(candidate)
         if direct:
@@ -591,16 +619,34 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         window = {"minute": 60, "5minute": 300, "hour": 3600, "day": 86400}.get(granularity or "hour", 3600)
         return str(now - window), str(now)
 
-    def kpi_get(client: OrchestratorClient, kpi: str, ne_pk: str = "", granularity: str = "", start_time: str = "", end_time: str = "") -> Any:
+    def kpi_get(
+        client: OrchestratorClient,
+        kpi: str,
+        ne_pk: str = "",
+        granularity: str = "",
+        start_time: str = "",
+        end_time: str = "",
+    ) -> Any:
         spec = KPI_ENDPOINTS[kpi]
         start_time, end_time = _default_stats_window(kpi, granularity, start_time, end_time)
-        query = {k: v for k, v in {"nePk": ne_pk, "granularity": granularity, "startTime": start_time, "endTime": end_time}.items() if v}
+        query = {
+            k: v
+            for k, v in {
+                "nePk": ne_pk,
+                "granularity": granularity,
+                "startTime": start_time,
+                "endTime": end_time,
+            }.items()
+            if v
+        }
         last_error: Exception | None = None
         results: list[Any] = []
         for path in spec["paths"]:
             try:
                 if spec.get("appliance_level") and ne_pk:
-                    results.append(client.appliance_api_get(ne_pk, path, **{k: v for k, v in query.items() if k != "nePk"}))
+                    results.append(
+                        client.appliance_api_get(ne_pk, path, **{k: v for k, v in query.items() if k != "nePk"})
+                    )
                 else:
                     results.append(client.get_raw(path, **query))
             except RuntimeError as error:
@@ -658,7 +704,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         try:
             data = kpi_get(client, "reachability")
             rows = data if isinstance(data, list) else (data or {}).get("data") or []
-            return {str(r.get("nePk") or r.get("ne")): str(r.get("reachability") or r.get("state") or "") for r in rows if isinstance(r, dict)}
+            return {
+                str(r.get("nePk") or r.get("ne")): str(r.get("reachability") or r.get("state") or "")
+                for r in rows
+                if isinstance(r, dict)
+            }
         except Exception:
             return {}
 
@@ -766,10 +816,22 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         return {"per_appliance": per_appliance, "total_alarms": total, "by_severity": total_by_severity}
 
     TUNNEL_KPI_KEYS = (
-        "tunnelname", "tunnel", "tunnelid", "overlayid", "nepk",
-        "mos", "min_mos", "max_mos", "avg_mos",
-        "max_jitter", "avg_tx_jitter", "max_pre_pct_loss", "max_post_pct_loss",
-        "avg_tx_latency", "min_latency_min", "max_latency_max",
+        "tunnelname",
+        "tunnel",
+        "tunnelid",
+        "overlayid",
+        "nepk",
+        "mos",
+        "min_mos",
+        "max_mos",
+        "avg_mos",
+        "max_jitter",
+        "avg_tx_jitter",
+        "max_pre_pct_loss",
+        "max_post_pct_loss",
+        "avg_tx_latency",
+        "min_latency_min",
+        "max_latency_max",
     )
 
     def project_tunnel_kpis(node: Any) -> Any:
@@ -835,15 +897,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         for field in field_list:
             normalized = field.strip().lower()
             wanted.update(WAN_FIELD_ALIASES.get(normalized, {normalized}))
-        kept = {
-            key: _project_fields(value, field_list)
-            for key, value in node.items()
-            if str(key).lower() in wanted
-        }
+        kept = {key: _project_fields(value, field_list) for key, value in node.items() if str(key).lower() in wanted}
         nested = {
-            key: _project_fields(value, field_list)
-            for key, value in node.items()
-            if isinstance(value, (dict, list))
+            key: _project_fields(value, field_list) for key, value in node.items() if isinstance(value, (dict, list))
         }
         nested = {key: value for key, value in nested.items() if value not in ({}, [])}
         if kept:
@@ -854,19 +910,27 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         return {key: value for key, value in node.items() if str(key).lower() in identifiers}
 
     def brownout_state(payload: Any) -> list[dict[str, Any]]:
-        rows = payload if isinstance(payload, list) else payload.get("tunnels") or payload.get("data") or [] if isinstance(payload, dict) else []
+        rows = (
+            payload
+            if isinstance(payload, list)
+            else payload.get("tunnels") or payload.get("data") or []
+            if isinstance(payload, dict)
+            else []
+        )
         result = []
         for item in rows:
             if not isinstance(item, dict):
                 continue
             state = str(item.get("state") or item.get("tunnelState") or "").lower()
             reason = item.get("brownoutReason") or item.get("brownout_reason")
-            result.append({
-                "tunnel": item.get("tunnelName") or item.get("name") or item.get("tunnelId"),
-                "state": state or "unknown",
-                "brownout": "brownout" in state or bool(reason),
-                "reason": reason or ("loss/latency/jitter threshold exceeded" if "brownout" in state else None),
-            })
+            result.append(
+                {
+                    "tunnel": item.get("tunnelName") or item.get("name") or item.get("tunnelId"),
+                    "state": state or "unknown",
+                    "brownout": "brownout" in state or bool(reason),
+                    "reason": reason or ("loss/latency/jitter threshold exceeded" if "brownout" in state else None),
+                }
+            )
         return result
 
     def _parse_json_object(raw: str, name: str) -> dict:
@@ -893,14 +957,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         rows = []
         for name in targets:
             ts = orchestrator_targets[name]
-            rows.append({
-                "name": name,
-                "url": ts.orchestrator_url,
-                "verify_tls": ts.verify_tls,
-                "has_api_key": bool(ts.orchestrator_api_key),
-                "has_password": bool(ts.orchestrator_password),
-                "is_default": name == "default",
-            })
+            rows.append(
+                {
+                    "name": name,
+                    "url": ts.orchestrator_url,
+                    "verify_tls": ts.verify_tls,
+                    "has_api_key": bool(ts.orchestrator_api_key),
+                    "has_password": bool(ts.orchestrator_password),
+                    "is_default": name == "default",
+                }
+            )
         return json_result({"targets": rows, "count": len(rows)}, settings.max_output_chars)
 
     @mcp.tool()
@@ -909,15 +975,36 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         rows = []
         for name in sorted(sse_targets):
             sse = sse_targets[name]
-            rows.append({
-                "name": name,
-                "provider": sse.provider,
-                "base_url": sse.base_url,
-                "verify_tls": sse.verify_tls,
-                "timeout": sse.timeout,
-                "has_admin_token": bool(sse.admin_token),
-                "is_default": name == "default",
-            })
+            rows.append(
+                {
+                    "name": name,
+                    "provider": sse.provider,
+                    "base_url": sse.base_url,
+                    "verify_tls": sse.verify_tls,
+                    "timeout": sse.timeout,
+                    "has_admin_token": bool(sse.admin_token),
+                    "is_default": name == "default",
+                }
+            )
+        return json_result({"targets": rows, "count": len(rows)}, settings.max_output_chars)
+
+    @mcp.tool()
+    def list_central_targets_tool() -> str:
+        """List the configured Aruba Central targets (multi-tenant support, e.g. several Central accounts). Read-only, never exposes secrets. Use the returned names as the 'target' parameter of central_* tools."""
+        rows = []
+        for name in sorted(central_targets):
+            central = central_targets[name]
+            rows.append(
+                {
+                    "name": name,
+                    "base_url": central.base_url,
+                    "client_id": central.client_id,
+                    "verify_tls": central.verify_tls,
+                    "timeout": central.timeout,
+                    "credentials_configured": bool(central.client_id and central.client_secret),
+                    "is_default": name == _resolve_central_name(""),
+                }
+            )
         return json_result({"targets": rows, "count": len(rows)}, settings.max_output_chars)
 
     @mcp.tool()
@@ -943,10 +1030,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 "ssh_enabled_global": settings.ssh_enabled,
                 "cli_commands_available": total_commands(),
                 "appliance_count": len(appliances),
-                "appliances": [
-                    {"nePk": a.get("nePk"), "name": a.get("name"), "ip": a.get("ip")}
-                    for a in appliances
-                ],
+                "appliances": [{"nePk": a.get("nePk"), "name": a.get("name"), "ip": a.get("ip")} for a in appliances],
                 "hint": "Use get_wan_health/get_mos/get_tunnel_state for KPIs; the nePk of every appliance is listed here.",
             }
             audit.record("orchestrator_info", "detect", settings.orchestrator_url, "ok", details=payload)
@@ -984,9 +1068,17 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         )
 
     @mcp.tool()
-    def list_api_operations(version: str = "", prefix: str = "", search: str = "", method: str = "",
-                             page: int = 0, page_size: int = 200, include_examples: bool = False, mode: str = "",
-        target: str = "") -> str:
+    def list_api_operations(
+        version: str = "",
+        prefix: str = "",
+        search: str = "",
+        method: str = "",
+        page: int = 0,
+        page_size: int = 200,
+        include_examples: bool = False,
+        mode: str = "",
+        target: str = "",
+    ) -> str:
         """List the stable API operation IDs, paginated and filterable. Defaults to the ACTIVE profile only (pass version='all' for every profile). Filters: search (substring on operation id AND path), prefix, method (GET/POST/PUT/DELETE). mode='index' returns a compact id -> path map (smallest payload). By default body_example is omitted; include_examples=true adds it. Response is always valid JSON with total_operations, page, has_more_page; call with page+1 for the next chunk."""
         try:
             if version and version != "all" and version not in engine._profiles:
@@ -1033,7 +1125,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     spec = profile_ops[op_id]
                     if lowered_prefix and not op_id.lower().startswith(lowered_prefix):
                         continue
-                    haystack = f'{op_id} {spec["path"]}'.lower()
+                    haystack = f"{op_id} {spec['path']}".lower()
                     score = sum(1 for term in expanded_terms if term in haystack)
                     if lowered_search and lowered_search not in haystack and score == 0:
                         continue
@@ -1077,16 +1169,23 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if truncated:
                 result = json.loads(result_text)
                 result["truncated"] = truncated
-                result["hint"] = ("Catalog page too large for the transport budget; "
-                                   "retry with a smaller page_size, or with search/prefix filters.")
+                result["hint"] = (
+                    "Catalog page too large for the transport budget; "
+                    "retry with a smaller page_size, or with search/prefix filters."
+                )
                 result.pop("excerpt", None)
                 result_text = json.dumps(result, ensure_ascii=False, default=str)
             else:
                 result = json.loads(result_text)
                 result["truncated"] = False
                 result_text = json.dumps(result, ensure_ascii=False, default=str)
-            audit.record("list_api_operations", "read", "profiles", "ok",
-                         details={"prefix": prefix, "search": search, "page": page})
+            audit.record(
+                "list_api_operations",
+                "read",
+                "profiles",
+                "ok",
+                details={"prefix": prefix, "search": search, "page": page},
+            )
             return json.dumps(result, ensure_ascii=False)
         except Exception as error:
             audit.record("list_api_operations", "read", "profiles", f"error: {error}")
@@ -1116,22 +1215,30 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             rows = []
             for label, entry in sorted(client.metrics().items()):
                 calls = int(entry.get("calls", 0))
-                rows.append({
-                    "operation": label,
-                    "calls": calls,
-                    "avg_seconds": round(entry.get("total_time", 0.0) / calls, 3) if calls else 0.0,
-                    "max_seconds": round(entry.get("max_time", 0.0), 3),
-                    "total_kb": round(entry.get("total_bytes", 0.0) / 1024, 1),
-                    "cache_hits": int(entry.get("cache_hits", 0)),
-                })
+                rows.append(
+                    {
+                        "operation": label,
+                        "calls": calls,
+                        "avg_seconds": round(entry.get("total_time", 0.0) / calls, 3) if calls else 0.0,
+                        "max_seconds": round(entry.get("max_time", 0.0), 3),
+                        "total_kb": round(entry.get("total_bytes", 0.0) / 1024, 1),
+                        "cache_hits": int(entry.get("cache_hits", 0)),
+                    }
+                )
             return json_result({"count": len(rows), "metrics": rows}, settings.max_output_chars)
         except Exception as error:
             audit.record("orchestrator_metrics", "read", settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_wan_health(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "", fields: str = "",
-        target: str = "") -> str:
+    def get_wan_health(
+        appliance_id: str = "",
+        granularity: str = "hour",
+        start_time: str = "",
+        end_time: str = "",
+        fields: str = "",
+        target: str = "",
+    ) -> str:
         """One-call WAN health snapshot: latency, jitter, loss and MOS per tunnel (already aggregated, no raw 70-column rows). appliance_id accepts comma-separated nePks/names/IPs; empty = all appliances. Pass fields to project only some columns."""
         try:
             client = require_client(target)
@@ -1148,12 +1255,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             mos_rows = []
             for ne_pk in targets:
                 try:
-                    mos_rows.append({
-                        "nePk": ne_pk,
-                        "data": project_wan_health_stats(
-                            kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
-                        ),
-                    })
+                    mos_rows.append(
+                        {
+                            "nePk": ne_pk,
+                            "data": project_wan_health_stats(
+                                kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
+                            ),
+                        }
+                    )
                 except Exception as error:
                     mos_rows.append({"nePk": ne_pk, "error": str(error)[:200]})
             mos = mos_rows
@@ -1163,7 +1272,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     state = reach.get(row.get("nePk"), "")
                     if state and state.lower() not in ("", "ok", "reachable", "up"):
                         row["reachability"] = state
-                        row["hint"] = "Orchestrator reports degraded reachability for this appliance; the error may be reachability, not the endpoint."
+                        row["hint"] = (
+                            "Orchestrator reports degraded reachability for this appliance; the error may be reachability, not the endpoint."
+                        )
             payload = {
                 "appliances": rows,
                 "mos": mos,
@@ -1190,15 +1301,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 ]
             payload["total_count"] = len(payload["appliances"])
             payload["truncated"] = False
-            audit.record("get_wan_health", "read", settings.orchestrator_url, "ok", details={"appliances": len(targets)})
+            audit.record(
+                "get_wan_health", "read", settings.orchestrator_url, "ok", details={"appliances": len(targets)}
+            )
             return json_result(payload, settings.max_output_chars)
         except Exception as error:
             audit.record("get_wan_health", "read", settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_mos(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "",
-        target: str = "") -> str:
+    def get_mos(
+        appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "", target: str = ""
+    ) -> str:
         """Voice MOS score per tunnel/appliance from GET /stats/aggregate/mos (values are typically scaled x100: 440 = MOS 4.40). Use start_time/end_time (epoch ms) and granularity to bound the window."""
         try:
             client = require_client(target)
@@ -1209,36 +1323,44 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 rows = []
                 for ne_pk in targets:
                     try:
-                        rows.append({
-                            "nePk": ne_pk,
-                            "data": project_wan_health_stats(
-                                kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
-                            ),
-                        })
+                        rows.append(
+                            {
+                                "nePk": ne_pk,
+                                "data": project_wan_health_stats(
+                                    kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
+                                ),
+                            }
+                        )
                     except Exception as error:
                         rows.append({"nePk": ne_pk, "error": str(error)[:200]})
                 payload = {"appliances": rows, "total_count": len(rows)}
             else:
                 ne_pk = resolve_ne_pk(client, appliance_id)
-                payload = project_wan_health_stats(
-                    kpi_get(client, "mos", ne_pk, granularity, start_time, end_time)
-                )
+                payload = project_wan_health_stats(kpi_get(client, "mos", ne_pk, granularity, start_time, end_time))
             audit.record("get_mos", "read", settings.orchestrator_url, "ok")
-            return json_result({"data": payload, "note": "MOS values may be scaled x100 (440 = 4.40)"}, settings.max_output_chars)
+            return json_result(
+                {"data": payload, "note": "MOS values may be scaled x100 (440 = 4.40)"}, settings.max_output_chars
+            )
         except Exception as error:
             audit.record("get_mos", "read", settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_tunnel_state(appliance_id: str = "",
-        target: str = "") -> str:
+    def get_tunnel_state(appliance_id: str = "", target: str = "") -> str:
         """Tunnel state per appliance from /tunnelsConfigAndState (proxied via the Orchestrator)."""
         try:
             client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if not appliance_id:
-                return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"], "hint": "Pass one appliance or 'all'; use list_appliances to discover them."}, settings.max_output_chars)
+                return json_result(
+                    {
+                        "error": "PARAM_REQUIRED",
+                        "required_params": ["appliance_id"],
+                        "hint": "Pass one appliance or 'all'; use list_appliances to discover them.",
+                    },
+                    settings.max_output_chars,
+                )
             targets = resolve_ne_pks(client, appliance_id)
             rows = []
             for ne_pk in targets:
@@ -1253,15 +1375,21 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_brownout_state(appliance_id: str = "",
-        target: str = "") -> str:
+    def get_brownout_state(appliance_id: str = "", target: str = "") -> str:
         """Brownout/blackout detection per tunnel with reason."""
         try:
             client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if not appliance_id:
-                return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"], "hint": "Pass one appliance or 'all'."}, settings.max_output_chars)
+                return json_result(
+                    {
+                        "error": "PARAM_REQUIRED",
+                        "required_params": ["appliance_id"],
+                        "hint": "Pass one appliance or 'all'.",
+                    },
+                    settings.max_output_chars,
+                )
             targets = resolve_ne_pks(client, appliance_id)
             rows = []
             total_tunnels = 0
@@ -1280,7 +1408,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 payload["reason"] = "All appliance brownout queries failed; see per-appliance errors."
             elif failed:
                 payload["status"] = "PARTIAL"
-                payload["reason"] = f"{failed} of {len(rows)} appliance brownout queries failed; see per-appliance errors."
+                payload["reason"] = (
+                    f"{failed} of {len(rows)} appliance brownout queries failed; see per-appliance errors."
+                )
             elif total_tunnels == 0:
                 payload["status"] = "SKIPPED_NO_ENTITY"
                 payload["reason"] = "No tunnel brownout entities were reported by the lab."
@@ -1304,7 +1434,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if not appliance_id:
-                return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"]}, settings.max_output_chars)
+                return json_result(
+                    {"error": "PARAM_REQUIRED", "required_params": ["appliance_id"]}, settings.max_output_chars
+                )
             ne_pk = resolve_ne_pk(client, appliance_id)
             version = client.resolve_active_profile()
             result: dict[str, Any] = {"nePk": ne_pk}
@@ -1322,7 +1454,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 query["ipEitherFlag"] = "true"
                 query["ip1"] = ip
             try:
-                result["flows"] = client.call(version, "orchestrator.flows242", query_params=None, json_body=None, **query)
+                result["flows"] = client.call(
+                    version, "orchestrator.flows242", query_params=None, json_body=None, **query
+                )
             except Exception as error:
                 result["flows_error"] = str(error)[:200]
                 if "appliance.flows263831" in engine._profiles[version]["operations"]:
@@ -1345,9 +1479,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     parse_firewall_log_entries,
                     summarize_security_log,
                 )
+
                 today = __import__("datetime").datetime.now().strftime("%Y-%m-%d")
                 log_payload = client.appliance_api_call(
-                    version, ne_pk, LOG_VIEWER_FILE_READ,
+                    version,
+                    ne_pk,
+                    LOG_VIEWER_FILE_READ,
                     path_params={"logType": "Firewall", "date": today, "lines": str(max(50, limit * 5))},
                 )
                 entries = parse_firewall_log_entries(log_payload)
@@ -1368,13 +1505,19 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             drops = (result.get("security_log") or {}).get("drops") or []
             if drops:
                 reasons = sorted({str(d.get("Reason", "")).strip() for d in drops if d.get("Reason")})[:5]
-                findings.append(f"{len(drops)} drop event(s) found in today's firewall log — reasons: {'; '.join(reasons)}")
+                findings.append(
+                    f"{len(drops)} drop event(s) found in today's firewall log — reasons: {'; '.join(reasons)}"
+                )
                 policy_drops = [d for d in drops if "policy" in str(d.get("Reason", "")).lower()]
                 if policy_drops:
-                    zones = sorted({f"{d.get('FromZone','?')}->{d.get('ToZone','?')}" for d in policy_drops})
-                    findings.append(f"Policy drops on zone pairs {', '.join(zones)} — review the zone matrix for these pairs")
+                    zones = sorted({f"{d.get('FromZone', '?')}->{d.get('ToZone', '?')}" for d in policy_drops})
+                    findings.append(
+                        f"Policy drops on zone pairs {', '.join(zones)} — review the zone matrix for these pairs"
+                    )
             else:
-                findings.append("No drops in today's firewall log — if traffic still fails, check reachability and routing")
+                findings.append(
+                    "No drops in today's firewall log — if traffic still fails, check reachability and routing"
+                )
             result["findings"] = findings
             audit.record("troubleshoot_flows", "read", settings.orchestrator_url, "ok", details={"drops": len(drops)})
             return json_result(result, settings.max_output_chars)
@@ -1383,14 +1526,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def troubleshoot_tunnel(appliance_id: str, granularity: str = "hour", start_time: str = "", end_time: str = "") -> str:
+    def troubleshoot_tunnel(
+        appliance_id: str, granularity: str = "hour", start_time: str = "", end_time: str = ""
+    ) -> str:
         """One-call tunnel troubleshooting: tunnel state, brownout reasons, WAN health KPIs (latency/jitter/loss/MOS) and reachability for one appliance, plus a prioritized diagnostic interpretation (tunnel down vs degraded vs healthy). Use it instead of calling get_tunnel_state + get_brownout_state + get_wan_health separately."""
         try:
             client = require_client()
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             if not appliance_id:
-                return json_result({"error": "PARAM_REQUIRED", "required_params": ["appliance_id"]}, settings.max_output_chars)
+                return json_result(
+                    {"error": "PARAM_REQUIRED", "required_params": ["appliance_id"]}, settings.max_output_chars
+                )
             ne_pk = resolve_ne_pk(client, appliance_id)
             result: dict[str, Any] = {"nePk": ne_pk}
             tunnels: list[dict[str, Any]] = []
@@ -1415,16 +1562,29 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 result["reachability"] = state
             findings: list[str] = []
             tunnels_list = tunnels if isinstance(tunnels, list) else []
-            down_admin = [t for t in tunnels_list if isinstance(t, dict) and str(t.get("adminState") or t.get("admin") or "").lower() in ("down", "disabled", "false")]
-            down_oper = [t for t in tunnels_list if isinstance(t, dict) and str(t.get("state") or t.get("status") or "").lower() == "down"]
+            down_admin = [
+                t
+                for t in tunnels_list
+                if isinstance(t, dict)
+                and str(t.get("adminState") or t.get("admin") or "").lower() in ("down", "disabled", "false")
+            ]
+            down_oper = [
+                t
+                for t in tunnels_list
+                if isinstance(t, dict) and str(t.get("state") or t.get("status") or "").lower() == "down"
+            ]
             brownout_rows = result.get("brownout") or []
             active_brownouts = [b for b in brownout_rows if isinstance(b, dict) and b.get("brownout")]
             if down_admin:
-                findings.append(f"{len(down_admin)} tunnel(s) are administratively down — verify intent before treating as failure")
+                findings.append(
+                    f"{len(down_admin)} tunnel(s) are administratively down — verify intent before treating as failure"
+                )
             remedies: list[dict[str, str]] = []
             if down_oper:
                 names = [str(t.get("tunnelName") or t.get("name") or t.get("tunnelId")) for t in down_oper[:5]]
-                findings.append(f"{len(down_oper)} tunnel(s) operationally DOWN ({', '.join(names)}) — check transport/NAT-D; use traceroute under the tunnel to find the failing hop")
+                findings.append(
+                    f"{len(down_oper)} tunnel(s) operationally DOWN ({', '.join(names)}) — check transport/NAT-D; use traceroute under the tunnel to find the failing hop"
+                )
                 remedies.append(
                     {
                         "situation": "tunnel operationally down",
@@ -1434,7 +1594,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 )
             if active_brownouts:
                 reasons = sorted({str(b.get("reason")) for b in active_brownouts if b.get("reason")})
-                findings.append(f"{len(active_brownouts)} tunnel(s) in brownout — reason: {'; '.join(reasons) if reasons else 'loss/latency/jitter threshold exceeded'}")
+                findings.append(
+                    f"{len(active_brownouts)} tunnel(s) in brownout — reason: {'; '.join(reasons) if reasons else 'loss/latency/jitter threshold exceeded'}"
+                )
                 remedies.append(
                     {
                         "situation": "brownout active",
@@ -1445,7 +1607,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if not down_oper and not active_brownouts and tunnels_list:
                 findings.append("No tunnels down and no active brownouts — tunnel plane looks healthy")
             if not tunnels_list and "tunnel_state_error" not in result:
-                findings.append("No tunnel entities reported — appliance may have no tunnels configured or reachability issues")
+                findings.append(
+                    "No tunnel entities reported — appliance may have no tunnels configured or reachability issues"
+                )
                 remedies.append(
                     {
                         "situation": "no tunnel entities",
@@ -1454,7 +1618,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     }
                 )
             if state and state.lower() not in ("", "ok", "reachable", "up"):
-                findings.append(f"Orchestrator reports reachability '{state}' for this appliance — errors may be reachability, not the endpoint")
+                findings.append(
+                    f"Orchestrator reports reachability '{state}' for this appliance — errors may be reachability, not the endpoint"
+                )
                 remedies.append(
                     {
                         "situation": "appliance reachability degraded",
@@ -1465,15 +1631,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             result["findings"] = findings
             if remedies:
                 result["remedies"] = remedies
-            audit.record("troubleshoot_tunnel", "read", settings.orchestrator_url, "ok", details={"findings": len(findings)})
+            audit.record(
+                "troubleshoot_tunnel", "read", settings.orchestrator_url, "ok", details={"findings": len(findings)}
+            )
             return json_result(result, settings.max_output_chars)
         except Exception as error:
             audit.record("troubleshoot_tunnel", "read", appliance_id, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_availability(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "",
-        target: str = "") -> str:
+    def get_availability(
+        appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "", target: str = ""
+    ) -> str:
         """Availability per appliance/site from GET /stats/aggregate/availability/appliance (fallback /availability/appliance)."""
         try:
             client = require_client(target)
@@ -1486,16 +1655,25 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except Exception as error:
             audit.record("get_availability", "read", settings.orchestrator_url, f"error: {error}")
             if "HTTP 404" in str(error):
-                return json_result({
-                    "status": "SKIPPED_NO_ENTITY",
-                    "reason": "Availability endpoint/entity is not exposed by this lab Orchestrator.",
-                    "endpoint_candidates": KPI_ENDPOINTS["availability"]["paths"],
-                }, settings.max_output_chars)
+                return json_result(
+                    {
+                        "status": "SKIPPED_NO_ENTITY",
+                        "reason": "Availability endpoint/entity is not exposed by this lab Orchestrator.",
+                        "endpoint_candidates": KPI_ENDPOINTS["availability"]["paths"],
+                    },
+                    settings.max_output_chars,
+                )
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_top_talkers(appliance_id: str = "", granularity: str = "hour", start_time: str = "", end_time: str = "", limit: int = 20,
-        target: str = "") -> str:
+    def get_top_talkers(
+        appliance_id: str = "",
+        granularity: str = "hour",
+        start_time: str = "",
+        end_time: str = "",
+        limit: int = 20,
+        target: str = "",
+    ) -> str:
         """Top talker applications/hosts from GET /stats/aggregate/topTalkers. Use it instead of pulling raw /flow rows."""
         try:
             client = require_client(target)
@@ -1512,8 +1690,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_active_alarms(appliance_id: str = "",
-        target: str = "") -> str:
+    def get_active_alarms(appliance_id: str = "", target: str = "") -> str:
         """Active alarm counts per appliance from /alarm/count/appliance (the /alarm/gms detail endpoint rejects view/severity filters — known upstream contract). appliance_id accepts 'all' (or empty) for every appliance, or a single nePk/name/IP; with 'all' the counts are aggregated per appliance and by severity. Use it for 'how many alarms are active right now' instead of alarm/gms."""
         try:
             client = require_client(target)
@@ -1526,14 +1703,19 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 ne_pk = resolve_ne_pk(client, appliance_id) if appliance_id else ""
                 payload = kpi_alarm_counts(client, ne_pk)
             audit.record("get_active_alarms", "read", settings.orchestrator_url, "ok")
-            return json_result({"data": payload, "note": "Counts per appliance/severity; the alarm/gms detail endpoint only accepts from+to (epoch seconds) upstream."}, settings.max_output_chars)
+            return json_result(
+                {
+                    "data": payload,
+                    "note": "Counts per appliance/severity; the alarm/gms detail endpoint only accepts from+to (epoch seconds) upstream.",
+                },
+                settings.max_output_chars,
+            )
         except Exception as error:
             audit.record("get_active_alarms", "read", settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_ha_status(appliance_id: str = "",
-        target: str = "") -> str:
+    def get_ha_status(appliance_id: str = "", target: str = "") -> str:
         """High-availability status per appliance; missing HA is reported explicitly."""
         try:
             client = require_client(target)
@@ -1566,15 +1748,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     rows.append({"nePk": ne_pk, "data": kpi_get(client, "firmware", ne_pk)})
                 except Exception as error:
                     rows.append({"nePk": ne_pk, "error": str(error)[:200]})
-            audit.record("get_firmware_compliance", "read", settings.orchestrator_url, "ok", details={"appliances": len(rows)})
+            audit.record(
+                "get_firmware_compliance", "read", settings.orchestrator_url, "ok", details={"appliances": len(rows)}
+            )
             return json_result({"appliances": rows, "total_count": len(rows)}, settings.max_output_chars)
         except Exception as error:
             audit.record("get_firmware_compliance", "read", settings.orchestrator_url, f"error: {error}")
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_ztp_status(offset: int = 0, limit: int = 20, fields: str = "",
-        target: str = "") -> str:
+    def get_ztp_status(offset: int = 0, limit: int = 20, fields: str = "", target: str = "") -> str:
         """Zero-Touch Provisioning status with paginated, credential-free discovery rows."""
         try:
             client = require_client(target)
@@ -1591,12 +1774,27 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     for item in part:
                         if not isinstance(item, dict):
                             continue
-                        row = {key: item.get(key) for key in ("id", "uuid", "approved", "denied", "enabled", "discoveredTime") if key in item}
+                        row = {
+                            key: item.get(key)
+                            for key in ("id", "uuid", "approved", "denied", "enabled", "discoveredTime")
+                            if key in item
+                        }
                         info = item.get("applianceInfo")
                         if isinstance(info, dict):
                             row["applianceInfo"] = {
                                 key: info.get(key)
-                                for key in ("hostname", "model", "serial", "softwareVersion", "site", "ip", "publicIp", "deviceType", "reachabilityStatus", "enabled")
+                                for key in (
+                                    "hostname",
+                                    "model",
+                                    "serial",
+                                    "softwareVersion",
+                                    "site",
+                                    "ip",
+                                    "publicIp",
+                                    "deviceType",
+                                    "reachabilityStatus",
+                                    "enabled",
+                                )
                                 if key in info
                             }
                         discovered.append(row)
@@ -1606,10 +1804,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             field_list = [field.strip() for field in fields.split(",") if field.strip()]
             page = discovered[offset : offset + limit]
             if field_list:
-                page = [
-                    {key: item.get(key) for key in field_list if key in item}
-                    for item in page
-                ]
+                page = [{key: item.get(key) for key in field_list if key in item} for item in page]
             result = {
                 "manual_provisioning": manual,
                 "discovered_count": total,
@@ -1655,13 +1850,17 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 appliance_id = ""
             missing_required: list[str] = []
             granularity_hint = False
-            needs_ne_pk = "nePk" in (spec.get("query_params") or []) or "nePk" in (
-                spec.get("path_params") or []
-            )
-            if needs_ne_pk and not multi_targets and not appliance_id and "nePk" not in (
-                json.dumps(_parse_json_object(extra_query_params_json, "extra_query_params_json"))
-                if extra_query_params_json.strip()
-                else ""
+            needs_ne_pk = "nePk" in (spec.get("query_params") or []) or "nePk" in (spec.get("path_params") or [])
+            if (
+                needs_ne_pk
+                and not multi_targets
+                and not appliance_id
+                and "nePk"
+                not in (
+                    json.dumps(_parse_json_object(extra_query_params_json, "extra_query_params_json"))
+                    if extra_query_params_json.strip()
+                    else ""
+                )
             ):
                 missing_required.append("appliance_id (nePk)")
             declared_query = spec.get("query_params") or []
@@ -1761,7 +1960,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                                 if "groupByNE" in (spec.get("query_params") or []):
                                     per_query.setdefault("groupByNE", "true")
                             try:
-                                results.append({"nePk": target, "data": client.call(version, operation_id, path_params=path_params, **per_query)})
+                                results.append(
+                                    {
+                                        "nePk": target,
+                                        "data": client.call(
+                                            version, operation_id, path_params=path_params, **per_query
+                                        ),
+                                    }
+                                )
                             except Exception as per_error:
                                 results.append({"nePk": target, "error": str(per_error)[:200]})
                         return results
@@ -1815,9 +2021,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             }
             if "from" in query_params and "to" in query_params:
                 try:
-                    looks_like_seconds = any(
-                        0 < int(float(str(query_params[k]))) < 10**12 for k in ("from", "to")
-                    )
+                    looks_like_seconds = any(0 < int(float(str(query_params[k]))) < 10**12 for k in ("from", "to"))
                 except (TypeError, ValueError):
                     looks_like_seconds = False
                 if looks_like_seconds:
@@ -2064,7 +2268,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 )
             wan_ip = wan_ips[0]
             rule = build_inbound_forwarding_rule(
-                ne_pk, wan_ip, external_port=external_port, internal_port=internal_port,
+                ne_pk,
+                wan_ip,
+                external_port=external_port,
+                internal_port=internal_port,
                 source_ip=source_ip,
             )
             engine = CompatibilityEngine(load_profiles(settings.profiles_dir))
@@ -2079,9 +2286,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if chosen is None and post_ops:
                 chosen = post_ops[0]
             if not confirm:
-                audit.record(
-                    "ensure_ssh_inbound_forwarding", "dry-run", ne_pk, "dry-run", dry_run=True
-                )
+                audit.record("ensure_ssh_inbound_forwarding", "dry-run", ne_pk, "dry-run", dry_run=True)
                 return json_result(
                     {
                         "dry_run": True,
@@ -2115,9 +2320,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     settings.max_output_chars,
                 )
             payload = client.call(version, chosen["operation_id"], json_body=rule)
-            audit.record(
-                "ensure_ssh_inbound_forwarding", chosen["operation_id"], ne_pk, "ok", dry_run=False
-            )
+            audit.record("ensure_ssh_inbound_forwarding", chosen["operation_id"], ne_pk, "ok", dry_run=False)
             return json_result(
                 {
                     "applied": True,
@@ -2131,9 +2334,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 settings.max_output_chars,
             )
         except Exception as error:
-            audit.record(
-                "ensure_ssh_inbound_forwarding", "", appliance_id, f"error: {error}"
-            )
+            audit.record("ensure_ssh_inbound_forwarding", "", appliance_id, f"error: {error}")
             return f"Error: {error}"
 
     OVERLAY_GET_OPERATION = "orchestrator.getoverlay323"
@@ -2188,9 +2389,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             version = client.resolve_active_profile()
             payload = _read_overlays(client, version)
             source = select_overlay(payload, source_overlay)
-            existing_names = {
-                str(row.get("name", "")).casefold() for row in extract_overlays(payload)
-            }
+            existing_names = {str(row.get("name", "")).casefold() for row in extract_overlays(payload)}
             if target_name.casefold() in existing_names:
                 raise SecurityError(f"An overlay named {target_name!r} already exists")
             plan = prepare_overlay_plan(source, target_name, overrides_json)
@@ -2252,8 +2451,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             version = client.resolve_active_profile()
             before = _read_overlays(client, version)
             if any(
-                str(row.get("name", "")).casefold() == plan.target_name.casefold()
-                for row in extract_overlays(before)
+                str(row.get("name", "")).casefold() == plan.target_name.casefold() for row in extract_overlays(before)
             ):
                 raise SecurityError(f"An overlay named {plan.target_name!r} already exists")
             result = client.call(
@@ -2308,11 +2506,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             rows = extract_overlays(_read_overlays(client, client.resolve_active_profile()))
             match = next(
-                (
-                    row
-                    for row in rows
-                    if str(row.get("name", "")).casefold() == plan.target_name.casefold()
-                ),
+                (row for row in rows if str(row.get("name", "")).casefold() == plan.target_name.casefold()),
                 None,
             )
             if match:
@@ -2370,8 +2564,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
             rows = extract_overlays(_read_overlays(client, version))
             still_present = any(
-                str(row.get("id") or row.get("overlayId") or "") == plan.created_overlay_id
-                for row in rows
+                str(row.get("id") or row.get("overlayId") or "") == plan.created_overlay_id for row in rows
             )
             plan.status = "rollback_failed" if still_present else "rolled_back"
             audit.record(
@@ -2392,7 +2585,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 settings.max_output_chars,
             )
         except Exception as error:
-            audit.record("rollback_overlay_plan", OVERLAY_DELETE_OPERATION, settings.orchestrator_url, f"error: {error}")
+            audit.record(
+                "rollback_overlay_plan", OVERLAY_DELETE_OPERATION, settings.orchestrator_url, f"error: {error}"
+            )
             return f"Error: {error}"
 
     def _read_discovered(client: OrchestratorClient, version: str) -> Any:
@@ -2485,7 +2680,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 settings.max_output_chars,
             )
         except Exception as error:
-            audit.record("list_discovered_appliances", ZTP_DISCOVERED_READ, settings.orchestrator_url, f"error: {error}")
+            audit.record(
+                "list_discovered_appliances", ZTP_DISCOVERED_READ, settings.orchestrator_url, f"error: {error}"
+            )
             return f"Error: {error}"
 
     @mcp.tool()
@@ -2807,8 +3004,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             plans: list[ZtpPlan] = []
             for index, selector in enumerate(selectors):
                 row = select_discovered(discovered, selector)
-                hostname = hostname_list[index] if hostname_list else str(
-                    (row.get("applianceInfo") or {}).get("hostname") or ""
+                hostname = (
+                    hostname_list[index]
+                    if hostname_list
+                    else str((row.get("applianceInfo") or {}).get("hostname") or "")
                 )
                 site = site_list[index] if site_list else ""
                 rendered = render_bulk_yaml(base_preconfig_yaml, hostname, site)
@@ -3113,9 +3312,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     "tunnels": summarize_tunnels(
                         client.appliance_api_call(version, ne_pk, TUNNELS_CONFIG_AND_STATE_READ)
                     ),
-                    "bonded": summarize_tunnels(
-                        client.appliance_api_call(version, ne_pk, BONDED_TUNNELS_STATE_READ)
-                    ),
+                    "bonded": summarize_tunnels(client.appliance_api_call(version, ne_pk, BONDED_TUNNELS_STATE_READ)),
                 }
                 if include_third_party:
                     entry["third_party"] = summarize_tunnels(
@@ -3185,8 +3382,6 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except Exception as error:
             return f"Error: {error}"
 
-
-
     @mcp.tool()
     def axis_health(target: str = "") -> str:
         """Axis Security (SSE) health check: service status and dependency components. Read-only."""
@@ -3198,8 +3393,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_tags(page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_tags(page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security application groups (Tags). Read-only."""
         try:
             axis = require_axis(target)
@@ -3209,8 +3403,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_tag(tag_id: str,
-        target: str = "") -> str:
+    def axis_get_tag(tag_id: str, target: str = "") -> str:
         """Get a single Axis Security application group (Tag) by id. Read-only."""
         try:
             axis = require_axis(target)
@@ -3219,14 +3412,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_tag(name: str, applications_json: str = "", confirm: bool = False,
-        target: str = "") -> str:
+    def axis_create_tag(name: str, applications_json: str = "", confirm: bool = False, target: str = "") -> str:
         """Create an Axis Security application group (Tag). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true to apply. Remember to call axis_commit to persist."""
         try:
             require_sse_writes("axis_create_tag")
             body = build_tag_body(name, json.loads(applications_json) if applications_json else None)
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": "/Tags", "method": "POST", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": "/Tags", "method": "POST", "body": body}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.create_tag(body)
             audit.record("axis_create_tag", name, "axis", "ok", dry_run=False)
@@ -3235,8 +3430,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_update_tag(tag_id: str, name: str = "", applications_json: str = "", confirm: bool = False,
-        target: str = "") -> str:
+    def axis_update_tag(
+        tag_id: str, name: str = "", applications_json: str = "", confirm: bool = False, target: str = ""
+    ) -> str:
         """Update an Axis Security application group (Tag). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_update_tag")
@@ -3248,7 +3444,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if not body:
                 return json_result({"error": "nothing to update"}, settings.max_output_chars)
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Tags/{tag_id}", "method": "PUT", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": f"/Tags/{tag_id}", "method": "PUT", "body": body}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.update_tag(tag_id, body)
             audit.record("axis_update_tag", tag_id, "axis", "ok", dry_run=False)
@@ -3257,13 +3456,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_tag(tag_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_delete_tag(tag_id: str, confirm: bool = False, target: str = "") -> str:
         """Delete an Axis Security application group (Tag). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_delete_tag")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Tags/{tag_id}", "method": "DELETE"}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": f"/Tags/{tag_id}", "method": "DELETE"}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             axis.delete_tag(tag_id)
             audit.record("axis_delete_tag", tag_id, "axis", "ok", dry_run=False)
@@ -3272,8 +3473,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_applications(page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_applications(page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security applications. Read-only."""
         try:
             axis = require_axis(target)
@@ -3283,8 +3483,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_application(app_id: str,
-        target: str = "") -> str:
+    def axis_get_application(app_id: str, target: str = "") -> str:
         """Get a single Axis Security application by id. Read-only."""
         try:
             axis = require_axis(target)
@@ -3302,20 +3501,25 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         identity_provider_id: str = "",
         network_range_json: str = "",
         confirm: bool = False,
-
-        target: str = "") -> str:
+        target: str = "",
+    ) -> str:
         """Create an Axis Security application (Web/Rdp/Ssh/Database/NetworkRange/Saas/...). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_create_application")
             body = build_application_body(
-                name, app_type, connector_zone_id,
+                name,
+                app_type,
+                connector_zone_id,
                 enabled=enabled,
                 tags=json.loads(tags_json) if tags_json else None,
                 identity_provider_id=identity_provider_id,
                 network_range=json.loads(network_range_json) if network_range_json else None,
             )
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": "/Applications", "method": "POST", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": "/Applications", "method": "POST", "body": body}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.create_application(body)
             audit.record("axis_create_application", name, "axis", "ok", dry_run=False)
@@ -3324,8 +3528,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_update_application(app_id: str, name: str = "", app_type: str = "", connector_zone_id: str = "", enabled: bool = True, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_update_application(
+        app_id: str,
+        name: str = "",
+        app_type: str = "",
+        connector_zone_id: str = "",
+        enabled: bool = True,
+        confirm: bool = False,
+        target: str = "",
+    ) -> str:
         """Update an Axis Security application. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_update_application")
@@ -3338,7 +3549,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 body["connectorZoneId"] = connector_zone_id
             body["enabled"] = enabled
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Applications/{app_id}", "method": "PUT", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {"path": f"/Applications/{app_id}", "method": "PUT", "body": body},
+                    },
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.update_application(app_id, body)
             audit.record("axis_update_application", app_id, "axis", "ok", dry_run=False)
@@ -3347,13 +3564,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_application(app_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_delete_application(app_id: str, confirm: bool = False, target: str = "") -> str:
         """Delete an Axis Security application. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_delete_application")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Applications/{app_id}", "method": "DELETE"}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": f"/Applications/{app_id}", "method": "DELETE"}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             axis.delete_application(app_id)
             audit.record("axis_delete_application", app_id, "axis", "ok", dry_run=False)
@@ -3362,8 +3581,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_connectors(page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_connectors(page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security connectors. Read-only."""
         try:
             axis = require_axis(target)
@@ -3373,8 +3591,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_connector(connector_id: str,
-        target: str = "") -> str:
+    def axis_get_connector(connector_id: str, target: str = "") -> str:
         """Get a single Axis Security connector by id. Read-only."""
         try:
             axis = require_axis(target)
@@ -3383,8 +3600,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_connector_status(connector_id: str,
-        target: str = "") -> str:
+    def axis_connector_status(connector_id: str, target: str = "") -> str:
         """Live Axis Security connector status: network/memory/disk/CPU/machine health. Read-only."""
         try:
             axis = require_axis(target)
@@ -3394,14 +3610,23 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_connector(name: str, connector_zone_id: str, enabled: bool = True, primary_public_ip: str = "", confirm: bool = False,
-        target: str = "") -> str:
+    def axis_create_connector(
+        name: str,
+        connector_zone_id: str,
+        enabled: bool = True,
+        primary_public_ip: str = "",
+        confirm: bool = False,
+        target: str = "",
+    ) -> str:
         """Create an Axis Security connector; the response includes the installation command. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_create_connector")
             body = build_connector_body(name, connector_zone_id, enabled=enabled, primary_public_ip=primary_public_ip)
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": "/Connectors", "method": "POST", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": "/Connectors", "method": "POST", "body": body}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.create_connector(body)
             audit.record("axis_create_connector", name, "axis", "ok", dry_run=False)
@@ -3410,8 +3635,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_update_connector(connector_id: str, name: str = "", connector_zone_id: str = "", enabled: bool = True, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_update_connector(
+        connector_id: str,
+        name: str = "",
+        connector_zone_id: str = "",
+        enabled: bool = True,
+        confirm: bool = False,
+        target: str = "",
+    ) -> str:
         """Update an Axis Security connector. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_update_connector")
@@ -3421,7 +3652,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if connector_zone_id:
                 body["connectorZoneId"] = connector_zone_id
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Connectors/{connector_id}", "method": "PUT", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {"path": f"/Connectors/{connector_id}", "method": "PUT", "body": body},
+                    },
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.update_connector(connector_id, body)
             audit.record("axis_update_connector", connector_id, "axis", "ok", dry_run=False)
@@ -3430,13 +3667,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_connector(connector_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_delete_connector(connector_id: str, confirm: bool = False, target: str = "") -> str:
         """Delete an Axis Security connector. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_delete_connector")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Connectors/{connector_id}", "method": "DELETE"}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": f"/Connectors/{connector_id}", "method": "DELETE"}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             axis.delete_connector(connector_id)
             audit.record("axis_delete_connector", connector_id, "axis", "ok", dry_run=False)
@@ -3445,13 +3684,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_regenerate_connector(connector_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_regenerate_connector(connector_id: str, confirm: bool = False, target: str = "") -> str:
         """Regenerate the installation command for an existing Axis Security connector. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_regenerate_connector")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Connectors/{connector_id}/regenerate", "method": "POST"}}, settings.max_output_chars)
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {"path": f"/Connectors/{connector_id}/regenerate", "method": "POST"},
+                    },
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.regenerate_connector(connector_id)
             audit.record("axis_regenerate_connector", connector_id, "axis", "ok", dry_run=False)
@@ -3460,8 +3704,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_connector_zones(page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_connector_zones(page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security connector zones. Read-only."""
         try:
             axis = require_axis(target)
@@ -3471,8 +3714,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_connector_zone(zone_id: str,
-        target: str = "") -> str:
+    def axis_get_connector_zone(zone_id: str, target: str = "") -> str:
         """Get a single Axis Security connector zone by id. Read-only."""
         try:
             axis = require_axis(target)
@@ -3481,14 +3723,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_connector_zone(name: str, zone_type: str, purpose: str, description: str = "", confirm: bool = False,
-        target: str = "") -> str:
+    def axis_create_connector_zone(
+        name: str, zone_type: str, purpose: str, description: str = "", confirm: bool = False, target: str = ""
+    ) -> str:
         """Create an Axis Security connector zone (Regular/InternetZone/ExternalPublicZone for Access/LogStreaming). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_create_connector_zone")
             body = build_connector_zone_body(name, zone_type, purpose, description=description)
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": "/ConnectorZones", "method": "POST", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": "/ConnectorZones", "method": "POST", "body": body}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.create_connector_zone(body)
             audit.record("axis_create_connector_zone", name, "axis", "ok", dry_run=False)
@@ -3497,8 +3743,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_update_connector_zone(zone_id: str, name: str = "", zone_type: str = "", purpose: str = "", description: str = "", confirm: bool = False,
-        target: str = "") -> str:
+    def axis_update_connector_zone(
+        zone_id: str,
+        name: str = "",
+        zone_type: str = "",
+        purpose: str = "",
+        description: str = "",
+        confirm: bool = False,
+        target: str = "",
+    ) -> str:
         """Update an Axis Security connector zone. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_update_connector_zone")
@@ -3514,7 +3767,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if not body:
                 return json_result({"error": "nothing to update"}, settings.max_output_chars)
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/ConnectorZones/{zone_id}", "method": "PUT", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {"path": f"/ConnectorZones/{zone_id}", "method": "PUT", "body": body},
+                    },
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.update_connector_zone(zone_id, body)
             audit.record("axis_update_connector_zone", zone_id, "axis", "ok", dry_run=False)
@@ -3523,13 +3782,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_connector_zone(zone_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_delete_connector_zone(zone_id: str, confirm: bool = False, target: str = "") -> str:
         """Delete an Axis Security connector zone. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_delete_connector_zone")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/ConnectorZones/{zone_id}", "method": "DELETE"}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": f"/ConnectorZones/{zone_id}", "method": "DELETE"}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             axis.delete_connector_zone(zone_id)
             audit.record("axis_delete_connector_zone", zone_id, "axis", "ok", dry_run=False)
@@ -3538,8 +3799,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_ip_categories(page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_ip_categories(page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security custom IP categories. Read-only."""
         try:
             axis = require_axis(target)
@@ -3549,8 +3809,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_ip_category(category_id: str,
-        target: str = "") -> str:
+    def axis_get_ip_category(category_id: str, target: str = "") -> str:
         """Get a single Axis Security custom IP category by id. Read-only."""
         try:
             axis = require_axis(target)
@@ -3559,8 +3818,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_ip_category(name: str, included_ips: str = "", excluded_ips: str = "", connector_zone_id: str = "", description: str = "", confirm: bool = False,
-        target: str = "") -> str:
+    def axis_create_ip_category(
+        name: str,
+        included_ips: str = "",
+        excluded_ips: str = "",
+        connector_zone_id: str = "",
+        description: str = "",
+        confirm: bool = False,
+        target: str = "",
+    ) -> str:
         """Create an Axis Security custom IP category (comma-separated IPs/CIDRs). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_create_ip_category")
@@ -3572,7 +3838,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 description=description,
             )
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": "/IpCategories", "method": "POST", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": "/IpCategories", "method": "POST", "body": body}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.create_ip_category(body)
             audit.record("axis_create_ip_category", name, "axis", "ok", dry_run=False)
@@ -3581,13 +3850,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_ip_category(category_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_delete_ip_category(category_id: str, confirm: bool = False, target: str = "") -> str:
         """Delete an Axis Security custom IP category. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_delete_ip_category")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/IpCategories/{category_id}", "method": "DELETE"}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": f"/IpCategories/{category_id}", "method": "DELETE"}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             axis.delete_ip_category(category_id)
             audit.record("axis_delete_ip_category", category_id, "axis", "ok", dry_run=False)
@@ -3596,8 +3867,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_web_categories(page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_web_categories(page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security web categories. Read-only."""
         try:
             axis = require_axis(target)
@@ -3607,8 +3877,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_web_category(category_id: str,
-        target: str = "") -> str:
+    def axis_get_web_category(category_id: str, target: str = "") -> str:
         """Get a single Axis Security web category by id. Read-only."""
         try:
             axis = require_axis(target)
@@ -3617,8 +3886,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_web_category(name: str, included_domains: str = "", excluded_domains: str = "", connector_zone_id: str = "", description: str = "", confirm: bool = False,
-        target: str = "") -> str:
+    def axis_create_web_category(
+        name: str,
+        included_domains: str = "",
+        excluded_domains: str = "",
+        connector_zone_id: str = "",
+        description: str = "",
+        confirm: bool = False,
+        target: str = "",
+    ) -> str:
         """Create an Axis Security web category (comma-separated domains/URLs). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_create_web_category")
@@ -3630,7 +3906,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 description=description,
             )
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": "/WebCategories", "method": "POST", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": "/WebCategories", "method": "POST", "body": body}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.create_web_category(body)
             audit.record("axis_create_web_category", name, "axis", "ok", dry_run=False)
@@ -3639,13 +3918,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_web_category(category_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_delete_web_category(category_id: str, confirm: bool = False, target: str = "") -> str:
         """Delete an Axis Security web category. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_delete_web_category")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/WebCategories/{category_id}", "method": "DELETE"}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": f"/WebCategories/{category_id}", "method": "DELETE"}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             axis.delete_web_category(category_id)
             audit.record("axis_delete_web_category", category_id, "axis", "ok", dry_run=False)
@@ -3654,8 +3935,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_ssl_exclusions(page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_ssl_exclusions(page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security SSL exclusions. Read-only."""
         try:
             axis = require_axis(target)
@@ -3665,18 +3945,28 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_ssl_exclusion(name: str, exclusion_type: str, excluded_domains: str = "", enabled: bool = True, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_create_ssl_exclusion(
+        name: str,
+        exclusion_type: str,
+        excluded_domains: str = "",
+        enabled: bool = True,
+        confirm: bool = False,
+        target: str = "",
+    ) -> str:
         """Create an Axis Security SSL exclusion (Predefined/Custom). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_create_ssl_exclusion")
             body = build_ssl_exclusion_body(
-                name, exclusion_type,
+                name,
+                exclusion_type,
                 excluded_domains=[d.strip() for d in excluded_domains.split(",") if d.strip()] or None,
                 enabled=enabled,
             )
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": "/SslExclusions", "method": "POST", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": "/SslExclusions", "method": "POST", "body": body}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.create_ssl_exclusion(body)
             audit.record("axis_create_ssl_exclusion", name, "axis", "ok", dry_run=False)
@@ -3685,13 +3975,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_ssl_exclusion(exclusion_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_delete_ssl_exclusion(exclusion_id: str, confirm: bool = False, target: str = "") -> str:
         """Delete an Axis Security SSL exclusion. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_delete_ssl_exclusion")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/SslExclusions/{exclusion_id}", "method": "DELETE"}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": f"/SslExclusions/{exclusion_id}", "method": "DELETE"}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             axis.delete_ssl_exclusion(exclusion_id)
             audit.record("axis_delete_ssl_exclusion", exclusion_id, "axis", "ok", dry_run=False)
@@ -3700,8 +3992,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_groups(page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_groups(page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security user groups. Read-only."""
         try:
             axis = require_axis(target)
@@ -3711,14 +4002,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_group(name: str, users_json: str = "", description: str = "", confirm: bool = False,
-        target: str = "") -> str:
+    def axis_create_group(
+        name: str, users_json: str = "", description: str = "", confirm: bool = False, target: str = ""
+    ) -> str:
         """Create an Axis Security user group. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_create_group")
             body = build_group_body(name, users=json.loads(users_json) if users_json else None, description=description)
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": "/Groups", "method": "POST", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": "/Groups", "method": "POST", "body": body}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.create_group(body)
             audit.record("axis_create_group", name, "axis", "ok", dry_run=False)
@@ -3727,13 +4022,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_group(group_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_delete_group(group_id: str, confirm: bool = False, target: str = "") -> str:
         """Delete an Axis Security user group. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_delete_group")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Groups/{group_id}", "method": "DELETE"}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": f"/Groups/{group_id}", "method": "DELETE"}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             axis.delete_group(group_id)
             audit.record("axis_delete_group", group_id, "axis", "ok", dry_run=False)
@@ -3742,8 +4039,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_users(page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_users(page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security users. Read-only."""
         try:
             axis = require_axis(target)
@@ -3753,8 +4049,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_user(user_id: str,
-        target: str = "") -> str:
+    def axis_get_user(user_id: str, target: str = "") -> str:
         """Get a single Axis Security user by id. Read-only."""
         try:
             axis = require_axis(target)
@@ -3763,19 +4058,34 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_user(user_name: str, email: str, first_name: str, last_name: str, enabled: bool = True, groups_json: str = "", expiration: str = "", confirm: bool = False,
-        target: str = "") -> str:
+    def axis_create_user(
+        user_name: str,
+        email: str,
+        first_name: str,
+        last_name: str,
+        enabled: bool = True,
+        groups_json: str = "",
+        expiration: str = "",
+        confirm: bool = False,
+        target: str = "",
+    ) -> str:
         """Create an Axis Security user. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_create_user")
             body = build_user_body(
-                user_name, email, first_name, last_name,
+                user_name,
+                email,
+                first_name,
+                last_name,
                 enabled=enabled,
                 groups=json.loads(groups_json) if groups_json else None,
                 expiration=expiration,
             )
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": "/Users", "method": "POST", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": "/Users", "method": "POST", "body": body}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.create_user(body)
             audit.record("axis_create_user", user_name, "axis", "ok", dry_run=False)
@@ -3784,13 +4094,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_user(user_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_delete_user(user_id: str, confirm: bool = False, target: str = "") -> str:
         """Delete an Axis Security user. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_delete_user")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Users/{user_id}", "method": "DELETE"}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": f"/Users/{user_id}", "method": "DELETE"}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             axis.delete_user(user_id)
             audit.record("axis_delete_user", user_id, "axis", "ok", dry_run=False)
@@ -3799,8 +4111,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_locations(page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_locations(page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security locations. Read-only."""
         try:
             axis = require_axis(target)
@@ -3810,8 +4121,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_get_location(location_id: str,
-        target: str = "") -> str:
+    def axis_get_location(location_id: str, target: str = "") -> str:
         """Get a single Axis Security location by id. Read-only."""
         try:
             axis = require_axis(target)
@@ -3820,14 +4130,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_location(name: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_create_location(name: str, confirm: bool = False, target: str = "") -> str:
         """Create an Axis Security location. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_create_location")
             body = build_location_body(name)
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": "/Locations", "method": "POST", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": "/Locations", "method": "POST", "body": body}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.create_location(body)
             audit.record("axis_create_location", name, "axis", "ok", dry_run=False)
@@ -3836,13 +4148,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_location(location_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_delete_location(location_id: str, confirm: bool = False, target: str = "") -> str:
         """Delete an Axis Security location. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_delete_location")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Locations/{location_id}", "method": "DELETE"}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": f"/Locations/{location_id}", "method": "DELETE"}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             axis.delete_location(location_id)
             audit.record("axis_delete_location", location_id, "axis", "ok", dry_run=False)
@@ -3851,8 +4165,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_sub_locations(location_id: str, page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_sub_locations(location_id: str, page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security sub-locations under a location. Read-only."""
         try:
             axis = require_axis(target)
@@ -3862,17 +4175,29 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_sub_location(location_id: str, name: str, ip_ranges: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_create_sub_location(
+        location_id: str, name: str, ip_ranges: str, confirm: bool = False, target: str = ""
+    ) -> str:
         """Create an Axis Security sub-location (comma-separated CIDRs). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_create_sub_location")
             body = build_sub_location_body(
-                name, location_id,
+                name,
+                location_id,
                 [ip.strip() for ip in ip_ranges.split(",") if ip.strip()],
             )
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Locations/{location_id}/SubLocations", "method": "POST", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {
+                            "path": f"/Locations/{location_id}/SubLocations",
+                            "method": "POST",
+                            "body": body,
+                        },
+                    },
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.create_sub_location(location_id, body)
             audit.record("axis_create_sub_location", name, "axis", "ok", dry_run=False)
@@ -3881,13 +4206,23 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_sub_location(location_id: str, sub_location_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_delete_sub_location(
+        location_id: str, sub_location_id: str, confirm: bool = False, target: str = ""
+    ) -> str:
         """Delete an Axis Security sub-location. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_delete_sub_location")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Locations/{location_id}/SubLocations/{sub_location_id}", "method": "DELETE"}}, settings.max_output_chars)
+                return json_result(
+                    {
+                        "dry_run": True,
+                        "would_execute": {
+                            "path": f"/Locations/{location_id}/SubLocations/{sub_location_id}",
+                            "method": "DELETE",
+                        },
+                    },
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             axis.delete_sub_location(location_id, sub_location_id)
             audit.record("axis_delete_sub_location", sub_location_id, "axis", "ok", dry_run=False)
@@ -3896,8 +4231,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_tunnels(page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_tunnels(page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security tunnels. Read-only."""
         try:
             axis = require_axis(target)
@@ -3907,8 +4241,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_tunnel_status(tunnel_id: str,
-        target: str = "") -> str:
+    def axis_tunnel_status(tunnel_id: str, target: str = "") -> str:
         """Get the live status of an Axis Security tunnel. Read-only."""
         try:
             axis = require_axis(target)
@@ -3918,14 +4251,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_create_tunnel(name: str, location_id: str, auth_id: str, auth_psk: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_create_tunnel(
+        name: str, location_id: str, auth_id: str, auth_psk: str, confirm: bool = False, target: str = ""
+    ) -> str:
         """Create an Axis Security tunnel (IPSec). auth_psk is the pre-shared key. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_create_tunnel")
             body = build_tunnel_body(name, location_id, auth_id, auth_psk)
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": "/Tunnels", "method": "POST", "body": body}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": "/Tunnels", "method": "POST", "body": body}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             payload = axis.create_tunnel(body)
             audit.record("axis_create_tunnel", name, "axis", "ok", dry_run=False)
@@ -3934,13 +4271,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_delete_tunnel(tunnel_id: str, confirm: bool = False,
-        target: str = "") -> str:
+    def axis_delete_tunnel(tunnel_id: str, confirm: bool = False, target: str = "") -> str:
         """Delete an Axis Security tunnel. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Call axis_commit to persist."""
         try:
             require_sse_writes("axis_delete_tunnel")
             if not confirm:
-                return json_result({"dry_run": True, "would_execute": {"path": f"/Tunnels/{tunnel_id}", "method": "DELETE"}}, settings.max_output_chars)
+                return json_result(
+                    {"dry_run": True, "would_execute": {"path": f"/Tunnels/{tunnel_id}", "method": "DELETE"}},
+                    settings.max_output_chars,
+                )
             axis = require_axis(target)
             axis.delete_tunnel(tunnel_id)
             audit.record("axis_delete_tunnel", tunnel_id, "axis", "ok", dry_run=False)
@@ -3949,8 +4288,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_list_certificates(page: int = 1, page_size: int = 50,
-        target: str = "") -> str:
+    def axis_list_certificates(page: int = 1, page_size: int = 50, target: str = "") -> str:
         """List Axis Security domain name certificates. Read-only."""
         try:
             axis = require_axis(target)
@@ -3970,8 +4308,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def axis_commit(confirm: bool = False,
-        target: str = "") -> str:
+    def axis_commit(confirm: bool = False, target: str = "") -> str:
         """Commit all pending Axis Security changes. Without confirm=true returns a dry-run notice; with confirm=true (and EC_ALLOW_WRITE_TOOLS=true) commits the staged changes."""
         try:
             require_sse_writes("axis_commit")
@@ -3994,21 +4331,23 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     # --- Aruba Central (new Central REST API families) ----------------------
 
     @mcp.tool()
-    def central_status() -> str:
+    def central_status(target: str = "") -> str:
         """Check Aruba Central connectivity: fetches an OAuth2 token and runs a lightweight sites-health query. Read-only."""
         try:
-            central = require_central()
+            central = require_central(target)
             payload = central.sites_health(params={"limit": 1})
             audit.record("central_status", "read", settings.central_base_url, "ok")
-            return json_result({"connected": True, "base_url": settings.central_base_url, "probe": payload}, settings.max_output_chars)
+            return json_result(
+                {"connected": True, "base_url": settings.central_base_url, "probe": payload}, settings.max_output_chars
+            )
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_get_sites(view: str = "summary", limit: int = 100) -> str:
+    def central_get_sites(view: str = "summary", limit: int = 100, target: str = "") -> str:
         """Get Aruba Central site health: view='summary' (per-site health scores), 'device' or 'client'. Read-only."""
         try:
-            central = require_central()
+            central = require_central(target)
             params: dict[str, Any] = {"limit": limit}
             if view == "device":
                 payload = central.sites_device_health(params=params)
@@ -4021,10 +4360,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_get_devices(device_type: str = "ap", limit: int = 100, offset: int = 0) -> str:
+    def central_get_devices(device_type: str = "ap", limit: int = 100, offset: int = 0, target: str = "") -> str:
         """List Aruba Central devices by family: device_type='ap', 'switch' or 'gateway'. Read-only."""
         try:
-            central = require_central()
+            central = require_central(target)
             family = resolve_family(device_type)
             payload = central.list_devices(family, params={"limit": limit, "offset": offset})
             return json_result(summarize_devices(payload), settings.max_output_chars)
@@ -4032,20 +4371,22 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_get_device_details(device_type: str, serial: str) -> str:
+    def central_get_device_details(device_type: str, serial: str, target: str = "") -> str:
         """Get Aruba Central device detail by serial: device_type='ap', 'switch' or 'gateway'. Read-only."""
         try:
-            central = require_central()
+            central = require_central(target)
             payload = central.get_device(resolve_family(device_type), serial)
             return json_result(payload, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_get_device_trends(device_type: str, serial: str, metric: str, duration: str = "1D") -> str:
+    def central_get_device_trends(
+        device_type: str, serial: str, metric: str, duration: str = "1D", target: str = ""
+    ) -> str:
         """Get bounded Aruba Central time-series trends for a device. metric depends on family (aps: throughput/frames/client-count; switches: throughput/frames/poe; gateways: cpu-utilization/memory-utilization/throughput/wan-availability). Read-only."""
         try:
-            central = require_central()
+            central = require_central(target)
             family = resolve_family(device_type)
             endpoint = trend_metric(family, metric)
             payload = central.get_device_trends(family, serial, endpoint, params={"duration": duration})
@@ -4054,20 +4395,20 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_get_clients(limit: int = 100, offset: int = 0, site_id: str = "") -> str:
+    def central_get_clients(limit: int = 100, offset: int = 0, site_id: str = "", target: str = "") -> str:
         """List Aruba Central wireless clients (optionally filtered by site_id). Read-only."""
         try:
-            central = require_central()
+            central = require_central(target)
             payload = central.list_clients(params={"limit": limit, "offset": offset, "site_id": site_id})
             return json_result(summarize_clients(payload), settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_get_wlans(ssid: str = "", limit: int = 100) -> str:
+    def central_get_wlans(ssid: str = "", limit: int = 100, target: str = "") -> str:
         """List Aruba Central WLANs, or get one exact SSID when ssid is provided. Read-only."""
         try:
-            central = require_central()
+            central = require_central(target)
             if ssid:
                 payload = central.get_wlan(ssid)
             else:
@@ -4077,10 +4418,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_get_gateway_cluster(cluster_id: str = "") -> str:
+    def central_get_gateway_cluster(cluster_id: str = "", target: str = "") -> str:
         """List Aruba Central gateway clusters, or get one cluster's members and health by cluster_id. Read-only."""
         try:
-            central = require_central()
+            central = require_central(target)
             if cluster_id:
                 payload = central.get_cluster(cluster_id)
             else:
@@ -4090,10 +4431,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_get_alerts(site_id: str = "", severity: str = "", state: str = "active", limit: int = 100) -> str:
+    def central_get_alerts(
+        site_id: str = "", severity: str = "", state: str = "active", limit: int = 100, target: str = ""
+    ) -> str:
         """Get Aruba Central alerts filtered by site, severity and state (active/cleared/deferred). Read-only."""
         try:
-            central = require_central()
+            central = require_central(target)
             payload = central.get_alerts(
                 params={"site_id": site_id, "severity": severity, "state": state, "limit": limit}
             )
@@ -4102,10 +4445,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_get_events(site_id: str = "", serial: str = "", severity: str = "", limit: int = 100) -> str:
+    def central_get_events(
+        site_id: str = "", serial: str = "", severity: str = "", limit: int = 100, target: str = ""
+    ) -> str:
         """Get Aruba Central event records filtered by site, device serial and severity. Read-only."""
         try:
-            central = require_central()
+            central = require_central(target)
             payload = central.get_events(
                 params={"site_id": site_id, "serial": serial, "severity": severity, "limit": limit}
             )
@@ -4114,17 +4459,19 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_list_show_commands(device_type: str, serial: str) -> str:
+    def central_list_show_commands(device_type: str, serial: str, target: str = "") -> str:
         """List the 'show' commands supported by an Aruba Central device. Read-only; use the catalog before central_run_show_commands."""
         try:
-            central = require_central()
+            central = require_central(target)
             payload = central.list_show_commands(resolve_troubleshooting_device_type(device_type), serial)
             return json_result(payload, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_run_show_commands(device_type: str, serial: str, commands_json: str, confirm: bool = False) -> str:
+    def central_run_show_commands(
+        device_type: str, serial: str, commands_json: str, confirm: bool = False, target: str = ""
+    ) -> str:
         """Run 'show' commands on an Aruba Central device (read-only CLI diagnostics). Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Returns a task_id: poll it with central_get_task_result."""
         try:
             require_writes("central_run_show_commands")
@@ -4139,16 +4486,21 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     },
                     settings.max_output_chars,
                 )
-            central = require_central()
+            central = require_central(target)
             payload = central.run_show_commands(device, serial, commands)
             task_id = extract_task_id(payload)
             audit.record("central_run_show_commands", serial, "central", "ok", dry_run=False)
-            return json_result({"applied": True, "task_id": task_id, "hint": "Poll central_get_task_result for output."}, settings.max_output_chars)
+            return json_result(
+                {"applied": True, "task_id": task_id, "hint": "Poll central_get_task_result for output."},
+                settings.max_output_chars,
+            )
         except Exception as error:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_bounce_port(device_type: str, serial: str, ports_json: str, mode: str = "port", confirm: bool = False) -> str:
+    def central_bounce_port(
+        device_type: str, serial: str, ports_json: str, mode: str = "port", confirm: bool = False, target: str = ""
+    ) -> str:
         """Bounce ports (mode='port') or toggle PoE (mode='poe') on an Aruba Central switch or gateway. Disruptive: dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Returns a task_id: poll it with central_get_task_result."""
         try:
             require_writes("central_bounce_port")
@@ -4166,11 +4518,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     },
                     settings.max_output_chars,
                 )
-            central = require_central()
+            central = require_central(target)
             payload = central.bounce_port(device, serial, ports, mode=mode_value)
             task_id = extract_task_id(payload)
             audit.record("central_bounce_port", serial, "central", "ok", dry_run=False)
-            return json_result({"applied": True, "task_id": task_id, "hint": "Poll central_get_task_result for status."}, settings.max_output_chars)
+            return json_result(
+                {"applied": True, "task_id": task_id, "hint": "Poll central_get_task_result for status."},
+                settings.max_output_chars,
+            )
         except Exception as error:
             return f"Error: {error}"
 
@@ -4183,16 +4538,19 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         start_at: str = "",
         end_at: str = "",
         limit: int = 0,
+        target: str = "",
     ) -> str:
         """Get Aruba Central client analytics: view='usage', 'top', 'trend', 'mobility' (requires mac_address), 'onboarding-summary', 'onboarding-reasons' or 'onboarding-count'. Time window defaults to the last 24 hours (UTC). Read-only."""
         try:
-            central = require_central()
+            central = require_central(target)
             resolved = resolve_analytics_view(view)
             start, end = analytics_time_window(start_at, end_at)
             if resolved == "usage":
                 payload = central.clients_usage(
                     params={
-                        "filter": build_usage_filter(start, end, site_id=site_id, serial_number=serial_number, mac_address=mac_address)
+                        "filter": build_usage_filter(
+                            start, end, site_id=site_id, serial_number=serial_number, mac_address=mac_address
+                        )
                     }
                 )
             elif resolved == "top":
@@ -4211,10 +4569,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     params=build_analytics_params(start, end, site_id=site_id, limit=limit),
                 )
             else:
-                onboarding_view = {"onboarding-summary": "export", "onboarding-reasons": "reasons", "onboarding-count": "count"}[resolved]
+                onboarding_view = {
+                    "onboarding-summary": "export",
+                    "onboarding-reasons": "reasons",
+                    "onboarding-count": "count",
+                }[resolved]
                 payload = central.client_onboarding(
                     onboarding_view,
-                    params=build_analytics_params(start, end, site_id=site_id, serial_number=serial_number, limit=limit),
+                    params=build_analytics_params(
+                        start, end, site_id=site_id, serial_number=serial_number, limit=limit
+                    ),
                 )
             return json_result(payload, settings.max_output_chars)
         except Exception as error:
@@ -4229,6 +4593,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         port: int = 0,
         count: int = 0,
         confirm: bool = False,
+        target: str = "",
     ) -> str:
         """Run a live network diagnostic (ping, traceroute, nslookup, tcp, http, https) from an Aruba Central device. Dry-run by default; requires confirm=true and EC_ALLOW_WRITE_TOOLS=true. Returns a task_id: poll it with central_get_task_result using the matching operation."""
         try:
@@ -4249,7 +4614,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     },
                     settings.max_output_chars,
                 )
-            central = require_central()
+            central = require_central(target)
             payload = central.run_network_test(device, serial, endpoint, body)
             task_id = extract_task_id(payload)
             audit.record("central_run_network_test", serial, "central", "ok", dry_run=False)
@@ -4266,10 +4631,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def central_get_task_result(device_type: str, serial: str, task_id: str, operation: str = "showCommands") -> str:
+    def central_get_task_result(
+        device_type: str, serial: str, task_id: str, operation: str = "showCommands", target: str = ""
+    ) -> str:
         """Get the result of an asynchronous Aruba Central troubleshooting task (showCommands, ping, traceroute, nslookup, tcp, http, https, portBounce, poeBounce) by task_id. Read-only."""
         try:
-            central = require_central()
+            central = require_central(target)
             op = validate_operation(operation)
             payload = central.get_task_result(resolve_troubleshooting_device_type(device_type), serial, task_id, op)
             return json_result(payload, settings.max_output_chars)
@@ -4352,7 +4719,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     "password_configured": bool(settings.dashboard_remote_password),
                     "dashboard_port": settings.dashboard_port,
                     "dashboard_dir": settings.dashboard_dir,
-                    "url": f"http://{settings.dashboard_remote_host}:{settings.dashboard_port}/" if settings.dashboard_remote_host else "",
+                    "url": f"http://{settings.dashboard_remote_host}:{settings.dashboard_port}/"
+                    if settings.dashboard_remote_host
+                    else "",
                     "missing": missing,
                     "configured": not missing,
                 },
@@ -4363,7 +4732,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     def require_dashboard_remote() -> RemoteDashboardDeployer:
         if not settings.dashboard_remote_enabled:
-            raise SecurityError("Remote dashboard is disabled. Set EC_DASHBOARD_REMOTE_ENABLED=true and configure host/user/credentials (panel web → Variables → Dashboard remoto).")
+            raise SecurityError(
+                "Remote dashboard is disabled. Set EC_DASHBOARD_REMOTE_ENABLED=true and configure host/user/credentials (panel web → Variables → Dashboard remoto)."
+            )
         if not settings.dashboard_remote_host or not settings.dashboard_remote_user:
             raise SecurityError("EC_DASHBOARD_REMOTE_HOST and EC_DASHBOARD_REMOTE_USER are required.")
         if not settings.dashboard_remote_password and not settings.dashboard_remote_key_path:
@@ -4472,7 +4843,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             page = render_dashboard_html(payload, refresh_seconds=settings.dashboard_refresh_seconds)
             with require_dashboard_remote() as deployer:
                 result = deployer.deploy(page.encode("utf-8"))
-            audit.record("dashboard_refresh_remote", settings.dashboard_remote_host, "dashboard", "ok" if result.ok else "error", dry_run=False)
+            audit.record(
+                "dashboard_refresh_remote",
+                settings.dashboard_remote_host,
+                "dashboard",
+                "ok" if result.ok else "error",
+                dry_run=False,
+            )
             return json_result(
                 {"applied": result.ok, "url": result.url, "detail": result.detail, "steps": result.steps},
                 settings.max_output_chars,
@@ -4495,14 +4872,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             for ne_pk in resolve_ne_pks(client, appliance_id):
                 entry: dict[str, Any] = {"nePk": ne_pk}
                 try:
-                    ids_state = summarize_ids_state(
-                        client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ)
-                    )
+                    ids_state = summarize_ids_state(client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ))
                     entry["ids_ips"] = ids_state
                     if not ids_state["active"]:
-                        findings.append(
-                            {"nePk": ne_pk, "severity": "high", "finding": "IDS/IPS is not active"}
-                        )
+                        findings.append({"nePk": ne_pk, "severity": "high", "finding": "IDS/IPS is not active"})
                 except Exception as error:
                     entry["ids_ips"] = {"error": str(error)}
                 try:
@@ -4551,11 +4924,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         "threshold_zones": ddos_thresholds.get("zones", []),
                         "profile_zones": ddos_profiles.get("zones", []),
                     }
-                    configured_profiles = [
-                        zone
-                        for zone in (ddos_profiles.get("zones") or [])
-                        if zone.get("profile")
-                    ]
+                    configured_profiles = [zone for zone in (ddos_profiles.get("zones") or []) if zone.get("profile")]
                     if not configured_profiles:
                         findings.append(
                             {
@@ -4578,16 +4947,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     )
                     entries = parse_firewall_log_entries(log_payload)
                     firewall_summary = summarize_security_log(entries)
-                    entry["firewall_drops"] = sum(
-                        (firewall_summary.get("drop_reasons") or {}).values()
-                    )
+                    entry["firewall_drops"] = sum((firewall_summary.get("drop_reasons") or {}).values())
                 except Exception as error:
                     entry["firewall_drops"] = None
                     entry["firewall_drops_error"] = str(error)[:200]
                 try:
-                    ids_events = extract_rows(
-                        client.appliance_api_call(version, ne_pk, IDS_IPS_EVENTS_READ, limit=20)
-                    )
+                    ids_events = extract_rows(client.appliance_api_call(version, ne_pk, IDS_IPS_EVENTS_READ, limit=20))
                 except Exception:
                     ids_events = []
                 entry["correlated_findings"] = correlate_security_signals(
@@ -4847,15 +5212,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             incidents: list[dict[str, Any]] = []
             for ne_pk in resolve_ne_pks(client, appliance_id):
                 try:
-                    ids_state = summarize_ids_state(
-                        client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ)
-                    )
+                    ids_state = summarize_ids_state(client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ))
                 except Exception as error:
                     ids_state = {"active": None, "error": str(error)[:200]}
                 try:
-                    ids_events = extract_rows(
-                        client.appliance_api_call(version, ne_pk, IDS_IPS_EVENTS_READ, limit=50)
-                    )
+                    ids_events = extract_rows(client.appliance_api_call(version, ne_pk, IDS_IPS_EVENTS_READ, limit=50))
                 except Exception:
                     ids_events = []
                 firewall_summary = None
@@ -4876,14 +5237,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     ddos_profiles = summarize_ddos(
                         client.appliance_api_call(version, ne_pk, DDOS_PROTECTION_PROFILE_READ)
                     )
-                    ddos_unprotected = not any(
-                        zone.get("profile") for zone in (ddos_profiles.get("zones") or [])
-                    )
+                    ddos_unprotected = not any(zone.get("profile") for zone in (ddos_profiles.get("zones") or []))
                 except Exception:
                     ddos_unprotected = None
-                findings = correlate_security_signals(
-                    ne_pk, ids_state, ids_events, firewall_summary, web_summary
-                )
+                findings = correlate_security_signals(ne_pk, ids_state, ids_events, firewall_summary, web_summary)
                 try:
                     alarm_payload = kpi_alarm_counts(client, ne_pk)
                     severity_counts: dict[str, int] = {}
@@ -4905,9 +5262,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                         {
                             "nePk": ne_pk,
                             "ids_ips_active": ids_state.get("active"),
-                            "firewall_drop_total": sum(
-                                (firewall_summary or {}).get("drop_reasons", {}).values()
-                            )
+                            "firewall_drop_total": sum((firewall_summary or {}).get("drop_reasons", {}).values())
                             if isinstance(firewall_summary, dict)
                             else None,
                             "findings": findings,
@@ -4934,7 +5289,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def propose_remediation(appliance_id: str = "all", date: str = "", policy: str = "containment_proposed", target: str = "") -> str:
+    def propose_remediation(
+        appliance_id: str = "all", date: str = "", policy: str = "containment_proposed", target: str = ""
+    ) -> str:
         """Build structured, dry-run remediation proposals for detected incidents: reruns the correlation of correlate_incidents and, for each finding, returns evidence, scope, risk, reversal plan, candidate policy and the exact read-only next step. NEVER applies anything; applying always requires the existing confirmed write tools (block_threat/apply_change/run_cli_command with confirm=true) plus human approval. policy: observation|containment_proposed|controlled_change|emergency. target: named Orchestrator from list_orchestrator_targets_tool (default target when empty)."""
         try:
             client = require_client(target)
@@ -4949,15 +5306,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             incidents: list[dict[str, Any]] = []
             for ne_pk in resolve_ne_pks(client, appliance_id):
                 try:
-                    ids_state = summarize_ids_state(
-                        client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ)
-                    )
+                    ids_state = summarize_ids_state(client.appliance_api_call(version, ne_pk, IDS_IPS_STATE_READ))
                 except Exception as error:
                     ids_state = {"active": None, "error": str(error)[:200]}
                 try:
-                    ids_events = extract_rows(
-                        client.appliance_api_call(version, ne_pk, IDS_IPS_EVENTS_READ, limit=50)
-                    )
+                    ids_events = extract_rows(client.appliance_api_call(version, ne_pk, IDS_IPS_EVENTS_READ, limit=50))
                 except Exception:
                     ids_events = []
                 firewall_summary = None
@@ -4974,9 +5327,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     web_summary = summarize_web_filtering(entries)
                 except Exception:
                     firewall_summary = None
-                findings = correlate_security_signals(
-                    ne_pk, ids_state, ids_events, firewall_summary, web_summary
-                )
+                findings = correlate_security_signals(ne_pk, ids_state, ids_events, firewall_summary, web_summary)
                 try:
                     alarm_payload = kpi_alarm_counts(client, ne_pk)
                     severity_counts: dict[str, int] = {}
@@ -5071,7 +5422,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 else:
                     raise SecurityError(
                         "body_json must be a JSON object"
-                        + (" (or an array matching the catalog's array body_example)" if isinstance(parsed, list) else "")
+                        + (
+                            " (or an array matching the catalog's array body_example)"
+                            if isinstance(parsed, list)
+                            else ""
+                        )
                     )
             example = operation_details(version, operation_id).get("body_example")
             placeholder_example = isinstance(example, dict) and any(
@@ -5079,12 +5434,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             )
             spec = engine._profiles[version]["operations"][operation_id]
             query_only_write = bool(spec.get("query_params")) and not spec.get("body_example")
-            if (
-                confirm
-                and operation.method in ("POST", "PUT", "PATCH")
-                and not body
-                and not query_only_write
-            ):
+            if confirm and operation.method in ("POST", "PUT", "PATCH") and not body and not query_only_write:
                 raise SecurityError(
                     "Refusing a confirmed write with an empty JSON body. "
                     "Discover the required schema or copy a known-good object before applying."
@@ -5159,8 +5509,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     if verify_operation_id.startswith("appliance."):
                         verify_ne_pk = resolve_ne_pk(client, appliance_id)
                         verification = client.appliance_api_call(
-                            version, verify_ne_pk, verify_operation_id,
-                            path_params={}, **{},
+                            version,
+                            verify_ne_pk,
+                            verify_operation_id,
+                            path_params={},
+                            **{},
                         )
                     else:
                         verification = client.call(version, verify_operation_id, path_params={})
@@ -5168,8 +5521,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 except Exception as error:
                     verification_error = str(error)
                     audit.record(
-                        "apply_change", verify_operation_id, verify_op.path,
-                        f"read-after-write failed (write was applied): {error}", dry_run=False,
+                        "apply_change",
+                        verify_operation_id,
+                        verify_op.path,
+                        f"read-after-write failed (write was applied): {error}",
+                        dry_run=False,
                     )
             response = {
                 "applied": True,
@@ -5179,9 +5535,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if verification_error is not None:
                 response["read_after_write_failed"] = True
                 response["read_after_write_error"] = verification_error
-                response[
-                    "warning"
-                ] = ("The write was APPLIED, but the read-after-write check failed. " "Do not retry the write blindly: re-run only the GET verification.")
+                response["warning"] = (
+                    "The write was APPLIED, but the read-after-write check failed. "
+                    "Do not retry the write blindly: re-run only the GET verification."
+                )
             return json_result(response, settings.max_output_chars)
         except json.JSONDecodeError as error:
             audit.record("apply_change", operation_id, "", f"invalid body JSON: {error}")
@@ -5198,11 +5555,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
             version = client.resolve_active_profile()
+
             def _safe_call(operation_id: str, **query: Any) -> Any:
                 try:
                     return client.call(version, operation_id, **query)
                 except Exception as error:
                     return {"error": str(error)}
+
             platform: dict[str, Any] = {}
             for label, op_id in (
                 ("platform_info", "get_platforminfo"),
@@ -5216,13 +5575,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     result = _safe_call(op_id)
                 else:
                     try:
-                        path = "/gms/rest/stats/infrastructure/" + {
-                            "platform_info": "platformInfo",
-                            "host_name": "hostName",
-                            "ip_address": "ipAddress",
-                            "os_flavor_version": "osFlavorVersion",
-                            "is_in_container": "isInContainer",
-                        }[label]
+                        path = (
+                            "/gms/rest/stats/infrastructure/"
+                            + {
+                                "platform_info": "platformInfo",
+                                "host_name": "hostName",
+                                "ip_address": "ipAddress",
+                                "os_flavor_version": "osFlavorVersion",
+                                "is_in_container": "isInContainer",
+                            }[label]
+                        )
                         result = client.get_raw(path)
                     except Exception as error:
                         result = {"error": str(error), "unavailable_in_version": version}
@@ -5243,8 +5605,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_appliance_infrastructure(appliance_id: str = "all",
-        target: str = "") -> str:
+    def get_appliance_infrastructure(appliance_id: str = "all", target: str = "") -> str:
         """Read per-appliance infrastructure KPIs from the Orchestrator: CPU timeseries, per-appliance performance/throughput timeseries and interface state. Supports 'all' or a single appliance (nePk, name, IP or serial). Statistics are read from the Orchestrator DB, so they cover historical/aggregate views rather than live per-second counters."""
         try:
             client = require_client(target)
@@ -5302,9 +5663,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             version = client.resolve_active_profile()
             ne_pk = resolve_ne_pk(client, appliance_id)
             body = build_realtime_stats_body(target_type, name, filter_mode, count)
-            payload = client.appliance_api_call(
-                version, ne_pk, APPLIANCE_REALTIME_STATS_READ, json_body=body
-            )
+            payload = client.appliance_api_call(version, ne_pk, APPLIANCE_REALTIME_STATS_READ, json_body=body)
             rows = summarize_realtime_stats(payload)
             audit.record(
                 "get_realtime_stats",
@@ -5326,7 +5685,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         """Ask the Orchestrator's built-in SD-WAN AI assistant (SASE Copilot) a natural-language question about the SD-WAN fabric (POST /sdwanai/search, streaming SSE consumed to completion). Returns the assistant's answer plus chat_id/msg_id for conversation continuity. Requires the SASE Copilot feature enabled on the Orchestrator (check get_sase_copilot_status) and a READ_WRITE API role. target: named Orchestrator from list_orchestrator_targets_tool (default target when empty)."""
         try:
             if not question or not question.strip():
-                return json_result({"error": "PARAM_REQUIRED", "required_params": ["question"]}, settings.max_output_chars)
+                return json_result(
+                    {"error": "PARAM_REQUIRED", "required_params": ["question"]}, settings.max_output_chars
+                )
             client = require_client(target)
             if client is None:
                 return "Orchestrator is not configured. Set EC_ORCHESTRATOR_URL and credentials."
@@ -5340,11 +5701,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             body: dict[str, Any] = {"question": question.strip()}
             if chat_id:
                 body["chat_id"] = chat_id
-            payload = client.stream_post_sse(
-                "/gms/rest/sdwanai/search", json_body=body, max_events=max(1, max_events)
-            )
+            payload = client.stream_post_sse("/gms/rest/sdwanai/search", json_body=body, max_events=max(1, max_events))
             answer = _extract_sdwan_ai_answer(payload)
-            audit.record("ask_sdwan_ai", "read", settings.orchestrator_url, "ok", details={"chat_id": answer.get("chat_id", "")})
+            audit.record(
+                "ask_sdwan_ai", "read", settings.orchestrator_url, "ok", details={"chat_id": answer.get("chat_id", "")}
+            )
             return json_result(answer, settings.max_output_chars)
         except Exception as error:
             audit.record("ask_sdwan_ai", "read", settings.orchestrator_url, f"error: {error}")
@@ -5360,7 +5721,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             version = client.resolve_active_profile()
             if "orchestrator.sdwanaichatlogs" not in engine._profiles[version]["operations"]:
                 return json_result(
-                    {"error": "SD-WAN AI chat logs are not available in the active API profile", "active_profile": version},
+                    {
+                        "error": "SD-WAN AI chat logs are not available in the active API profile",
+                        "active_profile": version,
+                    },
                     settings.max_output_chars,
                 )
             payload = client.call(version, "orchestrator.sdwanaichatlogs")
@@ -5380,7 +5744,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             version = client.resolve_active_profile()
             if "orchestrator.sdwanaiclearcontext" not in engine._profiles[version]["operations"]:
                 return json_result(
-                    {"error": "SD-WAN AI context clear is not available in the active API profile", "active_profile": version},
+                    {
+                        "error": "SD-WAN AI context clear is not available in the active API profile",
+                        "active_profile": version,
+                    },
                     settings.max_output_chars,
                 )
             require_writes("clear_sdwan_ai_context")
@@ -5401,7 +5768,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             version = client.resolve_active_profile()
             if "orchestrator.getenablesasecopilot" not in engine._profiles[version]["operations"]:
                 return json_result(
-                    {"error": "SASE Copilot status is not available in the active API profile", "active_profile": version},
+                    {
+                        "error": "SASE Copilot status is not available in the active API profile",
+                        "active_profile": version,
+                    },
                     settings.max_output_chars,
                 )
             payload = client.call(version, "orchestrator.getenablesasecopilot")
@@ -5412,8 +5782,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             return f"Error: {error}"
 
     @mcp.tool()
-    def get_appliance_health(appliance_id: str = "all", samples: int = 10,
-        target: str = "") -> str:
+    def get_appliance_health(appliance_id: str = "all", samples: int = 10, target: str = "") -> str:
         """Read the live health summary and system state directly from EdgeConnect appliances: POST /health (loss/latency/jitter/MOS), system info, disk usage and disks — all fetched from the appliance itself through the Orchestrator appliance proxy over the SD-WAN network. Use for real-time device health; use get_orchestrator_infrastructure / get_appliance_infrastructure for Orchestrator-side historical KPIs."""
         try:
             client = require_client(target)
@@ -5424,33 +5793,23 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             for ne_pk in resolve_ne_pks(client, appliance_id):
                 entry: dict[str, Any] = {"nePk": ne_pk}
                 try:
-                    entry["health"] = client.appliance_api_call(
-                        version, ne_pk, APPLIANCE_HEALTH_READ, json_body={}
-                    )
+                    entry["health"] = client.appliance_api_call(version, ne_pk, APPLIANCE_HEALTH_READ, json_body={})
                 except Exception as error:
                     entry["health"] = {"error": str(error)}
                 try:
-                    entry["system_info"] = client.appliance_api_call(
-                        version, ne_pk, APPLIANCE_SYSTEM_INFO_READ
-                    )
+                    entry["system_info"] = client.appliance_api_call(version, ne_pk, APPLIANCE_SYSTEM_INFO_READ)
                 except Exception as error:
                     entry["system_info"] = {"error": str(error)}
                 try:
-                    entry["disk_usage"] = client.appliance_api_call(
-                        version, ne_pk, APPLIANCE_DISK_USAGE_READ
-                    )
+                    entry["disk_usage"] = client.appliance_api_call(version, ne_pk, APPLIANCE_DISK_USAGE_READ)
                 except Exception as error:
                     entry["disk_usage"] = {"error": str(error)}
                 try:
-                    entry["disks"] = summarize_disks(
-                        client.appliance_api_call(version, ne_pk, APPLIANCE_DISKS_READ)
-                    )
+                    entry["disks"] = summarize_disks(client.appliance_api_call(version, ne_pk, APPLIANCE_DISKS_READ))
                 except Exception as error:
                     entry["disks"] = {"error": str(error)}
                 results.append(entry)
-            audit.record(
-                "get_appliance_health", "read", appliance_id, "ok", details={"appliances": len(results)}
-            )
+            audit.record("get_appliance_health", "read", appliance_id, "ok", details={"appliances": len(results)})
             return json_result({"appliances": results}, settings.max_output_chars)
         except Exception as error:
             audit.record("get_appliance_health", "read", appliance_id, f"error: {error}")

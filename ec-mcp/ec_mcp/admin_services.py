@@ -91,6 +91,37 @@ def probe_axis(entry: dict[str, Any]) -> dict[str, Any]:
     return {"latency": elapsed, "status_code": response.status_code}
 
 
+def probe_central(entry: dict[str, Any]) -> dict[str, Any]:
+    """Perform a real OAuth2 token request plus a lightweight Central query."""
+    from .central_client import ArubaCentralClient, ArubaCentralError
+
+    base_url = str(entry.get("base_url") or "").strip()
+    client_id = str(entry.get("client_id") or "").strip()
+    client_secret = str(entry.get("client_secret") or "").strip()
+    if not base_url:
+        raise ServiceProbeError("La plataforma Central no tiene URL base configurada.")
+    if not client_id or not client_secret:
+        raise ServiceProbeError("La plataforma Central no tiene credenciales OAuth2 completas.")
+    verify_tls = entry.get("verify_tls", True)
+    timeout = float(entry.get("timeout") or 30.0)
+    token_url = str(entry.get("token_url") or "").strip()
+    started = _now()
+    client = ArubaCentralClient(
+        client_id=client_id,
+        client_secret=client_secret,
+        base_url=base_url,
+        token_url=token_url or "https://sso.common.cloud.hpe.com/as/token.oauth2",
+        timeout=timeout,
+        verify_tls=verify_tls,
+    )
+    try:
+        client.sites_health(params={"limit": 1})
+    except ArubaCentralError as exc:
+        raise ServiceProbeError(f"Central: {exc}") from exc
+    elapsed = (_now() - started).total_seconds()
+    return {"latency": elapsed, "status_code": 200}
+
+
 def probe_update_service() -> dict[str, Any]:
     """Return the real updater worker state; never fabricate 'ready'."""
     from . import web_update
@@ -172,7 +203,12 @@ def services_status(probe: bool = True) -> dict[str, Any]:
         report["mcp_transport"] = probe_mcp_transport()
     except (ServiceProbeError, ValueError) as exc:
         report["mcp_transport"] = {"state": "down", "error": str(exc)}
-    _record("services_status", "panel", "checked", {"probes": len(report["orchestrators"]) + len(report["sse_platforms"]) + 2})
+    _record(
+        "services_status",
+        "panel",
+        "checked",
+        {"probes": len(report["orchestrators"]) + len(report["sse_platforms"]) + 2},
+    )
     return report
 
 
