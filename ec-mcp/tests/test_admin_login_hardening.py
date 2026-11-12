@@ -45,3 +45,18 @@ def test_lockout_precedes_password_verification_and_expires(monkeypatch, tmp_pat
         assert attempts == ["bad", "bad"]
         clock[0] += 61
         assert client.post("/login", json={"password": "good"}).status_code == 200
+
+
+def test_shared_password_cannot_bypass_named_accounts(monkeypatch, tmp_path):
+    monkeypatch.setenv("EC_ADMIN_SESSIONS_FILE", str(tmp_path / "sessions.json"))
+    monkeypatch.setattr(admin, "_audit_panel", lambda *args, **kwargs: None)
+    monkeypatch.setattr(admin.admin_users, "has_users", lambda: True)
+    monkeypatch.setattr(admin.admin_users, "verify_user", lambda u, p: "admin" if (u, p) == ("alice", "named") else None)
+    calls = []
+    monkeypatch.setattr(admin, "_verify_password", lambda *args, **kwargs: calls.append(True) or True)
+    admin.LOGIN_FAILURES.clear()
+    with TestClient(admin.build_admin_app()) as client:
+        denied = client.post("/login", json={"password": "legacy"})
+        assert denied.json()["ok"] is False
+        assert not calls
+        assert client.post("/login", json={"username": "alice", "password": "named"}).json()["ok"] is True
