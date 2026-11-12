@@ -292,3 +292,55 @@ class TestNetworkTests:
         assert validate_operation("ping") == "ping"
         with pytest.raises(ValueError, match="Unsupported operation"):
             validate_operation("bogus")
+
+
+class TestClientAnalytics:
+    def test_analytics_paths(self, monkeypatch):
+        monkeypatch.setattr(
+            "ec_mcp.central_client.httpx.post",
+            lambda *a, **k: httpx.Response(200, json={"access_token": "t", "expires_in": 3600}),
+        )
+        captured = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured[request.url.path] = str(request.url.query)
+            return httpx.Response(200, json={"items": []})
+
+        client = make_client(handler)
+        client.clients_usage(params={"filter": "timestamp gt a"})
+        client.clients_top_usage(params={"start-at": "a", "end-at": "b"})
+        client.clients_trend(params={"start-at": "a", "end-at": "b"})
+        client.client_onboarding("reasons", params={"start-at": "a", "end-at": "b"})
+        client.client_mobility_trail("AA:BB:CC:DD:EE:FF", params={"limit": 20})
+        assert set(captured) == {
+            "/network-monitoring/v1/clients-usage",
+            "/network-monitoring/v1/clients-topn-usage",
+            "/network-monitoring/v1/clients-trend",
+            "/network-monitoring/v1/client-onboarding-stage/reasons",
+            "/network-monitoring/v1/clients/AA:BB:CC:DD:EE:FF/mobility-trail",
+        }
+        with pytest.raises(ValueError, match="view must be"):
+            client.client_onboarding("bogus")
+
+    def test_analytics_helpers(self):
+        from ec_mcp.central_workflow import (
+            analytics_time_window,
+            build_analytics_params,
+            build_usage_filter,
+            resolve_analytics_view,
+        )
+
+        assert resolve_analytics_view("TOP") == "top"
+        with pytest.raises(ValueError, match="Unsupported view"):
+            resolve_analytics_view("bogus")
+        start, end = analytics_time_window("", "")
+        assert start and end
+        assert analytics_time_window("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z") == (
+            "2026-01-01T00:00:00Z",
+            "2026-01-02T00:00:00Z",
+        )
+        assert build_usage_filter("s", "e", site_id="site1", mac_address="AA:BB") == (
+            "timestamp gt s and timestamp lt e and siteId eq 'site1' and macAddress eq 'AA:BB'"
+        )
+        params = build_analytics_params("s", "e", site_id="site1", serial_number="SG1", limit=10)
+        assert params == {"start-at": "s", "end-at": "e", "site-id": "site1", "serial-number": "SG1", "limit": 10}

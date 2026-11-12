@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC
 from typing import Any
 
 from .central_client import DEVICE_FAMILIES, TROUBLESHOOTING_DEVICE_TYPES
@@ -278,6 +279,59 @@ def summarize_events(payload: Any) -> dict[str, Any]:
     return {"count": len(events), "events": events}
 
 
+ANALYTICS_VIEWS = ("usage", "top", "trend", "mobility", "onboarding-summary", "onboarding-reasons", "onboarding-count")
+
+
+def resolve_analytics_view(view: str) -> str:
+    """Validate a client analytics view name."""
+    value = (view or "").strip().lower()
+    if value not in ANALYTICS_VIEWS:
+        raise ValueError(f"Unsupported view '{view}'. Use one of: {', '.join(ANALYTICS_VIEWS)}")
+    return value
+
+
+def analytics_time_window(start_at: str = "", end_at: str = "") -> tuple[str, str]:
+    """Resolve the analytics window, defaulting to the last 24 hours (UTC)."""
+    from datetime import datetime, timedelta
+
+    now = datetime.now(UTC)
+    end = end_at.strip() or now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    start = start_at.strip() or (now - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return start, end
+
+
+def build_usage_filter(
+    start_at: str, end_at: str, site_id: str = "", serial_number: str = "", mac_address: str = ""
+) -> str:
+    """Build the clients-usage endpoint's limited OData filter."""
+    parts = [f"timestamp gt {start_at}", f"timestamp lt {end_at}"]
+    for field, value in (("siteId", site_id), ("serialNumber", serial_number), ("macAddress", mac_address)):
+        if value.strip():
+            parts.append(f"{field} eq '{value.strip()}'")
+    return " and ".join(parts)
+
+
+def build_analytics_params(
+    start_at: str,
+    end_at: str,
+    site_id: str = "",
+    serial_number: str = "",
+    mac_address: str = "",
+    limit: int = 0,
+) -> dict[str, Any]:
+    """Build kebab-case query params for the client analytics endpoints."""
+    params: dict[str, Any] = {"start-at": start_at, "end-at": end_at}
+    if site_id.strip():
+        params["site-id"] = site_id.strip()
+    if serial_number.strip():
+        params["serial-number"] = serial_number.strip()
+    if mac_address.strip():
+        params["mac-address"] = mac_address.strip()
+    if limit:
+        params["limit"] = limit
+    return params
+
+
 def validate_operation(operation: str) -> str:
     """Validate an async operation name for task result lookups."""
     value = (operation or "showCommands").strip() or "showCommands"
@@ -305,6 +359,7 @@ def extract_task_id(payload: Any) -> str:
 
 
 __all__ = [
+    "ANALYTICS_VIEWS",
     "DEVICE_FAMILIES",
     "NETWORK_TESTS",
     "SHOW_COMMANDS_MAX",
@@ -313,6 +368,7 @@ __all__ = [
     "extract_task_id",
     "parse_commands",
     "parse_ports",
+    "resolve_analytics_view",
     "resolve_family",
     "resolve_troubleshooting_device_type",
     "summarize_alerts",

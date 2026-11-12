@@ -39,10 +39,14 @@ from .axis_workflow import (
 from .build import build_info
 from .central_client import ArubaCentralClient
 from .central_workflow import (
+    analytics_time_window,
+    build_analytics_params,
     build_network_test_body,
+    build_usage_filter,
     extract_task_id,
     parse_commands,
     parse_ports,
+    resolve_analytics_view,
     resolve_family,
     resolve_troubleshooting_device_type,
     summarize_alerts,
@@ -4167,6 +4171,52 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             task_id = extract_task_id(payload)
             audit.record("central_bounce_port", serial, "central", "ok", dry_run=False)
             return json_result({"applied": True, "task_id": task_id, "hint": "Poll central_get_task_result for status."}, settings.max_output_chars)
+        except Exception as error:
+            return f"Error: {error}"
+
+    @mcp.tool()
+    def central_get_client_analytics(
+        view: str,
+        mac_address: str = "",
+        site_id: str = "",
+        serial_number: str = "",
+        start_at: str = "",
+        end_at: str = "",
+        limit: int = 0,
+    ) -> str:
+        """Get Aruba Central client analytics: view='usage', 'top', 'trend', 'mobility' (requires mac_address), 'onboarding-summary', 'onboarding-reasons' or 'onboarding-count'. Time window defaults to the last 24 hours (UTC). Read-only."""
+        try:
+            central = require_central()
+            resolved = resolve_analytics_view(view)
+            start, end = analytics_time_window(start_at, end_at)
+            if resolved == "usage":
+                payload = central.clients_usage(
+                    params={
+                        "filter": build_usage_filter(start, end, site_id=site_id, serial_number=serial_number, mac_address=mac_address)
+                    }
+                )
+            elif resolved == "top":
+                payload = central.clients_top_usage(
+                    params=build_analytics_params(start, end, site_id=site_id, serial_number=serial_number, limit=limit)
+                )
+            elif resolved == "trend":
+                payload = central.clients_trend(
+                    params=build_analytics_params(start, end, site_id=site_id, serial_number=serial_number, limit=limit)
+                )
+            elif resolved == "mobility":
+                if not mac_address.strip():
+                    raise ValueError("mac_address is required for the 'mobility' view")
+                payload = central.client_mobility_trail(
+                    mac_address.strip(),
+                    params=build_analytics_params(start, end, site_id=site_id, limit=limit),
+                )
+            else:
+                onboarding_view = {"onboarding-summary": "export", "onboarding-reasons": "reasons", "onboarding-count": "count"}[resolved]
+                payload = central.client_onboarding(
+                    onboarding_view,
+                    params=build_analytics_params(start, end, site_id=site_id, serial_number=serial_number, limit=limit),
+                )
+            return json_result(payload, settings.max_output_chars)
         except Exception as error:
             return f"Error: {error}"
 
