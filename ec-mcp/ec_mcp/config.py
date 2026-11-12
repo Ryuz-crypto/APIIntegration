@@ -30,6 +30,14 @@ class Settings:
     axis_verify_tls: bool = True
     axis_timeout: float = 30.0
 
+    central_enabled: bool = False
+    central_client_id: str = ""
+    central_client_secret: str = ""
+    central_base_url: str = "https://us.api.central.arubanetworks.com"
+    central_token_url: str = "https://sso.common.cloud.hpe.com/as/token.oauth2"
+    central_verify_tls: bool = True
+    central_timeout: float = 30.0
+
     orchestrators_json: str = ""
     sse_platforms_json: str = ""
 
@@ -79,6 +87,17 @@ class Settings:
             axis_base_url=os.environ.get("EC_AXIS_BASE_URL", "https://admin-api.axissecurity.com"),
             axis_verify_tls=os.environ.get("EC_AXIS_VERIFY_TLS", "true").lower() != "false",
             axis_timeout=float(os.environ.get("EC_AXIS_TIMEOUT", "30")),
+            central_enabled=os.environ.get("EC_CENTRAL_ENABLED", "false").lower() == "true",
+            central_client_id=os.environ.get("EC_CENTRAL_CLIENT_ID", ""),
+            central_client_secret=os.environ.get("EC_CENTRAL_CLIENT_SECRET", ""),
+            central_base_url=os.environ.get("EC_CENTRAL_BASE_URL", "https://us.api.central.arubanetworks.com").rstrip(
+                "/"
+            ),
+            central_token_url=os.environ.get(
+                "EC_CENTRAL_TOKEN_URL", "https://sso.common.cloud.hpe.com/as/token.oauth2"
+            ),
+            central_verify_tls=os.environ.get("EC_CENTRAL_VERIFY_TLS", "true").lower() != "false",
+            central_timeout=float(os.environ.get("EC_CENTRAL_TIMEOUT", "30")),
             orchestrators_json=os.environ.get("EC_ORCHESTRATORS_JSON", ""),
             sse_platforms_json=os.environ.get("EC_SSE_PLATFORMS_JSON", ""),
             dashboard_remote_enabled=os.environ.get("EC_DASHBOARD_REMOTE_ENABLED", "false").lower() == "true",
