@@ -23,6 +23,15 @@ from .multi_target import load_registry
 PROBE_TIMEOUT = 10.0
 PROBE_CACHE_SECONDS = 15.0
 
+_CENTRAL_PROBE_CLIENTS: dict[tuple[str, str, str], Any] = {}
+_STATUS_CACHE: dict[str, Any] = {"report": None, "at": 0.0}
+
+
+def clear_status_cache() -> None:
+    """Drop the cached services status so the next call probes for real."""
+    _STATUS_CACHE["report"] = None
+    _STATUS_CACHE["at"] = 0.0
+
 
 def _now() -> datetime:
     return datetime.now(UTC)
@@ -92,7 +101,11 @@ def probe_axis(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def probe_central(entry: dict[str, Any]) -> dict[str, Any]:
-    """Perform a real OAuth2 token request plus a lightweight Central query."""
+    """Perform a real OAuth2 token request plus a lightweight Central query.
+
+    Clients are cached per platform so the OAuth2 access token is reused
+    across probes instead of requesting a new one on every check.
+    """
     from .central_client import ArubaCentralClient, ArubaCentralError
 
     base_url = str(entry.get("base_url") or "").strip()
@@ -105,18 +118,23 @@ def probe_central(entry: dict[str, Any]) -> dict[str, Any]:
     verify_tls = entry.get("verify_tls", True)
     timeout = float(entry.get("timeout") or 30.0)
     token_url = str(entry.get("token_url") or "").strip()
+    cache_key = (base_url, client_id, token_url)
+    client = _CENTRAL_PROBE_CLIENTS.get(cache_key)
+    if client is None:
+        client = ArubaCentralClient(
+            client_id=client_id,
+            client_secret=client_secret,
+            base_url=base_url,
+            token_url=token_url or "https://sso.common.cloud.hpe.com/as/token.oauth2",
+            timeout=timeout,
+            verify_tls=verify_tls,
+        )
+        _CENTRAL_PROBE_CLIENTS[cache_key] = client
     started = _now()
-    client = ArubaCentralClient(
-        client_id=client_id,
-        client_secret=client_secret,
-        base_url=base_url,
-        token_url=token_url or "https://sso.common.cloud.hpe.com/as/token.oauth2",
-        timeout=timeout,
-        verify_tls=verify_tls,
-    )
     try:
         client.sites_health(params={"limit": 1})
     except ArubaCentralError as exc:
+        _CENTRAL_PROBE_CLIENTS.pop(cache_key, None)
         raise ServiceProbeError(f"Central: {exc}") from exc
     elapsed = (_now() - started).total_seconds()
     return {"latency": elapsed, "status_code": 200}
@@ -165,7 +183,16 @@ def probe_mcp_transport() -> dict[str, Any]:
 
 
 def services_status(probe: bool = True) -> dict[str, Any]:
-    """Build the real services status consumed by the admin panel."""
+    """Build the real services status consumed by the admin panel.
+
+    Results are cached for PROBE_CACHE_SECONDS so switching tabs does not
+    re-probe every backend (and does not flip a just-verified connection
+    back to an unproven state). Each cached report still comes from real
+    checks, with its own checked_at timestamp.
+    """
+    now = _now().timestamp()
+    if probe and _STATUS_CACHE["report"] is not None and now - _STATUS_CACHE["at"] < PROBE_CACHE_SECONDS:
+        return dict(_STATUS_CACHE["report"])
     report: dict[str, Any] = {
         "checked_at": _now().isoformat(),
         "probe": bool(probe),
@@ -219,6 +246,9 @@ def services_status(probe: bool = True) -> dict[str, Any]:
         "checked",
         {"probes": len(report["orchestrators"]) + len(report["sse_platforms"]) + len(report["central_platforms"]) + 2},
     )
+    if probe:
+        _STATUS_CACHE["report"] = report
+        _STATUS_CACHE["at"] = now
     return report
 
 

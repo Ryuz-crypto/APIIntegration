@@ -34,7 +34,7 @@ def validate_token_strength(token: str) -> None:
     if len(token.encode("utf-8")) < MIN_TOKEN_BYTES:
         raise SystemExit(
             f"EC_MCP_AUTH_TOKEN must be at least {MIN_TOKEN_BYTES} bytes of random data. "
-            "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
         )
 
 
@@ -43,8 +43,14 @@ class BearerAuthMiddleware:
     valid Authorization: Bearer header. Failed attempts per IP are limited
     to FAILED_AUTH_LIMIT per FAILED_AUTH_WINDOW_SECONDS, then blocked."""
 
-    def __init__(self, app, tokens: list[str], *, auth_limit: int = FAILED_AUTH_LIMIT,
-                 auth_window: float = FAILED_AUTH_WINDOW_SECONDS):
+    def __init__(
+        self,
+        app,
+        tokens: list[str],
+        *,
+        auth_limit: int = FAILED_AUTH_LIMIT,
+        auth_window: float = FAILED_AUTH_WINDOW_SECONDS,
+    ):
         if not tokens:
             raise ValueError("At least one auth token is required")
         for token in tokens:
@@ -59,10 +65,7 @@ class BearerAuthMiddleware:
         client = scope.get("client")
         if client and isinstance(client, tuple):
             return str(client[0])
-        forwarded = [
-            value for key, value in scope.get("headers", [])
-            if key == b"x-forwarded-for"
-        ]
+        forwarded = [value for key, value in scope.get("headers", []) if key == b"x-forwarded-for"]
         if forwarded:
             return forwarded[0].decode("latin-1").split(",")[0].strip()
         return "unknown"
@@ -88,8 +91,7 @@ class BearerAuthMiddleware:
 
             orch_url = os.environ.get("EC_ORCHESTRATOR_URL", "")
             orch_auth = bool(
-                os.environ.get("EC_ORCHESTRATOR_API_KEY", "")
-                or os.environ.get("EC_ORCHESTRATOR_USER", "")
+                os.environ.get("EC_ORCHESTRATOR_API_KEY", "") or os.environ.get("EC_ORCHESTRATOR_USER", "")
             )
             response = JSONResponse(
                 {
@@ -126,15 +128,10 @@ class BearerAuthMiddleware:
             await response(scope, receive, send)
             return
 
-        headers = {
-            key.decode("latin-1").lower(): value.decode("latin-1")
-            for key, value in scope.get("headers", [])
-        }
+        headers = {key.decode("latin-1").lower(): value.decode("latin-1") for key, value in scope.get("headers", [])}
         authorization = headers.get("authorization", "")
-        provided = authorization[len("Bearer "):].strip() if authorization.startswith("Bearer ") else ""
-        if not provided or not any(
-            hmac.compare_digest(provided, token) for token in self.tokens
-        ):
+        provided = authorization[len("Bearer ") :].strip() if authorization.startswith("Bearer ") else ""
+        if not provided or not any(hmac.compare_digest(provided, token) for token in self.tokens):
             self._record_failure(ip)
             response = JSONResponse({"error": "unauthorized"}, status_code=401)
             await response(scope, receive, send)
@@ -155,9 +152,7 @@ def resolve_transport_security(host: str = "127.0.0.1"):
     """
     from mcp.server.transport_security import TransportSecuritySettings
 
-    extra = [
-        h.strip() for h in os.environ.get("EC_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()
-    ]
+    extra = [h.strip() for h in os.environ.get("EC_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
     allowed_hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
     for entry in extra:
         base, _, port = entry.rpartition(":")
@@ -211,18 +206,48 @@ def build_sse_app(server: FastMCP, token: str):
 
 
 def resolve_auth_tokens(primary: str | None = None) -> list[str]:
-    """Return the active auth tokens: a primary (rotation) token plus the
-    EC_MCP_AUTH_TOKEN environment token, so rotation can be seamless."""
+    """Return the active auth tokens: a primary (rotation) token, the
+    EC_MCP_AUTH_TOKEN environment token and every named token from
+    EC_MCP_AUTH_TOKENS_JSON (independent tokens per AI platform, e.g.
+    Vibe, Claude, ChatGPT), so rotation can be seamless."""
     tokens: list[str] = []
     env_token = os.environ.get("EC_MCP_AUTH_TOKEN", "")
     for token in (primary, env_token):
         if token and token not in tokens:
             tokens.append(token)
+    for token in load_named_auth_tokens().values():
+        if token and token not in tokens:
+            tokens.append(token)
     if not tokens:
         raise SystemExit(
             "EC_MCP_AUTH_TOKEN is required for HTTP/SSE transports. "
-            "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
         )
+    return tokens
+
+
+def load_named_auth_tokens(blob: str = "") -> dict[str, str]:
+    """Load the named MCP tokens from EC_MCP_AUTH_TOKENS_JSON.
+
+    Format: {"<name>": "<token>", ...}. Invalid JSON or non-string values
+    are rejected so a broken file cannot silently disable authentication.
+    """
+    import json
+
+    raw = blob.strip() or os.environ.get("EC_MCP_AUTH_TOKENS_JSON", "")
+    if not raw.strip():
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise SystemExit(f"EC_MCP_AUTH_TOKENS_JSON is not valid JSON: {error}") from error
+    if not isinstance(data, dict):
+        raise SystemExit("EC_MCP_AUTH_TOKENS_JSON must be a JSON object name -> token")
+    tokens: dict[str, str] = {}
+    for name, token in data.items():
+        if not isinstance(token, str) or not token.strip():
+            raise SystemExit(f"EC_MCP_AUTH_TOKENS_JSON[{name}] must be a non-empty string")
+        tokens[str(name)] = token.strip()
     return tokens
 
 
