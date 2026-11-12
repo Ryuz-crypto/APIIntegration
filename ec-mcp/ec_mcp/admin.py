@@ -1032,6 +1032,15 @@ async def api_restart(request):
     session, denied = _authorize(request, "restart")
     if denied:
         return denied
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if _has_password_configured():
+        password = str(body.get("password") or "")
+        if not _verify_password(password, allow_first_run=False):
+            _audit_panel(session["user"], "restart", "panel", "blocked_password")
+            return JSONResponse({"error": "Contraseña del panel incorrecta"}, status_code=403)
     errors = restart_tls_errors()
     if errors:
         _audit_panel(session["user"], "restart", "panel", "blocked_tls")

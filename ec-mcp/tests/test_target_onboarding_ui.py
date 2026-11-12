@@ -18,7 +18,7 @@ def test_target_activation_only_restarts_after_success():
 const assert = require('node:assert/strict');
 globalThis.localStorage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};
 globalThis.document={documentElement:{dataset:{},style:{setProperty:()=>{}}},querySelector:()=>null,querySelectorAll:()=>[],addEventListener:()=>{}};
-globalThis.window=globalThis;globalThis.confirm=()=>true;
+globalThis.window=globalThis;globalThis.confirm=()=>true;globalThis.prompt=()=>'panel-pass';
 """ + script + r"""
 const fields={};q=id=>fields[id]||(fields[id]={value:''});
 q('#o-name').value='new';q('#o-url').value='https://example';q('#o-user').value='alice';q('#o-password').value='test';q('#o-tls').value='true';
