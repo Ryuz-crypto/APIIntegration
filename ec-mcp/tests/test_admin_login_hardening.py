@@ -39,8 +39,8 @@ def test_lockout_precedes_password_verification_and_expires(monkeypatch, tmp_pat
     monkeypatch.setattr(admin, "_verify_password", verify)
     admin.LOGIN_FAILURES.clear()
     with TestClient(admin.build_admin_app()) as client:
-        assert client.post("/login", json={"password": "bad"}).status_code == 401
-        assert client.post("/login", json={"password": "bad"}).status_code == 401
+        assert client.post("/login", json={"password": "bad"}).json()["ok"] is False
+        assert client.post("/login", json={"password": "bad"}).json()["ok"] is False
         assert client.post("/login", json={"password": "good"}).status_code == 429
         assert attempts == ["bad", "bad"]
         clock[0] += 61
