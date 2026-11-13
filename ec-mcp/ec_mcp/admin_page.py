@@ -368,6 +368,8 @@ html[data-effect="quiet"] #workspace .panel:first-child:after{animation:none}
 #bak-dlg .orch .help,#bak-dlg .orch strong{color:var(--card-fg,#fff)}#bak-dlg .orch .badge{background:#d9f5ec;color:#075842;border-color:#82bbad}
 #bak-dlg .orch-actions{display:flex;flex-wrap:wrap;gap:6px;margin-inline-start:12px}
 @media(max-width:700px){#bak-dlg .orch-actions{float:none;max-width:none;margin:0 0 12px}}
+.restart-password-dialog{max-width:500px;border:1px solid var(--brand);border-radius:16px;box-shadow:0 20px 70px #000a,0 0 30px color-mix(in srgb,var(--brand) 30%,transparent)}
+.restart-password-dialog h3{margin:0 0 8px}.restart-password-dialog input:focus{border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 35%,transparent)}
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='home', TOPOLOGY_STATUS=null, TOPOLOGY_BUSY=false;
