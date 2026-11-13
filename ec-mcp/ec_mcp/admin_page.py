@@ -368,6 +368,8 @@ html[data-effect="quiet"] #workspace .panel:first-child:after{animation:none}
 #bak-dlg .orch .help,#bak-dlg .orch strong{color:var(--card-fg,#fff)}#bak-dlg .orch .badge{background:#d9f5ec;color:#075842;border-color:#82bbad}
 #bak-dlg .orch-actions{display:flex;flex-wrap:wrap;gap:6px;margin-inline-start:12px}
 @media(max-width:700px){#bak-dlg .orch-actions{float:none;max-width:none;margin:0 0 12px}}
+.restart-password-dialog{max-width:500px;border:1px solid var(--brand);border-radius:16px;box-shadow:0 20px 70px #000a,0 0 30px color-mix(in srgb,var(--brand) 30%,transparent)}
+.restart-password-dialog h3{margin:0 0 8px}.restart-password-dialog input:focus{border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 35%,transparent)}
 </style></head><body><main id="app">Cargando...</main>
 <script>
 var AUTHED=false, STATE={}, CONFIG=null, UPDATE=null, ME=null, WIZARD=null, WSTEP=-1, WDRAFT={}, WREVIEW=null, CURTAB='home', TOPOLOGY_STATUS=null, TOPOLOGY_BUSY=false;
@@ -697,13 +699,28 @@ function renderOrchestrators(){
 function orchPickerHtml(){var l=STATE.orchestrators||[];if(!l.length)return '';return '<label style="margin:0 0 10px;display:flex;gap:8px;align-items:center">'+t('pick_existing')+'<select id="o-pick" style="width:auto;min-height:34px" onchange="if(this.value)editOrch(this.value)"><option value="">— '+t('new_entry')+' —</option>'+l.map(function(o){return '<option value="'+esc(o.name)+'">'+esc(o.name)+'</option>'}).join('')+'</select></label>'}
 function ssePickerHtml(){var l=STATE.sse_platforms||[];if(!l.length)return '';return '<label style="margin:0 0 10px;display:flex;gap:8px;align-items:center">'+t('pick_existing')+'<select id="s-pick" style="width:auto;min-height:34px" onchange="if(this.value)editSse(this.value)"><option value="">— '+t('new_entry')+' —</option>'+l.map(function(o){return '<option value="'+esc(o.name)+'">'+esc(o.name)+'</option>'}).join('')+'</select></label>'}
 function editOrch(name){var o=(STATE.orchestrators||[]).find(function(x){return x.name===name});if(!o)return;q('#o-name').value=o.name;q('#o-url').value=o.url;q('#o-user').value=o.username||'';['#o-key','#o-password','#o-ssh-password','#o-enable'].forEach(function(id){q(id).value='' });q('#o-tls').value=String(o.verify_tls);q('#o-ssh-user').value=o.ssh_user||'';q('#o-ssh-host').value=o.ssh_host||''}
-function confirmTargetActivation(){return confirm((LANG==='es'||LANG==='mx')?'Se guardará el destino y se reiniciarán los servicios para cargar todos los cambios pendientes. Si no hay un destino predeterminado explícito, la selección automática puede cambiar. ¿Continuar?':'Save the target and restart services to load all pending changes? If no explicit default is set, automatic target selection may change.')}
+function requestRestartPassword(){
+ return new Promise(function(resolve){
+  var spanish=LANG==='es'||LANG==='mx', dialog=document.createElement('dialog');
+  dialog.className='restart-password-dialog';
+  dialog.setAttribute('aria-labelledby','restart-password-title');
+  dialog.innerHTML='<form method="dialog"><h3 id="restart-password-title">'+(spanish?'Confirmar reinicio':'Confirm restart')+'</h3><p class="help">'+(spanish?'El destino ya está guardado. El reinicio aplica todos los cambios pendientes y puede cambiar el destino automático si no hay uno predeterminado explícito.':'The target is saved. Restart applies all pending changes and may change the automatically selected target if no explicit default is set.')+'</p><label for="restart-password-input">'+(spanish?'Contraseña del panel':'Panel password')+'</label><input id="restart-password-input" type="password" autocomplete="current-password" required><div class="actions"><button type="submit">'+(spanish?'Confirmar reinicio':'Confirm restart')+'</button><button type="button" class="secondary" data-cancel>'+(spanish?'Cancelar':'Cancel')+'</button></div></form>';
+  document.body.appendChild(dialog);
+  var input=dialog.querySelector('input'),done=false;
+  function finish(value){if(done)return;done=true;input.value='';if(dialog.open&&dialog.close)dialog.close();dialog.remove();resolve(value)}
+  dialog.querySelector('form').addEventListener('submit',function(event){event.preventDefault();if(input.value)finish(input.value)});
+  dialog.querySelector('[data-cancel]').addEventListener('click',function(){finish(null)});
+  dialog.addEventListener('cancel',function(event){event.preventDefault();finish(null)});
+  dialog.addEventListener('close',function(){finish(null)});
+  if(dialog.showModal)dialog.showModal();else dialog.setAttribute('open','');
+  input.focus();
+ });
+}
 async function activateSavedTarget(){
- try{var rpass=prompt((LANG==='es'||LANG==='mx')?'Escribe la contraseña del panel para confirmar el reinicio:':'Enter the panel password to confirm the restart:');if(rpass===null){notice((LANG==='es'||LANG==='mx')?'Destino guardado; reinicio no solicitado.':'Target saved; restart was not requested.','err');return}var result=await api('/api/restart',{password:rpass});if(result.state==='pending'){notice((LANG==='es'||LANG==='mx')?'Destino guardado. Reinicio solicitado; espera la confirmación.':'Target saved. Restart requested; waiting for confirmation.','info');pollRestart(0)}else notice((LANG==='es'||LANG==='mx'?'Destino guardado, pero no se pudo solicitar el reinicio: ':'Target saved, but restart could not be requested: ')+(result.error||result.message||'unknown'),'err')}
+ try{var rpass=await requestRestartPassword();if(rpass===null){notice((LANG==='es'||LANG==='mx')?'Destino guardado; reinicio no solicitado.':'Target saved; restart was not requested.','err');return}var result=await api('/api/restart',{password:rpass});if(result.state==='pending'){notice((LANG==='es'||LANG==='mx')?'Destino guardado. Reinicio solicitado; espera la confirmación.':'Target saved. Restart requested; waiting for confirmation.','info');pollRestart(0)}else notice((LANG==='es'||LANG==='mx'?'Destino guardado, pero no se pudo solicitar el reinicio: ':'Target saved, but restart could not be requested: ')+(result.error||result.message||'unknown'),'err')}
  catch(e){notice(((LANG==='es'||LANG==='mx')?'Destino guardado; reinicio no solicitado: ':'Target saved; restart was not requested: ')+e.message,'err')}
 }
 async function saveOrch(activate){
- if(activate&&!confirmTargetActivation())return;
  try{var r=await api('/api/orchestrators',{name:q('#o-name').value.trim(),url:q('#o-url').value.trim(),api_key:q('#o-key').value,username:q('#o-user').value,password:q('#o-password').value,verify_tls:q('#o-tls').value==='true',ssh_user:q('#o-ssh-user').value,ssh_password:q('#o-ssh-password').value,ssh_enable_password:q('#o-enable').value,ssh_host:q('#o-ssh-host').value});if(!r.ok){notice(r.error||r.message,'err');return}STATE=await api('/api/state');renderOrchestrators();notice(r.message,'ok');if(activate)await activateSavedTarget()}catch(e){notice(e.message,'err')}
 }
 async function deleteOrch(name){if(!confirm('Eliminar '+name+'?'))return;await api('/api/orchestrators/delete',{name:name});STATE=await api('/api/state');renderOrchestrators()}
@@ -715,7 +732,6 @@ function renderSse(){
 }
 function editSse(name){var o=(STATE.sse_platforms||[]).find(function(x){return x.name===name});if(!o)return;q('#s-name').value=o.name;q('#s-provider').value=o.provider;q('#s-url').value=o.base_url;q('#s-token').value='';q('#s-token-status').textContent=o.has_admin_token?t('secret_set'):t('secret_unset');var picker=q('#s-pick');if(picker)picker.value=o.name;q('#s-tls').value=String(o.verify_tls);q('#s-timeout').value=o.timeout}
 async function saveSse(activate){
- if(activate&&!confirmTargetActivation())return;
  try{var savedName=q('#s-name').value.trim();var r=await api('/api/sse',{name:savedName,provider:q('#s-provider').value,base_url:q('#s-url').value.trim(),admin_token:q('#s-token').value,verify_tls:q('#s-tls').value==='true',timeout:q('#s-timeout').value});if(!r.ok){notice(r.error||r.message,'err');return}STATE=await api('/api/state');renderSse();editSse(savedName);notice(r.message,'ok');if(activate)await activateSavedTarget()}catch(e){notice(e.message,'err')}
 }
 async function deleteSse(name){if(!confirm('Eliminar plataforma '+name+'?'))return;await api('/api/sse/delete',{name:name});STATE=await api('/api/state');renderSse()}
@@ -728,7 +744,6 @@ function renderCentral(){
 }
 function editCentral(name){var o=(STATE.central_platforms||[]).find(function(x){return x.name===name});if(!o)return;q('#c-name').value=o.name;q('#c-url').value=o.base_url;q('#c-id').value=o.client_id||'';q('#c-secret').value='';q('#c-secret-status').textContent=o.has_client_secret?t('secret_set'):t('secret_unset');q('#c-tokenurl').value=o.token_url||'';var picker=q('#c-pick');if(picker)picker.value=o.name;q('#c-tls').value=String(o.verify_tls);q('#c-timeout').value=o.timeout}
 async function saveCentral(activate){
- if(activate&&!confirmTargetActivation())return;
  try{var savedName=q('#c-name').value.trim();var r=await api('/api/central',{name:savedName,base_url:q('#c-url').value.trim(),client_id:q('#c-id').value.trim(),client_secret:q('#c-secret').value||null,token_url:q('#c-tokenurl').value.trim(),verify_tls:q('#c-tls').value==='true',timeout:q('#c-timeout').value});if(!r.ok){notice(r.error||r.message,'err');return}STATE=await api('/api/state');renderCentral();editCentral(savedName);notice(r.message,'ok');if(activate)await activateSavedTarget()}catch(e){notice(e.message,'err')}
 }
 async function deleteCentral(name){if(!confirm((LANG==='es'||LANG==='mx')?'Eliminar plataforma Central '+name+'?':'Delete Central platform '+name+'?'))return;await api('/api/central/delete',{name:name});STATE=await api('/api/state');renderCentral()}
@@ -869,15 +884,12 @@ async function reloadAfterMutation(){
  if(CURTAB==='wizard'){WIZARD=null;WSTEP=0;await renderWizard()}else showTab(CURTAB);
 }
 async function wizSaveOrch(activate){
- if(activate&&!confirmTargetActivation())return;
  try{var r=await api('/api/orchestrators',{name:q('#wo-name').value.trim(),url:q('#wo-url').value.trim(),api_key:q('#wo-key').value||null,username:q('#wo-user').value||null,password:q('#wo-pass').value||null,verify_tls:true});if(!r.ok){notice(r.error||r.message,'err');return}await reloadAfterMutation();notice(r.message,'ok');if(activate)await activateSavedTarget()}catch(e){notice(e.message,'err')}
 }
 async function wizSaveSse(activate){
- if(activate&&!confirmTargetActivation())return;
  try{var r=await api('/api/sse',{name:q('#ws-name').value.trim(),provider:'axis',base_url:q('#ws-url').value.trim(),admin_token:q('#ws-token').value||null,verify_tls:true,timeout:q('#ws-timeout').value});if(!r.ok){notice(r.error||r.message,'err');return}await reloadAfterMutation();notice(r.message,'ok');if(activate)await activateSavedTarget()}catch(e){notice(e.message,'err')}
 }
 async function wizSaveCentral(activate){
- if(activate&&!confirmTargetActivation())return;
  try{var r=await api('/api/central',{name:q('#wc-name').value.trim(),base_url:q('#wc-url').value.trim(),client_id:q('#wc-id').value.trim(),client_secret:q('#wc-secret').value||null,verify_tls:true,timeout:q('#wc-timeout').value});if(!r.ok){notice(r.error||r.message,'err');return}await reloadAfterMutation();notice(r.message,'ok');if(activate)await activateSavedTarget()}catch(e){notice(e.message,'err')}
 }
 async function probeTarget(kind,name){
