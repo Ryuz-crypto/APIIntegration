@@ -23,7 +23,7 @@ globalThis.window=globalThis;globalThis.confirm=()=>true;globalThis.prompt=()=>'
 const fields={};q=id=>fields[id]||(fields[id]={value:''});
 q('#o-name').value='new';q('#o-url').value='https://example';q('#o-user').value='alice';q('#o-password').value='test';q('#o-tls').value='true';
 let calls=[],fail=true;api=async(path,body)=>{calls.push(path);if(path==='/api/orchestrators')return fail?{ok:false,error:'failed'}:{ok:true,message:'saved'};if(path==='/api/restart')return {state:'pending'};return {orchestrators:[],sse_platforms:[]}};
-notice=()=>{};renderOrchestrators=()=>{};pollRestart=()=>{};
+notice=()=>{};renderOrchestrators=()=>{};pollRestart=()=>{};requestRestartPassword=async()=> 'panel-pass';
 (async()=>{await saveOrch(true);assert(!calls.includes('/api/restart'));assert.equal(q('#o-password').value,'test');fail=false;calls=[];await saveOrch(true);assert(calls.includes('/api/restart'));console.log('verified')})().catch(e=>{console.error(e);process.exit(1)});
 """
     result = subprocess.run(  # noqa: S603 - repository panel script under Node
@@ -31,3 +31,9 @@ notice=()=>{};renderOrchestrators=()=>{};pollRestart=()=>{};
     )
     assert result.returncode == 0, result.stderr
     assert "verified" in result.stdout
+
+
+def test_restart_dialog_masks_password():
+    assert 'type="password" autocomplete="current-password" required' in PAGE
+    assert "var rpass=await requestRestartPassword()" in PAGE
+    assert "var rpass=prompt(" not in PAGE
