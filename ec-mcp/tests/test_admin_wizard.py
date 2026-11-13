@@ -842,13 +842,14 @@ def test_page_has_pickers_and_backups_menu():
     assert "HTTP '+response.status" in PAGE
 
 
-def test_page_has_eight_languages_with_translations():
+def test_page_has_nine_languages_with_translations():
     assert "var I18N_L=" in PAGE and "lang-sel" in PAGE
     for name in ("Português", "Italiano", "Deutsch", "Español (MX)", "Français", "日本語"):
         assert name in PAGE
     for lang in ("pt", "it", "de", "mx", "fr", "ja"):
         assert f"I18N_L.{lang}" in PAGE or f'"{lang}"' in PAGE
-    assert "I18N.es[k]||I18N.en[k]" in PAGE  # fallback es/en en t()
+    assert "I18N.es[k]||I18N.en[k]" not in PAGE  # No Spanish-first fallback for other locales
+    assert "עברית" in PAGE
 
 
 def test_new_routes_registered():
